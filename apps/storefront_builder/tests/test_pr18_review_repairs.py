@@ -13,12 +13,10 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.messages import get_messages
 from django.template.loader import render_to_string
-from django.urls import reverse
 
 from apps.content.models import HeroSlide, MediaAsset, PromotionalBanner, StoryRailItem
 from apps.storefront_builder import media_views
@@ -248,16 +246,6 @@ class DestinationTypeSafetyTests(_Base):
                 state = self.node(self.picker_call(markup))
                 self.assertEqual(state["pwned"], "undefined")
                 self.assertEqual(state["r"]["type"], PAYLOAD)  # a harmless string, not code
-
-    def test_section_destination_block_escapes_the_same_sink(self):
-        section = SimpleNamespace(pk=1, settings={"destination": {"destination_type": PAYLOAD, "destination_id": None}})
-        markup = render_to_string(
-            "dashboard/storefront_builder/partials/section_destination_fields.html",
-            {"section": section, "destination_product_name": "", "categories": [], "brands": [], "collections": []},
-        )
-        state = self.node(self.picker_call(markup))
-        self.assertEqual(state["pwned"], "undefined")
-        self.assertEqual(state["r"]["type"], PAYLOAD)
 
 
 # --------------------------------------------------------------------------- #3

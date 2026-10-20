@@ -1,17 +1,15 @@
 """تست‌های مدل‌ها و رندر اسلاید و بنر صفحه اصلی."""
 
-from decimal import Decimal
 from io import BytesIO
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from PIL import Image
 
-from apps.catalog.models import Category, Product, Vendor
+from apps.catalog.models import Category, Vendor
 from apps.content.models import (
     HOMEPAGE_MEDIA_MAX_UPLOAD_BYTES,
     DestinationType,
@@ -217,7 +215,7 @@ class DashboardHeroCRUDTests(TestCase):
         response = self.client.get(reverse("dashboard:hero-list"))
         self.assertNotContains(response, "دیگر روی صفحه‌ی عمومی اثری ندارد")
 
-    def test_deprecation_notice_when_builder_published(self):
+    def test_shared_media_notice_when_builder_published(self):
         from apps.storefront_builder.services import layout_service as sfb_svc
 
         store = _akhlaghi()
@@ -225,7 +223,10 @@ class DashboardHeroCRUDTests(TestCase):
         sfb_svc.publish(store)
 
         response = self.client.get(reverse("dashboard:hero-list"))
-        self.assertContains(response, "دیگر روی صفحه‌ی عمومی اثری ندارد")
+        # ARCH-02: the screen manages the store's shared default media, which keeps driving the
+        # storefront — it must say so (and must never claim it has no effect any more).
+        self.assertContains(response, "رسانه‌های مشترک فروشگاه")
+        self.assertNotContains(response, "دیگر روی صفحه‌ی عمومی اثری ندارد")
 
 
 class DashboardBannerCRUDTests(TestCase):
@@ -290,8 +291,15 @@ class EmptyStateTests(TestCase):
         """Category tiles and other sections remain even without hero/banners."""
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        # Other section markers should still render
-        self.assertContains(response, "محصولات پرفروش")
+        # The engine-native default composition still carries the non-media sections.
+        from apps.storefront_builder.models import StorefrontLayout, StorefrontSection
+
+        layout = StorefrontLayout.objects.get(published_version__isnull=False)
+        keys = set(
+            StorefrontSection.objects.filter(page__version=layout.published_version, page__page_type="home")
+            .values_list("section_key", flat=True)
+        )
+        self.assertTrue({"category_grid", "newest_products", "best_sellers"} <= keys)
 
 
 

@@ -215,23 +215,21 @@ class SharedPageShellTests(TestCase):
         self.assertNotIn('class="store-admin-shortcut"', body)
         self.assertNotIn("پنل مدیریت", body)
 
-    def test_builder_home_preview_has_admin_shortcut(self):
+    def test_builder_home_preview_never_shows_the_admin_shortcut(self):
+        """BUG-UI-01 (ARCH-02): the Design Studio embeds the Builder preview as
+        the customer-facing canvas — it must not carry an admin-panel button."""
         svc.get_or_create_draft(self.store)
         body = self._preview().content.decode()
-        self.assertIn('class="store-admin-shortcut"', body)
-        self.assertIn('target="_top"', body)
+        self.assertNotIn('class="store-admin-shortcut"', body)
+        self.assertNotIn("ورود به پنل مدیریت فروشگاه", body)
 
-    def test_builder_home_preview_admin_shortcut_preserves_local_non_default_port(self):
+    def test_builder_preview_admin_shortcut_absent_on_non_default_port_too(self):
         svc.get_or_create_draft(self.store)
         response = self.admin_client.get(
             reverse("dashboard:storefront-builder-preview"),
             HTTP_HOST=f"{ADMIN_HOST}:8765",
         )
-        expected = (
-            f"http://{self.store.admin_subdomain}."
-            f"{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}:8765/admin-portal/"
-        )
-        self.assertContains(response, f'href="{expected}"')
+        self.assertNotContains(response, 'class="store-admin-shortcut"')
 
     def test_admin_shortcut_is_never_on_any_public_storefront_route(self):
         """Isolation: confirms the removal is not homepage-specific special
@@ -519,16 +517,18 @@ class BrandSixPagePresenceAndAssetEnvelopeTests(TestCase):
             self.assertEqual(listing.count(asset), 1, f"{asset} not exactly once on listing")
 
     # -- 6. E6 boundary: collection_index is not a pilot render surface ----
-    def test_collection_index_does_not_render_pilot_brand_or_builder_css(self):
+    def test_collection_index_does_not_render_pilot_brand(self):
         """The pilot on the COLLECTION page renders on collection_detail but
         NOT on collection_index (/collections/) — that route renders its own
-        hardcoded grid, ignores render_items, and does not load the Builder
-        stylesheet. Proves the pilot boundary is real, not accidentally
-        universal."""
+        hardcoded grid and ignores render_items. Proves the pilot boundary is
+        real, not accidentally universal. (R4-11b: the page DOES load
+        storefront_builder.css — it draws the shared R4 header / footer /
+        bottom-nav, which are styled only by that sheet; without it a new
+        store's logo and nav icons rendered at natural size.)"""
         body = self._get(reverse("catalog:collection-index")).content.decode()
         self.assertNotIn("برندهای شش‌صفحه", body, "brand pilot leaked onto collection_index")
         self.assertNotIn('class="brand-tile', body, "brand tile leaked onto collection_index")
-        self.assertNotIn("css/storefront_builder.css", body, "collection_index must not load Builder CSS")
+        self.assertIn("css/storefront_builder.css", body, "the shared R4 chrome needs its stylesheet")
         # But the SAME page-type pilot IS on collection_detail (contrast).
         detail = self._get(self.routes["collection"]).content.decode()
         self.assertIn("برندهای شش‌صفحه", detail)
@@ -624,7 +624,7 @@ class CollectionSixPagePresenceAndAssetEnvelopeTests(TestCase):
             self.assertIn("کالکشن‌های شش‌صفحه", body, f"collection tiles title missing on {name} ({url})")
             self.assertIn("کالکشن شش‌صفحه قابل مشاهده", body, f"collection name missing on {name} ({url})")
             self.assertIn(detail_url, body, f"collection-detail link missing on {name} ({url})")
-            self.assertIn('class="pcard"', body, f"collection tile markup missing on {name} ({url})")
+            self.assertIn('class="pcard collection-tile"', body, f"collection tile markup missing on {name} ({url})")
 
     # -- 2. Correct page dispatch (context page type) ----------------------
     def test_each_route_dispatches_to_its_own_page_type(self):
@@ -697,15 +697,16 @@ class CollectionSixPagePresenceAndAssetEnvelopeTests(TestCase):
             self.assertIn("کالکشن شش‌صفحه قابل مشاهده", body, f"collection name absent on {name}")
 
     # -- 6. E6 boundary: collection_index is not a pilot render surface ----
-    def test_collection_index_does_not_render_pilot_tiles_or_builder_css(self):
+    def test_collection_index_does_not_render_pilot_tiles(self):
         """The pilot on the COLLECTION page renders on collection_detail but
         NOT on collection_index (/collections/) — that route renders its own
-        hardcoded grid, ignores render_items, and does not load the Builder
-        stylesheet. Proves the pilot boundary is real, not accidentally
-        universal, AND that no fabricated "current" collection is created."""
+        hardcoded grid and ignores render_items. Proves the pilot boundary is
+        real, not accidentally universal, AND that no fabricated "current"
+        collection is created. (R4-11b: it loads storefront_builder.css for the
+        shared R4 chrome only; see the brand variant above.)"""
         body = self._get(reverse("catalog:collection-index")).content.decode()
         self.assertNotIn("کالکشن‌های شش‌صفحه", body, "collection_tiles pilot leaked onto collection_index")
-        self.assertNotIn("css/storefront_builder.css", body, "collection_index must not load Builder CSS")
+        self.assertIn("css/storefront_builder.css", body, "the shared R4 chrome needs its stylesheet")
         # But the SAME page-type pilot IS on collection_detail (contrast).
         detail = self._get(self.routes["collection"]).content.decode()
         self.assertIn("کالکشن‌های شش‌صفحه", detail)

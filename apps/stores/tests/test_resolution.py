@@ -731,3 +731,26 @@ class ResolveStorefrontUrlForStoreTests(TestCase):
         self.assertTrue(_is_dev_resolvable_hostname("teststore.rastisi.localhost"))
         self.assertFalse(_is_dev_resolvable_hostname("shop-test-domain.local"))
         self.assertFalse(_is_dev_resolvable_hostname("mystore.ir"))
+
+
+class DevStorefrontUrlFollowsTheRequestPortTests(TestCase):
+    """FOLLOWUP-03 — the Studio's public/back-to-store link must not hard-code :8000."""
+
+    def setUp(self):
+        self.store = Store.objects.get(slug="akhlaghi")
+        _make_verified_domain(self.store, "code123.rastisi.localhost")
+
+    @override_settings(DEBUG=True, ALLOWED_HOSTS=["*"])
+    def test_request_port_is_used(self):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/", HTTP_HOST="x.rastisi.localhost:8003")
+        self.assertEqual(resolve_storefront_url_for_store(self.store, request), "http://code123.rastisi.localhost:8003/")
+
+    @override_settings(DEBUG=True, ALLOWED_HOSTS=["*"])
+    def test_default_http_port_adds_no_suffix_and_no_request_keeps_8000(self):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/", HTTP_HOST="x.rastisi.localhost")
+        self.assertEqual(resolve_storefront_url_for_store(self.store, request), "http://code123.rastisi.localhost/")
+        self.assertEqual(resolve_storefront_url_for_store(self.store), "http://code123.rastisi.localhost:8000/")

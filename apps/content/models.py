@@ -62,6 +62,7 @@ def validate_image_content(value):
     try:
         img = Image.open(value)
         detected_format = img.format
+        pixel_count = img.size[0] * img.size[1]
         img.verify()
     except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Exception) as exc:
         raise ValidationError("فایل بارگذاری‌شده یک تصویر معتبر نیست.") from exc
@@ -74,6 +75,11 @@ def validate_image_content(value):
             f"فرمت تصویر «{detected_format}» مجاز نیست. "
             f"فرمت‌های مجاز: {', '.join(sorted(ALLOWED_IMAGE_FORMATS))}"
         )
+    # R4-14 — a small, highly compressed file may still expand to hundreds of megapixels once decoded
+    from apps.core.image_validation import MAX_PIXELS, MAX_PIXELS_LABEL
+
+    if pixel_count > MAX_PIXELS:
+        raise ValidationError(f"ابعاد تصویر بیش از حد بزرگ است؛ حداکثر {MAX_PIXELS_LABEL}. تصویر را کوچک‌تر ذخیره کنید.")
 
 # طرح‌های مجاز برای لینک خارجی
 ALLOWED_SCHEMES = ["https", "http", "mailto", "tel"]
@@ -931,6 +937,10 @@ class FooterSettings(TimeStampedModel):
     secondary_phone = models.CharField("تلفن ثانویه", max_length=50, blank=True, validators=[validate_phone])
     email = models.EmailField("ایمیل", blank=True)
     working_hours = models.CharField("ساعات کاری", max_length=250, blank=True)
+    show_map_link = models.BooleanField(
+        "نمایش لینک نقشه", default=False,
+        help_text="فقط وقتی نشانی را به‌عنوان نشانیِ واقعی و قابل‌مسیریابی تأیید می‌کنید روشن شود؛ پیش‌فرض خاموش است تا نشانیِ نمایشی/ناقص لینکِ نقشهٔ گمراه‌کننده نسازد.",
+    )
     # Sections
     show_navigation = models.BooleanField("نمایش ناوبری", default=True)
     show_social_links = models.BooleanField("نمایش شبکه‌های اجتماعی", default=True)

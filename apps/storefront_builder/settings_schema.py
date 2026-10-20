@@ -33,7 +33,7 @@ ALLOWED_FIELD_TYPES = frozenset({
     "repeater",
     #: Phase 5 Task 4B — the shared per-section "background" block
     #: (mode/color/pattern/palette-role/media-asset) that already exists on
-    #: every BACKGROUND_AWARE_SECTION_KEYS section via the
+    #: every the `background` capability section via the
     #: ``_with_background`` legacy-validator wrapper. Declaring it as a schema
     #: field only makes the R4 Inspector render + accept it; the AUTHORITY
     #: for its shape stays ``section_registry.validate_background_settings``
@@ -50,6 +50,12 @@ ALLOWED_FIELD_TYPES = frozenset({
     #: choice list into the Inspector context" pattern ``resource_source``
     #: already established below — never a second Menu authority/model.
     "menu_picker",
+    #: Design-block engine — the sparse per-section ``design`` object
+    #: (semantic colours, border, radius, shadow, spacing, layout, image, actions).
+    #: Which sub-properties exist for a section is declared once in
+    #: ``design_block.DESIGN_APPLICABLE``; the AUTHORITY for shape/range stays
+    #: ``design_block.validate_design_settings`` (run by the section's validator).
+    "design",
 })
 
 #: R4 Task 6 (Group D) — a ``repeater`` item's own sub-fields must be
@@ -80,7 +86,17 @@ class SettingsSchemaError(ValueError):
 
     Subclasses ``ValueError`` so existing ``assertRaises(ValueError, ...)``
     call sites (legacy validators, tests) remain compatible.
+
+    ``merchant_message`` (R4-08) — an OPTIONAL, already-Persian, safe-to-show sentence naming the control and the rule it
+    broke. The technical ``str(exc)`` stays English/internal and is never shown to a merchant; callers that can show a
+    refusal (the R4 mutation boundary) use ``merchant_message`` when present and a generic sentence otherwise.
     """
+
+    merchant_message: str = ""
+
+    def __init__(self, *args, merchant_message: str = "") -> None:
+        super().__init__(*args)
+        self.merchant_message = merchant_message
 
 
 @dataclasses.dataclass(frozen=True)
@@ -101,6 +117,11 @@ class SettingsField:
     #: any per-item value), reusing the existing integer-bounds attributes
     #: rather than adding new ones.
     repeater_item_fields: tuple["SettingsField", ...] = ()
+    #: Context-sensitive Inspector visibility: ``((controlling_key, (allowed value, ...)), ...)``, AND across
+    #: entries. The control is offered only while every controlling field currently holds one of the allowed
+    #: values (booleans compare as ``"true"``/``"false"``). Display metadata ONLY — the stored value of a hidden
+    #: field is never touched or validated differently; the renderer ignores dormant values on its own.
+    visible_when: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -254,21 +275,45 @@ def _clean_repeater_value(field: SettingsField, raw_value: object) -> list:
     return cleaned_items
 
 
+def _persian_digits(number: int) -> str:
+    return str(number).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+
+
+def _range_sentence(field: SettingsField) -> str:
+    low, high = field.min_value, field.max_value
+    label = f"«{field.label}»"
+    if low is not None and high is not None:
+        return f"{label} باید عددی بین {_persian_digits(low)} و {_persian_digits(high)} باشد."
+    if low is not None:
+        return f"{label} باید عددی برابر یا بیشتر از {_persian_digits(low)} باشد."
+    if high is not None:
+        return f"{label} باید عددی برابر یا کمتر از {_persian_digits(high)} باشد."
+    return f"{label} باید یک عدد صحیح باشد."
+
+
 def _clean_field_value(field: SettingsField, raw_value: object) -> object:
     if field.field_type == "integer":
+        # R4-08 — an EMPTY number control means "back to the automatic/default value" (never an error): an optional number
+        # (item limit, offset, ...) could otherwise never be cleared once it had been set.
+        if raw_value is None or (isinstance(raw_value, str) and not raw_value.strip()):
+            if not field.required:
+                return field.default
+            raise SettingsSchemaError(
+                f"{field.key!r} is required", merchant_message=f"«{field.label}» نمی‌تواند خالی باشد.",
+            )
         try:
             cleaned = int(normalize_digits(raw_value))
         except (TypeError, ValueError) as exc:
             raise SettingsSchemaError(
-                f"Invalid integer value for {field.key!r}: {raw_value!r}"
+                f"Invalid integer value for {field.key!r}: {raw_value!r}", merchant_message=_range_sentence(field),
             ) from exc
         if field.min_value is not None and cleaned < field.min_value:
             raise SettingsSchemaError(
-                f"{field.key!r} must be >= {field.min_value} (got {cleaned})"
+                f"{field.key!r} must be >= {field.min_value} (got {cleaned})", merchant_message=_range_sentence(field),
             )
         if field.max_value is not None and cleaned > field.max_value:
             raise SettingsSchemaError(
-                f"{field.key!r} must be <= {field.max_value} (got {cleaned})"
+                f"{field.key!r} must be <= {field.max_value} (got {cleaned})", merchant_message=_range_sentence(field),
             )
         return cleaned
 
@@ -279,7 +324,8 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
         allowed_values = {value for value, _label in field.choices}
         if raw_value not in allowed_values:
             raise SettingsSchemaError(
-                f"{field.key!r} must be one of {sorted(allowed_values)!r} (got {raw_value!r})"
+                f"{field.key!r} must be one of {sorted(allowed_values)!r} (got {raw_value!r})",
+                merchant_message=f"مقدار انتخاب‌شده برای «{field.label}» معتبر نیست.",
             )
         return raw_value
 
@@ -287,7 +333,10 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
         cleaned = raw_value if isinstance(raw_value, str) else str(raw_value)
         if field.max_length is not None and len(cleaned) > field.max_length:
             raise SettingsSchemaError(
-                f"{field.key!r} exceeds max_length {field.max_length} (got {len(cleaned)})"
+                f"{field.key!r} exceeds max_length {field.max_length} (got {len(cleaned)})",
+                merchant_message=(
+                    f"«{field.label}» حداکثر {_persian_digits(field.max_length)} نویسه می‌تواند باشد."
+                ),
             )
         return cleaned
 
@@ -317,6 +366,24 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
                 f"Invalid menu_picker value for {field.key!r}: {raw_value!r}"
             ) from exc
         return cleaned if cleaned > 0 else None
+
+    if field.field_type == "color":
+        # Semantic colour: "" (automatic) | "token:<role>" | "#RRGGBB".
+        from .semantic_colors import SemanticColorError, clean_semantic_color
+
+        try:
+            return clean_semantic_color(raw_value)
+        except SemanticColorError as exc:
+            raise SettingsSchemaError(str(exc)) from exc
+
+    if field.field_type == "design":
+        # Shape guard only; ``design_block.validate_design_settings`` (called by the
+        # section's own validator via ``_with_design``) is the sole authority.
+        if not isinstance(raw_value, dict):
+            raise SettingsSchemaError(
+                f"{field.key!r} must be an object (got {type(raw_value).__name__})"
+            )
+        return raw_value
 
     if field.field_type == "background":
         # Phase 5 Task 4B — shape guard ONLY (must be a JSON object), exactly
@@ -348,7 +415,7 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
             raise SettingsSchemaError(str(exc)) from exc
         return resource_source.serialize_resource_source(typed)
 
-    # color / media / variant: opaque, schema-declared but not type-coerced
+    # media / variant: opaque, schema-declared but not type-coerced
     # yet — passed through unchanged for the legacy validator to
     # authoritatively check.
     return raw_value
@@ -469,6 +536,7 @@ def _serialize_field(field: SettingsField) -> dict:
         "max_length": field.max_length,
         "widget_hint": field.widget_hint,
         "repeater_item_fields": [_serialize_field(item_field) for item_field in field.repeater_item_fields],
+        "visible_when": {key: list(values) for key, values in field.visible_when},
     }
 
 
@@ -491,8 +559,23 @@ def clean_section_schema_patch(definition, raw_patch: dict, current_settings: di
     if definition.settings_schema is None:
         raise SettingsSchemaError("Section is not schema-enabled")
 
+    normalize = getattr(definition, "normalize_patch", None)
+    if normalize is not None:
+        raw_patch = normalize(raw_patch, current_settings)
     merged = clean_schema_patch(definition.settings_schema, raw_patch, current_settings)
+    # Legacy-settings compatibility (one generic rule): design properties the section stored while its capabilities
+    # still granted them are DORMANT after a capability change — carried through every write untouched, never a reason
+    # to reject an unrelated edit. Newly submitted unsupported properties are still rejected by the section validator.
+    from . import design_block
+
+    dormant = design_block.dormant_design_keys(
+        (current_settings or {}).get("design"), design_block.properties_for_capabilities(definition.capabilities),
+    )
+    if dormant and "design" in merged:
+        merged = {**merged, "design": design_block.split_resubmitted_dormant(merged["design"], dormant)}
     validated = definition.validate_settings(merged)
+    if dormant:
+        validated = {**validated, "design": design_block.restore_dormant(validated.get("design"), dormant)}
     # Phase 1 (Task 6) — stamp the internal explicit-local-variant marker only
     # when this patch genuinely targets the section's registered variant key.
     # Applied AFTER validation (the marker is intentionally outside the
@@ -571,3 +654,44 @@ def mark_explicit_card_style_override(*, settings: dict) -> dict:
     overrides[CARD_STYLE_EXPLICIT_OVERRIDE_KEY] = True
     updated["appearance_overrides"] = overrides
     return updated
+
+
+def _comparable(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "" if value is None else str(value)
+
+
+def compute_field_visibility(fields, values: dict) -> dict:
+    """``{field key: visible}`` for the CURRENT ``values``. A hidden controlling field is dormant (contributes ``None``),
+    so a stale value of a control that is not on screen can never steer another control's visibility; a rule may name a
+    field declared later in the schema (resolved on demand). Mirrors the live evaluation in ``r4_editor.js``."""
+    by_key = {field.key: field for field in fields}
+    visibility: dict = {}
+    effective: dict = {}
+
+    def resolve(key, trail=()):
+        if key in visibility:
+            return
+        field = by_key.get(key)
+        if field is None or key in trail:  # unknown key / cyclic rule: treated as having no value
+            effective[key] = None
+            return
+        for controlling, _allowed in field.visible_when:
+            resolve(controlling, trail + (key,))
+        visible = all(_comparable(effective.get(c)) in allowed for c, allowed in field.visible_when)
+        visibility[key] = visible
+        effective[key] = (values[key] if key in values else field.default) if visible else None
+
+    for field in fields:
+        resolve(field.key)
+    return {field.key: visibility[field.key] for field in fields}
+
+
+def visible_when_json(field: SettingsField) -> str:
+    """The rule as the JSON the Inspector JS re-evaluates live (empty string when the field is unconditional)."""
+    import json
+
+    if not field.visible_when:
+        return ""
+    return json.dumps({key: list(values) for key, values in field.visible_when}, ensure_ascii=False, separators=(",", ":"))

@@ -9,17 +9,15 @@ resolved once, centrally, by ``product_card_data`` (U3) — never re-derived
 here — so every future visual variant reads identical business semantics.
 {% endcomment %}
 {% with card=product|product_card_data %}
-<article class="pcard style-{{ card_settings.card_style|default:'standard' }} badge-treatment-{{ card_settings.badge_treatment|default:'none' }}{% if card_settings.card_border is False %} no-border{% endif %}{% if card_settings.image_ratio == "portrait" %} ratio-portrait{% elif card_settings.image_ratio == "landscape" %} ratio-landscape{% endif %}{% if card_settings.quick_add_reveal == "hover_fade" %} quickadd-hover-fade{% elif card_settings.quick_add_reveal == "always" %} quickadd-always{% endif %}{% if card.is_out_of_stock %} out-of-stock{% endif %}"{% if is_builder_preview %} data-admin-edit-kind="product" data-admin-edit-id="{{ product.pk }}" data-admin-edit-title="{{ card.name|escape }}" data-admin-product-id="{{ product.pk }}" data-admin-product-title="{{ card.name|escape }}"{% endif %}>
+<article class="pcard style-{{ card_settings.card_style|default:'standard' }} badge-treatment-{{ card_settings.badge_treatment|default:'none' }}{% if card_settings.card_border is False %} no-border{% endif %}{% if card_settings.image_ratio == "portrait" %} ratio-portrait{% elif card_settings.image_ratio == "landscape" %} ratio-landscape{% endif %}{% if card_settings.quick_add_reveal == "hover_fade" %} quickadd-hover-fade{% elif card_settings.quick_add_reveal == "always" %} quickadd-always{% endif %}{% if card.is_out_of_stock %} out-of-stock{% endif %}" data-sfb-card-surface{% if is_builder_preview %} data-admin-edit-kind="product" data-admin-edit-id="{{ product.pk }}" data-admin-edit-title="{{ card.name|escape }}" data-admin-product-id="{{ product.pk }}" data-admin-product-title="{{ card.name|escape }}"{% endif %}>
   <a class="pcard-hitarea" href="{{ card.url }}" aria-label="مشاهده {{ card.name }}"></a>
   <div class="img" style="background:{{ product.tint|default:'#ffffff' }}">
     {% if card.image_url %}
-    <img class="cover-photo" src="{{ card.image_url }}"
-         alt="{{ card.image_alt }}"
-         style="position:absolute;inset:0;width:100%;height:100%;object-fit:var(--sfb-image-fit, cover)">
+    <img class="cover-photo" src="{{ card.image_url }}" data-img-role="product"
+         alt="{{ card.image_alt }}">
     {% if card.secondary_image_url %}
-    <img class="cover-photo-2" src="{{ card.secondary_image_url }}"
-         alt="" aria-hidden="true"
-         style="position:absolute;inset:0;width:100%;height:100%;object-fit:var(--sfb-image-fit, cover)">
+    <img class="cover-photo-2" src="{{ card.secondary_image_url }}" data-img-role="product"
+         alt="" aria-hidden="true">
     {% endif %}
     {% else %}
     {% if card_settings.card_style == "compact" %}
@@ -43,7 +41,7 @@ here — so every future visual variant reads identical business semantics.
     {% endif %}
     {% if card.is_out_of_stock %}
     <div class="badges badges-stock"><span class="pill pill-outofstock">ناموجود</span></div>
-    {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style != "compact" and card_settings.card_style != "beauty_retail" and card_settings.card_style != "chocolate_retail" %}
+    {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style != "compact" and card_settings.card_style != "beauty_retail" and card_settings.card_style != "chocolate_retail" and card_settings.card_style != "center_stepper" %}
     <div class="addbar">
       <button type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none"
               onclick="event.preventDefault();event.stopPropagation()">
@@ -61,15 +59,21 @@ here — so every future visual variant reads identical business semantics.
     {% if card_settings.show_rating is not False %}
     <div class="rate">
       <span class="stars">{{ card.rating|star_rating }}</span>{{ card.rating|fa_number }}
-      <span style="opacity:.6">({{ card.reviews_count|fa_number }})</span>
+      <span>({{ card.reviews_count|fa_number }})</span>
     </div>
     {% endif %}
     {% if card_settings.show_price is not False %}
     <div class="price">
+      {% if card.is_price_inquiry %}
+      <div class="now price-inquiry">
+        {% if card.inquiry_url %}<a class="price-inquiry-link" href="{{ card.inquiry_url }}" onclick="event.stopPropagation()">استعلام قیمت</a>{% else %}<span class="price-inquiry-label">استعلام قیمت</span>{% endif %}
+      </div>
+      {% else %}
       <div class="now">
         {{ card.price|toman }}
         {% if card.compare_at_price %}<div class="old">{{ card.compare_at_price|toman }}</div>{% endif %}
       </div>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -112,6 +116,7 @@ here — so every future visual variant reads identical business semantics.
   title all resolve the SAME $id() token because they share this one
   ``sfbOverlay`` scope, so aria-controls/aria-labelledby stay correctly paired
   per instance and no two dialogs ever collide on one page.{% endcomment %}
+  {% if card_settings.show_quick_view is not False %}
   <div class="pcard-quickview" x-data="sfbOverlay()" x-id="['sfb-quick-view', 'sfb-quick-view-title']">
     <button type="button" class="pcard-qv-trigger"
             aria-haspopup="dialog" :aria-controls="$id('sfb-quick-view')"
@@ -130,7 +135,7 @@ here — so every future visual variant reads identical business semantics.
       <button type="button" class="pcard-qv-close" aria-label="بستن نمای سریع" @click="closeOverlay()">×</button>
       <div class="pcard-qv-media">
         {% if card.image_url %}
-        <img src="{{ card.image_url }}" alt="{{ card.image_alt }}" loading="lazy">
+        <img src="{{ card.image_url }}" data-img-role="product" alt="{{ card.image_alt }}" loading="lazy">
         {% else %}
         <span class="pcard-qv-media-placeholder" aria-hidden="true">{{ product.icon|default:"🛍️" }}</span>
         {% endif %}
@@ -141,13 +146,17 @@ here — so every future visual variant reads identical business semantics.
         {% if card_settings.show_rating is not False %}
         <div class="pcard-qv-rate">
           <span class="stars">{{ card.rating|star_rating }}</span>{{ card.rating|fa_number }}
-          <span style="opacity:.6">({{ card.reviews_count|fa_number }})</span>
+          <span>({{ card.reviews_count|fa_number }})</span>
         </div>
         {% endif %}
         <div class="pcard-qv-price">
+          {% if card.is_price_inquiry %}
+          <span class="now price-inquiry">استعلام قیمت</span>
+          {% else %}
           <span class="now">{{ card.price|toman }}</span>
           {% if card.compare_at_price %}<span class="old">{{ card.compare_at_price|toman }}</span>{% endif %}
           {% if card.is_on_sale %}<span class="pill pill-disc">{{ card.discount_percent|fa_number }}٪</span>{% endif %}
+          {% endif %}
         </div>
         <div class="pcard-qv-actions">
           {% if card.is_out_of_stock %}
@@ -163,6 +172,28 @@ here — so every future visual variant reads identical business semantics.
       </div>
     </div>
   </div>
+  {% endif %}
+  {% if card_settings.card_style == "center_stepper" and not card.is_out_of_stock %}
+  <div class="stp-actions" x-data="{ q: 1 }">
+    {% if card_settings.show_quick_add is False %}
+    <a class="stp-select" href="{{ card.url }}">مشاهده محصول</a>
+    {% elif card.is_quick_add_eligible %}
+    <div class="stp-row">
+      <button class="stp-cart" type="button" hx-post="{% url 'cart:add' product.slug %}" hx-include="closest .stp-row" hx-swap="none" aria-label="افزودن به سبد خرید"
+              onclick="event.preventDefault();event.stopPropagation()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+      </button>
+      <div class="stp-qty">
+        <button type="button" aria-label="افزودن یک عدد" @click.prevent.stop="q = Math.min(q + 1, 99)">+</button>
+        <input type="number" name="quantity" min="1" max="99" x-model.number="q" aria-label="تعداد" onclick="event.stopPropagation()">
+        <button type="button" aria-label="کاهش یک عدد" @click.prevent.stop="q = Math.max(q - 1, 1)">−</button>
+      </div>
+    </div>
+    {% else %}
+    <a class="stp-select" href="{{ card.url }}">انتخاب گزینه‌ها</a>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if not card.is_out_of_stock and card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style == "compact" %}
   <div class="compact-actions">
     <button class="compact-cart" type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none" aria-label="افزودن به سبد خرید"

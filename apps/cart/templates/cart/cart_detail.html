@@ -1,6 +1,6 @@
 {% extends "storefront_shell.html" %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
-{% load static %}
+{% load static storefront_builder_extras %}
 
 {% block title %}سبد خرید | {{ SHOP_NAME }}{% endblock %}
 
@@ -14,7 +14,7 @@ only in product_card.css) rendered as an unstyled block list here.
 {% endcomment %}
 <link rel="stylesheet" href="{% static 'css/product_card.css' %}">
 <link rel="stylesheet" href="{% static 'css/cart.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 {% endblock %}
 
 {% block content %}

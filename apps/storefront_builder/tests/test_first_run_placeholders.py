@@ -119,9 +119,11 @@ class ApplyFirstRunPlaceholdersTests(TestCase):
         placeholder = self.apply([_item("product_section", products=[])])
         self.assertEqual(render_service.hide_empty_public_sections(placeholder), placeholder)
 
-    def test_an_unreplaced_empty_product_section_is_still_hidden_as_before(self):
+    def test_an_unreplaced_empty_product_section_is_no_longer_dropped(self):
+        # Owner contract: a template-owned section is never removed because its data is empty (it renders the
+        # shared empty state in place instead).
         plain = [_item("product_section", products=[])]
-        self.assertEqual(render_service.hide_empty_public_sections(plain), [])
+        self.assertEqual(render_service.hide_empty_public_sections(plain), plain)
 
 
 class SectionLevelReadinessTests(TestCase):

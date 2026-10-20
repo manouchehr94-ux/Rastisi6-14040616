@@ -1,0 +1,24 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Semantic colour control — ONE shared partial for the standalone ``color`` field and for
+every colour property of the ``design`` block. The value is "" (automatic) | "token:<role>"
+(a role of the Store's own palette, so a palette change recolours it) | "#RRGGBB" (custom).
+Nested controls carry NO data-r4-field-key: the dedicated listeners in r4_editor.js read them.
+Expects: ``value`` (current stored value) and ``color_choices``.
+
+R4-09 — these two native controls stay the SOURCE OF TRUTH and the no-JS fallback; r4_color_picker.js hides them and
+puts ONE shared picker (palette / suggestions / spectrum / HEX / automatic) in front of them. Each palette option carries
+``data-hex`` (what that role resolves to for this Draft — display only; the stored value remains ``token:<role>``).
+{% endcomment %}
+<div class="r4-color-control" data-r4-color-control{% if geometry_key %} data-r4-global-geometry-key="{{ geometry_key }}"{% endif %}>
+  <select class="r4-control" data-r4-color-token aria-label="{{ aria_label|default:'رنگ' }}">
+    <option value="" {% if not value %}selected{% endif %}>خودکار (پیش‌فرض قالب)</option>
+    {% for token, label in color_choices %}
+    <option value="{{ token }}" data-hex="{{ color_hex|dictget:token }}" {% if value == token %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+    <option value="custom" {% if value and not value|startswith:"token:" %}selected{% endif %}>رنگ دلخواه…</option>
+  </select>
+  <input type="color" class="r4-control r4-color-custom" data-r4-color-custom
+         value="{% if value and not value|startswith:'token:' %}{{ value|lower }}{% else %}#808080{% endif %}"
+         {% if not value or value|startswith:"token:" %}hidden{% endif %}>
+</div>

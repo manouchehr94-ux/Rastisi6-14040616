@@ -109,6 +109,9 @@ def touch_product_draft(product: Product) -> None:
 def _delete_product_and_files(product: Product) -> None:
     for image in product.images.all():
         if image.image:
+            from apps.catalog.services.product_image_service import _delete_original
+
+            _delete_original(image.image.name)
             image.image.delete(save=False)
         if image.thumbnail:
             image.thumbnail.delete(save=False)

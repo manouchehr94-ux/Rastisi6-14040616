@@ -67,6 +67,11 @@ class ShopSettings(TimeStampedModel):
     name = models.CharField("نام فروشگاه", max_length=150, default="فروشگاه اینترنتی")
     tagline = models.CharField("شعار فروشگاه", max_length=200, blank=True)
     description = models.TextField("توضیحات فروشگاه (درباره ما)", blank=True)
+    price_inquiry_page = models.ForeignKey(
+        "content.ContentPage", verbose_name="صفحه‌ی مقصد «استعلام قیمت»", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+        help_text="خالی = صفحه‌ی منتشرشده‌ی «درباره ما» (اسلاگ about-us). باز شدن این صفحه درخواستی ثبت یا ارسال نمی‌کند.",
+    )
     contact_phone = models.CharField("شماره تماس", max_length=30, blank=True)
     contact_email = models.EmailField("ایمیل فروشگاه", blank=True)
     contact_address = models.CharField("آدرس", max_length=300, blank=True)

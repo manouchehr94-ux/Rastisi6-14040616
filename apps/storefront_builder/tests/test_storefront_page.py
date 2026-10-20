@@ -30,6 +30,8 @@ from apps.storefront_builder.models import (
 from apps.storefront_builder.services import layout_service as svc
 from apps.stores.models import Store
 
+from ._r4_support import r4_mutate
+
 
 def _akhlaghi():
     return Store.objects.get(slug="akhlaghi")
@@ -192,12 +194,10 @@ class SectionDuplicateStaysOnSamePageTests(TestCase):
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         home = self.draft.home_page()
         section = StorefrontSection.objects.create(page=home, section_key="rich_text", order=0)
 
-        self.client.post(self.reverse("dashboard:storefront-builder-section-duplicate", args=[section.pk]))
+        r4_mutate(self.client, self.draft, {"type": "section.duplicate", "section_id": section.pk})
 
         duplicate = home.sections.filter(section_key="rich_text").exclude(pk=section.pk).get()
         self.assertNotEqual(duplicate.stable_id, section.stable_id)
@@ -297,34 +297,3 @@ class PageTenantIsolationTests(TestCase):
         draft_b = svc.get_or_create_draft(self.store_b)
 
         self.assertFalse(draft_a.pages.filter(pk__in=draft_b.pages.values_list("pk", flat=True)).exists())
-
-    def test_get_scoped_section_rejects_a_section_belonging_to_another_store(self):
-        from django.test import Client
-        from django.urls import reverse
-
-        from apps.storefront_builder.views import _get_scoped_section
-
-        draft_b = svc.get_or_create_draft(self.store_b)
-        home_b = draft_b.home_page()
-        home_b.sections.all().delete()
-        foreign_section = StorefrontSection.objects.create(page=home_b, section_key="rich_text", order=0)
-
-        from django.contrib.auth import get_user_model
-        from django.utils import timezone
-
-        from apps.stores.models import StoreMembership
-
-        User = get_user_model()
-        host = "sfb-page-isolation-test.rastisi.localhost"
-        self.store_a.admin_subdomain = host.split(".")[0]
-        self.store_a.save(update_fields=["admin_subdomain"])
-        staff = User.objects.create_user(username="page_isolation_owner", password="pass12345", is_staff=True)
-        StoreMembership.objects.create(
-            store=self.store_a, user=staff, role=StoreMembership.Role.OWNER,
-            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
-        )
-        client = Client(HTTP_HOST=host)
-        client.login(username="page_isolation_owner", password="pass12345")
-
-        resp = client.post(reverse("dashboard:storefront-builder-section-toggle", args=[foreign_section.pk]))
-        self.assertEqual(resp.status_code, 404)

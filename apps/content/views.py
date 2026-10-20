@@ -56,6 +56,11 @@ def newsletter_subscribe(request):
     except RateLimitUnavailable:
         return render(request, "content/partials/newsletter_form.html", {"error": UNAVAILABLE_MESSAGE})
 
+    if request.POST.get("consent") != "yes":
+        return render(request, "content/partials/newsletter_form.html", {
+            "error": "برای دریافت خبرنامه، رضایت خود را تأیید کنید.",
+        })
+
     try:
         subscribe_to_newsletter(store, request.POST.get("email", ""))
     except NewsletterSubscribeError as exc:

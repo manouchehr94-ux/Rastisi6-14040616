@@ -117,6 +117,9 @@ class CollectionDetailViewTests(TestCase):
         for i in range(15):
             svc.add_product(large, _product(self.store, f"query-budget-large-{i}"))
 
+        # The very first public request of a Store provisions its default engine composition once; warm it up.
+        self.client.get(reverse("catalog:collection-detail", args=[small.slug]))
+
         with CaptureQueriesContext(connection) as small_queries:
             resp_small = self.client.get(reverse("catalog:collection-detail", args=[small.slug]))
         with CaptureQueriesContext(connection) as large_queries:
@@ -225,11 +228,12 @@ class CollectionIndexBoundaryTests(TestCase):
         self.assertIn("collections", resp.context)
         self.assertIn("page_obj", resp.context)
 
-    def test_index_does_not_load_builder_css_or_render_items(self):
+    def test_index_does_not_render_builder_items(self):
         svc.create_collection(self.store, name="کالکشنِ مرزی")
         resp = self.client.get(reverse("catalog:collection-index"))
         body = resp.content.decode()
-        self.assertNotIn("css/storefront_builder.css", body)
+        # R4-11b: the sheet IS loaded — the shared R4 header / footer / bottom-nav this page draws are styled only by it
+        self.assertIn("css/storefront_builder.css", body)
         # It renders its own hardcoded grid template, not the shared render_rows.
         template_names = [t.name for t in resp.templates if t.name]
         self.assertIn("catalog/collection_index.html", template_names)

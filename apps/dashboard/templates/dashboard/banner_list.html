@@ -3,16 +3,11 @@
 {% block page_title %}بنرهای تبلیغاتی{% endblock %}
 {% block page_sub %}مدیریت بنرهای تبلیغاتی صفحه اصلی{% endblock %}
 {% block content %}
-{% if storefront_builder_active %}
-<div class="form-error" role="alert" style="color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-  <span>سازنده بصری صفحه اصلی برای این فروشگاه فعال و منتشر شده — این صفحه دیگر روی صفحه‌ی عمومی اثری ندارد. بنرها را از «سازنده بصری» (بخش‌های «بنر تکی»/«ردیف چند بنری») ویرایش کنید.</span>
-  <a href="{% url 'dashboard:storefront-builder-editor' %}" class="btn btn-sm btn-primary">رفتن به سازنده بصری</a>
-</div>
-{% else %}
 <div class="card" style="margin-bottom:16px;background:var(--violet-softer, #f7f5fc)">
-  <p style="margin:0;font-size:13px">پیشنهاد می‌شود بنرهای تبلیغاتی را از «سازنده بصری صفحه اصلی» مدیریت کنید — بدون نیاز به خروج از سازنده و با پیش‌نمایش زنده. <a href="{% url 'dashboard:storefront-builder-editor' %}">رفتن به سازنده بصری ←</a></p>
+  <p style="margin:0 0 6px;font-size:13px"><b>رسانه‌های مشترک فروشگاه.</b> بنرها متعلق به فروشگاه‌اند، نه به یک قالب؛ هر بخشِ Design Studio که رسانهٔ اختصاصی نداشته باشد، از همین فهرست نمایش می‌دهد و با تعویض قالب حفظ می‌شوند.</p>
+  <p style="margin:0 0 6px;font-size:12px;color:var(--muted)">تغییر این فهرست پیش‌نویس ندارد و بلافاصله روی همهٔ بخش‌های بدونِ رسانهٔ اختصاصی—از جمله نسخهٔ منتشرشده—اثر می‌گذارد. برای رسانهٔ اختصاصیِ یک بخش (قابل پیش‌نویس و انتشار)، همان بخش را در Design Studio باز کنید.</p>
+  <a href="{% url 'dashboard:storefront-builder-r4-editor' %}">رفتن به Design Studio ←</a>
 </div>
-{% endif %}
 <div class="card">
   <div class="card-head">
     <h3>بنرها ({{ banners|length }})</h3>

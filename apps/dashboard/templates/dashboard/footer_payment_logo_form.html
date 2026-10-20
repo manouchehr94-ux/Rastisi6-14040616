@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load image_guide %}
 {% block title %}{% if logo %}ویرایش{% else %}افزودن{% endif %} لوگوی پرداخت | پنل مدیریت{% endblock %}
 {% block page_title %}{% if logo %}ویرایش لوگو «{{ logo.title }}»{% else %}افزودن لوگوی پرداخت{% endif %}{% endblock %}
 {% block page_sub %}مشخصات لوگو را وارد کنید{% endblock %}
@@ -16,6 +17,7 @@
       <label class="field-label{% if not logo %} required{% endif %}" for="id_image">تصویر</label>
       {% if logo and logo.image %}<p style="margin-bottom:8px"><img src="{{ logo.image.url }}" alt="{{ logo.title }}" style="max-height:60px;border-radius:8px"></p>{% endif %}
       <input type="file" name="image" id="id_image" accept="image/*" {% if not logo %}required{% endif %} class="form-input" aria-describedby="help_image{% if field_errors.image %} error_image{% endif %}" {% if field_errors.image %}aria-invalid="true"{% endif %}>
+      {% image_guide "footer_badge" "image" %}
       <span class="field-help" id="help_image">لوگوی درگاه پرداخت. ترجیحاً با پس‌زمینه شفاف (PNG).</span>
       {% if field_errors.image %}<span class="field-error" id="error_image">{{ field_errors.image }}</span>{% endif %}
     </div>

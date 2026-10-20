@@ -26,7 +26,7 @@
       <td dir="ltr" style="text-align:right"><a href="{% url 'dashboard:order-detail' rr.order.code %}">{{ rr.order.code }}</a></td>
       <td>{{ rr.customer.full_name }}</td>
       <td><span class="badge">{{ rr.get_status_display }}</span></td>
-      <td>{{ rr.created_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ rr.created_at|jalali_dt }}</td>
       <td><a class="btn btn-sm" href="{% url 'dashboard:return-detail' rr.pk %}">مشاهده</a></td>
     </tr>
     {% empty %}

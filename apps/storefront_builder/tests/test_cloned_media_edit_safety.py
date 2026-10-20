@@ -81,9 +81,6 @@ class _ClonedMediaEditCaseMixin:
         self.client.login(username=self.staff.username, password="pass12345")
 
         layout = svc.get_or_create_layout(self.store)
-        layout.r4_editor_enabled = True
-        layout.save(update_fields=["r4_editor_enabled"])
-
         draft = svc.get_or_create_draft(self.store)
         section = StorefrontSection.objects.create(
             version=draft, section_key=self.section_key, order=960,

@@ -1,0 +1,9 @@
+{% comment %}
+Shared empty state that REPLACES a data-driven, template-owned section which has no shell of its own when empty
+(section_empty_state_service, ``replace_section``). The section keeps its place in the composition; only what it
+DISPLAYS changes. One markup for every template; colours come from the active design tokens.
+{% endcomment %}
+<section class="section sec-empty sec-empty--{{ item.empty_state.kind }}{% if is_builder_preview %} sec-empty--studio{% endif %}" data-empty-state="{{ item.empty_state.kind }}">
+  <div class="sec-head"><h2><span class="bar"></span>{{ item.empty_state.title }}</h2></div>
+  {% include "storefront_builder/sections/_empty_state_body.html" with empty_state=item.empty_state %}
+</section>

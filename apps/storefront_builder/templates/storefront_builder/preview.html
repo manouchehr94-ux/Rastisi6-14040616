@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static storefront_builder_extras %}
 
 {% block title %}پیش‌نمایش — {{ SHOP_NAME }}{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
-<link rel="stylesheet" href="{% static 'css/home.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}?v=u2b-footer-v3-20260823">
-<link rel="stylesheet" href="{% static 'css/storefront_builder_preview_v22.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/home.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder_preview_v22.css' %}">
 {% endblock %}
 
 {% block header %}
@@ -105,8 +105,19 @@
   // standalone Preview and on the live storefront, but while this document is
   // inside the Builder iframe they must never replace the iframe document.
   // Capture phase runs before section-specific link handlers/default navigation.
+  // The R4 Design Studio edits entities (slides, categories, products …) through the section's own settings, so inside ITS frame
+  // an entity element is ordinary section surface (it must take part in the direct-edit gestures). Only the legacy editor, which
+  // implements sfb:openEntityEditor, still gets the entity-editor behaviour.
+  var isStudioHost = false;
+  try { isStudioHost = inParentFrame && window.frameElement && window.frameElement.id === 'r4PreviewFrame'; } catch (err) { isStudioHost = false; }
+  // marker on <body> (not <html>): the html element's data-sfb-* tokens are part of the Preview/Published parity contract
+  if (isStudioHost && document.body) document.body.setAttribute('data-sfb-studio-host', '1');
+  function ownedByEntityEditor(target) {
+    return !isStudioHost && !!(target && target.closest && target.closest('[data-admin-edit-kind]'));
+  }
+
   function openEntityEditor(target) {
-    if (!target || !inParentFrame || builderMode !== 'edit') return false;
+    if (!target || !inParentFrame || builderMode !== 'edit' || isStudioHost) return false;
     var editable = target.closest ? target.closest('[data-admin-edit-kind]') : null;
     if (!editable) return false;
     var section = editable.closest('[data-section-id]');
@@ -121,6 +132,120 @@
     return true;
   }
 
+  // ---- Direct editing gestures (Preview-document layer) -------------------------------------------------------------
+  // Mouse: single click SELECTS a section, double-click opens its settings. Touch / pen: tap SELECTS, press-and-hold opens
+  // settings. Section identity is always the nearest [data-section-id] (never a CSS class); selection and "open settings" travel
+  // to the Studio over the existing origin-restricted messages (sfb:selectSection / sfb:openSectionSettings), and the Studio
+  // opens settings through the same R4.openSection() the structure drawer uses. Genuinely interactive storefront controls
+  // are never hijacked, so a merchant can still test them in the Preview.
+  var LONG_PRESS_MS = 550;      // hold this long (touch / pen) to open settings
+  var LONG_PRESS_SLOP = 10;     // px of movement that turns a hold into a drag/scroll and cancels it
+  var INTERACTIVE_TAGS = { A: 1, BUTTON: 1, INPUT: 1, SELECT: 1, TEXTAREA: 1, LABEL: 1, SUMMARY: 1, OPTION: 1, VIDEO: 1, AUDIO: 1, IFRAME: 1, FORM: 1 };
+  var INTERACTIVE_ROLES = /^(button|link|tab|menuitem|checkbox|radio|switch|slider|spinbutton|textbox|combobox|option|searchbox)$/;
+  var lastPointerType = 'mouse';
+  var press = null;
+  var suppressClickUntil = 0;
+
+  function hasClickBinding(el) {
+    var attrs = el.attributes;
+    for (var i = 0; i < attrs.length; i++) {
+      var name = attrs[i].name;
+      if (name === 'onclick' || name.indexOf('@click') === 0 || name.indexOf('x-on:click') === 0) return true;
+    }
+    return false;
+  }
+
+  // True when ``target`` is (inside) a control the storefront owns: form fields, buttons, links, media, contenteditable,
+  // ARIA widgets, Alpine/onclick-bound elements (quantity controls, carousel arrows, product-card actions, add-to-cart …).
+  function isInteractive(target, section) {
+    for (var el = target; el && el.nodeType === 1; el = el.parentElement) {
+      if (INTERACTIVE_TAGS[el.tagName] && !(el.tagName === 'A' && !el.hasAttribute('href')) && el.tagName !== 'FORM') return true;
+      if (el.isContentEditable || el.hasAttribute('data-no-edit-gesture')) return true;
+      var role = el.getAttribute('role');
+      if (role && INTERACTIVE_ROLES.test(role)) return true;
+      if (hasClickBinding(el)) return true;
+      if (el === section) break;
+    }
+    return false;
+  }
+
+  function sectionMessage(type, section) {
+    return {
+      type: type,
+      sectionId: section.getAttribute('data-section-id') || '',
+      sectionKey: section.getAttribute('data-section-key') || '',
+      containerId: section.getAttribute('data-container-id') || '',
+      cellId: section.getAttribute('data-cell-id') || ''
+    };
+  }
+
+  function acknowledgeEditGesture(section) {
+    section.classList.remove('sfb-rsec-hold');
+    section.classList.add('sfb-rsec-ack');
+    setTimeout(function () { section.classList.remove('sfb-rsec-ack'); }, 500);
+  }
+
+  function openSectionSettingsFor(section) {
+    applyBuilderSelection({
+      sectionId: section.getAttribute('data-section-id'),
+      cellId: section.getAttribute('data-cell-id'),
+      containerId: section.getAttribute('data-container-id')
+    });
+    window.parent.postMessage(sectionMessage('sfb:openSectionSettings', section), window.location.origin);
+  }
+
+  function cancelPress() {
+    if (!press) return;
+    clearTimeout(press.timer);
+    clearTimeout(press.cue);
+    if (press.section) press.section.classList.remove('sfb-rsec-hold');
+    press = null;
+  }
+
+  document.addEventListener('pointerdown', function (evt) {
+    lastPointerType = evt.pointerType || 'mouse';
+    cancelPress();
+    if (!inParentFrame || builderMode !== 'edit') return;
+    if (evt.pointerType === 'mouse' || evt.isPrimary === false) return;           // mouse: click / double-click
+    if (!evt.target || !evt.target.closest) return;
+    var section = evt.target.closest('[data-section-id]');
+    if (!section || isInteractive(evt.target, section) || ownedByEntityEditor(evt.target)) return;
+    var current = { section: section, x: evt.clientX, y: evt.clientY, id: evt.pointerId, timer: 0, cue: 0 };
+    current.cue = setTimeout(function () { if (press === current) section.classList.add('sfb-rsec-hold'); }, 140);
+    current.timer = setTimeout(function () {
+      if (press !== current) return;
+      cancelPress();
+      suppressClickUntil = Date.now() + 800;                                       // the release must not also "tap-select"
+      acknowledgeEditGesture(section);
+      openSectionSettingsFor(section);
+    }, LONG_PRESS_MS);
+    press = current;
+  }, true);
+
+  document.addEventListener('pointermove', function (evt) {
+    if (!press || evt.pointerId !== press.id) return;
+    if (Math.abs(evt.clientX - press.x) > LONG_PRESS_SLOP || Math.abs(evt.clientY - press.y) > LONG_PRESS_SLOP) cancelPress();
+  }, true);
+  ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'dragstart'].forEach(function (name) {
+    document.addEventListener(name, cancelPress, true);
+  });
+  window.addEventListener('scroll', cancelPress, true);                            // scrolling begins: it is not a hold
+  window.addEventListener('blur', cancelPress);
+
+  // no browser context menu / text-selection callout from a press on an editable surface
+  document.addEventListener('contextmenu', function (evt) {
+    if (!inParentFrame || builderMode !== 'edit' || lastPointerType === 'mouse') return;
+    var section = evt.target && evt.target.closest ? evt.target.closest('[data-section-id]') : null;
+    if (section && !isInteractive(evt.target, section)) evt.preventDefault();
+  }, true);
+
+  // the second press of a double-click must not start a word selection
+  document.addEventListener('mousedown', function (evt) {
+    if (!inParentFrame || builderMode !== 'edit' || evt.detail < 2) return;
+    var section = evt.target && evt.target.closest ? evt.target.closest('[data-section-id]') : null;
+    if (section && !isInteractive(evt.target, section)) evt.preventDefault();
+  }, true);
+
   function interceptBuilderEditClick(evt) {
     if (!inParentFrame || builderMode !== 'edit') return;
     var target = evt.target;
@@ -134,14 +259,12 @@
 
     var section = target.closest('[data-section-id]');
     if (section) {
+      // a real storefront control (button, quantity, carousel arrow, add-to-cart, link …) keeps working: not hijacked
+      if (isInteractive(target, section)) return;
       evt.preventDefault();
       evt.stopImmediatePropagation();
-      window.parent.postMessage({
-        type: 'sfb:openSectionSettings',
-        sectionId: section.getAttribute('data-section-id') || '',
-        containerId: section.getAttribute('data-container-id') || '',
-        cellId: section.getAttribute('data-cell-id') || ''
-      }, window.location.origin);
+      if (Date.now() < suppressClickUntil) return;       // the release that ends a long press
+      selectSectionElement(section);                      // single click / tap: SELECT only
       return;
     }
 
@@ -325,15 +448,12 @@
 
   document.addEventListener('dblclick', function (evt) {
     if (!inParentFrame || builderMode !== 'edit') return;
-    var section = evt.target.closest('[data-section-id]');
-    if (!section) return;
+    if (lastPointerType !== 'mouse') return;                  // touch / pen: press-and-hold opens settings, a double tap does not
+    var section = evt.target.closest ? evt.target.closest('[data-section-id]') : null;
+    if (!section || isInteractive(evt.target, section) || ownedByEntityEditor(evt.target)) return;
     evt.preventDefault();
-    window.parent.postMessage({
-      type: 'sfb:openSectionSettings',
-      sectionId: section.getAttribute('data-section-id'),
-      cellId: section.getAttribute('data-cell-id'),
-      containerId: section.getAttribute('data-container-id'),
-    }, window.location.origin);
+    acknowledgeEditGesture(section);
+    openSectionSettingsFor(section);
   });
 
   // Library -> Cell drag/drop.  The Library lives in the parent document and

@@ -7,7 +7,7 @@
 
 .acc-stats{display:flex;gap:14px;margin-top:22px;flex-wrap:wrap}
 .acc-stat{flex:1;min-width:140px;background:var(--violet-softer);border-radius:14px;padding:16px;text-align:center}
-.acc-stat b{display:block;font-size:16px;font-weight:900;color:var(--violet)}
+.acc-stat b{display:block;font-size:16px;font-weight:900;color:var(--violet-text,var(--violet))}
 .acc-stat span{font-size:11.5px;color:var(--muted)}
 
 .ord-table{display:flex;flex-direction:column;gap:2px}
@@ -16,14 +16,14 @@
 .ord-row:last-child{border-bottom:0}
 
 .badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
-.badge-pending{background:var(--violet-soft);color:var(--violet)}
+.badge-pending{background:var(--violet-soft);color:var(--violet-text,var(--violet))}
 .badge-processing{background:#fff4e0;color:var(--amber, #b5750a)}
 .badge-shipped{background:#e0f0ff;color:#0a6bb5}
 .badge-delivered{background:var(--green-soft);color:var(--green)}
-.badge-canceled{background:var(--red-soft, #fdeaea);color:var(--pink)}
-.badge-pay-pending{background:var(--violet-soft);color:var(--violet)}
+.badge-canceled{background:var(--red-soft, #fdeaea);color:var(--pink-text,var(--pink))}
+.badge-pay-pending{background:var(--violet-soft);color:var(--violet-text,var(--violet))}
 .badge-pay-paid{background:var(--green-soft);color:var(--green)}
-.badge-pay-failed{background:var(--red-soft, #fdeaea);color:var(--pink)}
+.badge-pay-failed{background:var(--red-soft, #fdeaea);color:var(--pink-text,var(--pink))}
 .badge-pay-refunded{background:#e0f0ff;color:#0a6bb5}
 
 .addr-list{display:flex;flex-direction:column;gap:12px}
@@ -31,10 +31,10 @@
 .addr-card.is-default{border-color:var(--violet);background:var(--violet-softer)}
 .addr-card b{display:block;font-size:13.5px;margin-bottom:4px}
 .addr-meta{color:var(--muted);margin-top:2px}
-.addr-badge{position:absolute;top:12px;left:14px;background:var(--violet);color:#fff;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px}
+.addr-badge{position:absolute;top:12px;left:14px;background:var(--violet);color:var(--on-violet,#fff);font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px}
 .addr-actions{display:flex;gap:14px;margin-top:10px}
-.addr-actions button{font-size:11.5px;font-weight:700;color:var(--violet)}
-.addr-actions button.danger{color:var(--pink)}
+.addr-actions button{font-size:11.5px;font-weight:700;color:var(--violet-text,var(--violet))}
+.addr-actions button.danger{color:var(--pink-text,var(--pink))}
 
 @media(max-width:720px){
   .ord-row{grid-template-columns:1fr 1fr;row-gap:4px}

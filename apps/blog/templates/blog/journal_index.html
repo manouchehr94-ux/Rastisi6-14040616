@@ -1,0 +1,19 @@
+{% extends "storefront_shell.html" %}
+{% load static %}
+{% block title %}مجله فروشگاه | {{ SHOP_NAME }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap journal-page">
+  <header class="journal-head"><p>مجله و راهنمای خرید</p><h1>مطالب تازه فروشگاه</h1><p>ایده‌هایی برای انتخاب، ترکیب و نگهداری بهتر محصولات</p></header>
+  {% if posts %}
+  <div class="journal-grid">
+    {% for post in posts %}
+    <a href="{{ post.get_absolute_url }}" class="journal-tile" data-sfb-card-surface>
+      {% if post.has_available_cover %}<div class="journal-cover"><img src="{{ post.cover_image.url }}" data-img-role="article" alt="{{ post.title }}" loading="lazy"></div>{% else %}<div class="journal-cover journal-cover--none"{% if post.tint %} style="background:{{ post.tint }}"{% endif %}><span aria-hidden="true">{{ post.cover_emoji|default:"✦" }}</span></div>{% endif %}
+      <div class="journal-tile-copy"><span>{{ post.category_label|default:"مجله فروشگاه" }}</span><h2>{{ post.title }}</h2><p>{{ post.excerpt }}</p><strong>خواندن مطلب ←</strong></div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<div class="sfb-content-empty">هنوز مطلبی منتشر نشده است. به‌زودی مجله فروشگاه به‌روزرسانی می‌شود.</div>{% endif %}
+</div>
+{% endblock %}

@@ -115,7 +115,7 @@ class TrustContentSurvivesTheDraftLifecycleOnPdpTests(TestCase):
         # A merchant edits the trust rows (through the canonical validator).
         section.settings = section_registry.validate_trust_features_settings(
             {"items": [
-                {"icon": "🛡️", "title": "ضمانت اصالت کالای پی‌دی‌تی‌ایکس", "subtitle": "اورجینال"},
+                {"icon": "🛡️", "title": "ضمانت اصالت کالای پی‌دی‌تی‌ایکس", "subtitle": "اورجینال", "verified": True},
             ]}
         )
         section.save(update_fields=["settings"])

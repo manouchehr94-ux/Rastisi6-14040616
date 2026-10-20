@@ -326,17 +326,3 @@ class D004DestinationPickerSerializationTests(_DestinationFixtureMixin, MediaVie
         url = reverse("dashboard:storefront-builder-section-media-add", args=[self.hero_section.pk, "hero-slides"])
         state = self._run_in_node(self._picker_call(self.client.get(url).content.decode()))
         self.assertEqual(state["type"], "none")
-
-    def test_section_destination_fields_block_null_id_is_valid_js(self):
-        from django.template.loader import render_to_string
-        for dtype in ["category", "brand", "collection", "product"]:
-            with self.subTest(dtype=dtype):
-                section = type("S", (), {"pk": 1, "settings": {"destination": {
-                    "destination_type": dtype, "destination_id": None}}})()
-                html = render_to_string(
-                    "dashboard/storefront_builder/partials/section_destination_fields.html",
-                    {"section": section, "destination_product_name": ""},
-                )
-                call = self._picker_call(html)
-                self.assertNotIn("None", call)
-                self._run_in_node(call)

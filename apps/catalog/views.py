@@ -1,18 +1,12 @@
 import json
-from datetime import timedelta
 
 from django.core.paginator import Paginator
-from django.db.models import Avg, F, Max, Prefetch, Q
+from django.db.models import F, Prefetch, Q
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.http import urlencode
 from django.views.decorators.http import require_POST
 
-from apps.blog.models import BlogPost
-from apps.content.models import HeroSlide, PromotionalBanner
-from apps.content.services import resolve_destination_url
-from apps.customers.models import Customer
 from apps.stores.resolution import resolve_store_for_storefront
 
 from .models import Brand, Category, Product, Review
@@ -22,113 +16,22 @@ from apps.cart.services.gift_wrap_service import (
 )
 
 from .services.product_publish_service import storefront_listing_products, storefront_visible_products
+from .services import availability_service, search_service
+from .services.promotion_service import active_discount_q, with_active_discount
 from .services.product_video_service import ProductVideoError
 from .services.storefront_variant_service import build_variant_selector_context
 
-BEST_SORT_OPTIONS = {
-    "sold": ("-sold_count", "پرفروش‌ترین"),
-    "new": ("-created_at", "جدیدترین"),
-    "view": ("-views_count", "پربازدید"),
-    "disc": ("-discount_percent", "تخفیف‌دار"),
-}
-DEFAULT_SORT = "sold"
-
-TILE_CLASSES = ["t1", "t2", "t3"]
-
-
-def _best_products(store, sort_key):
-    order_field, _ = BEST_SORT_OPTIONS.get(sort_key, BEST_SORT_OPTIONS[DEFAULT_SORT])
-    qs = (
-        storefront_listing_products(store)
-        .select_related("brand").prefetch_related("images")
-    )
-    if sort_key == "disc":
-        qs = qs.filter(discount_percent__gt=0)
-    return qs.order_by(order_field)[:8]
-
 
 def home(request):
+    """Public homepage — rendered by the Universal Storefront Engine like every other page (published layout; a Store
+    that never published gets the engine's own deterministic default). There is no second homepage implementation."""
     store = resolve_store_for_storefront(request)
-
-    # اگر این فروشگاه سازنده بصری صفحه اصلی را منتشر کرده (تصمیم ۳ کاربر:
-    # فعال‌سازی تدریجی per-store)، مسیر قدیمی هارد‌کد این پایین اجرا
-    # نمی‌شود — به‌جایش همان نسخه‌ی منتشرشده رندر می‌شود (هرگز Draft،
-    # تصمیم ۱۱ کاربر). Import محلی برای جلوگیری از وابستگی حلقوی
-    # ماژول‌سطح با apps.storefront_builder (که خودش از apps.catalog
-    # استفاده می‌کند).
-    #
-    # Phase 1B: منطقِ تشخیص/ساختِ کانتکست دیگر اینجا تکرار نمی‌شود —
-    # ``build_universal_storefront_context`` تنها نقطه‌ی این تصمیم برایِ
-    # هر شش نوع صفحه است (نگاه کنید به گزارشِ Phase 1B).
-    from apps.storefront_builder.services.storefront_context_service import (
-        build_universal_storefront_context,
-    )
+    # local import: apps.storefront_builder itself imports apps.catalog
     from apps.storefront_builder.models import StorefrontPage
+    from apps.storefront_builder.services.storefront_context_service import build_universal_storefront_context
 
-    universal_context = build_universal_storefront_context(
-        request, store, StorefrontPage.PageType.HOME,
-    )
-    if universal_context["uses_universal_shell"]:
-        # ``top_level_categories`` از قبل توسطِ ``build_universal_storefront_context``
-        # محاسبه شده (نگاه کنید به ``storefront_context_service._top_level_categories``)
-        # — دیگر نیازی به کوئریِ جداگانه‌یِ اینجا نیست.
-        return render(request, "catalog/home_visual.html", universal_context)
-
-    active_products = storefront_listing_products(store)
-
-    top_categories = list(
-        Category.objects.filter(store=store, parent__isnull=True, is_active=True).order_by("order", "name")
-    )
-    icon_categories = (
-        Category.objects.filter(store=store, parent__isnull=False, is_active=True)
-        .select_related("parent")
-        .order_by("order", "name")
-    )
-
-    new_products = active_products.select_related("brand").prefetch_related("images").order_by("-created_at")[:8]
-    discounted_products = (
-        active_products.select_related("brand").prefetch_related("images")
-        .filter(discount_percent__gt=0).order_by("-discount_percent")[:6]
-    )
-    highlight_product = discounted_products.first()
-    most_viewed_product = active_products.order_by("-views_count").first()
-
-    stats = active_products.aggregate(avg_rating=Avg("rating"), max_discount=Max("discount_percent"))
-
-    context = {
-        "sort_key": DEFAULT_SORT,
-        "best_sort_options": BEST_SORT_OPTIONS,
-        "best_products": _best_products(store, DEFAULT_SORT),
-        "top_categories": top_categories,
-        "tiles": list(zip(top_categories[:3], TILE_CLASSES)),
-        "cream_category": top_categories[3] if len(top_categories) > 3 else None,
-        "icon_categories": icon_categories,
-        "new_products": new_products,
-        "discounted_products": discounted_products,
-        "highlight_product": highlight_product,
-        "most_viewed_product": most_viewed_product,
-        "customers_count": Customer.objects.count(),
-        "avg_rating": stats["avg_rating"] or 0,
-        "max_discount": stats["max_discount"] or 0,
-        "blog_posts": BlogPost.objects.order_by("-published_at")[:5],
-        "special_offer_deadline": (timezone.now() + timedelta(hours=8)).isoformat(),
-        "hero_slides": HeroSlide.objects.filter(is_active=True, store=store, section__isnull=True).select_related(
-            "destination_category", "destination_product", "destination_brand"
-        ),
-        "promo_banners": PromotionalBanner.objects.filter(is_active=True, store=store, section__isnull=True).select_related(
-            "destination_category", "destination_product", "destination_brand"
-        ),
-    }
-    return render(request, "catalog/home.html", context)
-
-
-def home_best_products(request):
-    store = resolve_store_for_storefront(request)
-    sort_key = request.GET.get("sort", DEFAULT_SORT)
-    if sort_key not in BEST_SORT_OPTIONS:
-        sort_key = DEFAULT_SORT
-    context = {"products": _best_products(store, sort_key)}
-    return render(request, "catalog/partials/product_grid.html", context)
+    context = build_universal_storefront_context(request, store, StorefrontPage.PageType.HOME)
+    return render(request, "catalog/home_visual.html", context)
 
 
 PRODUCTS_PER_PAGE = 12
@@ -152,9 +55,8 @@ def _filtered_products(request, store):
 
     query = request.GET.get("q", "").strip()
     if query:
-        qs = qs.filter(
-            Q(name__icontains=query) | Q(brand__name__icontains=query) | Q(category__name__icontains=query)
-        ).distinct()
+        # RS-09: one Persian-aware normaliser (ی/ي، ک/ك، ZWNJ، خط‌فاصله، ارقام) — never a raw icontains on the whole string.
+        qs = search_service.apply_product_search(qs, query)
 
     category_slug = request.GET.get("category", "").strip()
     if category_slug:
@@ -166,27 +68,34 @@ def _filtered_products(request, store):
 
     min_price = request.GET.get("min_price", "").strip()
     if min_price.isdigit():
-        qs = qs.filter(price__gte=int(min_price))
+        # «استعلام قیمت»: بهای عمومی ندارد، پس در فیلترِ بازه‌ی قیمت نمی‌آید.
+        qs = qs.filter(price__gte=int(min_price), is_price_inquiry=False)
 
     max_price = request.GET.get("max_price", "").strip()
     if max_price.isdigit():
-        qs = qs.filter(price__lte=int(max_price))
+        qs = qs.filter(price__lte=int(max_price), is_price_inquiry=False)
 
     if request.GET.get("discounted") == "1":
-        qs = qs.filter(discount_percent__gt=0)
+        qs = with_active_discount(qs)
 
     # U5 — availability facet, real stock data (no fabricated "in stock"
     # claim): ``Product.stock`` is already the single source of truth used
     # by the card resolver's ``is_out_of_stock`` (U3) and by
     # ``inventory_service`` — reusing the same field here, not a new one.
     if request.GET.get("in_stock") == "1":
-        qs = qs.filter(stock__gt=0)
+        qs = availability_service.available_only(qs)
 
     sort_key = request.GET.get("sort", DEFAULT_LIST_SORT)
     if sort_key not in LIST_SORT_OPTIONS:
         sort_key = DEFAULT_LIST_SORT
     order_field, _ = LIST_SORT_OPTIONS[sort_key]
-    qs = qs.order_by(order_field, "id")
+    # Owner rule: unavailable products (when included) come AFTER available
+    # ones; the chosen sort still orders each group.
+    if sort_key in ("price_asc", "price_desc"):
+        # کالاهای «استعلام قیمت» عددِ قابل‌مقایسه ندارند؛ در مرتب‌سازیِ قیمت بعد از کالاهای قیمت‌دار.
+        qs = availability_service.order_available_first(qs, "is_price_inquiry", order_field, "id")
+    else:
+        qs = availability_service.order_available_first(qs, order_field, "id")
 
     return qs, sort_key, query
 
@@ -528,6 +437,7 @@ def build_product_detail_context(request, product):
             "gift_wrap_price": int(gift_wrap_price),
         },
         "gallery_slides": _gallery_slides(product),
+        "price_inquiry": None,
         "approved_reviews": approved_reviews,
         "review_count": review_count,
         "rating_breakdown": rating_breakdown,
@@ -541,6 +451,17 @@ def build_product_detail_context(request, product):
         # هرگز در فروشگاه رندر نمی‌شدند — صرف‌نظر از درستیِ خودِ ذخیره‌سازی.
         "product_videos": _product_video_render_data(product),
     }
+    if product.is_price_inquiry:
+        # «استعلام قیمت»: هیچ قیمتی (حتی در JSONِ صفحه) به مرورگر نمی‌رسد و
+        # انتخابگرِ تنوع که قیمتِ هر تنوع را دارد خالی می‌شود.
+        from .services import pricing_mode_service
+
+        context["variant_selector"] = {"mode": "none", "axes": [], "matrix": {}, "groups": [], "default_key": None}
+        context["product_price_json"] = {
+            "price": 0, "regular": 0, "savings": 0, "stock": 0, "sku": product.sku, "gift_wrap_price": 0,
+        }
+        context["gift_wrap_available"] = False
+        context["price_inquiry"] = {"url": pricing_mode_service.inquiry_destination_url(product.store)}
     return context
 
 
@@ -655,7 +576,9 @@ def collection_index(request):
 def collection_detail(request, slug):
     store = resolve_store_for_storefront(request)
     collection = get_object_or_404(collection_service.public_collection_queryset(store), slug=slug)
-    items = collection_service.collection_visible_items(collection, store)
+    items = availability_service.order_items_available_first(
+        collection_service.collection_visible_items(collection, store), "order", "id",
+    )
 
     paginator = Paginator(items, PRODUCTS_PER_PAGE)
     page_obj = paginator.get_page(request.GET.get("page"))

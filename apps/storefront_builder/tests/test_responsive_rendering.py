@@ -35,6 +35,9 @@ def _product(store, slug, *, vendor=None, category=None):
     return Product.objects.create(
         store=store, vendor=vendor, category=category, name=f"کالای {slug}", slug=slug,
         sku=f"SKU-{slug}", price=Decimal("10000"), status=Product.Status.ACTIVE,
+        # Home product rails never pick an unavailable product (owner rule), so a fixture meant to APPEAR there
+        # must be in stock.
+        stock=5,
     )
 
 

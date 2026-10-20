@@ -2,7 +2,12 @@ from django.test import SimpleTestCase
 
 from apps.storefront_builder import resource_source as resource_source_module
 from apps.storefront_builder import section_registry
-from apps.storefront_builder.section_registry import SectionDefinition, TrustFeaturesSettingsError, get_definition
+from apps.storefront_builder.section_registry import (
+    SectionDefinition,
+    TrustFeaturesSettingsError,
+    get_definition,
+    sections_with_capability,
+)
 from apps.storefront_builder.settings_schema import (
     SettingsField,
     SettingsSchema,
@@ -394,6 +399,8 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 # Phase 5 Task 5 (STRANS) — between-slide transition style.
                 "transition",
                 "appearance_overrides",
+                # R4-11 — the generic Design field (hero gained the image focal-point control)
+                "design",
                 # Phase 5 Task 4B — the per-section background picker field.
                 "background",
             ],
@@ -512,6 +519,8 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "trust_features",
         "faq",
         "testimonials",
+        "surface_panel",
+        "decorative_strip",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):
@@ -1005,6 +1014,7 @@ class RepeaterSchemaEnabledFamilyTests(SimpleTestCase):
         cleaned = clean_section_schema_patch(definition, {
             "items": [{"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"}],
         }, current)
+        # FOLLOWUP-10: default ``claim``/``verified`` are not persisted, so legacy items keep their exact stored shape.
         self.assertEqual(cleaned["items"], [
             {"icon": "🚚", "title": "ارسال رایگان", "subtitle": "تا ۲۴ ساعت"},
         ])
@@ -1071,7 +1081,7 @@ class RepeaterSchemaEnabledFamilyTests(SimpleTestCase):
 class BackgroundCapabilityProjectionTests(SimpleTestCase):
     def _schema_enabled_background_aware_keys(self):
         keys = []
-        for key in section_registry.BACKGROUND_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("background"):
             definition = section_registry.get_definition(key)
             if definition.settings_schema is not None:
                 keys.append(key)
@@ -1089,7 +1099,9 @@ class BackgroundCapabilityProjectionTests(SimpleTestCase):
             field = definition.settings_schema.get_field("background")
             self.assertIsNotNone(field, f"{key} is background-aware + schema-enabled but has no background field")
             self.assertEqual(field.field_type, "background", key)
-            self.assertEqual(field.group, "advanced", key)
+            # a product band's fill is its primary design decision -> Basic tab; every other section: Advanced
+            expected_group = "basic" if section_registry.get_definition(key).supports_capability("background_primary") else "advanced"
+            self.assertEqual(field.group, expected_group, key)
 
     def test_background_field_default_is_canonical_default_background_settings(self):
         for key in self._schema_enabled_background_aware_keys():
@@ -1099,12 +1111,12 @@ class BackgroundCapabilityProjectionTests(SimpleTestCase):
     def test_non_background_aware_schema_section_has_no_background_field(self):
         # A schema-enabled section that is NOT background-aware must not get
         # the field. cart_summary has no schema; use a schema-enabled section
-        # that is deliberately excluded from BACKGROUND_AWARE_SECTION_KEYS.
+        # that is deliberately excluded from sections_with_capability("background").
         # (If none exist, this assertion is vacuously safe.)
         for definition in section_registry.list_definitions():
             if definition.settings_schema is None:
                 continue
-            if definition.key in section_registry.BACKGROUND_AWARE_SECTION_KEYS:
+            if definition.key in sections_with_capability("background"):
                 continue
             self.assertIsNone(
                 definition.settings_schema.get_field("background"),
@@ -1141,7 +1153,7 @@ class BackgroundCapabilityProjectionTests(SimpleTestCase):
         }
         for key in documented_non_schema:
             definition = section_registry.get_definition(key)
-            self.assertIn(key, section_registry.BACKGROUND_AWARE_SECTION_KEYS, key)
+            self.assertIn(key, sections_with_capability("background"), key)
             self.assertIsNone(definition.settings_schema, key)
 
 

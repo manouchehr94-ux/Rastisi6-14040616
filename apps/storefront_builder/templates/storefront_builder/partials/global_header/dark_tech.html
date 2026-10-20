@@ -14,7 +14,7 @@ palette still shows through the accent/hover states, per U2A §11.
 Required context: same three keys every variant renderer receives.
 {% endcomment %}
 {% with hc=header_config rc=header_config.responsive %}
-<div class="gh-shell gh-shell--dark" x-data="{ ghMobileOpen: false }">
+<div class="gh-shell gh-shell--dark" x-data="{ ghMobileOpen: false }" @keydown.escape.window="ghMobileOpen = false">
 {% include "storefront_builder/partials/global_header/_shared/announcement_bar.html" %}
 
 <header class="header gh gh--dark{% if hc.sticky %} sfb-sticky{% endif %}" style="background:var(--gh-bg) !important;color:var(--gh-ink) !important;border-color:var(--gh-border) !important">

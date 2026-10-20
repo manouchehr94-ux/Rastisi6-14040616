@@ -1,0 +1,11 @@
+{% comment %}
+Generic decorative strip (see decorative_strip.py). All visual values are inline custom
+properties from the validated settings; the image URL was resolved Store-scoped by the
+render service. Draws nothing when the strip is disabled.
+{% endcomment %}
+{% if strip.enabled %}
+<section class="section decor-strip" style="{{ strip.style }}"{% if strip.pattern %} data-pattern="{{ strip.pattern }}"{% endif %}{% if strip.bleed %} data-bleed="1"{% endif %}{% if strip.hide %} data-hide="{{ strip.hide }}"{% endif %}>
+  <span class="decor-strip-bg" aria-hidden="true"></span>
+  {% if strip.text %}<span class="decor-strip-text">{{ strip.text }}</span>{% endif %}
+</section>
+{% endif %}

@@ -72,7 +72,7 @@ def _discounted_product(store):
     return Product.objects.create(
         store=store, vendor=vendor, category=category, name="کالای طلاییِ V5",
         slug="v5-golden-product", sku="SKU-V5-GOLDEN", price=Decimal("120000"),
-        discount_percent=10, status=Product.Status.ACTIVE,
+        discount_percent=10, status=Product.Status.ACTIVE, stock=5,
     )
 
 
@@ -82,7 +82,7 @@ def _product(store, slug, *, discount_percent=0):
     return Product.objects.create(
         store=store, vendor=vendor, category=category, name=f"کالای {slug}", slug=slug,
         sku=f"SKU-{slug}", price=Decimal("10000"), status=Product.Status.ACTIVE,
-        discount_percent=discount_percent,
+        discount_percent=discount_percent, stock=5,
     )
 
 
@@ -467,7 +467,7 @@ class BlogPostsPlatformWideButRenderedSafelyTests(TestCase):
         store = _akhlaghi()
         _verified_domain(store, HOST)
         for i in range(4):
-            BlogPost.objects.create(title=f"Post {i}", slug=f"p3-post-{i}", body="x")
+            BlogPost.objects.create(title=f"Post {i}", slug=f"p3-post-{i}", body="x", published_at=timezone.now())
         draft = svc.get_or_create_draft(store)
         home = draft.home_page()
         home.sections.all().delete()

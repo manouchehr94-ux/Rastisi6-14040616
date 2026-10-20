@@ -15,7 +15,7 @@
     <div class="mini">
       <picture>
         {% if banner.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ banner.mobile_image_url }}">{% endif %}
-        {% if banner.desktop_image_url %}<img src="{{ banner.desktop_image_url }}" alt="{{ banner.title|default:'بنر' }}" loading="lazy" style="max-height:120px;border-radius:12px">{% endif %}
+        {% if banner.desktop_image_url %}<img src="{{ banner.desktop_image_url }}" data-img-role="banner" alt="{{ banner.title|default:'بنر' }}" loading="lazy">{% endif %}
       </picture>
     </div>
   </div>

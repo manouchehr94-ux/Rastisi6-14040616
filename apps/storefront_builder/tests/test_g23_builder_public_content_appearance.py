@@ -28,7 +28,6 @@ from django.utils import timezone
 from apps.catalog.models import Brand, MerchantCollection
 from apps.catalog.services.brand_service import update_brand
 from apps.storefront_builder.models import StorefrontSection
-from apps.storefront_builder import section_registry
 from apps.storefront_builder.services import layout_service, render_service
 from apps.stores.management.commands.seed_ready_template_fashion_demo import STORE_SLUG
 from apps.stores.models import Store, StoreMembership
@@ -201,183 +200,6 @@ class DefectBFeaturedCollectionsRoundTripTests(_GoldenBase):
 # =====================================================================
 # DEFECT C — Section Background control end-to-end
 # =====================================================================
-class DefectCSectionBackgroundTests(_GoldenBase):
-    def _bg_section(self, home):
-        # category_grid is background-aware and has a settings form.
-        return self._section(home, "category_grid")
-
-    def _post_settings(self, section, extra):
-        base = {
-            "title": (section.settings or {}).get("title", ""),
-            "display_mode": (section.settings or {}).get("display_mode", "fashion_tiles"),
-            "item_limit": (section.settings or {}).get("item_limit", 12),
-            "motion_style": "none",
-        }
-        base.update(extra)
-        return self.client.post(self._settings_url(section), base, HTTP_HOST=self.host)
-
-    # 1. MUTATION / PERSISTENCE ----------------------------------------
-    def test_palette_mode_persists_when_only_mode_selected(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        """A merchant selecting a palette background whose companion field is
-        left at its natural default MUST persist as palette — not silently
-        downgrade to theme (the observed 'nothing changes')."""
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        # The exact minimal payload a merchant produces by only changing the
-        # background type to 'palette' (companion palette-role field left
-        # unset / not touched).
-        self._post_settings(sec, {"background_mode": "palette"})
-        sec.refresh_from_db()
-        self.assertEqual((sec.settings or {}).get("background", {}).get("mode"), "palette",
-                         "palette selection silently downgraded to theme (Defect C)")
-
-    def test_custom_color_mode_persists_when_only_mode_selected(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "color"})
-        sec.refresh_from_db()
-        self.assertEqual((sec.settings or {}).get("background", {}).get("mode"), "color",
-                         "custom-color selection silently downgraded to theme (Defect C)")
-
-    # 2. PREVIEW RENDER ------------------------------------------------
-    def test_palette_background_changes_preview_render(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "palette", "background_palette_role": "tone-2"})
-        preview = self._preview_home_html()
-        self.assertIn('data-bg-mode="palette"', preview)
-        self.assertIn('data-palette-role="tone-2"', preview)
-
-    def test_color_mode_without_color_paints_no_background(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        """G2.3 review follow-up: selecting 'custom color' but never picking a
-        colour must keep the mode (no silent theme downgrade) yet paint NO
-        background — never a surprise hardcoded red. The wrapper only emits an
-        inline background-color when a real colour is set."""
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "color"})
-        sec.refresh_from_db()
-        self.assertEqual((sec.settings or {}).get("background", {}).get("mode"), "color")
-        self.assertEqual((sec.settings or {}).get("background", {}).get("color"), "")
-        preview = self._preview_home_html()
-        # No accidental red / no inline background-color painted for this section.
-        self.assertNotIn("#F53247", preview)
-
-    def test_palette_pattern_without_role_persists_with_default_role(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        """The empty-companion defaulting must apply to BOTH palette modes."""
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {
-            "background_mode": "palette_pattern",
-            "background_pattern_slug": "commerce-doodle",
-        })
-        sec.refresh_from_db()
-        bg = (sec.settings or {}).get("background", {})
-        self.assertEqual(bg.get("mode"), "palette_pattern")
-        self.assertEqual(bg.get("palette_role"), "tone-1")
-
-    # 4. CUSTOM COLOR INDEPENDENCE -------------------------------------
-    def test_custom_color_renders_independent_hex(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "color", "background_color": "#123456"})
-        sec.refresh_from_db()
-        self.assertEqual((sec.settings or {}).get("background", {}).get("color"), "#123456")
-        preview = self._preview_home_html()
-        self.assertIn("#123456", preview)
-
-    # 5. PUBLISH / PUBLIC ----------------------------------------------
-    def test_background_survives_publish_into_public(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "palette", "background_palette_role": "tone-3"})
-        layout_service.publish(self.store)
-        public = self._public_home_html()
-        self.assertIn('data-bg-mode="palette"', public)
-        self.assertIn('data-palette-role="tone-3"', public)
-
-    # 6. INVALID INPUT --------------------------------------------------
-    def test_invalid_palette_role_does_not_persist_bogus(self):
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "palette", "background_palette_role": "tone-99"})
-        sec.refresh_from_db()
-        bg = (sec.settings or {}).get("background", {})
-        # Bogus role must never be stored; must not raise; safe fallback.
-        self.assertNotEqual(bg.get("palette_role"), "tone-99")
-
-    def test_malformed_color_rejected_safely(self):
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        before = (sec.settings or {}).get("background", {})
-        resp = self._post_settings(sec, {"background_mode": "color", "background_color": "not-a-color"})
-        sec.refresh_from_db()
-        after = (sec.settings or {}).get("background", {})
-        # Must not store a malformed color.
-        self.assertNotEqual(after.get("color"), "not-a-color")
-
-    # 7. TENANT ISOLATION ----------------------------------------------
-    def test_background_change_is_store_scoped(self):
-        # Store A change must not touch Store B's sections.
-        other = Store.objects.create(
-            name="فروشگاه دیگر", slug="g23-other-store", admin_subdomain="g23-other-store",
-        )
-        other_draft = layout_service.get_or_create_draft(other)
-        other_home = other_draft.get_page("home")
-        other_sec = other_home.sections.filter(section_key="category_grid").first()
-        other_before = (other_sec.settings or {}).get("background") if other_sec else None
-
-        _, home = self._draft_home()
-        sec = self._bg_section(home)
-        self._post_settings(sec, {"background_mode": "palette", "background_palette_role": "tone-1"})
-
-        if other_sec:
-            other_sec.refresh_from_db()
-            self.assertEqual((other_sec.settings or {}).get("background"), other_before,
-                             "changing store A background mutated store B")
-
 
 
 # =====================================================================
@@ -437,7 +259,7 @@ class BrandTileCssIsInSharedBuilderStylesheetTests(TestCase):
         css = self._builder_css()
         # Effective Home value (dense block wins): `.brand-tile img{max-height:48px}`
         self.assertIn("max-height:48px", css)
-        self.assertIn("object-fit:contain", css)
+        self.assertIn("object-fit:var(--img-fit,contain)", css)  # R4-11: through the image contract
         # And it must NOT carry the stale first-block value that would change Home.
         self.assertNotIn("max-height:40px", css)
 
@@ -461,13 +283,12 @@ class BrandTileCssIsInSharedBuilderStylesheetTests(TestCase):
         self.assertIn("gap:9px", css)            # dense wins over 14px
         self.assertIn("flex:0 0 150px", css)     # dense wins over 140px
 
-    def test_home_css_brand_rules_are_not_deleted(self):
-        """Regression guard: adding rules to the shared sheet must NOT remove
-        the original Home-only rules (Home must stay byte-identical)."""
-        home = self._home_css()
-        self.assertIn(".brand-tile", home)
-        self.assertIn(".brand-carousel", home)
-        self.assertIn(".brand-tile img{max-height:40px", home)
+    def test_brand_rules_have_one_definition_in_the_shared_engine_sheet(self):
+        """Brand tile / carousel rules are defined once, in the shared engine sheet (no second copy in home.css)."""
+        css = self._builder_css()
+        self.assertIn(".brand-tile", css)
+        self.assertIn(".brand-carousel", css)
+        self.assertNotIn(".brand-carousel", self._home_css())
 
     def test_brand_selectors_are_scoped_no_global_spill(self):
         """Every Brand rule added to the shared sheet must be anchored on a
@@ -487,7 +308,6 @@ class BrandTileCssIsInSharedBuilderStylesheetTests(TestCase):
         for rule in rule_lines:
             selector = rule.split("{", 1)[0].strip()
             self.assertIn("brand-", selector, f"non-brand-scoped selector leaked into Brand CSS block: {selector!r}")
-
 
 
 # =====================================================================
@@ -533,7 +353,6 @@ class BrandOnNonHomePublicRouteTests(_GoldenBase):
         # tile CSS now lives) — NOT the Home-only home.css.
         self.assertIn("css/storefront_builder.css", body)
         self.assertNotIn("css/home.css", body)
-
 
 
 # =====================================================================

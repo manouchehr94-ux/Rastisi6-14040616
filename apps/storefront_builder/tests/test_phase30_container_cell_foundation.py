@@ -1,5 +1,4 @@
 from django.test import TestCase
-from django.urls import reverse
 
 from apps.storefront_builder.models import (
     StorefrontCell,
@@ -131,23 +130,6 @@ class Phase30ContainerCellFoundationTests(StorefrontBuilderViewsTestCase):
         after = self.draft.compute_fingerprint()
 
         self.assertNotEqual(before, after)
-
-    def test_legacy_row_endpoint_keeps_container_shadow_in_sync(self):
-        first = self._section(0, row_key="pair", row_span=3)
-        self._section(1, row_key="pair", row_span=9)
-
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-section-row-layout", args=[first.pk]),
-            {"layout_mode": "half"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        container = self.page.containers.get()
-        self.assertEqual(container.layout_key, "half")
-        self.assertEqual(
-            list(container.cells.order_by("order").values_list("span", flat=True)),
-            [6, 6],
-        )
 
 
 class Phase30ContainerCellModelContractTests(TestCase):

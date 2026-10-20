@@ -1,7 +1,22 @@
+import hashlib
+import os
+
 from django import template
+from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
 register = template.Library()
+
+
+@register.filter
+def contrast_fg(color):
+    """Black or white text colour for an arbitrary merchant background colour
+    (WCAG relative-luminance based — never an RGB-average guess). An invalid /
+    empty value yields white, the historical default for coloured section bands."""
+    from apps.core.color_utils import best_foreground, is_valid_hex
+
+    return best_foreground(color) if is_valid_hex(color) else "#FFFFFF"
 
 
 @register.filter
@@ -23,6 +38,31 @@ def sanitize_rich_text(value):
     from apps.catalog.services.html_sanitizer import sanitize_product_description
 
     return mark_safe(sanitize_product_description(value or ""))
+
+
+@register.filter
+def shell_geometry_style(geometry, region):
+    """Inline custom-property fragment for a header/footer ``geometry`` block (``--gh-*`` / ``--gf-*``)."""
+    from .. import shell_geometry
+
+    return shell_geometry.geometry_style(geometry, region)
+
+
+@register.filter
+def geo(geometry, spec):
+    """``{{ hc.geometry|geo:"chip_count:2" }}`` — an integer geometry value with the variant's own default."""
+    key, _, default = str(spec).partition(":")
+    value = geometry.get(key) if isinstance(geometry, dict) else None
+    try:
+        return int(value) if value is not None else int(default)
+    except (TypeError, ValueError):
+        return int(default or 0)
+
+
+@register.filter
+def startswith(value, prefix):
+    """``{% if value|startswith:"token:" %}`` — string prefix test for template conditions."""
+    return isinstance(value, str) and value.startswith(prefix)
 
 
 @register.filter
@@ -236,3 +276,107 @@ def media_default_state(section, config):
     if model is None:
         return media_defaults_service.DefaultMediaState()
     return media_defaults_service.default_media_state(section, model)
+
+
+@register.simple_tag
+def footer_badge_slot_total(extra_blocks):
+    """Total square count requested by the footer's ``badge_slots`` block (0 when the block is absent)."""
+    for block in extra_blocks or []:
+        if isinstance(block, dict) and block.get("type") == "badge_slots":
+            try:
+                return max(0, int(block.get("count", 0)))
+            except (TypeError, ValueError):
+                return 0
+    return 0
+
+
+@register.simple_tag
+def footer_empty_badge_slots(total, badges):
+    """Range of neutral empty squares left after the real trust badges took their places."""
+    try:
+        used = len(badges or [])
+    except TypeError:
+        used = 0
+    return range(max(0, int(total or 0) - used))
+
+
+@register.simple_tag
+def sfb_static(path):
+    """Static URL with a content-derived cache-busting query (``?v=<mtime>``).
+
+    The storefront stylesheets are loaded by BOTH the published pages and the Design Studio preview. They must
+    share one URL that changes exactly when the file changes — a hand-pinned token (or none at all) lets one
+    surface keep running an older stylesheet than the other. Falls back to the plain static URL when the file
+    cannot be located on disk."""
+    import os
+
+    from django.contrib.staticfiles import finders
+    from django.templatetags.static import static
+
+    url = static(path)
+    try:
+        found = finders.find(path)
+        if found:
+            return f"{url}?v={int(os.stat(found).st_mtime)}"
+    except OSError:
+        pass
+    return url
+
+
+@register.filter
+def visible_when_json(field):
+    """The Inspector's context-sensitive visibility rule of a schema field as compact JSON ("" when unconditional)."""
+    from ..settings_schema import visible_when_json as _visible_when_json
+
+    return _visible_when_json(field)
+
+
+@register.filter
+def mode_not_in(mode, csv):
+    """True when ``mode`` is NOT one of the comma separated ``csv`` modes (drives the server-rendered ``hidden``)."""
+    return str(mode or "theme") not in {item.strip() for item in str(csv).split(",")}
+
+
+@register.simple_tag(takes_context=True)
+def service_claims(context):
+    """FOLLOWUP-10 — the REAL payment / shipping / pickup state of the current store, for the few fixed (non-editable)
+    storefront blocks that used to state those services unconditionally. Read-only, store-scoped, cached per request;
+    without a store everything is False (never claim what cannot be verified)."""
+    request = context.get("request")
+    store = getattr(request, "store", None) if request is not None else None
+    if store is None:
+        return {"payment": False, "shipping": False, "pickup": False}
+    cached = getattr(request, "_service_claims_cache", None)
+    if cached is None:
+        from ..services.trust_claims import store_service_state
+
+        cached = request._service_claims_cache = store_service_state(store)
+    return cached
+
+
+#: path -> (mtime_ns, content hash): the hash is recomputed only when the file really changed
+_STATIC_VERSION_CACHE: dict[str, tuple[int, str]] = {}
+
+
+@register.simple_tag
+def static_v(path):
+    """``{% static %}`` URL + ``?v=<content hash>`` (R4-09 fix).
+
+    Django's default static serving sends ``Last-Modified`` but no ``Cache-Control`` / ``ETag``, so a browser (Firefox in
+    particular) applies HEURISTIC freshness and keeps serving a previously fetched ``r4_studio.css`` / ``r4_editor.js`` for
+    hours after a patch replaced them — new script against old stylesheet. A URL that changes with the file's content makes
+    that impossible. A storage that already fingerprints its URLs (``?`` or a hash in the name) is left alone; a file the
+    finders cannot see simply gets the plain URL."""
+    url = static(path)
+    if "?" in url:
+        return url
+    absolute = finders.find(path)
+    if not absolute or not os.path.isfile(absolute):
+        return url
+    mtime = os.stat(absolute).st_mtime_ns
+    cached = _STATIC_VERSION_CACHE.get(absolute)
+    if cached is None or cached[0] != mtime:
+        with open(absolute, "rb") as handle:
+            cached = (mtime, hashlib.sha1(handle.read()).hexdigest()[:10])
+        _STATIC_VERSION_CACHE[absolute] = cached
+    return f"{url}?v={cached[1]}"

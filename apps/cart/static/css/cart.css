@@ -3,7 +3,7 @@
   استپر تعداد، خلاصه‌ی سفارش) تا وفاداری بصری کامل حفظ شود.
 */
 .breadcrumb{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);padding:18px 0;flex-wrap:wrap}
-.breadcrumb a:hover{color:var(--violet)}
+.breadcrumb a:hover{color:var(--violet-text,var(--violet))}
 .breadcrumb svg{width:13px;height:13px;opacity:.6}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
@@ -17,7 +17,8 @@
 
 .citem{display:flex;gap:13px;padding:14px 0;border-bottom:1px solid var(--line)}
 .citem:last-child{border-bottom:0}
-.citem .thumb{width:74px;height:74px;border-radius:14px;display:grid;place-items:center;font-size:38px;flex-shrink:0}
+.citem .thumb{width:74px;height:74px;border-radius:14px;display:grid;place-items:center;font-size:38px;flex-shrink:0;overflow:hidden}
+.citem .thumb img{display:block;width:100%;height:100%;object-fit:var(--img-fit,cover)}
 .citem .info{flex:1;min-width:0}
 .citem .info b{font-size:13.5px;display:block;line-height:1.6}
 .citem .info .meta{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap}
@@ -27,21 +28,21 @@
 .citem .lp{font-weight:900;font-size:14px}
 .citem .lp small{display:block;font-size:11px;color:var(--muted);text-decoration:line-through;font-weight:500;text-align:left}
 .citem .rm{color:var(--muted);font-size:11.5px;display:flex;align-items:center;gap:4px}
-.citem .rm:hover{color:var(--pink)}
+.citem .rm:hover{color:var(--pink-text,var(--pink))}
 .citem .rm svg{width:14px;height:14px}
 .stepper{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:11px;overflow:hidden}
-.stepper button{width:34px;height:34px;font-size:16px;color:var(--violet);font-weight:800}
+.stepper button{width:34px;height:34px;font-size:16px;color:var(--violet-text,var(--violet));font-weight:800}
 .stepper button:hover{background:var(--violet-softer)}
 .stepper input{width:38px;height:34px;text-align:center;border:0;outline:0;font-weight:800;background:transparent}
 
 .totals .ln{display:flex;justify-content:space-between;padding:7px 0;font-size:13px}
-.totals .ln.disc{color:var(--pink)}
-.totals .ln.free{color:var(--green)}
+.totals .ln.disc{color:var(--pink-text,var(--pink))}
+.totals .ln.free{color:var(--green-text,var(--green))}
 .totals .grand{border-top:2px dashed var(--line);margin-top:8px;padding-top:13px;font-size:16px;font-weight:900}
-.totals .grand .v{color:var(--violet)}
-.save-note{background:var(--pink-soft);color:var(--pink);border-radius:11px;padding:9px 13px;font-size:12px;font-weight:700;margin-top:10px;text-align:center}
+.totals .grand .v{color:var(--violet-text,var(--violet))}
+.save-note{background:var(--pink-soft);color:var(--pink-text,var(--pink));border-radius:11px;padding:9px 13px;font-size:12px;font-weight:700;margin-top:10px;text-align:center}
 .trust{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11px;margin-top:12px}
-.trust svg{width:14px;height:14px;color:var(--green)}
+.trust svg{width:14px;height:14px;color:var(--green-text,var(--green))}
 .btn-block{width:100%;align-items:center;justify-content:center}
 
 .empty{text-align:center;padding:60px 20px}
@@ -53,6 +54,16 @@
   .co-grid{grid-template-columns:1fr}
   .col-sum{position:static}
 }
+/* RS-10 — a narrow phone column must not shred the product name: the thumbnail sits beside the name, the price/quantity
+   controls wrap UNDER them instead of squeezing the text into a 1-word column. */
+@media(max-width:560px){
+  .citem{flex-wrap:wrap;gap:10px 12px}
+  .citem .thumb{width:64px;height:64px}
+  .citem .info{flex:1 1 calc(100% - 80px);min-width:0}
+  .citem .info b{overflow-wrap:anywhere;word-break:normal}
+  .citem .right{flex:1 1 100%;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .citem .lp small{text-align:start}
+}
 
 
 /* P5-W1 — Free-Shipping Goal (presentation only; all values precomputed by
@@ -62,7 +73,7 @@
 .fsg{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--violet-softer,#f3effc)}
 .fsg--success{display:flex;align-items:center;gap:8px;border-color:var(--green,#16a34a);background:color-mix(in srgb,var(--green,#16a34a) 8%,transparent)}
 .fsg--success .fsg-ic{font-size:16px;line-height:1}
-.fsg--success .fsg-msg{font-size:13px;font-weight:800;color:var(--green,#16a34a)}
+.fsg--success .fsg-msg{font-size:13px;font-weight:800;color:var(--green-text,var(--green,#16a34a))}
 .fsg--goal .fsg-msg{font-size:12.5px;font-weight:700;color:#4b4560;margin-bottom:8px}
 .fsg-track{position:relative;height:8px;border-radius:6px;background:#e6e0f5;overflow:hidden}
 .fsg-fill{display:block;height:100%;max-width:100%;border-radius:6px;background:var(--violet,#7c3aed);transition:width .3s ease}

@@ -41,13 +41,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.storefront_builder import global_region_registry as g
-from apps.storefront_builder import section_registry as section_registry_module
-from apps.storefront_builder import variant_contract as variant_contract_module
 from apps.storefront_builder.section_registry import SECTION_REGISTRY
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services.storefront_context_service import build_universal_storefront_context
 from apps.storefront_builder.models import StorefrontPage
-from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.stores.models import Store, StoreDomain
 
 User = get_user_model()
 
@@ -345,57 +343,6 @@ class PersistedValueIsStableKeyTests(TestCase):
         self.assertEqual(cleaned["header_variant"], "legacy_default")
 
 
-class EditorRejectsUnknownVariantTests(TestCase):
-    """Test O/P — the editor POST rejects an unknown key outright and
-    round-trips a valid selection end-to-end through the real HTTP view."""
-
-    def setUp(self):
-        cache.clear()
-        self.store = _akhlaghi()
-        self.store.admin_subdomain = ADMIN_HOST.split(".")[0]
-        self.store.save(update_fields=["admin_subdomain"])
-        self.staff = User.objects.create_user(username="u2a_header_owner", password="pass12345", is_staff=True)
-        StoreMembership.objects.create(
-            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
-            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
-        )
-        self.client = Client(HTTP_HOST=ADMIN_HOST)
-        self.client.login(username="u2a_header_owner", password="pass12345")
-
-    @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
-    def test_post_with_unknown_variant_key_is_rejected(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self.client.post(reverse("dashboard:storefront-builder-header"), {
-            "show_cart": "on", "header_variant": "totally_made_up_variant",
-        })
-        self.assertEqual(resp.status_code, 200)
-        draft = svc.get_or_create_draft(self.store)
-        self.assertEqual(draft.effective_header_config()["header_variant"], "legacy_default")
-
-    @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
-    def test_post_with_valid_variant_key_round_trips(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self.client.post(reverse("dashboard:storefront-builder-header"), {
-            "show_cart": "on", "header_variant": "premium_three_column",
-        })
-        self.assertEqual(resp.status_code, 302)
-        draft = svc.get_or_create_draft(self.store)
-        self.assertEqual(draft.header_config["header_variant"], "premium_three_column")
-
-        get_resp = self.client.get(reverse("dashboard:storefront-builder-header"))
-        self.assertContains(get_resp, 'value="premium_three_column" selected')
-
-
 class NoMigrationRequiredTests(TestCase):
     """Test Q — ``header_variant`` lives entirely inside the pre-existing
     ``header_config`` JSONField; no schema change is needed."""
@@ -413,7 +360,7 @@ class SectionRegistryUntouchedTests(TestCase):
     """Test R — U2A does not touch ``SECTION_REGISTRY`` at all."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 36)
+        self.assertEqual(len(SECTION_REGISTRY), 38)
 
 
 class U1CapabilityTripwireStillPassesTests(TestCase):
@@ -603,8 +550,9 @@ class GlobalHeaderCssVariableScopeTests(TestCase):
 
     def test_css_defines_shell_scoped_variables_not_header_scoped(self):
         css = _GLOBAL_HEADER_CSS_PATH.read_text(encoding="utf-8")
-        self.assertIn(".gh-shell{--gh-ink:", css)
-        self.assertIn(".gh-shell--dark{--gh-ink:", css)
+        # the shell rule also scopes the mobile drawer; the dark shell additionally derives an accent *text* token
+        self.assertIn(".gh-shell,.mobile-nav-drawer{--gh-ink:", css)
+        self.assertRegex(css, r"\.gh-shell--dark\{[^}]*--gh-ink:#f1f0f5")
         self.assertNotIn(".gh{--gh-ink:", css)
         self.assertNotIn(".gh--dark{--gh-ink:", css)
 

@@ -18,7 +18,7 @@ include می‌شود — مسئولیتِ باز/بسته‌کردن با خا�
   <ul class="cart-preview-items">
     {% for item in cart_items_preview %}
     <li class="cart-preview-item">
-      {% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.product_name }}" class="cart-preview-thumb" loading="lazy">{% endif %}
+      {% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.product_name }}" class="cart-preview-thumb" data-img-role="thumb" loading="lazy">{% endif %}
       <div class="cart-preview-info">
         <span class="cart-preview-name">{{ item.product_name }}</span>
         {% if item.variant_label %}<span class="cart-preview-variant">{{ item.variant_label }}</span>{% endif %}

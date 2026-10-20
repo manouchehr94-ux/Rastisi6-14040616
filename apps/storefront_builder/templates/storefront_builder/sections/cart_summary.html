@@ -8,17 +8,7 @@ Phase 5 — خلاصه‌ی سفارش (جمع/تخفیف/مالیات) + دکم
   <div class="card">
     <div class="card-h"><span class="ic">🧾</span>خلاصه سفارش</div>
     <div class="card-b">
-      <div class="totals">
-        <div class="ln"><span>جمع کالاها</span><b>{{ totals.items_total|toman }}</b></div>
-        {% if totals.product_discount > 0 %}
-        <div class="ln disc"><span>تخفیف کالاها</span><b>− {{ totals.product_discount|toman }}</b></div>
-        {% endif %}
-        {% if totals.gift_wrap_total > 0 %}
-        <div class="ln"><span>🎁 کادوپیچی</span><b>{{ totals.gift_wrap_total|toman }}</b></div>
-        {% endif %}
-        <div class="ln"><span>مالیات بر ارزش افزوده</span><b>{{ totals.tax|toman }}</b></div>
-        <div class="ln grand"><span>جمع قابل پرداخت</span><span class="v">{{ totals.grand_total|toman }}</span></div>
-      </div>
+      {% include "cart/partials/totals_breakdown.html" with breakdown=totals.breakdown grand_label="جمع قابل پرداخت" %}
       {% if totals.product_discount > 0 %}
       <div class="save-note">🎁 شما در این سبد {{ totals.product_discount|toman }} صرفه‌جویی کردید!</div>
       {% endif %}

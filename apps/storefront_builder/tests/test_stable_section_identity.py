@@ -9,11 +9,12 @@ Covers:
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.test import TestCase
-from django.urls import reverse
 
 from apps.storefront_builder.models import StorefrontSection
 from apps.storefront_builder.services import layout_service as svc
 from apps.stores.models import Store
+
+from ._r4_support import r4_mutate
 
 
 def _akhlaghi():
@@ -104,12 +105,10 @@ class StableIdDuplicateTests(TestCase):
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(version=self.draft, section_key="rich_text", order=0)
         original_stable_id = section.stable_id
 
-        self.client.post(reverse("dashboard:storefront-builder-section-duplicate", args=[section.pk]))
+        r4_mutate(self.client, self.draft, {"type": "section.duplicate", "section_id": section.pk})
 
         duplicate = self.draft.sections.filter(section_key="rich_text").exclude(pk=section.pk).get()
         self.assertNotEqual(duplicate.stable_id, original_stable_id)

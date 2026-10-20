@@ -19,6 +19,7 @@ in r4_editor.js.
     <div class="r4-picker-mode-tabs" role="tablist">
       <button type="button" class="r4-picker-mode-tab" role="tab" data-r4-picker-mode="manual">انتخاب دستی</button>
       <button type="button" class="r4-picker-mode-tab" role="tab" data-r4-picker-mode="auto">خودکار</button>
+      {% if collections is not None %}<button type="button" class="r4-picker-mode-tab" role="tab" data-r4-picker-mode="collection">از کالکشن</button>{% endif %}
     </div>
 
     <div class="r4-picker-body">
@@ -86,6 +87,30 @@ in r4_editor.js.
         </div>
         <p class="r4-picker-auto-current" data-r4-picker-auto-current hidden></p>
       </section>
+      {% if collections is not None %}
+      <section class="r4-picker-panel" data-r4-picker-panel="collection" hidden>
+        <p class="r4-picker-hint">به‌جای انتخاب دوباره‌ی کالاها، یک کالکشن آماده را به این بخش وصل کنید.</p>
+        <ul class="r4-coll-notes">
+          <li><b>منبع زنده:</b> عضویت کالکشن کپی نمی‌شود؛ هر تغییری در کالکشن (افزودن/حذف کالا یا تغییر موجودی) در همین بخش دیده می‌شود.</li>
+          <li><b>سقف نمایش:</b> فقط به‌اندازه‌ی «تعداد نمایش» همین بخش از کالکشن نشان داده می‌شود؛ عنوان، تعداد و ترتیب بخش حفظ می‌شود.</li>
+          <li><b>ذخیره:</b> انتخاب شما فقط در پیش‌نویس ثبت می‌شود و تا زدن «انتشار» روی فروشگاه عمومی اثری ندارد؛ با «انصراف» چیزی تغییر نمی‌کند.</li>
+        </ul>
+        <div class="r4-coll-list" role="radiogroup" aria-label="کالکشن‌های فعال" data-r4-picker-collections>
+          {% for c in collections %}
+          <div class="r4-coll-card">
+            <button type="button" role="radio" aria-checked="false" class="r4-coll-choice" data-r4-picker-collection="{{ c.id }}" data-r4-picker-collection-name="{{ c.name }}">
+              <span class="r4-coll-radio" aria-hidden="true"></span>
+              <span class="r4-coll-title">{{ c.name }}</span>
+              <span class="r4-coll-meta{% if not c.visible_count %} r4-coll-meta--empty{% endif %}">{% if c.visible_count %}{{ c.visible_count }} کالای قابل نمایش{% else %}هیچ کالای قابل نمایشی ندارد؛ بخش خالی می‌ماند{% endif %}</span>
+            </button>
+            <a class="r4-coll-campaign" href="{% url 'dashboard:collection-campaign' c.id %}" target="_blank" rel="noopener" title="شروع / زمان‌بندی کمپین «{{ c.name }}»">زمان‌بندی کمپین ↗</a>
+          </div>
+          {% empty %}
+          <p class="r4-picker-empty">هنوز کالکشن فعالی ساخته نشده است. از «کالکشن‌ها» در پنل مدیریت یکی بسازید.</p>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
     </div>
 
     <footer class="r4-picker-footer">

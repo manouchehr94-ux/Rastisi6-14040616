@@ -1,4 +1,5 @@
 {% extends "portal/base_platform.html" %}
+{% load persian %}
 {% block title %}اعلان‌ها | راستیسی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block content %}
@@ -19,7 +20,7 @@
     <div style="border:1px solid var(--p-line);border-radius:10px;padding:12px;{% if not notification.read_at %}background:var(--p-surface){% endif %}">
       <div style="display:flex;justify-content:space-between;gap:8px">
         <strong style="font-size:13px">{{ notification.subject }}</strong>
-        <span style="font-size:11px;color:var(--p-muted)">{{ notification.created_at|date:"Y-m-d H:i" }}</span>
+        <span style="font-size:11px;color:var(--p-muted)">{{ notification.created_at|jalali_dt }}</span>
       </div>
       <p style="font-size:13px;color:var(--p-muted);margin-top:6px">{{ notification.body }}</p>
     </div>

@@ -145,7 +145,7 @@
           </div></details>
           <div class="cw-muted-note"><span class="cw-text-icon">✓</span><span>پس از ذخیره‌ی پیش‌نویس، در صفحه‌ی پیشنهاد می‌توانی با دکمه‌ی «پیش‌نمایش مشتریان واجد شرایط» تعدادِ واقعی را ببینی؛ تا آن زمان کدی صادر نمی‌شود.</span></div>
           {% endif %}
-          <div class="cw-panel-actions"><span style="color:#9ba0ad;font-size:10.5px">سؤال ۱ از ۳</span><button class="cw-btn cw-primary" type="button" data-next="2">مرحله بعد <span aria-hidden="true">←</span></button></div>
+          <div class="cw-panel-actions"><span style="color:var(--muted);font-size:10.5px">سؤال ۱ از ۳</span><button class="cw-btn cw-primary" type="button" data-next="2">مرحله بعد <span aria-hidden="true">←</span></button></div>
         </section>
 
         <!-- ================= مرحله ۲ ================= -->
@@ -158,7 +158,7 @@
             <button type="button" class="cw-choice" data-reward="none" aria-pressed="false"><span class="cw-choice-icon">💬</span><span><b>فقط پیام تبریک</b><small>بدون کد تخفیف</small></span><span class="cw-tick"></span></button>
           </div>
           <div class="cw-conditional" id="cw-reward-details">
-            <div class="cw-field" id="cw-amount-block"><label class="cw-field-label" id="cw-amount-label" for="id_coupon_value">چند درصد تخفیف بدهیم؟</label><div style="position:relative"><input id="id_coupon_value" name="coupon_value" class="cw-text-input cw-date-input" style="padding-left:76px" inputmode="numeric" value="{{ form.coupon_value.value|default:'' }}"><span id="cw-amount-unit" style="position:absolute;left:12px;top:9px;color:#8589a0;font-size:11px">درصد</span></div><div class="cw-error" id="cw-amount-error">مقدار تخفیف معتبر نیست.</div>{% include "dashboard/partials/cw_errors.html" with f=form.coupon_value %}</div>
+            <div class="cw-field" id="cw-amount-block"><label class="cw-field-label" id="cw-amount-label" for="id_coupon_value">چند درصد تخفیف بدهیم؟</label><div style="position:relative"><input id="id_coupon_value" name="coupon_value" class="cw-text-input cw-date-input" style="padding-left:76px" inputmode="numeric" value="{{ form.coupon_value.value|default:'' }}"><span id="cw-amount-unit" style="position:absolute;left:12px;top:9px;color:var(--muted);font-size:11px">درصد</span></div><div class="cw-error" id="cw-amount-error">مقدار تخفیف معتبر نیست.</div>{% include "dashboard/partials/cw_errors.html" with f=form.coupon_value %}</div>
             <div class="cw-field" id="cw-validity-block"><label class="cw-field-label" for="id_code_valid_days">مشتری چند روز فرصت استفاده داشته باشد؟</label><select class="cw-select-input" id="id_code_valid_days" name="code_valid_days">{% if not form.code_valid_days.value and campaign %}<option value="" selected>{% if has_fixed_expiry %}طبق تاریخ انقضای ثابتِ قبلی{% else %}— مدتِ اعتبار را انتخاب کن —{% endif %}</option>{% endif %}{% for d, label in validity_days %}<option value="{{ d }}" {% if form.code_valid_days.value|stringformat:"s" == d|stringformat:"s" %}selected{% elif not form.code_valid_days.value and not campaign and d == 7 %}selected{% endif %}>{{ label }}{% if d == 7 %} (پیشنهادی){% endif %}</option>{% endfor %}</select><div class="cw-field-help">برای هر مشتری، مدت اعتبار کد از زمان صدور محاسبه می‌شود.</div>{% include "dashboard/partials/cw_errors.html" with f=form.code_valid_days %}</div>
           </div>
           <details class="cw-advanced" id="cw-advanced-reward"><summary>تنظیمات بیشتر هدیه (اختیاری)</summary><div class="cw-advanced-body">

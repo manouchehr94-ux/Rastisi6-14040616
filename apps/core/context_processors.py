@@ -1,5 +1,5 @@
 from apps.content.models import SocialLink
-from apps.core.color_utils import darken_hex, foreground_for, mix_hex, safe_hex
+from apps.core.color_utils import mix_hex, safe_hex
 from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
 from apps.stores.resolution import StoreResolutionError
 
@@ -280,6 +280,23 @@ def shop_settings(request):
     section_tones = _appearance_registry.resolve_section_tones(tone_config)
     theme_roles = _appearance_registry.resolve_theme_roles(tone_config)
 
+    # Accessible *usage* colours. The raw palette (primary/accent/muted/…) is the
+    # merchant's identity and is injected unchanged as ``--brand-*``; what text is
+    # actually painted with is derived here, by WCAG luminance, from that palette
+    # (see ``apps.storefront_builder.accessible_colors``). A colour that already
+    # passes is returned unchanged.
+    from apps.storefront_builder.accessible_colors import build_accessible_theme
+
+    accessible = build_accessible_theme(
+        {
+            "primary": primary, "secondary": secondary, "accent": accent,
+            "background": background, "surface": surface, "text": text,
+            "muted": muted, "border": border,
+        },
+        theme_roles,
+        tones=section_tones,
+    )
+
     # Phase 3.10 — Storefront -> Merchant Admin shortcut.
     #
     # This is intentionally limited to the actual Store homepage and the
@@ -288,43 +305,16 @@ def shop_settings(request):
     # We only compute the correct per-Store host here, preserving a local
     # non-default port such as :8000.
     #
-    # Final storefront polish pass — merchant QA: a real, live "پنل مدیریت"
-    # button was rendering in the PUBLIC shopper-facing header on
-    # ``catalog:home`` for ANY anonymous visitor (this flag was never
-    # staff/auth-gated — only page-gated). A public storefront must never
-    # expose an admin-panel control. The Builder's own HOME preview
-    # (``dashboard:storefront-builder-preview``) is a separate, authenticated
-    # merchant-admin surface, not the public storefront, so it keeps the
-    # shortcut unchanged; only the real public homepage loses it.
-    resolver_match = getattr(request, "resolver_match", None)
-    view_name = getattr(resolver_match, "view_name", "") if resolver_match else ""
-    is_builder_preview_home = (
-        view_name == "dashboard:storefront-builder-preview"
-        and request.GET.get("page", "home") == "home"
-    )
-    is_home_surface = view_name == "catalog:home" or is_builder_preview_home
+    # BUG-UI-01 (ARCH-02): the "پنل مدیریت" shortcut must never be part of a
+    # customer-facing rendering. It used to survive in the Builder's HOME preview
+    # (``dashboard:storefront-builder-preview``), which is exactly what the Design
+    # Studio embeds as the "what the customer sees" canvas and what the template
+    # gallery / live demo preview reuse. The Studio has its own admin navigation
+    # (brand link + sidebar), so no storefront rendering — public, Draft preview or
+    # candidate-template preview — exposes an admin control any more. The template
+    # guards (``SHOW_ADMIN_SHORTCUT and SHOP_ADMIN_URL``) stay as inert, tested
+    # fail-closed conditions.
     shop_admin_url = ""
-    if is_home_surface:
-        from django.conf import settings as django_settings
-        from apps.stores.hostnames import build_cross_host_url
-        from apps.stores.models import Store
-
-        store = getattr(request, "store", None)
-        if store is None or getattr(store, "pk", None) != shop.store_id:
-            store = (
-                Store.objects.only("id", "admin_subdomain")
-                .filter(pk=shop.store_id)
-                .first()
-            )
-        if store is not None and store.admin_subdomain:
-            admin_hostname = (
-                f"{store.admin_subdomain}.{django_settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
-            )
-            shop_admin_url = build_cross_host_url(
-                request,
-                hostname=admin_hostname,
-                path="/admin-portal/",
-            )
 
     from apps.stores.services.enamad_verification_service import (
         store_enamad_badge_for_request,
@@ -359,12 +349,27 @@ def shop_settings(request):
         "SHOP_SECONDARY_COLOR": secondary,
         "SHOP_BACKGROUND_COLOR": background,
         "SHOP_SURFACE_COLOR": surface,
-        "SHOP_TEXT_COLOR": text,
-        "SHOP_MUTED_TEXT_COLOR": muted,
-        "SHOP_PRIMARY_FG": foreground_for(primary),
-        "SHOP_ACCENT_FG": foreground_for(accent),
-        "SHOP_SECONDARY_FG": foreground_for(secondary),
-        "SHOP_PRIMARY_HOVER": darken_hex(primary),
+        # body/muted text are *text* colours by definition: the rendered value is the
+        # palette value, nudged only if it would be unreadable on its own surfaces.
+        "SHOP_TEXT_COLOR": accessible["text"],
+        "SHOP_MUTED_TEXT_COLOR": accessible["muted_text"],
+        "SHOP_PRIMARY_FG": accessible["primary_fg"],
+        "SHOP_ACCENT_FG": accessible["accent_fg"],
+        "SHOP_SECONDARY_FG": accessible["secondary_fg"],
+        "SHOP_PRIMARY_HOVER": accessible["primary_hover"],
+        "SHOP_PRIMARY_HOVER_FG": accessible["primary_hover_fg"],
+        "SHOP_GRADIENT_FG": accessible["gradient_fg"],
+        "SHOP_GRADIENT_END": accessible["gradient_end"],
+        "SHOP_MUTED_FG": accessible["muted_fg"],
+        "SHOP_PALETTE_TONE_FGS": accessible["tone_fgs"],
+        "SHOP_PRIMARY_TEXT": accessible["primary_text"],
+        "SHOP_PRIMARY_TEXT_ON_DARK": accessible["primary_text_on_dark"],
+        "SHOP_ACCENT_TEXT": accessible["accent_text"],
+        "SHOP_SECONDARY_TEXT": accessible["secondary_text"],
+        "SHOP_PRICE_TEXT": accessible["price_text"],
+        "SHOP_SUCCESS_TEXT": accessible["success_text"],
+        "SHOP_WARNING_TEXT": accessible["warning_text"],
+        "SHOP_DANGER_TEXT": accessible["danger_text"],
         "SHOP_BORDER_COLOR": border,
         "SHOP_PALETTE_TONE_1": section_tones[0],
         "SHOP_PALETTE_TONE_2": section_tones[1],
@@ -372,14 +377,16 @@ def shop_settings(request):
         "SHOP_PALETTE_TONE_4": section_tones[3],
         "SHOP_PALETTE_TONE_5": section_tones[4],
         "SHOP_THEME_HEADER_BG": theme_roles["header_bg"],
-        "SHOP_THEME_HEADER_TEXT": theme_roles["header_text"],
+        "SHOP_THEME_HEADER_TEXT": accessible["header_text"],
+        "SHOP_THEME_HEADER_MUTED_TEXT": accessible["header_muted_text"],
         "SHOP_THEME_NAV_BG": theme_roles["nav_bg"],
-        "SHOP_THEME_NAV_TEXT": theme_roles["nav_text"],
+        "SHOP_THEME_NAV_TEXT": accessible["nav_text"],
         "SHOP_THEME_CARD_BG": theme_roles["card_bg"],
         "SHOP_THEME_FOOTER_BG": theme_roles["footer_bg"],
-        "SHOP_THEME_FOOTER_TEXT": theme_roles["footer_text"],
+        "SHOP_THEME_FOOTER_TEXT": accessible["footer_text"],
+        "SHOP_FOOTER_MUTED_TEXT": accessible["footer_muted_text"],
         "SHOP_THEME_PRICE": theme_roles["price"],
-        "SHOW_ADMIN_SHORTCUT": bool(is_builder_preview_home and shop_admin_url),
+        "SHOW_ADMIN_SHORTCUT": False,
         "SHOP_ADMIN_URL": shop_admin_url,
         "SHOP_ENAMAD_VERIFICATION_META_NAME": (
             enamad_verification_meta.name if enamad_verification_meta else ""

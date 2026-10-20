@@ -41,7 +41,11 @@ def _extension(filename: str) -> str:
 
 
 def validate_image_file(file) -> None:
-    """پسوند، حجم و معتبربودن واقعی فایل را بررسی می‌کند؛ در خطا ProductImageError می‌دهد."""
+    """پسوند، حجم و معتبربودن واقعی فایل (فرمتِ تشخیص‌داده‌شدهٔ Pillow + سقف پیکسل) را بررسی می‌کند؛ در خطا ProductImageError می‌دهد."""
+    from django.core.exceptions import ValidationError
+
+    from apps.core.image_validation import open_and_verify
+
     ext = _extension(getattr(file, "name", ""))
     if ext not in ALLOWED_EXTENSIONS:
         allowed = "، ".join(sorted(e.lstrip(".") for e in ALLOWED_EXTENSIONS))
@@ -51,11 +55,9 @@ def validate_image_file(file) -> None:
         raise ProductImageError("حجم تصویر نباید بیشتر از ۵ مگابایت باشد.")
 
     try:
-        file.seek(0)
-        with Image.open(file) as img:
-            img.verify()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
-        raise ProductImageError("فایل انتخاب‌شده تصویر معتبری نیست.") from exc
+        open_and_verify(file, label="تصویر", formats=tuple(ALLOWED_PIL_FORMATS))
+    except ValidationError as exc:
+        raise ProductImageError(exc.messages[0]) from exc
     finally:
         file.seek(0)
 
@@ -75,8 +77,11 @@ def _encode(image: Image.Image, fmt: str) -> bytes:
 
 def _load_normalized_image(file):
     file.seek(0)
-    opened = Image.open(file)
-    opened.load()
+    try:
+        opened = Image.open(file)
+        opened.load()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise ProductImageError("فایل انتخاب‌شده تصویر معتبری نیست یا ناقص است.") from exc
 
     fmt = (opened.format or "JPEG").upper()
     if fmt not in ALLOWED_PIL_FORMATS:
@@ -91,6 +96,38 @@ def _load_normalized_image(file):
     return pil_image, fmt
 
 
+ORIGINALS_DIR = "products/originals"
+
+
+def original_storage_name(main_name: str) -> str:
+    """مسیرِ نسخهٔ اصلیِ آپلودشده برای یک تصویرِ کالا — از نامِ فایلِ اصلی مشتق می‌شود (بدون ستونِ جدید/Migration)."""
+    return f"{ORIGINALS_DIR}/{(main_name or '').rsplit('/', 1)[-1]}"
+
+
+def _keep_original(file, final_name: str) -> None:
+    """R4-14 — بایت‌های آپلودشدهٔ فروشنده بدونِ هیچ تغییری کنارِ نسخه‌های نمایشی (≤۲۰۰۰px و بندانگشتی) نگه داشته می‌شود؛
+    پردازش غیرمخرب است و اگر روزی نسخهٔ نمایشی عوض شود، اصلِ فایل در دسترس است. خطای ذخیره‌سازیِ این نسخه مانعِ آپلود نمی‌شود."""
+    from django.core.files.storage import default_storage
+
+    try:
+        file.seek(0)
+        default_storage.save(original_storage_name(final_name), ContentFile(file.read()))
+    except Exception:  # pragma: no cover - best effort, never blocks the upload
+        pass
+    finally:
+        file.seek(0)
+
+
+def _delete_original(main_name: str) -> None:
+    from django.core.files.storage import default_storage
+
+    try:
+        if main_name:
+            default_storage.delete(original_storage_name(main_name))
+    except Exception:  # pragma: no cover
+        pass
+
+
 def add_product_image(product, file, *, alt: str = "") -> ProductImage:
     """تصویر را اعتبارسنجی، در صورت نیاز کوچک، و همراه بندانگشتی برای کالا ثبت می‌کند."""
     validate_image_file(file)
@@ -103,6 +140,7 @@ def add_product_image(product, file, *, alt: str = "") -> ProductImage:
 
     next_order = product.images.count()
     instance = ProductImage(product=product, alt=(alt or "").strip(), order=next_order, is_cover=next_order == 0)
+    _keep_original(file, f"{base_name}{ext}")
     instance.image.save(f"{base_name}{ext}", ContentFile(_encode(main_image, fmt)), save=False)
     instance.thumbnail.save(f"{base_name}-thumb{ext}", ContentFile(_encode(thumb_image, fmt)), save=False)
     instance.save()
@@ -115,6 +153,7 @@ def delete_product_image(image: ProductImage) -> None:
     was_cover = image.is_cover
 
     if image.image:
+        _delete_original(image.image.name)
         image.image.delete(save=False)
     if image.thumbnail:
         image.thumbnail.delete(save=False)

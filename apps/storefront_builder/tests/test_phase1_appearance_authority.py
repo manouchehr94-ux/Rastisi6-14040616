@@ -129,164 +129,11 @@ class Phase1AppearanceAuthorityBase(StorefrontBuilderViewsTestCase):
 # =====================================================================
 # TEST GROUP A — LEGACY APPEARANCE PRESERVATION
 # =====================================================================
-class LegacyAppearancePreservationTests(Phase1AppearanceAuthorityBase):
-    """Desired invariant: a legacy Appearance edit changing one ordinary field
-    must PRESERVE the persisted typed Store Appearance manifest.
-    """
-
-    def test_legacy_appearance_edit_preserves_typed_manifest(self):
-        # Arrange: a valid non-default typed manifest (incl. non-default Hero
-        # and Card) is persisted on the active Draft.
-        self._persist_manifest(
-            hero="hero.split.v1",
-            card="card.luxury_dark.v1",
-        )
-        self.draft.refresh_from_db()
-        original_manifest = copy.deepcopy(
-            self.draft.appearance_config.get(STORE_APPEARANCE_CONFIG_KEY)
-        )
-        self.assertIsNotNone(
-            original_manifest,
-            "precondition: the persisted manifest must exist before the edit",
-        )
-        self.assertEqual(original_manifest["selections"]["hero"], "hero.split.v1")
-        self.assertEqual(original_manifest["selections"]["card"], "card.luxury_dark.v1")
-
-        # Act: POST the legacy Appearance editor changing only `font`, using
-        # the real route and a real (minimal) valid payload.
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-appearance"),
-            {"font": "Tahoma"},
-        )
-
-        # Assert desired behavior.
-        self.assertEqual(
-            response.status_code,
-            302,
-            "legacy Appearance POST should redirect on success",
-        )
-        self.draft.refresh_from_db()
-        self.assertEqual(
-            self.draft.appearance_config.get("font"),
-            "Tahoma",
-            "the edited field must change",
-        )
-        self.assertEqual(
-            self.draft.appearance_config.get(STORE_APPEARANCE_CONFIG_KEY),
-            original_manifest,
-            "the typed Store Appearance manifest must survive a legacy "
-            "single-field Appearance edit (Phase-1 canonical-writer invariant)",
-        )
-
-    def test_legacy_appearance_edit_preserves_effective_hero_selection(self):
-        """Effective-state view of the same invariant.
-
-        Even if one accepts that the reserved key may be re-derived, the
-        *effective* resolved Hero selection must not silently revert to the
-        safe default after an unrelated Appearance edit.
-        """
-        self._persist_manifest(hero="hero.split.v1", card="card.luxury_dark.v1")
-
-        self.client.post(
-            reverse("dashboard:storefront-builder-appearance"),
-            {"font": "Tahoma"},
-        )
-
-        selections = self._effective_selections()
-        self.assertEqual(
-            selections.get("hero"),
-            "hero.split.v1",
-            "effective Hero selection must survive an unrelated Appearance edit",
-        )
-        self.assertEqual(
-            selections.get("card"),
-            "card.luxury_dark.v1",
-            "effective Card selection must survive an unrelated Appearance edit",
-        )
 
 
 # =====================================================================
 # TEST GROUP B — LEGACY HEADER / FOOTER SYNC
 # =====================================================================
-class LegacyHeaderFooterSyncTests(Phase1AppearanceAuthorityBase):
-    """Desired invariant: after a legacy Header/Footer selector edit, the
-    effective typed manifest resolves to the newly chosen family value and
-    unrelated manifest selections remain unchanged.
-    """
-
-    def test_legacy_header_edit_updates_effective_manifest_selection(self):
-        # Arrange: a persisted manifest with selection A for header and a
-        # distinct non-default hero selection that must remain intact.
-        self._persist_manifest(
-            header="header.legacy_default.v1",
-            hero="hero.split.v1",
-        )
-
-        # Act: submit legacy Header selector B via the real Header route.
-        # The real Header form requires `show_cart` to remain enabled
-        # (validate_header_config rejects a header with no cart path), so we
-        # send a faithful payload with the cart toggle on rather than a
-        # stripped-down one.
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-header"),
-            {"header_variant": "dark_tech", "show_cart": "on"},
-        )
-        self.assertEqual(
-            response.status_code,
-            302,
-            "legacy Header POST should redirect on success",
-        )
-
-        # Assert desired behavior.
-        selections = self._effective_selections()
-        self.assertEqual(
-            selections.get("header"),
-            "header.dark_tech.v1",
-            "effective manifest header selection must follow the legacy edit",
-        )
-        self.assertEqual(
-            selections.get("hero"),
-            "hero.split.v1",
-            "unrelated manifest selections must be preserved by a Header edit",
-        )
-
-    def test_legacy_footer_edit_updates_effective_manifest_selection(self):
-        # Arrange.
-        self._persist_manifest(
-            footer="footer.legacy_default.v1",
-            hero="hero.split.v1",
-        )
-
-        # Act: submit legacy Footer selector via the real Footer route.
-        # The real Footer form requires at least one footer section to remain
-        # enabled (validate_footer_config rejects a fully-empty footer), so we
-        # send a faithful payload with a couple of standard sections on.
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-footer"),
-            {
-                "footer_variant": "marketplace_dense",
-                "show_about": "on",
-                "show_copyright": "on",
-            },
-        )
-        self.assertEqual(
-            response.status_code,
-            302,
-            "legacy Footer POST should redirect on success",
-        )
-
-        # Assert desired behavior.
-        selections = self._effective_selections()
-        self.assertEqual(
-            selections.get("footer"),
-            "footer.marketplace_dense.v1",
-            "effective manifest footer selection must follow the legacy edit",
-        )
-        self.assertEqual(
-            selections.get("hero"),
-            "hero.split.v1",
-            "unrelated manifest selections must be preserved by a Footer edit",
-        )
 
 
 # =====================================================================
@@ -405,7 +252,6 @@ class LocalVariantPrecedenceTests(Phase1AppearanceAuthorityBase):
             "explicit local Section variant (variant_explicit=True) must win "
             "over the inherited Store Global default (approved precedence)",
         )
-
 
 
 # =====================================================================
@@ -605,7 +451,6 @@ class AppearanceAuthorityServiceTests(Phase1AppearanceAuthorityBase):
         )
 
 
-
 # =====================================================================
 # TASK 5 — READY TEMPLATE APPLY IS AUTHORITATIVE (declared=persisted=effective)
 # =====================================================================
@@ -717,8 +562,6 @@ class ReadyTemplateApplyAuthorityTests(Phase1AppearanceAuthorityBase):
             admin_subdomain="r4-convergence-store",
         )
         r4_layout = layout_service.get_or_create_layout(r4_store)
-        r4_layout.r4_editor_enabled = True
-        r4_layout.save(update_fields=["r4_editor_enabled"])
         r4_draft = layout_service.get_or_create_draft(r4_store, user=self.staff)
         self._seed_conflicting_manifest(r4_draft)
         # Apply via the R4 mutation service dispatch (same path the endpoint uses).
@@ -730,6 +573,8 @@ class ReadyTemplateApplyAuthorityTests(Phase1AppearanceAuthorityBase):
                 "draft_id": r4_draft.pk,
                 "template_key": preset.key,
                 "template_version": preset.version,
+                # explicit selection over an existing (bootstrap) composition needs the merchant's confirmation
+                "confirm_replace": True,
             },
         )
         r4_draft.refresh_from_db()
@@ -822,7 +667,6 @@ class ReadyTemplateApplyAuthorityTests(Phase1AppearanceAuthorityBase):
         )
 
 
-
 # =====================================================================
 # TASK 6 — EXPLICIT LOCAL VARIANT MARKER STAMPING (R4 + legacy paths)
 # =====================================================================
@@ -840,8 +684,6 @@ class ExplicitLocalVariantMarkerTests(Phase1AppearanceAuthorityBase):
 
         self._json = _json
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         # A schema-enabled section with a registered variant key (hero_style).
         self.home.sections.all().delete()
         self.hero = StorefrontSection.objects.create(
@@ -926,32 +768,6 @@ class ExplicitLocalVariantMarkerTests(Phase1AppearanceAuthorityBase):
             data,
         )
 
-    def test_legacy_genuine_variant_change_marks_explicit(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self._post_legacy_hero(hero_style="split")
-        self.assertEqual(resp.status_code, 302)
-        self.hero.refresh_from_db()
-        self.assertEqual(self.hero.settings.get("hero_style"), "split")
-        self.assertTrue(self._section_overrides().get("variant_explicit"))
-
-    def test_legacy_content_only_edit_does_not_mark(self):
-        # Re-submit the SAME variant value (the form always includes it) while
-        # changing only an unrelated control — historical marker state must not
-        # transition to explicit.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self._post_legacy_hero(hero_style="overlay", autoplay=True)
-        self.assertEqual(resp.status_code, 302)
-        self.assertNotIn("variant_explicit", self._section_overrides())
 
     # -- render precedence end-to-end (marker set via real R4 edit) --------
     def test_marker_set_via_r4_makes_local_variant_win_at_render(self):

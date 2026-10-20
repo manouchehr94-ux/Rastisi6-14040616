@@ -116,8 +116,9 @@ def _golden_home_composition() -> tuple[PresetSectionEntry, ...]:
             "category_grid",
             {"display_mode": "circular", "item_limit": 8, "title": "دسته‌بندی‌ها"},
         ),
-        # 3) Featured campaign / editorial promotion
-        PresetSectionEntry("multi_banner"),
+        # 3) Featured campaign / editorial promotion — banners 1-3 of the store's
+        #    SHARED banner media (offset/item_limit are the R4 slicing contract).
+        PresetSectionEntry("multi_banner", {"offset": 0, "item_limit": 3}),
         # 4) New arrivals
         PresetSectionEntry(
             "product_section",
@@ -133,8 +134,8 @@ def _golden_home_composition() -> tuple[PresetSectionEntry, ...]:
             "brand_carousel",
             {"display_mode": "carousel", "title": "برندها"},
         ),
-        # 6) Promo banners
-        PresetSectionEntry("multi_banner"),
+        # 6) Promo banners — banners 4-6 of the same shared media (distinct from #3).
+        PresetSectionEntry("multi_banner", {"offset": 3, "item_limit": 3}),
         # 7) Most popular / most viewed (uses views_count, a production-written
         #    metric — see ruling R7 in the G1 plan; avoids fabricating Order/
         #    payment/shipping infrastructure just to populate a Home section).
@@ -327,16 +328,11 @@ def _rebuild_home_composition(draft) -> None:
     container_service.rebuild_page_from_legacy_rows(page)
 
 
-#: Which published Home section (by key + occurrence index) owns which seeded
-#: media, and how the store-global pool is split across occurrences. The two
-#: ``multi_banner`` sections split the 6-banner pool 3/3 so they render DISTINCT
-#: content (fixing the duplicate-fallback defect) and each has its own editable
-#: rows.
 def _ensure_media_asset(row, file_field, asset_field):
     """Backfill a MediaAsset FK from a legacy image file field if missing, using
     the exact in-repo pattern of migration 0021 (reference the same stored file,
     no byte copy). Returns True if a change was made. This is what lets the
-    section-scoped row survive the Draft clone (``_clone_section_scoped_media``
+    media row survive archive snapshots and Draft clones (``_clone_section_scoped_media``
     only clones asset-backed placements)."""
     from apps.content.models import MediaAsset
 
@@ -350,94 +346,39 @@ def _ensure_media_asset(row, file_field, asset_field):
     return True
 
 
-def _attach_media_to_section(rows, section, *, asset_pairs):
-    """Move the given store-global media ``rows`` onto ``section`` (section-scoped)
-    and ensure each is MediaAsset-backed. Idempotent: rows already on this
-    section are left in place; ``display_order`` is re-sequenced deterministically."""
-    for order, row in enumerate(rows):
-        changed_fields = []
-        if row.section_id != section.id:
-            row.section = section
-            changed_fields.append("section")
-        if row.display_order != order:
-            row.display_order = order
-            changed_fields.append("display_order")
-        for file_field, asset_field in asset_pairs:
-            if _ensure_media_asset(row, file_field, asset_field):
-                changed_fields.append(asset_field)
-        if changed_fields:
-            row.save(update_fields=[*dict.fromkeys(changed_fields), "updated_at"])
+def _back_shared_media_with_assets(store) -> None:
+    """Make the store's SHARED default media (``section IS NULL`` Hero / Banner /
+    Story rows) ``MediaAsset``-backed, in place.
 
+    ARCH-02 owner decision: store media belongs to the STORE, not to a template.
+    The Golden Reference therefore no longer moves the seeded rows onto the
+    sections of its own template (which tied the demo's images to one template
+    and left every other template with nothing to show). The rows stay shared; the
+    two ``multi_banner`` sections render DISTINCT slices of them through their own
+    ``offset`` / ``item_limit`` settings (see ``_golden_home_composition``), and any
+    section can still adopt the shared rows as its own via the R4 media manager.
 
-def _attach_golden_section_media(store, published_version) -> None:
-    """Make every Golden Home section that renders media OWN that media
-    (section-scoped, MediaAsset-backed) instead of relying on the store-global
-    fallback — so the Storefront Builder shows the same items it renders and a
-    visibly-rendered item always has a working (non-404) edit path.
-
-    Root cause (G2.1 Defect C): the seed creates store-global (section=NULL)
-    HeroSlide/PromotionalBanner/StoryRailItem rows. ``render_service`` falls back
-    to them, but the Builder media CRUD is strictly ``section=section`` — so the
-    manager showed "0 items" and direct edit URLs 404'd. Attaching the rows to
-    their sections removes the fallback ambiguity: render and editor read the
-    SAME rows.
-
-    Also fixes the two ``multi_banner`` sections silently sharing one global pool
-    (duplicate content) by splitting the 6 banners across them.
-
-    Idempotent + tenant-scoped: operates only on this store's rows and this
-    published version's Home sections; re-running converges (rows already on the
-    right section stay put, only order/asset backfill is synced). Making each row
-    MediaAsset-backed also ensures the Builder's Draft clone
-    (``_clone_section_scoped_media``) preserves them, so the editor Draft is
-    fully editable.
+    Backing each row with a ``MediaAsset`` (same stored file, no byte copy — the
+    exact pattern of migration 0021) is what lets archive snapshots and Draft
+    clones keep referring to the very same files. Idempotent: rows that already
+    have an asset are left alone; nothing is moved, re-ordered, created or deleted.
+    Tenant-scoped by ``store``.
     """
     from apps.content.models import HeroSlide, PromotionalBanner, StoryRailItem
 
-    home = published_version.home_page()
-    ordered = list(home.sections.order_by("order"))
-
-    def sections_for(key):
-        return [s for s in ordered if s.section_key == key]
-
-    hero_pairs = [("desktop_image", "desktop_asset"), ("mobile_image", "mobile_asset")]
-    story_pairs = [("image", "image_asset")]
-
-    # Reclaim scope (idempotence across re-apply): the Golden setup rebuilds the
-    # Home page every run, so section IDs are ephemeral — a prior run's rows are
-    # attached to now-archived sections. On ``rasti-mode-demo`` all rows of a
-    # media type are Golden demo content, so we reclaim EVERY row of that type
-    # for this store (regardless of which section it currently points at) and
-    # re-attach it to the current published section. Tenant-scoped by ``store``.
-
-    # HeroSlide -> the single hero_banner section.
-    hero_sections = sections_for("hero_banner")
-    if hero_sections:
-        hero_rows = list(
-            HeroSlide.objects.filter(store=store).order_by("display_order", "id")
-        )
-        _attach_media_to_section(hero_rows, hero_sections[0], asset_pairs=hero_pairs)
-
-    # StoryRailItem -> the single story_rail section.
-    story_sections = sections_for("story_rail")
-    if story_sections:
-        story_rows = list(
-            StoryRailItem.objects.filter(store=store).order_by("display_order", "id")
-        )
-        _attach_media_to_section(story_rows, story_sections[0], asset_pairs=story_pairs)
-
-    # PromotionalBanner -> split the store's whole banner pool across the
-    # multi_banner sections so each renders (and owns) a DISTINCT set.
-    # Deterministic round-robin keeps the split stable across re-apply.
-    banner_sections = sections_for("multi_banner") + sections_for("single_banner")
-    if banner_sections:
-        banner_rows = list(
-            PromotionalBanner.objects.filter(store=store).order_by("display_order", "id")
-        )
-        n = len(banner_sections)
-        buckets = [banner_rows[i::n] for i in range(n)]
-        for section, rows in zip(banner_sections, buckets):
-            _attach_media_to_section(rows, section, asset_pairs=hero_pairs)
+    pairs_by_model = (
+        (HeroSlide, [("desktop_image", "desktop_asset"), ("mobile_image", "mobile_asset")]),
+        (PromotionalBanner, [("desktop_image", "desktop_asset"), ("mobile_image", "mobile_asset")]),
+        (StoryRailItem, [("image", "image_asset")]),
+    )
+    for model, asset_pairs in pairs_by_model:
+        for row in model.objects.filter(store=store, section__isnull=True).order_by("display_order", "id"):
+            changed = []
+            for file_field, asset_field in asset_pairs:
+                if _ensure_media_asset(row, file_field, asset_field):
+                    changed.append(asset_field)
+            if changed:
+                row.save(update_fields=[*changed, "updated_at"])
 
 
 def apply_golden_reference_storefront(store, *, user=None):
@@ -464,7 +405,7 @@ def apply_golden_reference_storefront(store, *, user=None):
     # G2.1 hardening (Issue 2): the ENTIRE Golden setup must be all-or-nothing.
     # ``layout_service.publish`` has its own (nested) atomic block and commits
     # the new published pointer before media attachment runs; without this outer
-    # transaction, a failure in ``_attach_golden_section_media`` would leave a
+    # transaction, a failure in ``_back_shared_media_with_assets`` would leave a
     # half-set-up Golden version live. Wrapping everything that mutates
     # layout/media/catalog-signals in one outer ``transaction.atomic`` means any
     # failure rolls back to the exact prior state (including the previous
@@ -488,12 +429,10 @@ def apply_golden_reference_storefront(store, *, user=None):
         # 3) Publish.
         published = layout_service.publish(store, user=user)
 
-        # 4) Make each media-hosting Home section OWN its media (section-scoped,
-        #    MediaAsset-backed) so the Storefront Builder shows/edits exactly what
-        #    the storefront renders (G2.1 Defect C — no "0 items", no 404 edit
-        #    path), and the two multi_banner sections render distinct banner sets.
-        #    If this step raises, the whole apply (including the publish above)
-        #    rolls back — the prior published version stays live.
-        _attach_golden_section_media(store, published)
+        # 4) Back the store's SHARED default media with MediaAssets in place
+        #    (ARCH-02: media is store-owned and template-independent; nothing is
+        #    moved onto this template's sections). If this step raises, the whole
+        #    apply (including the publish above) rolls back.
+        _back_shared_media_with_assets(store)
 
     return published

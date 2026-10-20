@@ -46,10 +46,10 @@
         <td data-label=""><input type="checkbox" name="product_ids" value="{{ product.pk }}"></td>
         <td data-label="کالا">
           <div class="prod-cell">
-            <div class="thumb" style="background:{{ product.tint|default:'var(--primary-soft)' }}">
+            <div class="thumb thumb-fit" style="background:{{ product.tint|default:'var(--primary-soft)' }}">
               {% if product.cover_image %}
               <img src="{{ product.cover_image.thumbnail.url|default:product.cover_image.image.url }}" alt=""
-                   style="width:100%;height:100%;object-fit:cover;border-radius:inherit">
+                   style="object-fit:contain;border-radius:inherit">
               {% else %}
               {{ product.icon|default:"🛍️" }}
               {% endif %}
@@ -73,7 +73,7 @@
           <b>{{ product|price_range_min|toman }} – {{ product|price_range_max|toman }}</b>
           {% else %}
           <b>{{ product.final_price|toman }}</b>
-          {% if product.discount_percent %}<br><small style="color:var(--red);text-decoration:line-through">{{ product.price|toman }}</small>{% endif %}
+          {% if product.discount_percent %}<br><small style="color:var(--red-ink);text-decoration:line-through">{{ product.price|toman }}</small>{% endif %}
           {% endif %}
         </td>
         <td data-label="موجودی">

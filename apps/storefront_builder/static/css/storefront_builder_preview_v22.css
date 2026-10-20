@@ -56,8 +56,12 @@ html[data-sfb-builder-mode="edit"] .sfb-rsec-toolbar [data-open-settings]::after
 /* Exact child entities (product, slide, banner, category, brand, collection)
    announce themselves on hover. Clicking the visible item opens its REAL
    existing admin editor through the parent deep workspace. */
+/* Zero-specificity positioning hook for the hover label: it only applies when the
+   storefront rule did not already position the element (e.g. .hero-slide is absolute),
+   so edit chrome can never change storefront geometry. */
+:where(html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]){position:relative}
 html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]{
-  position:relative !important;cursor:pointer !important;
+  cursor:pointer !important;
 }
 html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]::after{
   content:"✎ ویرایش";
@@ -72,8 +76,9 @@ html[data-sfb-builder-mode="edit"] [data-admin-edit-kind]:hover::after{
   opacity:1;transform:translateY(0);
 }
 
+:where(html[data-sfb-builder-mode="edit"] header, html[data-sfb-builder-mode="edit"] footer){position:relative}
 html[data-sfb-builder-mode="edit"] header,
-html[data-sfb-builder-mode="edit"] footer{position:relative;cursor:pointer !important}
+html[data-sfb-builder-mode="edit"] footer{cursor:pointer !important}
 html[data-sfb-builder-mode="edit"] header:hover,
 html[data-sfb-builder-mode="edit"] footer:hover{
   outline:2px dashed rgba(104,72,255,.52);outline-offset:-2px;
@@ -88,3 +93,45 @@ html[data-sfb-builder-mode="edit"] header::after{content:"✎ ویرایش هد�
 html[data-sfb-builder-mode="edit"] footer::after{content:"✎ ویرایش فوتر"}
 html[data-sfb-builder-mode="edit"] header:hover::after,
 html[data-sfb-builder-mode="edit"] footer:hover::after{opacity:1}
+
+/* ---- Direct editing gestures: single click selects, double-click / press-and-hold opens settings --------------------
+   Visual feedback only (no permanent toolbars): a soft ring while holding, a short pulse when the gesture is accepted.
+   Editing surface in the Builder iframe: no text-selection callout on a long press (form fields stay selectable). */
+html[data-sfb-builder-mode="edit"] .sfb-preview-sections .rsec[data-section-id] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-sfb-builder-mode="edit"] .sfb-preview-sections .rsec[data-section-id] :is(input, textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.sfb-preview-sections .rsec.sfb-rsec-hold {
+  outline: 2px solid rgba(44, 98, 81, .42);
+  outline-offset: -2px;
+  animation: sfb-rsec-hold 550ms ease-out forwards;
+}
+.sfb-preview-sections .rsec.sfb-rsec-ack {
+  animation: sfb-rsec-ack .5s ease-out;
+}
+@keyframes sfb-rsec-hold {
+  from { box-shadow: inset 0 0 0 0 rgba(44, 98, 81, 0); }
+  to   { box-shadow: inset 0 0 0 7px rgba(44, 98, 81, .13); }
+}
+@keyframes sfb-rsec-ack {
+  from { box-shadow: inset 0 0 0 10px rgba(44, 98, 81, .22); }
+  to   { box-shadow: inset 0 0 0 0 rgba(44, 98, 81, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sfb-preview-sections .rsec.sfb-rsec-hold,
+  .sfb-preview-sections .rsec.sfb-rsec-ack { animation: none; }
+}
+
+/* Studio host, mouse: a single click only SELECTS — a subtle outline, no toolbar parked on the section. The section's tool strip
+   appears while the pointer is over it (touch has no hover, so a selected section keeps its strip there). */
+@media (hover: hover) {
+  body[data-sfb-studio-host] .rsec.sfb-rsec-selected:not(:hover) > .sfb-rsec-toolbar,
+  body[data-sfb-studio-host] .sfb-preview-sections .rsec[data-section-id].sfb-rsec-selected:not(:hover) .sfb-rsec-toolbar {
+    display: none !important;
+  }
+}

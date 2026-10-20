@@ -61,6 +61,8 @@
   var toast = $('[data-rs-toast]');
   var structurePanel = document.getElementById('r4Structure');
   var inspectorAside = document.getElementById('r4Inspector');
+  var workspace = $('[data-rs-workspace]');
+  var workspaceDialog = $('[data-rs-workspace-dialog]');
   var undoButton = document.getElementById('r4UndoButton');
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
@@ -75,7 +77,7 @@
 
   var ui = {
     mode: 'structure',
-    panelVisible: true,
+    panelVisible: false,   // the right-edge drawer (page structure / global design / template peek): closed by default
     modal: null,
     lastFocus: null,
     media: null,
@@ -109,6 +111,8 @@
       setTimeout(function () { if (!toast.classList.contains('visible')) toast.textContent = ''; }, 220);
     }, 3800);
   }
+  // The editor script (loaded first) reports precise server refusals through the Studio toast.
+  R4.notify = notify;
 
   // ---- workspace chrome --------------------------------------------------
   var MODE_NAMES = {
@@ -130,6 +134,39 @@
     return (host || DATA.store_name || '') + (page ? ' / ' + page : ' /');
   }
 
+  // Direct-edit discoverability: wording follows the primary pointer (touch-first devices press-and-hold; mouse double-clicks).
+  function editHint() {
+    var coarse = false;
+    try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch (err) { coarse = false; }
+    return coarse ? 'لمس برای انتخاب؛ نگه‌داشتن برای تنظیمات' : 'یک‌بار کلیک برای انتخاب؛ دوبار کلیک برای تنظیمات';
+  }
+
+  // ---- the drawer's single presentation authority -------------------------------------------------------------
+  // Invariant (checked on every renderChrome): the drawer is either CLOSED (no panel-visible class, data-rs-drawer="closed",
+  // every view hidden, backdrop hidden) or shows EXACTLY ONE view that has real content (structure / global / template peek).
+  // A requested view whose content is missing or stale (e.g. Global Design closed underneath us by R4, a structure refresh
+  // that produced nothing) never renders a blank shell: the request is dropped, i.e. the drawer closes.
+  function drawerViewHasContent(name) {
+    if (name === 'structure') return Boolean(structurePanel && structurePanel.querySelector('[data-rs-structure-scroll] .tree-row, [data-rs-structure-scroll] .empty'));
+    if (name === 'global') {
+      var aside = document.getElementById('r4GlobalDesign');
+      return Boolean(R4.isGlobalDesignOpen() && aside && aside.children.length);
+    }
+    if (name === 'template-preview') return Boolean(ui.previewTemplate);
+    return false;
+  }
+
+  function resolveDrawerView() {
+    if (!ui.panelVisible || ui.lab.active || ui.mode === 'lab' || ui.mode === 'inspector') return null;
+    var name = ui.mode === 'global' ? 'global' : ui.mode === 'template-preview' ? 'template-preview' : 'structure';
+    if (drawerViewHasContent(name)) return name;
+    // unavailable/empty: drop the request instead of showing an empty white shell
+    ui.panelVisible = false;
+    if (name === 'global') ui.mode = 'structure';
+    else if (name === 'template-preview') { ui.previewTemplate = null; ui.mode = 'structure'; R4.showPreview(null); }
+    return null;
+  }
+
   function renderChrome() {
     var isLab = ui.mode === 'lab';
     var lab = ui.lab;
@@ -139,26 +176,36 @@
     // top navigation
     $all('.top-nav [data-rastisi-action]').forEach(function (b) {
       var action = b.getAttribute('data-rastisi-action');
-      var active = ui.mode === action || (action === 'structure' && (ui.mode === 'inspector' || ui.mode === 'template-preview'));
+      var active = action === 'structure' ? (ui.mode === 'structure' && ui.panelVisible)
+        : action === 'section-settings' ? ui.mode === 'inspector'
+        : action === 'global' ? (ui.mode === 'global' && ui.panelVisible)
+        : action === 'templates' ? false
+        : ui.mode === action;
       b.classList.toggle('active', active);
       b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (action === 'structure' || action === 'global') b.setAttribute('aria-expanded', active ? 'true' : 'false');
       b.disabled = ui.busy;
     });
 
-    // layout + panel views
+    // layout + the drawer — ONE presentation authority: resolveDrawerView() decides which single view (if any) is shown;
+    // everything below (panel class, data-rs-drawer, the views' hidden flags, the backdrop via CSS) derives from it.
     var showPanel = !isLab;
     if (layout) {
       layout.classList.toggle('lab-layout', isLab);
       layout.classList.toggle('no-panel', !showPanel);
     }
+    var drawerView = resolveDrawerView();
     if (contextPanel) {
       contextPanel.hidden = !showPanel;
-      contextPanel.classList.toggle('panel-visible', ui.panelVisible);
-      contextPanel.setAttribute('data-rastisi-panel', ui.mode === 'global' ? 'global-design' : ui.mode === 'inspector' ? 'inspector' : 'structure');
+      contextPanel.classList.toggle('panel-visible', drawerView !== null);
+      root.dataset.rsDrawer = drawerView || 'closed';
+      contextPanel.setAttribute('data-rastisi-panel', drawerView === 'global' ? 'global-design' : 'structure');
     }
     $all('[data-rs-view]').forEach(function (view) {
-      view.hidden = view.getAttribute('data-rs-view') !== ui.mode;
+      view.hidden = view.getAttribute('data-rs-view') !== drawerView;   // exactly one view is visible, or none
     });
+    renderDrawerFocus();
+    renderWorkspace();
     if (labDock) labDock.hidden = !isLab;
 
     // stage toolbar
@@ -181,7 +228,7 @@
       caption.textContent = lab.active
         ? (lab.compareBase ? 'طرح هنگام شروع؛ برای مقایسه ثابت می‌ماند.' : 'فقط ظاهر تغییر می‌کند؛ محصولات و متن‌ها محفوظ‌اند.')
         : ui.previewTemplate ? 'همان محتوای فروشگاه شما، با ظاهر این قالب؛ هنوز چیزی تغییر نکرده.'
-          : 'برای ویرایش، روی بخش موردنظر کلیک کنید.';
+          : editHint();
     }
     var captionIcon = caption && caption.parentElement ? caption.parentElement.querySelector('.icon') : null;
     if (captionIcon && caption) captionIcon.outerHTML = icon(lab.active ? 'spark' : 'eye');
@@ -258,6 +305,156 @@
       .catch(function () { /* status stays as last known; nothing is lost */ });
   }
 
+  // ---- page-structure drawer (temporary overlay) ------------------------------------------------------------
+  // The right-edge panel is a floating drawer (position:fixed): it never takes layout width, so the Preview, the Studio
+  // canvas and the storefront breakpoint are identical whether it is open or closed. It is closed by default, and
+  // mutually exclusive with the settings workspace (opening either closes the other).
+  var drawerReturnFocus = null;
+  var drawerWasOpen = false;
+
+  function renderDrawerFocus() {
+    if (!contextPanel) return;
+    var open = ui.panelVisible && !contextPanel.hidden && ui.mode !== 'inspector' && ui.mode !== 'lab';
+    if (open && !drawerWasOpen) {
+      drawerWasOpen = true;
+      var active = document.activeElement;
+      if (active && active !== document.body && !contextPanel.contains(active)) drawerReturnFocus = active;
+      contextPanel.setAttribute('tabindex', '-1');
+      contextPanel.focus({ preventScroll: true });
+    } else if (!open && drawerWasOpen) {
+      drawerWasOpen = false;
+      var back = drawerReturnFocus;
+      drawerReturnFocus = null;
+      // returning from the settings workspace: that overlay restores its own opener
+      if (ui.mode !== 'inspector' && back && document.contains(back) && typeof back.focus === 'function') back.focus({ preventScroll: true });
+    }
+  }
+
+  function closeDrawer() {
+    if (ui.mode === 'template-preview') { cancelTemplatePreview(); return; }
+    if (ui.mode === 'global') { setMode('structure'); return; }
+    ui.panelVisible = false;
+    renderChrome();
+  }
+
+  function filterStructure(query) {
+    query = (query || '').trim().toLowerCase();
+    ui.structureQuery = query;
+    $all('[data-r4-structure-row]', structurePanel || root).forEach(function (row) {
+      var label = (row.getAttribute('data-rs-section-label') || '').toLowerCase();
+      row.classList.toggle('ws-filtered-out', !!query && label.indexOf(query) === -1);
+    });
+  }
+
+  // ---- settings workspace (large overlay) ---------------------------------
+  // The overlay is presentation only: r4_editor.js still owns the Inspector body (fetch, hydrate, visibility rules,
+  // mutations). The Studio decides when the overlay is shown (mode === 'inspector') and handles focus, Escape and the
+  // search / save-state chrome. Nothing here reads or writes the Preview iframe or its size.
+  var workspaceReturnFocus = null;
+  var workspaceWasOpen = false;
+
+  function renderWorkspace() {
+    if (!workspace) return;
+    var open = ui.mode === 'inspector';
+    workspace.hidden = !open;
+    if (open && !workspaceWasOpen) {
+      workspaceReturnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+      workspaceWasOpen = true;
+      if (workspaceDialog) workspaceDialog.focus({ preventScroll: true });
+    } else if (!open && workspaceWasOpen) {
+      workspaceWasOpen = false;
+      var back = workspaceReturnFocus;
+      workspaceReturnFocus = null;
+      // an opener that lived inside the (now closed) drawer is not focusable any more: use the top-bar button instead
+      // …and so is a Preview-originated opener (the frame itself, after a double-click / press-and-hold on a section)
+      if (!back || !document.contains(back) || back.getClientRects().length === 0 || back.id === 'r4PreviewFrame') back = $('.top-nav [data-rastisi-action="section-settings"]');
+      if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+    }
+    if (open) renderWorkspaceSave();
+  }
+
+  function renderWorkspaceSave() {
+    var box = $('[data-r4-ws-save]', inspectorAside || document);
+    if (!box) return;
+    var text = box.querySelector('[data-r4-ws-save-text]');
+    box.setAttribute('data-state', ui.saveState);
+    if (text) text.textContent = SAVE_LABELS[ui.saveState] || '';
+  }
+
+  var searchTimer = null;
+  function runWorkspaceSearch(input) {
+    var query = (input.value || '').trim().toLowerCase();
+    var root_ = $('.r4-ws', inspectorAside || document);
+    if (!root_) return;
+    var rows = $all('[data-r4-field-row]', root_);
+    var firstTabWithHits = null;
+    var counts = {};
+    rows.forEach(function (row) {
+      var label = row.querySelector('.r4-field-label');
+      var hay = ((label ? label.textContent : '') + ' ' + (row.getAttribute('data-r4-field-key') || '')).toLowerCase();
+      // R4-10: the compound design block is searchable by the label of every property it shows ("گردی", "رنگ دکمه" …)
+      if (row.getAttribute('data-r4-field-type') === 'design') hay += ' ' + row.textContent.toLowerCase();
+      var hit = !row.hidden && !row.closest('[data-r4-ws-card][hidden]') && (!query || hay.indexOf(query) !== -1);
+      row.classList.toggle('ws-filtered-out', !hit);
+      row.classList.toggle('ws-hit', !!query && hit);
+      var panel = row.closest('[data-r4-tab-panel]');
+      if (hit && query && panel) {
+        var name = panel.getAttribute('data-r4-tab-panel');
+        counts[name] = (counts[name] || 0) + 1;
+        if (!firstTabWithHits) firstTabWithHits = name;
+      }
+    });
+    // R4-10: while searching, every Design sub-section with a hit is shown (the sub bar steps aside); clearing restores it
+    if (R4.setSubsectionSearch) R4.setSubsectionSearch(!!query);
+    $all('[data-r4-ws-card]', root_).forEach(function (card) {
+      var cardRows = $all('[data-r4-field-row]', card);
+      // manage / media cards hold no schema field rows: they only stay while there is no query
+      card.classList.toggle('ws-filtered-out', !!query && (!cardRows.length || cardRows.every(function (r) { return r.classList.contains('ws-filtered-out'); })));
+    });
+    $all('[data-r4-tab]', root_).forEach(function (tab) {
+      var count = counts[tab.getAttribute('data-r4-tab')] || 0;
+      var badge = tab.querySelector('[data-r4-ws-tab-count]');
+      if (!badge) return;
+      badge.hidden = !query || !count;
+      badge.textContent = query && count ? num(count) : '';
+    });
+    $all('[data-r4-ws-noresults]', root_).forEach(function (note) {
+      var panel = note.closest('[data-r4-tab-panel]');
+      var name = panel ? panel.getAttribute('data-r4-tab-panel') : '';
+      note.hidden = !query || !!counts[name];
+    });
+    if (query && firstTabWithHits) {
+      var activeTab = $('[data-r4-tab][aria-selected="true"]', root_);
+      var activeName = activeTab ? activeTab.getAttribute('data-r4-tab') : '';
+      if (!counts[activeName]) {
+        var target = $('[data-r4-tab="' + firstTabWithHits + '"]', root_);
+        if (target) target.click();
+      }
+    }
+  }
+
+  function trapWorkspaceFocus(evt) {
+    if (!workspaceDialog) return;
+    var focusable = $all('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"], a[href]', workspaceDialog).filter(function (el) {
+      return el.getClientRects().length > 0 && !el.closest('[hidden]') && !el.closest('[inert]');
+    });
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    var inside = document.activeElement && workspaceDialog.contains(document.activeElement);
+    if (!inside) { evt.preventDefault(); (evt.shiftKey ? last : first).focus(); return; }
+    if (evt.shiftKey && document.activeElement === first) { evt.preventDefault(); last.focus(); }
+    else if (!evt.shiftKey && document.activeElement === last) { evt.preventDefault(); first.focus(); }
+  }
+
+  document.addEventListener('input', function (evt) {
+    var structureSearch = evt.target && evt.target.closest && evt.target.closest('[data-rs-structure-search]');
+    if (structureSearch) { filterStructure(structureSearch.value); return; }
+    var input = evt.target && evt.target.closest && evt.target.closest('[data-r4-ws-search]');
+    if (!input) return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { runWorkspaceSearch(input); }, 80);
+  });
+
   // ---- modes -------------------------------------------------------------
   function setMode(mode, options) {
     if (ui.lab.active && mode !== 'lab') {
@@ -268,7 +465,8 @@
       ui.previewTemplate = null;
       R4.showPreview(null);
     }
-    ui.panelVisible = true;
+    // the structure view is the DEFAULT mode and means "no drawer"; the drawer is opened explicitly (options.drawer)
+    var drawerWanted = mode === 'global' || (mode === 'structure' && Boolean(options && options.drawer));
     if (mode === 'global') {
       R4.openGlobalDesign();
       if (options && options.tab) setGlobalTab(options.tab);
@@ -281,6 +479,8 @@
       if (R4.inspectorOpen) R4.closeInspector();
       if (zoomSelect) { zoomSelect.value = 'width'; R4.setZoom && R4.setZoom('width'); }
     }
+    // set AFTER the closing calls above: closing the settings workspace fires r4:inspector-closed, whose handler resets the drawer
+    ui.panelVisible = drawerWanted;
     ui.mode = mode;
     renderChrome();
   }
@@ -312,7 +512,7 @@
 
   function markSelectedRow() {
     $all('[data-r4-structure-row]', structurePanel || root).forEach(function (row) {
-      row.classList.toggle('selected', ui.mode === 'inspector' && String(ui.selectedSectionId) === row.getAttribute('data-r4-structure-section-id'));
+      row.classList.toggle('selected', ui.selectedSectionId != null && String(ui.selectedSectionId) === row.getAttribute('data-r4-structure-section-id'));
     });
   }
 
@@ -343,7 +543,7 @@
     if (title) title.textContent = label;
     if (scope) scope.textContent = pageLabel + ' / ' + label;
     if (lockedNote) lockedNote.hidden = !locked;
-    if (inspectorAside) inspectorAside.inert = locked;
+    $all('[data-r4-ws-fields]', inspectorAside || document).forEach(function (area) { area.inert = locked; });
     if (!actions) return;
     var dis = locked ? 'disabled' : '';
     var html = '<div class="section-divider"></div>' +
@@ -466,19 +666,31 @@
     setMode('structure');
   }
 
-  function switchTemplate(key) {
+  function switchTemplate(key, flags) {
     var t = templateByKey(key);
     if (!t || ui.busy || ui.lab.active || t.is_current) return;
     ui.busy = true;
     if (ui.modal) renderModal();
     else openModal('templates');
     renderChrome();
-    R4.switchTemplate(t.key, t.version).then(function (result) {
+    R4.switchTemplate(t.key, t.version, flags).then(function (result) {
       if (result && result.ok) return; // the workspace reloads
       ui.busy = false;
       renderChrome();
+      // Known, precise refusals: ask for the explicit confirmation the server
+      // requires instead of a generic failure. Nothing was changed.
+      if (result && (result.code === 'replace_confirmation_required' || result.code === 'locked_sections_present')) {
+        openModal('template-replace', {
+          key: t.key,
+          label: t.label,
+          locked: result.code === 'locked_sections_present',
+          lockedCount: (result.locked_sections || []).length,
+          pages: (result.summary && result.summary.pages) || null,
+        });
+        return;
+      }
       if (ui.modal) renderModal();
-      if (ui.saveState !== 'conflict') notify('تغییر قالب انجام نشد؛ دوباره تلاش کنید.');
+      if (ui.saveState !== 'conflict') notify((result && result.message) || 'تغییر قالب انجام نشد؛ دوباره تلاش کنید.');
     });
   }
 
@@ -698,7 +910,7 @@
       case 'templates':
         cls = 'gallery-modal';
         title = 'فروشگاه شما، با یک نگاه تازه.';
-        sub = num((DATA.templates || []).length) + ' قالب آماده؛ هر قالب دستور طراحی تمام فروشگاه است و محتوای شما حفظ می‌شود.';
+        sub = num((DATA.templates || []).length) + ' قالب آماده؛ هر قالب دستور طراحی تمام فروشگاه است؛ اعمال آن فقط پیش‌نویس را عوض می‌کند و محصولات و رسانه‌های شما حفظ می‌شوند.';
         top = '<div class="gallery-topline"><div class="filters">' +
           [['all', 'همه'], ['current', 'قالب فعلی']].map(function (f) {
             return btn('template-filter', f[1], '', ui.filter === f[0] ? 'active' : '', 'data-filter="' + f[0] + '" aria-pressed="' + (ui.filter === f[0]) + '" ' + (busy ? 'disabled' : ''));
@@ -712,10 +924,23 @@
         sub = 'یک بخش جدید، فقط در همین صفحه.';
         body = '<div data-rs-add-section-slot></div>';
         break;
+      case 'add-row':
+        title = 'ردیف دو‌ستونه بسازید';
+        sub = 'دو بخش کنار هم، فقط در همین صفحه.';
+        body = '<div data-rs-add-row-slot></div>';
+        break;
       case 'remove-section':
         title = 'این بخش از صفحه حذف شود؟';
         body = '<p class="modal-message">محصولات فروشگاه حذف نمی‌شوند؛ فقط این بخش از چیدمان صفحه برداشته می‌شود. می‌توانید آن را واگرد کنید.</p>';
         foot = btn('confirm-remove', 'حذف بخش', 'trash', 'outline danger') + btn('close-modal', 'نگه داشتن بخش', '', 'primary');
+        break;
+      case 'template-replace':
+        title = 'چیدمان فعلی با قالب «' + esc(m.label || '') + '» جایگزین شود؟';
+        body = '<p class="modal-message">قالب انتخاب‌شده ساختار کامل و دقیق خودش را وارد می‌کند و بخشی از قالب قبلی در طراحی جدید نمی‌ماند. ' +
+          'محصولات، برندها، قیمت‌ها و موجودی فروشگاه شما تغییر نمی‌کنند. طراحی فعلی شما پیش از جایگزینی به‌صورت یک نسخهٔ قابل‌بازگشت در تاریخچهٔ نسخه‌ها ذخیره می‌شود و می‌توانید با «واگرد» هم برگردید.</p>' +
+          (m.locked ? '<div class="note warn" style="margin-top:18px">' + num(m.lockedCount) + ' بخش قفل‌شده در صفحه‌های این قالب هست. با ادامه، همین بخش‌ها هم (با نسخهٔ پشتیبان) جایگزین می‌شوند؛ اگر نمی‌خواهید، انصراف دهید و ابتدا قفل آن‌ها را باز کنید.</div>' : '') +
+          '<div class="note" style="margin-top:12px">نسخهٔ عمومی تغییر نمی‌کند تا زمانی که انتشار را بزنید.</div>';
+        foot = btn('confirm-template-replace', m.locked ? 'جایگزینی (از جمله بخش‌های قفل‌شده)' : 'جایگزینی چیدمان', '', 'outline danger') + btn('close-modal', 'انصراف', '', 'primary');
         break;
       case 'confirm':
         title = m.title || 'ادامه می‌دهید؟';
@@ -838,6 +1063,11 @@
       var template = structurePanel ? structurePanel.querySelector('template[data-rs-add-section-template]') : null;
       if (slot && template) slot.appendChild(template.content.cloneNode(true));
     }
+    if (m.type === 'add-row') {
+      var rowSlot = modalRoot.querySelector('[data-rs-add-row-slot]');
+      var rowTemplate = structurePanel ? structurePanel.querySelector('template[data-rs-add-row-template]') : null;
+      if (rowSlot && rowTemplate) rowSlot.appendChild(rowTemplate.content.cloneNode(true));
+    }
     if (restoreFocus) {
       var target = null;
       if (focusControl) target = modalRoot.querySelector('[data-control="' + focusControl + '"]');
@@ -914,18 +1144,37 @@
     var action = el.getAttribute('data-rastisi-action');
     if (ui.busy && ['panel-toggle', 'panel-close', 'show-base', 'show-candidate', 'close-modal'].indexOf(action) === -1) return;
     switch (action) {
-      case 'structure': setMode('structure'); break;
+      case 'structure':
+        // the top-bar button toggles the drawer; the same action elsewhere always opens it
+        if (el.closest('.top-nav') && ui.mode === 'structure' && ui.panelVisible) closeDrawer();
+        else setMode('structure', { drawer: true });
+        break;
+      case 'section-settings':
+        if (R4.inspectorOpen) break;
+        if (ui.selectedSectionId != null && rowFor(ui.selectedSectionId)) R4.openSection(Number(ui.selectedSectionId));
+        else { notify('ابتدا یک بخش را در پیش‌نمایش یا فهرست «ساختار صفحه» انتخاب کنید.'); setMode('structure', { drawer: true }); }
+        break;
+      case 'row-select': {
+        var rowEl = el.closest('[data-r4-structure-row]');
+        if (!rowEl) break;
+        ui.selectedSectionId = rowEl.getAttribute('data-r4-structure-section-id');
+        markSelectedRow();
+        if (R4.previewSelect) R4.previewSelect(Number(ui.selectedSectionId));
+        break;
+      }
+      case 'workspace-backdrop': if (R4.inspectorOpen) R4.closeInspector(); break;
       case 'global':
         if (el.hasAttribute('data-rs-global-focus')) focusGlobalRegion(el.getAttribute('data-rs-global-focus'));
+        else if (el.closest('.top-nav') && ui.mode === 'global' && ui.panelVisible) closeDrawer();
         else setMode('global');
         break;
       case 'lab': setMode('lab'); break;
       case 'help': openModal('help'); break;
       case 'templates': openTemplateGallery(); break;
-      case 'panel-toggle': ui.panelVisible = !ui.panelVisible; renderChrome(); break;
-      case 'panel-close': ui.panelVisible = false; renderChrome(); break;
+      case 'panel-close': closeDrawer(); break;
       case 'global-tab': setGlobalTab(el.getAttribute('data-tab')); break;
       case 'add-section': openModal('add-section'); break;
+      case 'add-row': openModal('add-row'); break;
       case 'section-enable': sectionCommand('toggle_active'); break;
       case 'section-lock': sectionCommand('toggle_locked'); break;
       case 'section-up': sectionCommand('up'); break;
@@ -958,6 +1207,16 @@
       case 'preview-template': previewTemplate(el.getAttribute('data-key')); break;
       case 'cancel-template-preview': cancelTemplatePreview(); break;
       case 'switch-template': switchTemplate(el.getAttribute('data-key')); break;
+      case 'confirm-template-replace': {
+        var replaceModal = ui.modal || {};
+        var replaceKey = replaceModal.key;
+        var replaceLocked = Boolean(replaceModal.locked);
+        ui.modal = null;
+        if (app) app.inert = false;
+        modalRoot.innerHTML = '';
+        switchTemplate(replaceKey, { confirm_replace: true, allow_locked: replaceLocked });
+        break;
+      }
       case 'public-preview':
       case 'view-published':
         if (ui.lab.active) { notify('ابتدا آزمایش را اعمال کنید یا از آن خارج شوید.'); return; }
@@ -1029,6 +1288,24 @@
     setTimeout(function () { closeModal(); notify('بخش تازه به انتهای صفحه اضافه شد.'); }, 0);
   });
 
+  // FOLLOWUP-12 — guided two-column row: R4.addTwoColumnRow chains the existing mutations.
+  modalRoot.addEventListener('submit', function (evt) {
+    var form = evt.target.closest('[data-rs-add-row-form]');
+    if (!form) return;
+    evt.preventDefault();
+    var first = form.querySelector('[data-rs-add-row-first]');
+    var second = form.querySelector('[data-rs-add-row-second]');
+    var layout = form.querySelector('input[name="rs_row_layout"]:checked');
+    if (!first || !first.value) { notify('بخش ستون اول را انتخاب کنید.'); first && first.focus(); return; }
+    var submit = form.querySelector('[data-rs-add-row-submit]');
+    if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن ردیف…'; }
+    R4.addTwoColumnRow(layout ? layout.value : 'half', first.value, second ? second.value : '').then(function (result) {
+      closeModal();
+      if (result && result.ok) notify('ردیف دو‌ستونه به انتهای صفحه اضافه شد. هنوز منتشر نشده است.');
+      else if (result && result.partial) notify('ردیف فقط تا نیمه ساخته شد؛ ستون‌های خالی را از «خانه‌های خالی» پر کنید یا واگرد بزنید.');
+    });
+  });
+
   modalRoot.addEventListener('click', function (evt) {
     if (evt.target.classList && evt.target.classList.contains('modal-backdrop') && !ui.busy) closeModal();
   });
@@ -1066,6 +1343,21 @@
     // Escape only closes presentation layers (dialog first, then the admin
     // navigation overlay). It never mutates, never discards, never exits the
     // Design Lab and never answers a confirmation with "yes".
+    var pickerOpen = document.getElementById('r4ResourcePicker');
+    if (evt.key === 'Escape' && !ui.modal && ui.mode === 'inspector' && R4.inspectorOpen && !(pickerOpen && !pickerOpen.hidden) && root.dataset.r4SidebarExpanded !== 'true') {
+      evt.preventDefault();
+      R4.closeInspector();
+      return;
+    }
+    if (evt.key === 'Tab' && !ui.modal && ui.mode === 'inspector' && !(pickerOpen && !pickerOpen.hidden)) {
+      trapWorkspaceFocus(evt);
+      return;
+    }
+    if (evt.key === 'Escape' && !ui.modal && ui.panelVisible && ui.mode !== 'inspector' && ui.mode !== 'lab' && root.dataset.r4SidebarExpanded !== 'true') {
+      evt.preventDefault();
+      closeDrawer();
+      return;
+    }
     if (evt.key === 'Escape' && !ui.modal && root.dataset.r4SidebarExpanded === 'true') {
       var sidebarToggle = document.getElementById('r4SidebarToggle');
       if (sidebarToggle) { sidebarToggle.click(); sidebarToggle.focus(); }
@@ -1246,28 +1538,52 @@
     renderChrome();
   });
 
+  // Selection from the Preview (single click / tap): highlight the structure row, nothing else changes.
+  root.addEventListener('r4:section-selected', function (evt) {
+    ui.selectedSectionId = String(evt.detail.sectionId);
+    markSelectedRow();
+  });
+
+  // A direct-edit gesture (double-click / press-and-hold) is about to open settings: the drawer, if open, closes first.
+  root.addEventListener('r4:direct-edit', function (evt) {
+    ui.selectedSectionId = String(evt.detail.sectionId);
+    if (ui.panelVisible && ui.mode !== 'inspector') closeDrawer();
+    markSelectedRow();
+  });
+
   root.addEventListener('r4:inspector-opened', function (evt) {
     ui.selectedSectionId = evt.detail.sectionId;
     if (ui.mode === 'template-preview') { ui.previewTemplate = null; R4.showPreview(null); }
     ui.mode = 'inspector';
-    ui.panelVisible = true;
+    ui.panelVisible = false; // the drawer and the settings workspace are mutually exclusive
     renderInspectorChrome();
     markSelectedRow();
     renderChrome();
   });
 
   root.addEventListener('r4:inspector-closed', function () {
-    if (inspectorAside) inspectorAside.inert = false;
     if (ui.mode === 'inspector') {
       ui.mode = 'structure';
+      ui.panelVisible = false; // closing settings returns to the full canvas
       renderChrome();
     }
     markSelectedRow();
   });
 
+  // R4 closes Global Design on its own (e.g. R4.openSection hides it before the Inspector arrives): follow it, otherwise the
+  // drawer would stay open over an emptied view.
+  root.addEventListener('r4:global-closed', function () {
+    if (ui.mode === 'global') {
+      ui.mode = 'structure';
+      ui.panelVisible = false;
+      renderChrome();
+    }
+  });
+
   root.addEventListener('r4:global-opened', function () {
     if (ui.mode !== 'global' && !ui.lab.active) {
       ui.mode = 'global';
+      ui.panelVisible = true;
       renderChrome();
     }
   });
@@ -1275,6 +1591,7 @@
   root.addEventListener('r4:structure-refreshed', function () {
     var countPill = $('[data-rs-section-count]');
     if (countPill) countPill.textContent = num($all('[data-r4-structure-row]', structurePanel).length) + ' بخش';
+    if (ui.structureQuery) filterStructure(ui.structureQuery);
     if (ui.mode === 'inspector') renderInspectorChrome();
     markSelectedRow();
   });
@@ -1323,7 +1640,7 @@
   (function init() {
     // Deep links (?panel=appearance|header|footer) already opened Global
     // Design inside R4; follow it.
-    if (R4.isGlobalDesignOpen && R4.isGlobalDesignOpen()) ui.mode = 'global';
+    if (R4.isGlobalDesignOpen && R4.isGlobalDesignOpen()) { ui.mode = 'global'; ui.panelVisible = true; }
     renderSaveFeedback();
     setGlobalTab(root.dataset.rsGlobalTab || 'visual');
     renderChrome();
@@ -1338,10 +1655,20 @@
         openModal('published');
         notify('فروشگاه با موفقیت منتشر شد.');
       } else if (notice === 'template') {
-        notify('قالب تغییر کرد؛ محصولات، محتوا و ساختار صفحه حفظ شدند.');
+        notify('قالب جدید در پیش‌نویس اعمال شد؛ محصولات و رسانه‌های فروشگاه حفظ شدند. برای نمایش عمومی، منتشر کنید.');
       } else if (notice === 'discarded') {
         notify(ui.hasPublished ? 'پیش‌نویس به آخرین نسخهٔ منتشرشده برگشت.' : 'پیش‌نویس به طراحی اولیه برگشت.');
       }
+    }
+
+    // Deep link ?open=templates — the one official template gallery lives in this
+    // Studio; the old dashboard gallery URL forwards here and opens it directly.
+    // UI-only: nothing is written, the param is dropped from the address bar.
+    var deepParams = new URLSearchParams(window.location.search);
+    if (deepParams.get('open') === 'templates') {
+      deepParams.delete('open');
+      window.history.replaceState(null, '', window.location.pathname + (deepParams.toString() ? '?' + deepParams.toString() : ''));
+      openTemplateGallery();
     }
   })();
 })();

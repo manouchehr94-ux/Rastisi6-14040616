@@ -17,7 +17,6 @@ from django.utils import timezone
 
 from apps.catalog.models import Category, Product, Vendor
 from apps.catalog.services import collection_service
-from apps.storefront_builder.models import StorefrontSection
 from apps.storefront_builder.services import layout_service as svc
 from apps.stores.models import Store, StoreDomain, StoreMembership
 
@@ -274,45 +273,42 @@ class ReorderHideResponsiveReachPublicPageTests(TestCase):
         # هر تست، ``self.draft`` هرگز stale نمی‌شود.
         self.draft = svc.get_or_create_draft(self.store)
 
+    def _mutate(self, mutation):
+        import json
+
+        self.draft.refresh_from_db()
+        return self.admin_client.post(
+            reverse("dashboard:storefront-builder-r4-mutation"),
+            data=json.dumps({"base_revision": self.draft.edit_revision, "mutation": mutation}),
+            content_type="application/json",
+        )
+
     def test_reorder_persists_and_reaches_public_page(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         pd_page = self.draft.get_page("product_detail")
         main = pd_page.sections.get(section_key="product_main")
         desc = pd_page.sections.get(section_key="product_description")
-        # جابه‌جاییِ ترتیب: توضیحات قبل از بخشِ اصلی
-        resp = self.admin_client.post(reverse("dashboard:storefront-builder-section-reorder"), {
-            "page": "product_detail", "section_ids": [str(desc.pk), str(main.pk)],
-        })
-        self.assertEqual(resp.status_code, 200)
+        # move the description above the main block through the canonical R4 mutation
+        for _ in range(8):
+            desc.refresh_from_db()
+            main.refresh_from_db()
+            if desc.order < main.order:
+                break
+            resp = self._mutate({"type": "section.move", "section_id": desc.pk, "direction": "up"})
+            self.assertEqual(resp.status_code, 200, resp.content[:200])
         desc.refresh_from_db()
         main.refresh_from_db()
         self.assertLess(desc.order, main.order)
 
         svc.publish(self.store)
         body = self.public_client.get(reverse("catalog:product-detail", args=[self.product.slug])).content.decode()
-        # ``self.product.name`` هم در ``<title>`` (همیشه در ابتدای صفحه)
-        # ظاهر می‌شود — نشانه‌یِ اختصاصیِ بدنه‌ی product_main دقیقاً همان
-        # تگِ h1 است، نه صرفِ نامِ محصول در هرجایِ صفحه.
+        # the product name also appears in <title>; the main block is identified by its own <h1>
         self.assertLess(body.index("توضیحات محصول"), body.index(f"<h1>{self.product.name}</h1>"))
 
     def test_hiding_a_section_removes_it_from_the_public_page(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         pd_page = self.draft.get_page("product_detail")
         video_section = pd_page.sections.get(section_key="product_video")
-        resp = self.admin_client.post(
-            reverse("dashboard:storefront-builder-section-toggle", args=[video_section.pk]),
-        )
-        self.assertEqual(resp.status_code, 200)
+        resp = self._mutate({"type": "section.toggle_active", "section_id": video_section.pk})
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
         video_section.refresh_from_db()
         self.assertFalse(video_section.is_active)
 

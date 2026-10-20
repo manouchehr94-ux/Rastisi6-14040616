@@ -1,0 +1,38 @@
+{% comment %}
+Light link-strip footer (key: kawaii_minimal).
+Structure: a pale grey strip of the merchant's quick links, then one quiet row
+with the store mark at the RTL edge and the legal line / social icons at the
+other.  Shared merchant/footer data partials only.
+{% endcomment %}
+{% with fc=footer_config rc=footer_config.responsive %}
+<footer class="gf gf--kawaii">
+  {% if fc.show_quick_links and NAV_FOOTER_1 %}
+  <div class="gf-kw-strip" {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    <div class="wrap">
+      {% for item in NAV_FOOTER_1.items|slice:":8" %}
+      {% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <div class="wrap gf-kw-main">
+    {% if fc.show_about %}
+    <div class="gf-col gf-col-brand" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
+    </div>
+    {% endif %}
+    <div class="gf-kw-legal">
+      {% if fc.show_social %}
+      <div {% if rc.show_social.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_social.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/social_links.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_copyright %}
+      <div {% if rc.show_copyright.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_copyright.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/legal_row.html" %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</footer>
+{% endwith %}

@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}تاریخچه‌ی اشتراک | پنل مدیریت{% endblock %}
 {% block page_title %}تاریخچه‌ی اشتراک{% endblock %}
 {% block page_sub %}رخدادهایِ اشتراک — تغییرِ وضعیت و پلن{% endblock %}
@@ -10,7 +11,7 @@
     <tbody>
     {% for event in events %}
       <tr>
-        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ event.created_at|date:"Y-m-d H:i" }}</td>
+        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ event.created_at|jalali_dt }}</td>
         <td>{{ event.get_event_type_display }}</td>
         <td>{{ event.get_from_status_display|default:"—" }}</td>
         <td>{{ event.get_to_status_display|default:"—" }}</td>

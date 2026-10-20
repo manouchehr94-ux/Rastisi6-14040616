@@ -10,6 +10,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from apps.cart.models import Cart, CartItem
+from apps.cart.services.item_media import CART_ITEM_PREFETCH, cart_item_image
 
 
 CART_PREVIEW_MODE_COUNT_LINK = "count_link"
@@ -42,7 +43,7 @@ def get_cart_preview_data(request, *, mode: str = CART_PREVIEW_MODE_COUNT_LINK) 
     if mode == CART_PREVIEW_MODE_MINI_CART and cart_count > 0:
         items = list(
             cart.items.select_related("product", "variant")
-            .prefetch_related("product__images")
+            .prefetch_related(*CART_ITEM_PREFETCH)
             .order_by("-created_at")[:5]
         )
         cart_total = sum(
@@ -96,11 +97,6 @@ def _variant_label(variant) -> str:
 
 
 def _item_image_url(item) -> str:
-    """URL تصویرِ کوچکِ کالایِ این آیتم — از cache مربوط به
-    prefetch_related('product__images')."""
-    cover = item.product.cover_image
-    if cover:
-        if cover.thumbnail:
-            return cover.thumbnail.url
-        return cover.image.url
-    return ""
+    """URL تصویرِ کوچکِ این آیتم با همان مرجعِ واحدِ سبد/تسویه (``item_media``): تصویرِ تنوع ← کاورِ کالا ← بدونِ تصویر."""
+    image = cart_item_image(item)
+    return image.url if image else ""

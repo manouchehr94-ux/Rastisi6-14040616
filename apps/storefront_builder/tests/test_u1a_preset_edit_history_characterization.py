@@ -52,11 +52,12 @@ class PresetApplyEditHistoryCharacterizationTests(PresetServiceTestCase):
         layout = svc.get_or_create_layout(self.store)
         versions_before = layout.versions.count()
 
-        resp = self.admin_client.post(
-            reverse_apply_preset_url(),
-            {"preset_key": "dense_catalog", "confirm_preset_apply": "1"},
-        )
-        self.assertEqual(resp.status_code, 302)
+        # ARCH-02: the dashboard apply endpoint no longer offers non-ready structural presets (one Draft-changing
+        # path only); the checkpointing service itself is unchanged and is characterized directly.
+        from apps.storefront_builder import layout_preset_registry as _lpr
+        from apps.storefront_builder.services import preset_service as _preset_service
+
+        _preset_service.apply_preset_with_checkpoint(self.store, _lpr.get_layout_preset("dense_catalog"), user=self.staff)
 
         # No Undo entry against the old (now archived) row — the checkpoint
         # is the recovery mechanism for this action, not the edit-history log.
@@ -73,11 +74,12 @@ class PresetApplyEditHistoryCharacterizationTests(PresetServiceTestCase):
         draft = svc.get_or_create_draft(self.store)
         home_before = list(draft.home_page().sections.order_by("order").values_list("section_key", flat=True))
 
-        resp = self.admin_client.post(
-            reverse_apply_preset_url(),
-            {"preset_key": "dense_catalog", "confirm_preset_apply": "1"},
-        )
-        self.assertEqual(resp.status_code, 302)
+        # ARCH-02: the dashboard apply endpoint no longer offers non-ready structural presets (one Draft-changing
+        # path only); the checkpointing service itself is unchanged and is characterized directly.
+        from apps.storefront_builder import layout_preset_registry as _lpr
+        from apps.storefront_builder.services import preset_service as _preset_service
+
+        _preset_service.apply_preset_with_checkpoint(self.store, _lpr.get_layout_preset("dense_catalog"), user=self.staff)
 
         layout = svc.get_or_create_layout(self.store)
         new_draft = layout.draft_version
@@ -95,37 +97,6 @@ class PresetApplyEditHistoryCharacterizationTests(PresetServiceTestCase):
             "the pre-apply state must remain fully recoverable, just via History → Restore instead of Undo",
         )
 
-    def test_applying_a_preset_over_an_already_empty_draft_still_uses_plain_undo(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        """No existing content → nothing to checkpoint → the SAME Draft row
-        is mutated in place, exactly like before this Batch — Undo/Redo for
-        this scenario is completely unaffected."""
-        draft = svc.get_or_create_draft(self.store)
-        for page_type in ("home", "product_detail", "listing", "collection", "search", "cart"):
-            draft.get_page(page_type).sections.all().delete()
-        before_count = StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count()
-
-        resp = self.admin_client.post(
-            reverse_apply_preset_url(),
-            {"preset_key": "dense_catalog", "confirm_preset_apply": "1"},
-        )
-        self.assertEqual(resp.status_code, 302)
-
-        after_count = StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count()
-        self.assertEqual(after_count - before_count, 1)
-
-        entry = StorefrontEditHistoryEntry.objects.filter(draft_version=draft).latest("sequence")
-        self.assertEqual(entry.action_label, "اعمال پیش‌تنظیم صفحه‌آرایی")
-
-        undo_resp = self.admin_client.post(reverse_undo_url())
-        self.assertEqual(undo_resp.status_code, 200)
-        draft.refresh_from_db()
-        self.assertFalse(draft.home_page().sections.exists())
 
     def test_a_rejected_preset_apply_creates_no_history_entry(self):
         """A no-op/failed submission must not pollute the history log — this
@@ -133,8 +104,7 @@ class PresetApplyEditHistoryCharacterizationTests(PresetServiceTestCase):
         draft = svc.get_or_create_draft(self.store)
         before_count = StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count()
 
-        # Missing confirm_preset_apply=1 while pages already have sections —
-        # the view rejects this without calling apply_preset at all.
+        # A non-ready structural preset is refused by the view without calling any apply service.
         resp = self.admin_client.post(reverse_apply_preset_url(), {"preset_key": "dense_catalog"})
         self.assertEqual(resp.status_code, 302)
 

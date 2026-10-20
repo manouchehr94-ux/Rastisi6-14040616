@@ -504,11 +504,17 @@ class OnboardingBrandingForm(forms.Form):
 
     logo = forms.ImageField(
         label="لوگو", required=False,
-        help_text="PNG، JPG یا WebP؛ ترجیحاً کمتر از ۲ مگابایت.",
+        help_text="PNG، JPG یا WebP؛ حداکثر ۲ مگابایت.",
         widget=forms.FileInput(attrs={
-            "accept": "image/png,image/jpeg,image/webp,image/gif", "data-ob-logo-input": "",
+            "accept": "image/png,image/jpeg,image/webp", "data-ob-logo-input": "",
         }),
     )
+
+    def clean_logo(self):
+        # R4-14 — the help text promised < 2 MB but nothing enforced it; format is the one Pillow detects (no GIF)
+        from apps.core.image_validation import validate_uploaded_image
+
+        return validate_uploaded_image(self.cleaned_data.get("logo"), max_bytes=2 * 1024 * 1024, label="لوگو")
 
 
 class ContactForm(forms.Form):

@@ -11,12 +11,12 @@
     {% resolve_destination item as dest %}
     {% if dest.url %}
     <a class="story-item" href="{{ dest.url }}" {% if dest.open_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>
-      <span class="story-avatar">{% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.title|default:'استوری' }}" loading="lazy">{% endif %}</span>
+      <span class="story-avatar">{% if item.image_url %}<img src="{{ item.image_url }}" data-img-role="story" alt="{{ item.title|default:'استوری' }}" loading="lazy">{% endif %}</span>
       {% if item.title %}<span class="story-label">{{ item.title }}</span>{% endif %}
     </a>
     {% else %}
     <div class="story-item">
-      <span class="story-avatar">{% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.title|default:'استوری' }}" loading="lazy">{% endif %}</span>
+      <span class="story-avatar">{% if item.image_url %}<img src="{{ item.image_url }}" data-img-role="story" alt="{{ item.title|default:'استوری' }}" loading="lazy">{% endif %}</span>
       {% if item.title %}<span class="story-label">{{ item.title }}</span>{% endif %}
     </div>
     {% endif %}

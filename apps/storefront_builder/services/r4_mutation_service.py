@@ -10,6 +10,8 @@ increment ``edit_revision`` once, and record history through the existing
 
 from __future__ import annotations
 
+import re
+
 from django.db import transaction
 
 from apps.storefront_builder import (
@@ -17,6 +19,7 @@ from apps.storefront_builder import (
     layout_preset_registry,
     resource_source,
     section_registry,
+    shell_geometry,
 )
 from apps.storefront_builder.models import (
     APPEARANCE_COLOR_KEYS,
@@ -53,7 +56,14 @@ from apps.storefront_builder.storefront_appearance.validation import (
 
 
 class R4MutationError(ValueError):
-    pass
+    """A refused R4 mutation. ``str(exc)`` is the stable external code;
+    ``payload`` optionally carries structured, client-safe detail (for example
+    the exact locked sections or the replacement dry-run) so the UI can show a
+    precise Persian message instead of a generic failure."""
+
+    def __init__(self, *args, payload=None):
+        super().__init__(*args)
+        self.payload = dict(payload or {})
 
 
 class R4StaleRevision(R4MutationError):
@@ -97,6 +107,10 @@ _MUTATION_HISTORY_LABELS = {
 
 def _history_label(mutation: dict) -> str:
     return _MUTATION_HISTORY_LABELS.get(mutation.get("type"), "ویرایش R4")
+
+
+_PERSIAN_LETTERS = re.compile(r"[\u0600-\u06FF]")
+_INVALID_SETTINGS_MESSAGE_FA = "مقدار واردشده برای این تنظیم معتبر نیست؛ هیچ تغییری ذخیره نشد."
 
 
 def _is_strict_int(value: object) -> bool:
@@ -170,7 +184,18 @@ def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mut
     try:
         cleaned = clean_section_schema_patch(definition, patch, section.settings or {})
     except ValueError as exc:
-        raise R4MutationError("invalid_settings") from exc
+        # R4-08 — the refusal must SAY why (the Studio shows ``message``): a schema error carries its own safe Persian
+        # sentence naming the control and its limits; every other validator error gets the generic sentence — the internal
+        # technical text is still never shown.
+        text = str(exc)
+        message = (
+            getattr(exc, "merchant_message", "")
+            # the section validators (design / background / strip ...) raise merchant-facing PERSIAN sentences by contract;
+            # internal technical errors are English and never match
+            or (text if _PERSIAN_LETTERS.search(text) else "")
+            or _INVALID_SETTINGS_MESSAGE_FA
+        )
+        raise R4MutationError("invalid_settings", payload={"message": message}) from exc
 
     # R4 Task 10 — ownership is only ever validated when THIS mutation's
     # raw patch actually touches "source"; a stale/deleted legacy reference
@@ -199,6 +224,13 @@ def _apply_section_update_settings(*, store, draft: StorefrontLayoutVersion, mut
     # it is never persisted even as a dangling id.
     if "background" in patch:
         _validate_background_asset_ownership(store=store, background=cleaned.get("background"))
+    # The same write-time tenant isolation for every standalone ``media`` field of the schema (campaign panel image,
+    # decorative strip picture, ...): a foreign-Store asset id is rejected before anything is saved.
+    for field in definition.settings_schema.fields:
+        if field.field_type == "media" and field.key in patch and cleaned.get(field.key):
+            _validate_background_asset_ownership(
+                store=store, background={"mode": "image", "media_asset_id": cleaned.get(field.key)},
+            )
 
     # Phase 3 (V02) — Brand "View-all" capability truth. A merchant may only
     # turn the "مشاهده همه" anchor ON when the RESULTING rendered state can
@@ -262,9 +294,62 @@ def _validate_brand_view_all_enable(*, store, patch: dict, cleaned: dict) -> Non
 def _reset_error_code(exc: "preset_service.BaselineResetError | preset_service.InvalidPresetError") -> str:
     if isinstance(exc, preset_service.LockedSectionsPresentError):
         return "locked_sections_present"
+    if isinstance(exc, preset_service.NoTemplateBaselineError):
+        return "no_template_baseline"
+    if isinstance(exc, preset_service.TemplateBaselineVersionChangedError):
+        return "template_baseline_version_changed"
     if isinstance(exc, preset_service.InvalidPresetError):
         return "invalid_preset"
     return "baseline_reset_error"
+
+
+def reset_error_payload(exc) -> dict:
+    """Structured, client-safe detail for a refused reset (locked sections by
+    id/page/key) so the UI names exactly what blocks it."""
+    if isinstance(exc, preset_service.LockedSectionsPresentError):
+        return {"locked_sections": exc.locked_sections, "message": str(exc)}
+    return {"message": str(exc)}
+
+
+#: Precise, actionable Persian text per stable R4 error code. The Studio shows
+#: this instead of a generic "save failed" whenever the cause is known; an
+#: unknown code falls back to the generic message on the client.
+R4_ERROR_MESSAGES_FA = {
+    "locked_sections_present": (
+        "این کار انجام نشد چون بخش قفل‌شده‌ای در صفحه وجود دارد. "
+        "قفل آن بخش‌ها را باز کنید و دوباره تلاش کنید؛ هیچ تغییری ذخیره نشد."
+    ),
+    "replace_confirmation_required": (
+        "این کار چیدمان فعلی شما را جایگزین می‌کند. برای ادامه باید صریحاً تأیید کنید؛ "
+        "هیچ تغییری ذخیره نشد."
+    ),
+    "no_template_baseline": (
+        "برای این پیش‌نویس هنوز قالب آماده‌ای اعمال نشده است، پس چیزی برای بازنشانی وجود ندارد."
+    ),
+    "template_baseline_version_changed": (
+        "نسخهٔ قالبِ این پیش‌نویس با نسخهٔ فعلیِ آن قالب فرق دارد؛ بازنشانی به قالب کنونی انجام نشد. "
+        "قالب را دوباره انتخاب کنید."
+    ),
+    "invalid_appearance_template": "قالب انتخاب‌شده قابل اعمال نیست؛ هیچ تغییری ذخیره نشد.",
+    "unknown_appearance_template": "قالب انتخاب‌شده در فهرست قالب‌ها وجود ندارد.",
+    "template_version_mismatch": "نسخهٔ قالب تغییر کرده است؛ صفحه را تازه کنید و دوباره انتخاب کنید.",
+    "invalid_preset": "این بازنشانی انجام نشد؛ هیچ تغییری ذخیره نشد.",
+    "baseline_reset_error": "بازنشانی به قالب انجام نشد؛ هیچ تغییری ذخیره نشد.",
+    "no_active_draft": "پیش‌نویس فعالی وجود ندارد؛ صفحه را دوباره بارگذاری کنید.",
+}
+
+
+def error_response_body(exc: "R4MutationError") -> dict:
+    """The JSON body for a refused mutation: stable ``code`` + precise Persian
+    ``message`` (when known) + any structured ``payload`` detail."""
+    code = str(exc)
+    body = {"ok": False, "code": code}
+    message = (exc.payload or {}).get("message") if isinstance(getattr(exc, "payload", None), dict) else None
+    body["message"] = R4_ERROR_MESSAGES_FA.get(code) or message or ""
+    for key, value in (getattr(exc, "payload", None) or {}).items():
+        if key != "message":
+            body[key] = value
+    return body
 
 
 def _apply_section_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -275,7 +360,7 @@ def _apply_section_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation
     try:
         preset_service.reset_section_to_baseline(draft, section)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
 
 
 def _apply_section_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -289,7 +374,7 @@ def _apply_section_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, 
     try:
         preset_service.reset_section_setting_to_baseline(draft, section, key)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
 
 
 def _apply_appearance_reset_setting_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -299,21 +384,21 @@ def _apply_appearance_reset_setting_to_baseline(*, draft: StorefrontLayoutVersio
     try:
         preset_service.reset_appearance_setting_to_baseline(draft, key)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
 
 
 def _apply_header_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     try:
         preset_service.reset_header_to_baseline(draft)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
 
 
 def _apply_footer_reset_to_baseline(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     try:
         preset_service.reset_footer_to_baseline(draft)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
 
 
 def _apply_section_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -492,6 +577,8 @@ _APPEARANCE_UPDATE_ALLOWED_PATCH_KEYS = frozenset({
     "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
     "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
     "color_overrides", "theme_overrides",
+    # explicit, labelled merchant action: drop EVERY global colour / region-colour override (never a side effect of anything else)
+    "clear_global_color_overrides",
 })
 
 #: The fields a Template selection owns on transition — verified against
@@ -818,6 +905,37 @@ def _resolve_ready_template(template_key, template_version):
     return preset
 
 
+def _replace_template_exact_with_checkpoint(
+    *, draft: StorefrontLayoutVersion, preset, actor=None,
+    confirm_replace: bool = False, allow_locked: bool = False,
+) -> bool:
+    """Gate (read-only), snapshot, then replace — in that order, inside the
+    caller's transaction, so a refusal leaves neither a write nor a checkpoint.
+    Returns True when the composition was replaced, False for an idempotent
+    no-op. Raises ``R4MutationError`` with a stable code + structured payload."""
+    try:
+        summary = preset_service.describe_exact_replacement(draft, preset)
+        if summary["already_applied"]:
+            return False
+        if summary["locked_sections"] and not allow_locked:
+            raise preset_service.LockedSectionsPresentError(
+                "locked", locked_sections=summary["locked_sections"],
+            )
+        if summary["needs_confirmation"] and not confirm_replace:
+            raise preset_service.ReplaceConfirmationRequiredError("confirm", summary=summary)
+        layout_service.archive_draft_snapshot(
+            draft.layout.store, draft,
+            label=f"پیش از اعمال قالب «{preset.label_fa}»", user=actor,
+        )
+        return preset_service.replace_with_ready_template_exact(
+            draft, preset, confirmed=confirm_replace, allow_locked=allow_locked,
+        )
+    except preset_service.InvalidPresetError as exc:
+        raise R4MutationError(
+            _template_switch_error_code(exc), payload=_template_switch_error_payload(exc),
+        ) from exc
+
+
 def _apply_appearance_template(
     *, draft: StorefrontLayoutVersion, mutation: dict
 ) -> None:
@@ -826,18 +944,27 @@ def _apply_appearance_template(
         mutation.get("template_key"), mutation.get("template_version"),
     )
 
-    # Architecture Convergence / Phase 1 — a merchant-facing Ready Template apply
-    # is now the SAME preservation-first, same-Draft transition as
-    # ``switch_template``: it maps shared semantic slots, introduces missing
-    # target slots, and never silently destroys merchant work. It runs in place
-    # on the already-locked active Draft; ``apply_mutation`` owns the transaction,
-    # base revision, rollback, and records exactly one history entry / one
-    # revision increment (in ``record_change``), so this handler never records
-    # history itself.
-    try:
-        preset_service.switch_ready_template_preserving(draft, preset)
-    except preset_service.InvalidPresetError as exc:
-        raise R4MutationError("invalid_appearance_template") from exc
+    # An explicit Ready Template apply is an EXACT replacement of the covered
+    # pages (owner contract). It requires ``confirm_replace: true`` when it would
+    # discard design work and ``allow_locked: true`` to cross a lock; both gates
+    # are enforced server-side inside ``replace_with_ready_template_exact``. It
+    # runs in place on the already-locked active Draft; ``apply_mutation`` owns
+    # the transaction, base revision and rollback and records exactly one
+    # history entry / one revision increment (in ``record_change``). NOTE: the
+    # pre-replacement ARCHIVED snapshot is taken by the shared helper below for
+    # BOTH this mutation and the dashboard ``switch_template*`` entry points.
+    if mutation.get("mode") == "preserve":
+        # Explicit opt-in to the preservation-first merge (never the default).
+        try:
+            preset_service.switch_ready_template_preserving(draft, preset)
+        except preset_service.InvalidPresetError as exc:
+            raise R4MutationError("invalid_appearance_template") from exc
+        return
+    _replace_template_exact_with_checkpoint(
+        draft=draft, preset=preset,
+        confirm_replace=mutation.get("confirm_replace") is True,
+        allow_locked=mutation.get("allow_locked") is True,
+    )
 
 
 def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
@@ -861,13 +988,15 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
         for field in _TEMPLATE_OWNED_FIELDS:
             candidate[field] = getattr(new_template, field)
 
-    # Switching Palette starts fresh — old color/theme overrides made no
-    # sense against the new palette (same rule R3's editor already applies).
+    # Selecting another palette changes the INHERITED colours only. The merchant's explicit global overrides survive by default;
+    # what a palette switch drops is colour that was never a merchant choice — values a Ready Template installed and the merchant
+    # did not modify, and bootstrap carry-over (decided PER PROPERTY, see ``appearance_registry.override_origins``) — so they cannot
+    # defeat the palette just selected. Dropping every override is the explicit ``clear_global_color_overrides``.
     new_palette_slug = patch.get("palette_slug", current.get("palette_slug"))
     palette_changed = new_palette_slug != current.get("palette_slug")
     if palette_changed:
-        candidate["color_overrides"] = {}
-        candidate["theme_overrides"] = {}
+        kept = appearance_registry.merchant_overrides(current, draft.template_baseline_snapshot)
+        candidate["color_overrides"], candidate["theme_overrides"] = kept["color_overrides"], kept["theme_overrides"]
     candidate["palette_slug"] = new_palette_slug
 
     # Exact R3 precedence for every one of the 7 real Template-owned fields
@@ -888,32 +1017,42 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
         if field in patch:
             candidate[field] = patch[field]
 
-    # Partial color/theme override patch — merge onto the current set (a
-    # single Global Design field change posts ONE key, never the whole
-    # dict), dropping any key whose posted value now matches the resolved
-    # base (no-override) color, exactly like the legacy per-key logic in
-    # ``storefront_appearance_editor``.
-    if not palette_changed:
-        for overrides_key, base_resolver, valid_keys in (
-            ("color_overrides", appearance_registry.resolve_colors, APPEARANCE_COLOR_KEYS),
-            ("theme_overrides", appearance_registry.resolve_theme_roles, appearance_registry.THEME_ROLE_KEYS),
-        ):
-            posted = patch.get(overrides_key)
-            if not isinstance(posted, dict):
+    # Partial color/theme override patch — merge onto the current set (a single Global Design field change posts ONE key, never
+    # the whole dict). A key whose posted value equals the resolved base (no-override) colour is not an override; ``None`` clears
+    # exactly that one override (reset to the selected palette's value).
+    for overrides_key, base_resolver, valid_keys in (
+        ("color_overrides", appearance_registry.resolve_colors, APPEARANCE_COLOR_KEYS),
+        ("theme_overrides", appearance_registry.resolve_theme_roles, appearance_registry.THEME_ROLE_KEYS),
+    ):
+        posted = patch.get(overrides_key)
+        if not isinstance(posted, dict):
+            continue
+        merged = dict(candidate.get(overrides_key) or {})
+        base_config = {**candidate, overrides_key: {}}
+        base_values = base_resolver(base_config)
+        for key, value in posted.items():
+            if key not in valid_keys:
                 continue
-            merged = dict(candidate.get(overrides_key) or {})
-            base_config = {**candidate, overrides_key: {}}
-            base_values = base_resolver(base_config)
-            for key, value in posted.items():
-                if key not in valid_keys or not isinstance(value, str):
-                    continue
-                if value.upper() == base_values.get(key, "").upper():
-                    merged.pop(key, None)
-                else:
-                    merged[key] = value
-            candidate[overrides_key] = merged
-        if candidate.get("color_overrides"):
-            candidate["color_overrides_customized"] = True
+            if value is None:
+                merged.pop(key, None)
+                continue
+            if not isinstance(value, str):
+                continue
+            if value.upper() == base_values.get(key, "").upper():
+                merged.pop(key, None)
+            else:
+                merged[key] = value
+        candidate[overrides_key] = merged
+    if "color_overrides" in patch:
+        # "customised" = some stored base colour is not simply what the Ready Template installed
+        installed = ((draft.template_baseline_snapshot or {}).get("appearance") or {}).get("color_overrides") or {}
+        candidate["color_overrides_customized"] = any(
+            not (key in installed and str(installed[key]).upper() == str(value).upper())
+            for key, value in (candidate.get("color_overrides") or {}).items()
+        )
+    if patch.get("clear_global_color_overrides") is True:
+        candidate["color_overrides"], candidate["theme_overrides"] = {}, {}
+        candidate["color_overrides_customized"] = False
 
     try:
         cleaned = layout_service.validate_appearance_config(candidate)
@@ -963,7 +1102,7 @@ def _merge_shell_responsive_patch(current: dict, posted) -> dict:
 _HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
     {
         "header_variant", "announcement_text", "announcement_show_phone",
-        "announcement_links", "extra_blocks", "responsive",
+        "announcement_links", "extra_blocks", "responsive", "geometry",
     }
     | set(HEADER_TOGGLE_FIELDS)
 )
@@ -992,6 +1131,8 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
+    if "geometry" in patch:
+        candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
 
     try:
         cleaned = layout_service.validate_header_config(candidate)
@@ -1023,7 +1164,7 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 #: JSON and was already validated/synced on every save — it simply could
 #: never be CHANGED by a merchant through R4 before this.
 _FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive"} | set(FOOTER_TOGGLE_FIELDS)
+    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry"} | set(FOOTER_TOGGLE_FIELDS)
 )
 
 
@@ -1046,6 +1187,8 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
+    if "geometry" in patch:
+        candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)
@@ -1338,7 +1481,7 @@ def reset_page(*, store, actor, base_revision: int, page_type: str) -> Storefron
     try:
         return preset_service.reset_page_with_checkpoint(store, page_type, user=actor)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
 
 
 @transaction.atomic
@@ -1351,24 +1494,45 @@ def reset_storefront(*, store, actor, base_revision: int) -> StorefrontLayoutVer
     try:
         return preset_service.reset_storefront_with_checkpoint(store, user=actor)
     except (preset_service.BaselineResetError, preset_service.InvalidPresetError) as exc:
-        raise R4MutationError(_reset_error_code(exc)) from exc
+        raise R4MutationError(_reset_error_code(exc), payload=reset_error_payload(exc)) from exc
+
+
+TEMPLATE_SWITCH_MODES = ("replace", "preserve")
 
 
 def _perform_ready_template_switch(
     *, draft: StorefrontLayoutVersion, actor, preset,
+    confirm_replace: bool = False, allow_locked: bool = False, mode: str = "replace",
 ) -> StorefrontLayoutVersion:
-    """The ONE canonical preservation-first Ready Template switch execution,
-    shared by the optimistic (``switch_template``) and the legacy-form
-    (``switch_template_current``) entry points. Runs in place on the already-
-    locked ``draft`` (SAME Draft pk), then records exactly one canonical history
-    entry / one revision increment through ``edit_history_service.record_change``
-    — never a second history system, never a Draft-identity replacement.
+    """The ONE canonical Ready Template switch execution, shared by the
+    optimistic (``switch_template``) and legacy-form (``switch_template_current``)
+    entry points. EXPLICIT selection means EXACT composition (owner contract):
+    the target recipe replaces every covered page — no section of the previous
+    template survives, none is skipped for lack of data. The previous design is
+    kept recoverable twice over: a full ARCHIVED version snapshot (restorable via
+    the version history, media included) taken BEFORE the first write, and the
+    canonical edit-history entry (Undo).
+
+    Runs in place on the already-locked ``draft`` (SAME Draft pk): one history
+    entry / one revision increment through ``edit_history_service.record_change``.
+    A refusal (confirmation required / locked sections) happens before any write
+    and leaves no checkpoint behind (the whole call is one transaction).
     """
+    if mode not in TEMPLATE_SWITCH_MODES:
+        raise R4MutationError("invalid_switch_mode")
     before_state = edit_history_service.snapshot_draft(draft)
-    try:
-        preset_service.switch_ready_template_preserving(draft, preset)
-    except preset_service.InvalidPresetError as exc:
-        raise R4MutationError("invalid_appearance_template") from exc
+    if mode == "preserve":
+        # Opt-in ONLY (never the default for explicit selection): the
+        # preservation-first merge keeps merchant work inside the new template.
+        try:
+            preset_service.switch_ready_template_preserving(draft, preset)
+        except preset_service.InvalidPresetError as exc:
+            raise R4MutationError("invalid_appearance_template") from exc
+    elif not _replace_template_exact_with_checkpoint(
+        draft=draft, preset=preset, actor=actor,
+        confirm_replace=confirm_replace, allow_locked=allow_locked,
+    ):
+        return draft
     edit_history_service.record_change(
         draft=draft,
         actor=actor,
@@ -1378,9 +1542,27 @@ def _perform_ready_template_switch(
     return draft
 
 
+def _template_switch_error_payload(exc) -> dict:
+    if isinstance(exc, preset_service.ReplaceConfirmationRequiredError):
+        return {"summary": exc.summary, "message": str(exc)}
+    if isinstance(exc, preset_service.LockedSectionsPresentError):
+        return {"locked_sections": exc.locked_sections, "message": str(exc)}
+    return {"message": str(exc)}
+
+
+def _template_switch_error_code(exc) -> str:
+    """Stable external code per failure family of an explicit template switch."""
+    if isinstance(exc, preset_service.ReplaceConfirmationRequiredError):
+        return "replace_confirmation_required"
+    if isinstance(exc, preset_service.LockedSectionsPresentError):
+        return "locked_sections_present"
+    return "invalid_appearance_template"
+
+
 @transaction.atomic
 def switch_template(
     *, store, actor, base_revision: int, template_key: str, template_version: str,
+    confirm_replace: bool = False, allow_locked: bool = False, mode: str = "replace",
 ) -> StorefrontLayoutVersion:
     """Architecture Convergence / Phase 1 — the merchant-facing Ready Template
     switch, gated through the same optimistic concurrency boundary as every
@@ -1398,12 +1580,16 @@ def switch_template(
     not two competing ones."""
     draft = _lock_active_draft(store=store, base_revision=base_revision)
     preset = _resolve_ready_template(template_key, template_version)
-    return _perform_ready_template_switch(draft=draft, actor=actor, preset=preset)
+    return _perform_ready_template_switch(
+        draft=draft, actor=actor, preset=preset,
+        confirm_replace=confirm_replace, allow_locked=allow_locked, mode=mode,
+    )
 
 
 @transaction.atomic
 def switch_template_current(
     *, store, actor, template_key: str, template_version: str,
+    confirm_replace: bool = False, allow_locked: bool = False, mode: str = "replace",
 ) -> StorefrontLayoutVersion:
     """Legacy-form (no client-supplied ``base_revision``) counterpart to
     ``switch_template`` — same canonical preservation-first switch, locking the
@@ -1423,7 +1609,10 @@ def switch_template_current(
     except StorefrontLayoutVersion.DoesNotExist:
         raise R4MutationError("no_active_draft") from None
     preset = _resolve_ready_template(template_key, template_version)
-    return _perform_ready_template_switch(draft=draft, actor=actor, preset=preset)
+    return _perform_ready_template_switch(
+        draft=draft, actor=actor, preset=preset,
+        confirm_replace=confirm_replace, allow_locked=allow_locked, mode=mode,
+    )
 
 
 def _lock_layout_for_identity_replacement(*, store, expected_draft_id, expected_base_revision):

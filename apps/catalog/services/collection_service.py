@@ -61,6 +61,7 @@ def get_scoped_collection(store, pk) -> MerchantCollection:
 @transaction.atomic
 def create_collection(
     store, *, name, description="", image=None, seo_title="", seo_description="", user=None,
+    price_mode="standard",
 ) -> MerchantCollection:
     name = (name or "").strip()
     if not name:
@@ -69,7 +70,7 @@ def create_collection(
     collection = MerchantCollection(
         store=store, name=name, slug=_unique_slug(store, name),
         description=description or "", seo_title=seo_title or "", seo_description=seo_description or "",
-        created_by=actor, updated_by=actor,
+        created_by=actor, updated_by=actor, price_mode=price_mode,
     )
     if image is not None:
         collection.image = image
@@ -84,7 +85,7 @@ def create_collection(
 @transaction.atomic
 def update_collection(
     collection: MerchantCollection, *, name, description="", seo_title="", seo_description="",
-    image=None, remove_image=False, user=None,
+    image=None, remove_image=False, user=None, price_mode=None,
 ) -> MerchantCollection:
     """اسلاگ عمداً هرگز با ویرایشِ نام دوباره ساخته نمی‌شود (همان قرارداد
     ``update_brand``) — تا لینکِ عمومیِ کالکشن پس از تغییرِ نام نشکند."""
@@ -99,6 +100,8 @@ def update_collection(
         collection.image = image
     elif remove_image:
         collection.image = None
+    if price_mode is not None:
+        collection.price_mode = price_mode
     collection.updated_by = user if (user and user.is_authenticated) else None
     try:
         collection.full_clean(exclude=["created_by", "updated_by"])
@@ -203,7 +206,9 @@ def searchable_products(store, query: str = ""):
     qs = Product.objects.filter(store=store, is_draft_placeholder=False).select_related("brand").prefetch_related("images")
     query = (query or "").strip()
     if query:
-        qs = qs.filter(Q(name__icontains=query) | Q(sku__icontains=query))
+        from apps.catalog.services.search_service import apply_text_search
+
+        qs = apply_text_search(qs, query, fields=("name", "sku"))
     return qs.order_by("name")
 
 

@@ -88,15 +88,7 @@ LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
     "quarters": (3, 3, 3, 3),
 }
 
-#: R4 Task 7 (final-review fix, MINOR-7; fifth-reviewer fix, MINOR-2) — the
-#: SAME ratios, in the SAME order, as the legacy editor's own layout picker
-#: already shows (``templates/dashboard/storefront_builder/editor.html``'s
-#: inline layout_key if/elif chain) — just in this codebase's own
-#: Persian-indic-digit convention (see e.g. ``validate_container``'s "بین ۱
-#: تا ۱۲" below) rather than the legacy template's ASCII digits. A second
-#: literal, not a second translation: if the legacy picker's ratios or
-#: order ever change, update both — there is no shared constant to reuse
-#: across a Python dict and a Django template's inline chain.
+#: Persian labels for the container layout presets (Studio layout picker).
 LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
     "single": "۱۰۰٪",
     "half": "۵۰/۵۰",

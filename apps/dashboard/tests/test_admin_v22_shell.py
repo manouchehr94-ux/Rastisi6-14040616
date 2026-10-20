@@ -36,8 +36,8 @@ class AdminV22ShellContractTests(SimpleTestCase):
 
         store = next(section for section in navigation.SECTIONS if section.key == "store")
         labels = [tab.label for tab in store.tabs]
-        for label in ("ظاهر و طراحی", "سازنده فروشگاه", "قالب‌های آماده", "کالکشن‌ها", "محتوا",
-                      "صفحه اصلی", "منوها", "فوتر", "شبکه‌های اجتماعی"):
+        for label in ("ظاهر و طراحی", "ساختار صفحه‌ها", "قالب‌های آماده", "کالکشن‌ها", "محتوا",
+                      "رسانه‌های مشترک فروشگاه", "منوها", "فوتر", "شبکه‌های اجتماعی"):
             self.assertIn(label, labels)
 
     def test_command_search_exposes_deep_merchant_destinations(self):
@@ -48,7 +48,7 @@ class AdminV22ShellContractTests(SimpleTestCase):
             "can_manage_settings",
         )}
         titles = {item.title for item in navigation.build_palette(flags)}
-        for term in ("لوگو", "سازنده فروشگاه", "همه کالاها", "دسته‌بندی‌ها", "پیامک", "گزارش پیامک‌ها"):
+        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "پیامک", "گزارش پیامک‌ها"):
             self.assertIn(term, titles)
         hrefs = " ".join(item.href for item in navigation.build_palette(flags))
         self.assertIn("panel=header", hrefs)

@@ -63,8 +63,6 @@ class _ReviewCorrectionBase(TestCase):
         self.template_a = lpr.get_layout_preset(TEMPLATE_A_KEY)
         self.template_b = lpr.get_layout_preset(TEMPLATE_B_KEY)
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         preset_service.apply_preset(self.draft, self.template_a)
         self.draft.refresh_from_db()
@@ -78,6 +76,7 @@ class _ReviewCorrectionBase(TestCase):
             store=self.store, actor=self.staff,
             base_revision=self.draft.edit_revision,
             template_key=self.template_b.key, template_version=self.template_b.version,
+            mode="preserve",  # explicit opt-in: these tests cover the preservation-first merge algorithm
         )
         return self._active_draft()
 
@@ -311,6 +310,7 @@ class ExactSameTemplateNoOpTests(_ReviewCorrectionBase):
         r4_mutation_service.switch_template(
             store=self.store, actor=self.staff, base_revision=active.edit_revision,
             template_key=self.template_a.key, template_version=self.template_a.version,
+            mode="preserve",  # explicit opt-in: these tests cover the preservation-first merge algorithm
         )
 
         after = self._active_draft()
@@ -346,6 +346,7 @@ class ExactSameTemplateNoOpTests(_ReviewCorrectionBase):
         r4_mutation_service.switch_template(
             store=self.store, actor=self.staff, base_revision=active.edit_revision,
             template_key=self.template_a.key, template_version=self.template_a.version,
+            mode="preserve",  # explicit opt-in: these tests cover the preservation-first merge algorithm
         )
         switched = self._active_draft()
         preserved = StorefrontSection.objects.filter(page__version=switched, stable_id=sid).first()
@@ -373,8 +374,6 @@ class DashboardReadyApplyConfirmationSplitTests(TestCase):
             status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
         )
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         preset_service.apply_preset(self.draft, lpr.get_layout_preset("aftab_price"))
         self.draft.refresh_from_db()
@@ -384,10 +383,10 @@ class DashboardReadyApplyConfirmationSplitTests(TestCase):
         client.login(username="r2_dash_owner", password="pass12345")
         return client
 
-    def test_ready_template_apply_needs_no_destructive_confirmation(self):
-        # A merchant section makes the page have real content; a Ready Template
-        # apply must still succeed WITHOUT confirm_preset_apply=1 (preservation
-        # first, no destructive-replacement warning).
+    def test_ready_template_apply_over_customised_draft_requires_confirmation_then_succeeds(self):
+        # Owner contract: explicit selection REPLACES the composition, so a
+        # customised Draft needs the merchant's explicit confirmation (enforced
+        # server-side); once confirmed it succeeds on the same Draft.
         merchant = StorefrontSection.objects.create(
             version=self.draft, section_key="rich_text", order=97,
             settings={"content": "keep-me"},
@@ -400,15 +399,27 @@ class DashboardReadyApplyConfirmationSplitTests(TestCase):
         )
         self.assertIn(resp.status_code, (302, 303))
         self.layout.refresh_from_db()
-        # Same active Draft, provenance B, merchant content survived.
+        refused = self.layout.draft_version
+        self.assertEqual(
+            (refused.template_provenance or {}).get("template", {}).get("key"), "aftab_price",
+            "without confirmation nothing may be replaced",
+        )
+        self.assertTrue(StorefrontSection.objects.filter(page__version=refused, stable_id=sid).exists())
+
+        resp = client.post(
+            reverse("dashboard:storefront-builder-apply-preset"),
+            data={"preset_key": "almas_luxury", "confirm_preset_apply": "1"},
+        )
+        self.assertIn(resp.status_code, (302, 303))
+        self.layout.refresh_from_db()
         self.assertEqual(self.layout.draft_version_id, self.draft.pk)
         active = self.layout.draft_version
         self.assertEqual(
             (active.template_provenance or {}).get("template", {}).get("key"), "almas_luxury",
         )
-        self.assertIsNotNone(
-            StorefrontSection.objects.filter(page__version=active, stable_id=sid).first(),
-            "merchant content must survive the confirmation-free Ready Template apply",
+        self.assertFalse(
+            StorefrontSection.objects.filter(page__version=active, stable_id=sid).exists(),
+            "the previous composition must not live on inside the new template",
         )
 
     def test_non_ready_structural_preset_still_requires_confirmation(self):

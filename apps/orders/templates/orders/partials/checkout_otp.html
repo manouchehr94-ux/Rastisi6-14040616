@@ -21,7 +21,7 @@
   </form>
 
   <div style="display:flex;justify-content:space-between;margin-top:16px;font-size:12.5px">
-    <button type="button" style="color:var(--violet-2);font-weight:700"
+    <button type="button" style="color:var(--secondary-text,var(--violet-2));font-weight:700"
             hx-post="{% url 'orders:checkout-otp-resend' %}" hx-target="#checkout-container" hx-swap="innerHTML">
       ارسال دوباره‌ی کد
     </button>

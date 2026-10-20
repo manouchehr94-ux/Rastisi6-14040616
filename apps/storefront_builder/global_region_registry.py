@@ -80,6 +80,17 @@ class GlobalVariantDefinition:
     key: str
     label_fa: str
     renderer: str
+    #: What this variant's DOM actually paints/provides (the same vocabulary ``ComponentDefinition.capabilities`` carries in the
+    #: Store-Appearance registry, which is fed from here). The Studio derives which controls to offer from it — e.g. the
+    #: ``nav_surface`` capability is what makes the navigation colours (``nav_bg`` / ``nav_text``) meaningful.
+    capabilities: frozenset[str] = frozenset()
+
+
+#: The variant draws a navigation surface that is painted with the ``nav_bg`` / ``nav_text`` region colours.
+NAV_SURFACE = "nav_surface"
+#: region colour role → the variant capability that must be present (in the selected header or footer) for the role to paint
+#: anything. Roles not listed here are painted by every variant.
+ROLE_REQUIRES_CAPABILITY = {"nav_bg": NAV_SURFACE, "nav_text": NAV_SURFACE}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -184,6 +195,7 @@ _LEGACY_DEFAULT_VARIANT = GlobalVariantDefinition(
     key="legacy_default",
     label_fa="فعلی / پیش‌فرض",
     renderer="storefront_builder/partials/page_shell_header.html",
+    capabilities=frozenset({NAV_SURFACE}),
 )
 
 _MARKETPLACE_SEARCH_FIRST_VARIANT = GlobalVariantDefinition(
@@ -250,6 +262,7 @@ _ATELIER_NAV_VARIANT = GlobalVariantDefinition(
     key="atelier_nav",
     label_fa="آتلیه (ناوبری مینیمال)",
     renderer="storefront_builder/partials/global_header/atelier_nav.html",
+    capabilities=frozenset({NAV_SURFACE}),
 )
 
 #: Premium search-led commerce header.  Dark/gold is supplied by the active
@@ -261,22 +274,39 @@ _LUXURY_SEARCH_VARIANT = GlobalVariantDefinition(
     renderer="storefront_builder/partials/global_header/luxury_search.html",
 )
 
+#: Stationery / art-supply retail header: utility strip, wide pill search,
+#: prominent account pill and a flat category + link navigation bar.
+_STATIONERY_SEARCH_VARIANT = GlobalVariantDefinition(
+    key="stationery_search",
+    label_fa="لوازم تحریر (جستجوی عریض + نوار ناوبری)",
+    renderer="storefront_builder/partials/global_header/stationery_search.html",
+)
+
+#: Soft stationery boutique header: two-tone announcement band, centred brand,
+#: account pill and quiet icon actions, light grey navigation bar.
+_KAWAII_CENTER_VARIANT = GlobalVariantDefinition(
+    key="kawaii_center",
+    label_fa="بوتیک ملایم (برند مرکزی + نوار اعلان دوگانه)",
+    renderer="storefront_builder/partials/global_header/kawaii_center.html",
+    capabilities=frozenset({NAV_SURFACE}),
+)
+
 # A8 semantic header vocabulary.  Several identities deliberately reuse a
 # proven renderer when the inventory found the same topology; the identity is
 # still useful to recipes while renderer paths remain platform-owned.
 _A8_HEADER_VARIANTS = tuple(
-    GlobalVariantDefinition(key=key, label_fa=label, renderer=renderer)
-    for key, label, renderer in (
+    GlobalVariantDefinition(key=key, label_fa=label, renderer=renderer, capabilities=frozenset(capabilities))
+    for key, label, renderer, *capabilities in (
         ("editorial_row", "ردیف نشریه‌ای", "storefront_builder/partials/global_header/editorial_row.html"),
         ("marketplace_search", "بازارگاهی جستجو-محور", "storefront_builder/partials/global_header/marketplace_search.html"),
         ("centered_brand", "برند مرکزی", "storefront_builder/partials/global_header/centered_brand.html"),
         ("floating_compact", "شناور فشرده", "storefront_builder/partials/global_header/floating_compact.html"),
-        ("compact_drawer", "کشوی فشرده", "storefront_builder/partials/global_header/compact_drawer.html"),
+        ("compact_drawer", "کشوی فشرده", "storefront_builder/partials/global_header/compact_drawer.html", NAV_SURFACE),
         ("promo_bar", "نوار کمپینی", "storefront_builder/partials/global_header/promo_bar.html"),
         ("community_shortcuts", "میانبرهای اجتماعی", "storefront_builder/partials/global_header/community_shortcuts.html"),
         ("overlay_transparent", "شفاف روی تصویر", "storefront_builder/partials/global_header/overlay_transparent.html"),
         ("editorial_masthead", "سربرگ نشریه‌ای", "storefront_builder/partials/global_header/editorial_masthead.html"),
-        ("compact_menu", "منوی فشرده", "storefront_builder/partials/global_header/compact_menu.html"),
+        ("compact_menu", "منوی فشرده", "storefront_builder/partials/global_header/compact_menu.html", NAV_SURFACE),
         ("category_tabs", "زبانه‌های دسته‌بندی", "storefront_builder/partials/global_header/category_tabs.html"),
         ("playful_canopy", "سایه‌بان بازیگوش", "storefront_builder/partials/global_header/playful_canopy.html"),
     )
@@ -296,6 +326,8 @@ GLOBAL_HEADER_REGION = GlobalRegionDefinition(
         _CHOCOLATE_CENTERED_SEARCH_VARIANT,
         _ATELIER_NAV_VARIANT,
         _LUXURY_SEARCH_VARIANT,
+        _STATIONERY_SEARCH_VARIANT,
+        _KAWAII_CENTER_VARIANT,
         *_A8_HEADER_VARIANTS,
     ),
     default_variant="legacy_default",
@@ -363,6 +395,22 @@ _FOOTER_CHOCOLATE_DARK_VARIANT = GlobalVariantDefinition(
     renderer="storefront_builder/partials/global_footer/chocolate_dark_columns.html",
 )
 
+#: Dense dark retail footer with a service strip (merchant custom-text block),
+#: four information columns, store statement and credibility badges.
+_FOOTER_STATIONERY_DARK_VARIANT = GlobalVariantDefinition(
+    key="stationery_dark",
+    label_fa="لوازم تحریر (تیره با نوار خدمات)",
+    renderer="storefront_builder/partials/global_footer/stationery_dark.html",
+)
+
+#: Light link-strip footer: pale quick-link strip plus one quiet identity row.
+_FOOTER_KAWAII_MINIMAL_VARIANT = GlobalVariantDefinition(
+    key="kawaii_minimal",
+    label_fa="بوتیک ملایم (نوار پیوند روشن)",
+    renderer="storefront_builder/partials/global_footer/kawaii_minimal.html",
+    capabilities=frozenset({NAV_SURFACE}),
+)
+
 _A8_FOOTER_VARIANTS = tuple(
     GlobalVariantDefinition(key=key, label_fa=label, renderer=renderer)
     for key, label, renderer in (
@@ -389,6 +437,8 @@ GLOBAL_FOOTER_REGION = GlobalRegionDefinition(
         _FOOTER_PROMO_COLUMNS_VARIANT,
         _FOOTER_BEAUTY_RETAIL_VARIANT,
         _FOOTER_CHOCOLATE_DARK_VARIANT,
+        _FOOTER_STATIONERY_DARK_VARIANT,
+        _FOOTER_KAWAII_MINIMAL_VARIANT,
         *_A8_FOOTER_VARIANTS,
     ),
     default_variant="legacy_default",
@@ -520,3 +570,14 @@ def validate_global_variant_selection(region: GlobalRegionDefinition, value) -> 
             f"مقدارِ «{value}» برایِ سبکِ «{region.label_fa}» به هیچ Variantِ ثبت‌شده‌ای اشاره نمی‌کند"
         )
     return value
+
+
+def applicable_theme_roles(header_config: dict | None, footer_config: dict | None, all_roles: tuple[str, ...]) -> tuple[str, ...]:
+    """The region colour roles the SELECTED header + footer variants actually paint, derived from their registered capabilities
+    (a role that needs a capability — see ``ROLE_REQUIRES_CAPABILITY`` — is offered only if the selected header or footer has it).
+    Values stored for a role that is not applicable are kept, so switching variants never loses a merchant's colour."""
+    provided = (
+        resolve_active_global_variant(GLOBAL_HEADER_REGION, header_config).capabilities
+        | resolve_active_global_variant(GLOBAL_FOOTER_REGION, footer_config).capabilities
+    )
+    return tuple(role for role in all_roles if ROLE_REQUIRES_CAPABILITY.get(role) in (None, *provided))

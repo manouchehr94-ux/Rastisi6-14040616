@@ -1,55 +1,17 @@
 {% extends "base.html" %}
 {% comment %}
-Phase 1B — پوسته‌ی مشترکِ عمومیِ Storefront برایِ هر شش نوع صفحه.
-
-هدف: طبقِ بخشِ C کارِ فاز ۱B («Introduce ONE shared public storefront
-shell/base contract... Do not create six separate shells»)، این تمپلیت
-تنها نقطه‌ای است که تصمیم می‌گیرد هدر/فوترِ کدام صفحه از پوسته‌یِ مشترکِ
-Family-aware (``page_shell_header.html``/``page_shell_footer.html`` —
-همان تمپلیتی که پیش از این فاز فقط ``catalog/home_visual.html`` و
-``storefront_builder/preview.html`` استفاده می‌کردند) استفاده کند.
-
-U2A: ``header_variant_template`` (نامِ Templateِ هدرِ فعال) دیگر همیشه
-همان ``page_shell_header.html`` نیست — از ``header_variant``یِ ذخیره‌شده
-در ``layout_header_config`` توسطِ ``global_region_registry`` resolve
-می‌شود (نگاه کنید به ``storefront_context_service.build_universal_storefront_context``)؛
-برایِ نسخه‌هایِ بدونِ این کلید، همچنان دقیقاً همان ``page_shell_header.html``
-است (Variantِ ``legacy_default``) — بدونِ تغییرِ بصری.
-
-قراردادِ اکیداً حفظ‌شده — رفتارِ Storeهایِ قدیمی هرگز تغییر نمی‌کند:
-اگر ``uses_universal_shell`` در کانتکست (توسطِ
-``apps.storefront_builder.services.storefront_context_service.build_universal_storefront_context``
-ساخته می‌شود) ``False``/غایب باشد، این تمپلیت هیچ override‌ای اعمال
-نمی‌کند — ``{{ block.super }}`` دقیقاً همان هدر/فوترِ سخت‌کدشده‌یِ
-``base.html`` را بدونِ کوچک‌ترین تغییر رندر می‌کند؛ این دقیقاً همان
-رفتاری است که این صفحات پیش از Phase 1B داشتند (``{% extends "base.html" %}``
-مستقیم، بدون override).
-
-تمپلیت‌هایِ صفحاتِ عمومی (``catalog/product_detail.html``،
-``catalog/product_list.html``، ``catalog/collection_index.html``،
-``catalog/collection_detail.html``، ``cart/cart_detail.html``) باید از
-``{% extends "base.html" %}`` به ``{% extends "storefront_shell.html" %}``
-تغییر کنند — و کدِ درونِ ``{% block content %}``شان کاملاً بدونِ تغییر
-باقی می‌ماند (محتوایِ کاتالوگ/سبد بازنویسی نمی‌شود، فقط پوسته‌یِ اطرافش).
-``catalog/home_visual.html`` عمداً به این تمپلیت مهاجرت نمی‌کند — آن
-تمپلیت از قبل مستقیماً همین دو partial را include می‌کند و تغییرِ آن
-هیچ ارزشِ اضافه‌ای ندارد؛ اما همچنان دقیقاً همان دو partial را (نه یک
-نسخه‌یِ دومِ کپی‌شده) به اشتراک می‌گذارد.
+The ONE public storefront shell. Every storefront page — the six builder page types AND the domain-owned pages (checkout,
+payment result, account, order detail, wishlist, CMS pages) — extends this template and gets its header / footer / bottom
+nav from the Store's published engine layout (``storefront_context_service.build_universal_storefront_context``, or
+``render_domain_page`` for domain-owned bodies). There is no second hard-coded header or footer. The page body lives only
+in the content block; commerce content is never rewritten by the shell.
 {% endcomment %}
 
 {% block header %}
-{% if uses_universal_shell %}
 {% include header_variant_template with header_config=layout_header_config is_live_storefront=True is_builder_preview=False %}
-{% else %}
-{{ block.super }}
-{% endif %}
 {% endblock %}
 
 {% block footer %}
-{% if uses_universal_shell %}
-{% include footer_variant_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}
+{% if FOOTER_SETTINGS and not FOOTER_SETTINGS.is_enabled %}<footer class="footer"></footer>{% else %}{% include footer_variant_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}{% endif %}
 {% if mobile_bottom_nav_template %}{% include mobile_bottom_nav_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}{% endif %}
-{% else %}
-{{ block.super }}
-{% endif %}
 {% endblock %}

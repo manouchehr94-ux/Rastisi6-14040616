@@ -173,6 +173,7 @@ class FirstRunPlaceholderTests(FidelityBase):
         Product.objects.create(
             store=self.store, vendor=vendor, category=category, name="کالای واقعی", slug="p-fr",
             sku="SKU-FR-1", price=Decimal("1000"), status=Product.Status.ACTIVE,
+            stock=5,  # home rails never pick an unavailable product
         )
         html = _public_get(self.store).content.decode()
         self.assertNotIn('data-first-run-placeholder="products"', html)  # real data replaces the product placeholder

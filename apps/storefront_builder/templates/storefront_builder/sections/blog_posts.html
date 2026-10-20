@@ -1,16 +1,37 @@
 {% load persian %}{% comment %}
-Phase 3 — بلوکِ جدیدِ «مطالب وبلاگ»، ساده و قابلِ‌ استفاده‌ی مجدد (نه
-یک رندرکننده‌ی مختصِ V5). صفحه‌ی جزئیاتِ مطلب هنوز در پروژه وجود ندارد
-— دقیقاً همان محدودیتِ ``catalog/home.html``ی قدیمی (``href="#"``).
+بخش بازاستفاده‌پذیرِ مجله. فقط مطالب منتشرشده لینک واقعی دارند؛
+برای کاورهای گم‌شده جایگزین بصری و برای داده خالی پیام مناسب دارد.
 {% endcomment %}
-{% if posts %}
+{% if settings.style == "panel_carousel" %}
+<section class="section blog-panel" data-sfb-card-surface>
+  <div class="blog-panel-head"><h2>{{ settings.title|default:"آخرین مطالب وبلاگ" }}</h2><a class="more" href="{% url 'blog:index' %}">همه مطالب ←</a></div>
+  <div class="blog-panel-row">
+    {% for post in posts %}
+    <a class="blog-card blog-card--panel" data-sfb-card-surface href="{{ post.get_absolute_url }}">
+      {% if post.has_available_cover %}
+      <div class="th th-photo"><img src="{{ post.cover_image.url }}" data-img-role="article" alt="{{ post.title }}" loading="lazy">{% if post.category_label %}<span class="blog-badge">{{ post.category_label }}</span>{% endif %}</div>
+      {% else %}
+      <div class="th" style="background:{{ post.tint|default:'#f1ecfd' }}">{{ post.cover_emoji|default:"📰" }}{% if post.category_label %}<span class="blog-badge">{{ post.category_label }}</span>{% endif %}</div>
+      {% endif %}
+      <div class="bd">
+        <h4>{{ post.title }}</h4>
+        <span class="read">ادامه مطلب</span>
+      </div>
+    </a>
+    {% endfor %}
+    {% for _ in blog_empty_slots %}
+    <span class="blog-card blog-card--panel blog-card--empty" data-sfb-card-surface aria-hidden="true"><span class="th"></span></span>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
 <section class="section">
-  <div class="sec-head"><h2><span class="bar"></span>{{ settings.title|default:"آخرین مطالب وبلاگ" }}</h2></div>
+  <div class="sec-head"><h2><span class="bar"></span>{{ settings.title|default:"آخرین مطالب وبلاگ" }}</h2><a class="more" href="{% url 'blog:index' %}">همه مطالب ←</a></div>
   <div class="grid blog-grid">
     {% for post in posts %}
-    <a class="blog-card" href="#">
-      {% if post.cover_image %}
-      <div class="th th-photo"><img src="{{ post.cover_image.url }}" alt="{{ post.title }}" loading="lazy"></div>
+    <a class="blog-card" data-sfb-card-surface href="{{ post.get_absolute_url }}">
+      {% if post.has_available_cover %}
+      <div class="th th-photo"><img src="{{ post.cover_image.url }}" data-img-role="article" alt="{{ post.title }}" loading="lazy"></div>
       {% else %}
       <div class="th" style="background:{{ post.tint|default:'#f1ecfd' }}">{{ post.cover_emoji|default:"📰" }}</div>
       {% endif %}

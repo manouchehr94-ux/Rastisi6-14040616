@@ -20,6 +20,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
+from . import design_block, icon_registry
+from .services.category_selection import CATEGORY_SOURCE_MODES
 from . import resource_source as resource_source_module
 from .settings_schema import (
     CARD_STYLE_EXPLICIT_OVERRIDE_KEY,
@@ -112,10 +114,10 @@ class SectionDefinition:
     # هم‌ارزِ «این قابلیت هنوز برای این نوع اعلام نشده» است، نه یک تغییرِ
     # رفتار. نگاه کنید به ``variant_contract.py`` برای شکلِ کاملِ ``VariantDefinition``
     # و کمک‌تابع‌هایِ resolve.
-    #: مجموعه‌یِ صریحِ capabilityهای این نوع section — در ``_finalize_registry``
-    #: با نتیجه‌یِ استنتاج‌شده از allowlistهایِ فعلی (CARD_AWARE_SECTION_KEYS و...)
-    #: یکی می‌شود (اجتماع، نه جایگزینی) — پس هیچ کدِ دستیِ اینجا لازم نیست فعلاً
-    #: چیزی اعلام کند.
+    #: مجموعه‌یِ صریحِ capabilityهای این نوع section — **تنها مرجعِ حقیقتِ**
+    #: قابلیت‌ها: اعتبارسنجِ تنظیمات، پروژکشنِ فیلدِ Inspector، Design Block و
+    #: رندر همه از همین‌جا می‌خوانند (نگاه کنید به ``KNOWN_CAPABILITIES``؛ نامِ
+    #: ناشناخته در زمانِ import رد می‌شود). ``responsive`` برایِ همه خودکار اضافه می‌شود.
     capabilities: frozenset[str] = frozenset()
     #: دادهٔ لازمِ رندرِ این section (مثلاً «کوئری محصول»، «دسترسی به کالکشن») —
     #: طبقِ الزامِ کار، فعلاً برای هیچ‌کدام از ۳۴ نوعِ موجود مقداردهی نمی‌شود؛
@@ -148,6 +150,12 @@ class SectionDefinition:
     #: همچنان تنها مرجعِ معتبرسازی می‌مانند؛ Task 3 فقط زیرساخت را اضافه
     #: می‌کند، هیچ سکشنی را اینجا schema-enabled نمی‌کند.
     settings_schema: SettingsSchema | None = None
+    #: Optional ``(raw_patch, current_settings) -> raw_patch`` applied by the R4 schema bridge BEFORE cleaning — used to
+    #: pin a legacy "follow another setting" default the first time the merchant edits the setting it follows.
+    normalize_patch: "Callable[[dict, dict], dict] | None" = None
+    #: Optional ``(current_settings) -> {key: value}`` — display values the Inspector shows for keys that are absent from
+    #: the stored settings but have a legacy effective value (so the control shows what the renderer actually uses).
+    inspector_projection: "Callable[[dict], dict] | None" = None
 
     def __post_init__(self) -> None:
         """External-review correction (U1A pre-commit pass, item 1) — same
@@ -166,13 +174,9 @@ class SectionDefinition:
         object.__setattr__(self, "variants", tuple(self.variants or ()))
 
     def supports_capability(self, name: str, *, variant: "VariantDefinition | None" = None) -> bool:
-        """U1B2 — the single query editor/server-side gating code should use
-        instead of importing and checking membership in one of the
-        module-level ``*_AWARE_SECTION_KEYS`` frozensets directly. Backed by
-        ``self.capabilities``, which ``_finalize_registry`` already derives
-        from those exact frozensets (see ``_derived_capabilities``) — so
-        this is provably the same answer, just asked through the
-        authoritative metadata contract instead of a raw constant import.
+        """The single query editor/server-side/renderer gating code uses to ask
+        "does this section type support X" — backed by ``self.capabilities``,
+        the declaration on the registry definition (there is no second list).
 
         ``variant`` is optional: pass the section's currently active
         ``VariantDefinition`` (e.g. from ``variant_contract.resolve_active_variant``)
@@ -255,7 +259,7 @@ PRODUCT_SECTION_DATA_SOURCES = (
 #: این‌ها به ``source_id`` نیاز دارند.
 _SINGLE_REFERENCE_SOURCES = {"collection", "category", "brand"}
 
-PRODUCT_SECTION_DISPLAY_MODES = ("carousel", "grid", "campaign_band")
+PRODUCT_SECTION_DISPLAY_MODES = ("carousel", "grid", "campaign_band", "catalog_grid")
 
 _PRODUCT_SECTION_MIN_LIMIT = 2
 _PRODUCT_SECTION_MAX_LIMIT = 24
@@ -292,6 +296,110 @@ def _clean_positive_int_list(raw_list, *, max_len: int, error_cls=None, error_me
         seen.add(int_value)
         cleaned.append(int_value)
     return cleaned[:max_len]
+
+
+#: ``default`` keeps each context's own heading look; ``plain_outline`` = plain title + outlined "view all" pill;
+#: ``underlined`` = plain title + pill with an accent rule under the heading block.
+PRODUCT_SECTION_HEADING_STYLES = ("default", "plain_outline", "underlined")
+
+#: Generic presentation contract of a product section's item row. Every key is optional and written only
+#: when it differs from the default, so existing sections keep their stored shape and look.
+#:  * ``desktop_layout``  — "grid" (non-scrolling N-column grid) / "carousel" from the tablet breakpoint up;
+#:                          absent = follow ``display_mode``.
+#:  * ``overflow_mode``   — carousel row: "scroll" (default, user scroll) / "clip" (no user scroll; arrows and dots
+#:                          still move it) / "visible" (no scrolling at all: items wrap onto further rows).
+#:  * ``show_scrollbar``  — False hides the native scrollbar rail of a scrolling row.
+#:  * ``carousel_navigation`` — "none" (default) / "arrows" / "dots".
+#:  * ``desktop_columns`` / ``tablet_columns`` / ``mobile_columns`` / ``gap`` — columns and item gap (px).
+PRODUCT_SECTION_DESKTOP_LAYOUTS = ("inherit", "grid", "carousel")
+PRODUCT_SECTION_OVERFLOW_MODES = ("scroll", "clip", "visible")
+PRODUCT_SECTION_CAROUSEL_NAVIGATION = ("none", "arrows", "dots")
+_PRODUCT_SECTION_COLUMN_LIMITS = {"desktop_columns": (1, 8), "tablet_columns": (1, 6), "mobile_columns": (1, 4)}
+
+#: Campaign panel contract (``display_mode == "campaign_band"``): the promotional side panel is ENGINE configuration, never
+#: hard-coded markup or copy. Every key is optional and written only when it differs from the default; the copy keys are
+#: written whenever the merchant (or a recipe) sets them, because "absent" means "legacy: follow the section title/subtitle".
+#:  * ``campaign_panel_enabled``  — False removes the whole panel (the product region takes the freed width).
+#:  * ``campaign_panel_title`` / ``campaign_panel_subtitle`` — the panel's OWN copy, independent of the section heading.
+#:  * ``campaign_visual_mode``    — "icon" (default, a key of ``icon_registry``) / "media" (Store-scoped MediaAsset) / "none".
+#:  * ``campaign_icon_key`` / ``campaign_media_asset_id`` / ``campaign_visual_size`` (px).
+#:  * ``campaign_panel_width`` (% of the band), ``campaign_panel_align``, ``campaign_panel_radius`` / ``_border_width`` /
+#:    ``_padding`` (px) and the semantic colours ``campaign_panel_bg`` / ``_fg`` / ``_accent`` / ``_border_color``.
+CAMPAIGN_VISUAL_MODES = ("icon", "media", "none")
+CAMPAIGN_PANEL_ALIGNS = ("center", "start", "end")
+_CAMPAIGN_INT_LIMITS = {
+    "campaign_visual_size": (24, 160), "campaign_panel_width": (10, 40), "campaign_panel_radius": (0, 40),
+    "campaign_panel_border_width": (0, 8), "campaign_panel_padding": (0, 60),
+}
+_CAMPAIGN_COLOR_KEYS = ("campaign_panel_bg", "campaign_panel_fg", "campaign_panel_accent", "campaign_panel_border_color")
+_MAX_CAMPAIGN_TITLE = 80
+_MAX_CAMPAIGN_SUBTITLE = 200
+
+
+def _clean_campaign_panel_settings(raw: dict) -> dict:
+    out: dict = {}
+    if raw.get("campaign_panel_enabled") is not None and not _truthy_setting(raw.get("campaign_panel_enabled")):
+        out["campaign_panel_enabled"] = False
+    if raw.get("campaign_panel_title") is not None:
+        out["campaign_panel_title"] = str(raw["campaign_panel_title"]).strip()[:_MAX_CAMPAIGN_TITLE]
+    if raw.get("campaign_panel_subtitle") is not None:
+        out["campaign_panel_subtitle"] = str(raw["campaign_panel_subtitle"]).strip()[:_MAX_CAMPAIGN_SUBTITLE]
+    if raw.get("campaign_visual_mode") in CAMPAIGN_VISUAL_MODES[1:]:
+        out["campaign_visual_mode"] = raw["campaign_visual_mode"]
+    from . import icon_registry
+
+    if icon_registry.is_valid_icon_key(raw.get("campaign_icon_key")) and raw["campaign_icon_key"] != icon_registry.DEFAULT_ICON_KEY:
+        out["campaign_icon_key"] = raw["campaign_icon_key"]
+    media_id = raw.get("campaign_media_asset_id")
+    if media_id not in (None, "", 0, "0"):
+        try:
+            media_id = int(str(media_id).translate(_ASCII_DIGITS))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است") from None
+        if media_id <= 0:
+            raise ProductSectionSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است")
+        out["campaign_media_asset_id"] = media_id
+    for key, (low, high) in _CAMPAIGN_INT_LIMITS.items():
+        if raw.get(key) in (None, ""):
+            continue
+        try:
+            out[key] = max(low, min(high, int(str(raw[key]).translate(_ASCII_DIGITS))))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("مقدار عددیِ پنل کمپین نامعتبر است") from None
+    if raw.get("campaign_panel_align") in CAMPAIGN_PANEL_ALIGNS[1:]:
+        out["campaign_panel_align"] = raw["campaign_panel_align"]
+    from .semantic_colors import SemanticColorError, clean_semantic_color
+
+    for key in _CAMPAIGN_COLOR_KEYS:
+        try:
+            value = clean_semantic_color(raw.get(key))
+        except SemanticColorError as exc:
+            raise ProductSectionSettingsError(str(exc)) from exc
+        if value:
+            out[key] = value
+    return out
+
+
+def effective_campaign_copy(settings: dict) -> tuple[str, str]:
+    """(title, subtitle) the campaign panel shows. A section saved before the panel had its own copy keys follows the
+    section title/subtitle (the historical behaviour); once a key exists it is the panel's own value, even when empty."""
+    title = settings["campaign_panel_title"] if "campaign_panel_title" in settings else settings.get("title", "")
+    subtitle = settings["campaign_panel_subtitle"] if "campaign_panel_subtitle" in settings else settings.get("subtitle", "")
+    return title or "", subtitle or ""
+
+
+def pin_campaign_copy(raw_patch: dict, current_settings: dict) -> dict:
+    """Make the section heading and the panel title independent from the FIRST edit on: when a patch changes the
+    heading/subtitle of a campaign section that still follows them, the panel's current copy is pinned first, so editing
+    one text never silently rewrites the other."""
+    if not {"title", "subtitle"} & set(raw_patch):
+        return raw_patch
+    pinned = dict(raw_patch)
+    for own, followed in (("campaign_panel_title", "title"), ("campaign_panel_subtitle", "subtitle")):
+        if own not in current_settings and own not in raw_patch and followed in raw_patch:
+            pinned[own] = current_settings.get(followed, "")
+    return pinned
+_PRODUCT_SECTION_MAX_GAP = 60
 
 
 def _validate_product_section_settings(raw: dict) -> dict:
@@ -342,6 +450,7 @@ def _validate_product_section_settings(raw: dict) -> dict:
     header_position = raw.get("header_position", "above")
     if header_position not in ("above", "inside"):
         header_position = "above"
+    heading_style = raw.get("heading_style")
 
     # source_id/product_ids فقط برایِ منبعِ متناظرشان معنا دارند — برایِ
     # بقیه همیشه به مقدارِ خنثی (None/[]) بازنشانی می‌شوند تا تنظیماتِ
@@ -362,7 +471,7 @@ def _validate_product_section_settings(raw: dict) -> dict:
         if not product_ids:
             raise ProductSectionSettingsError("برایِ «کالاهایِ دستی» باید حداقل یک کالا انتخاب شود")
 
-    return {
+    cleaned = {
         "data_source": data_source,
         "source_id": source_id,
         "product_ids": product_ids,
@@ -376,6 +485,42 @@ def _validate_product_section_settings(raw: dict) -> dict:
         "carousel_show_arrows": carousel_show_arrows,
         "header_position": header_position,
     }
+    # Optional presentation (written only when non-default): how the section heading is drawn.
+    if heading_style in PRODUCT_SECTION_HEADING_STYLES[1:]:
+        cleaned["heading_style"] = heading_style
+    # Item-row presentation contract (all optional; written only when non-default).
+    if raw.get("desktop_layout") in PRODUCT_SECTION_DESKTOP_LAYOUTS[1:]:
+        cleaned["desktop_layout"] = raw["desktop_layout"]
+    if raw.get("overflow_mode") in PRODUCT_SECTION_OVERFLOW_MODES[1:]:
+        cleaned["overflow_mode"] = raw["overflow_mode"]
+    if raw.get("show_scrollbar") is not None and not _truthy_setting(raw.get("show_scrollbar")):
+        cleaned["show_scrollbar"] = False
+    if raw.get("carousel_navigation") in PRODUCT_SECTION_CAROUSEL_NAVIGATION[1:]:
+        cleaned["carousel_navigation"] = raw["carousel_navigation"]
+    for key, (low, high) in _PRODUCT_SECTION_COLUMN_LIMITS.items():
+        value = raw.get(key)
+        if value in (None, ""):
+            continue
+        try:
+            cleaned[key] = max(low, min(high, int(str(value).translate(_ASCII_DIGITS))))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("تعدادِ ستون باید عدد باشد") from None
+    if raw.get("gap") not in (None, ""):
+        try:
+            cleaned["gap"] = max(0, min(_PRODUCT_SECTION_MAX_GAP, int(str(raw["gap"]).translate(_ASCII_DIGITS))))
+        except (TypeError, ValueError):
+            raise ProductSectionSettingsError("فاصله‌ی بین کارت‌ها باید عدد باشد") from None
+    cleaned.update(_clean_campaign_panel_settings(raw))
+    return cleaned
+
+
+_ASCII_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _truthy_setting(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "0", "false", "off", "no")
+    return bool(value)
 
 
 def _product_section_defaults() -> dict:
@@ -423,6 +568,7 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
             ("carousel", "کاروسل"),
             ("grid", "گرید"),
             ("campaign_band", "نوار کمپینی کنار محصولات"),
+            ("catalog_grid", "گرید کاتالوگی با نوار پایین"),
         ),
     ),
     SettingsField("show_view_all", "نمایش دکمه «مشاهده همه»", "boolean", "basic", default=True),
@@ -440,7 +586,126 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
         "header_position", "جایگاه عنوان", "choice", "advanced", default="above",
         choices=(("above", "بالای بخش"), ("inside", "داخل بخش")),
     ),
+    SettingsField(
+        "heading_style", "سبک عنوان", "choice", "advanced", default="default",
+        choices=(("default", "پیش‌فرض"), ("plain_outline", "عنوان ساده + دکمه خط‌دار"), ("underlined", "عنوان ساده + خط تأکید")),
+    ),
+    SettingsField(
+        "desktop_layout", "چیدمان از تبلت به بالا", "choice", "advanced", default="inherit",
+        choices=(("inherit", "مطابق نوع نمایش"), ("grid", "گرید ثابت بدون اسکرول"), ("carousel", "کاروسل")),
+    ),
+    SettingsField(
+        "overflow_mode", "رفتار ردیف کارت‌ها", "choice", "advanced", default="scroll",
+        choices=(("scroll", "اسکرول افقی"), ("clip", "بدون اسکرول کاربر (برش)"), ("visible", "همه نمایان (شکستن به ردیف بعد)")),
+    ),
+    SettingsField("show_scrollbar", "نمایش نوار اسکرول", "boolean", "advanced", default=True),
+    SettingsField(
+        "carousel_navigation", "ناوبری کاروسل", "choice", "advanced", default="none",
+        choices=(("none", "بدون ناوبری"), ("arrows", "فلش‌ها"), ("dots", "نقطه‌ها")),
+    ),
+    SettingsField("desktop_columns", "ستون‌ها در دسکتاپ", "integer", "advanced", default=4, min_value=1, max_value=8),
+    SettingsField("tablet_columns", "ستون‌ها در تبلت", "integer", "advanced", default=3, min_value=1, max_value=6),
+    SettingsField("mobile_columns", "ستون‌ها در موبایل", "integer", "advanced", default=2, min_value=1, max_value=4),
+    SettingsField("gap", "فاصله بین کارت‌ها (px)", "integer", "advanced", default=16, min_value=0, max_value=_PRODUCT_SECTION_MAX_GAP),
+    # -- campaign panel (display_mode == campaign_band): engine configuration, see CAMPAIGN_* above --
+    SettingsField("campaign_panel_enabled", "نمایش پنل تبلیغاتی کنار محصولات", "boolean", "basic", default=True),
+    SettingsField("campaign_panel_title", "عنوان پنل تبلیغاتی", "text", "basic", default="", max_length=_MAX_CAMPAIGN_TITLE),
+    SettingsField("campaign_panel_subtitle", "توضیح پنل تبلیغاتی", "text", "basic", default="", max_length=_MAX_CAMPAIGN_SUBTITLE),
+    SettingsField(
+        "campaign_visual_mode", "نماد پنل", "choice", "basic", default="icon",
+        choices=(("icon", "آیکون آماده"), ("media", "تصویر از کتابخانه رسانه"), ("none", "بدون نماد")),
+    ),
+    SettingsField(
+        "campaign_icon_key", "آیکون", "choice", "basic", default="gift",
+        choices=icon_registry.icon_choices(),
+    ),
+    SettingsField("campaign_media_asset_id", "تصویر پنل", "media", "basic", default=None),
+    SettingsField("campaign_visual_size", "اندازه نماد (px)", "integer", "advanced", default=64, min_value=24, max_value=160),
+    SettingsField("campaign_panel_width", "عرض پنل (٪ از نوار)", "integer", "advanced", default=17, min_value=10, max_value=40),
+    SettingsField(
+        "campaign_panel_align", "چینش محتوای پنل", "choice", "advanced", default="center",
+        choices=(("center", "وسط"), ("start", "ابتدا"), ("end", "انتها")),
+    ),
+    SettingsField("campaign_panel_bg", "رنگ زمینه پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_fg", "رنگ متن و نماد پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_accent", "رنگ تأکید (دکمه) پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_border_color", "رنگ حاشیه پنل", "color", "advanced", default=""),
+    SettingsField("campaign_panel_border_width", "ضخامت حاشیه پنل (px)", "integer", "advanced", default=0, min_value=0, max_value=8),
+    SettingsField("campaign_panel_radius", "گردی گوشه‌های پنل (px)", "integer", "advanced", default=12, min_value=0, max_value=40),
+    SettingsField("campaign_panel_padding", "فاصله داخلی پنل (px)", "integer", "advanced", default=18, min_value=0, max_value=60),
 ))
+
+# Context-sensitive Inspector: the display type (variant) is the PRIMARY structural choice; the lower-level row
+# controls are offered only for the compositions that actually consume them (a hidden controlling field is dormant,
+# i.e. it contributes no value, so ``carousel_autoplay`` left on in a stale grid never hides the column controls).
+_PS_CAROUSEL = (("display_mode", ("carousel",)),)
+_PS_ROW = _PS_CAROUSEL + (("carousel_autoplay", ("false",)),)
+_PS_GRIDDED = (
+    ("display_mode", ("carousel", "grid", "campaign_band", "catalog_grid")),
+    ("carousel_autoplay", ("false", "")),
+)
+_CB = (("display_mode", ("campaign_band",)),)
+# ``campaign_panel_enabled`` is itself dormant (None -> "") outside a campaign band, so "true" or "" means "a panel can exist".
+_CB_PANEL = _CB + (("campaign_panel_enabled", ("true",)),)
+_CB_VISUAL = _CB_PANEL + (("campaign_visual_mode", ("icon", "media")),)
+PRODUCT_SECTION_VISIBLE_WHEN = {
+    "subtitle": (("display_mode", ("carousel", "grid", "catalog_grid")),),
+    "show_view_all": (("campaign_panel_enabled", ("true", "")),),
+    "campaign_panel_enabled": _CB,
+    "campaign_panel_title": _CB_PANEL,
+    "campaign_panel_subtitle": _CB_PANEL,
+    "campaign_visual_mode": _CB_PANEL,
+    "campaign_icon_key": _CB_PANEL + (("campaign_visual_mode", ("icon",)),),
+    "campaign_media_asset_id": _CB_PANEL + (("campaign_visual_mode", ("media",)),),
+    "campaign_visual_size": _CB_VISUAL,
+    "campaign_panel_width": _CB_PANEL,
+    "campaign_panel_align": _CB_PANEL,
+    "campaign_panel_bg": _CB_PANEL,
+    "campaign_panel_fg": _CB_PANEL,
+    "campaign_panel_accent": _CB_PANEL,
+    "campaign_panel_border_color": _CB_PANEL,
+    "campaign_panel_border_width": _CB_PANEL,
+    "campaign_panel_radius": _CB_PANEL,
+    "campaign_panel_padding": _CB_PANEL,
+    "carousel_autoplay": _PS_CAROUSEL,
+    "carousel_interval_ms": _PS_CAROUSEL + (("carousel_autoplay", ("true",)),),
+    "carousel_show_arrows": _PS_CAROUSEL + (("carousel_autoplay", ("true",)),),
+    "desktop_layout": _PS_ROW,
+    "overflow_mode": _PS_ROW,
+    "carousel_navigation": _PS_ROW,
+    "show_scrollbar": _PS_ROW + (("overflow_mode", ("scroll",)),),
+    "header_position": (("display_mode", ("carousel", "grid")),),
+    "heading_style": (("display_mode", ("carousel", "grid")),),
+    "desktop_columns": _PS_GRIDDED,
+    "tablet_columns": _PS_GRIDDED,
+    "mobile_columns": _PS_GRIDDED,
+    "gap": _PS_GRIDDED,
+}
+PRODUCT_SECTION_SCHEMA = dataclasses.replace(PRODUCT_SECTION_SCHEMA, fields=tuple(
+    dataclasses.replace(f, visible_when=PRODUCT_SECTION_VISIBLE_WHEN[f.key]) if f.key in PRODUCT_SECTION_VISIBLE_WHEN else f
+    for f in PRODUCT_SECTION_SCHEMA.fields
+))
+
+
+def effective_product_section_settings(settings: dict) -> dict:
+    """The settings the renderer actually consumes for a ``product_section``.
+
+    The variant (``display_mode``) is the primary structural choice: a row-level setting that belongs to another
+    composition is DORMANT, never silently reinterpreted — a stale ``desktop_layout="grid"`` or an old autoplay flag
+    can neither turn a campaign band into the ordinary grid nor make a grid scroll. The stored value is left untouched
+    (switching back restores it); only this render-time projection ignores it."""
+    mode = settings.get("display_mode") or "carousel"  # a legacy row without the key renders as a carousel
+    if mode == "carousel" and not settings.get("carousel_autoplay"):
+        return settings
+    effective = dict(settings)
+    if mode != "carousel":
+        for key in ("carousel_autoplay", "carousel_interval_ms", "carousel_show_arrows", "desktop_layout",
+                    "overflow_mode", "show_scrollbar", "carousel_navigation"):
+            effective.pop(key, None)
+    else:  # autoplay spotlight: a single-slide stage, no scrolling row
+        for key in ("desktop_layout", "overflow_mode", "show_scrollbar", "carousel_navigation"):
+            effective.pop(key, None)
+    return effective
 
 
 class CatalogProductWallSettingsError(ValueError):
@@ -559,41 +824,25 @@ def default_catalog_product_wall_settings() -> dict:
 #: چیدمانِ ثابتِ فعلی‌شان (tiles/auto-fill) اصلاً آن را در رندر
 #: نمی‌خواند — نمایشِ کنترل به تاجر برایِ این سه نوع صرفاً گمراه‌کننده
 #: است (تغییرِ عدد هیچ اثرِ بصری‌ای ندارد). برایِ آن تصمیم از
-#: ``COLUMN_VISUAL_SECTION_KEYS`` پایین استفاده کنید.
-COLUMN_AWARE_SECTION_KEYS = frozenset({
-    "product_section", "category_grid", "multi_banner", "promo_cards", "brand_carousel",
-    "featured_products", "newest_products", "best_sellers", "discounted_products",
-    "related_products", "product_listing", "collection_products",
-    # Site-target-overhaul Part 2D — ``catalog_product_wall``'s per-group
-    # rows reuse the exact same ``.pcarousel.rsec-cols`` column-count
-    # mechanism ``product_section`` already uses.
-    "catalog_product_wall",
-})
+#: the ``columns_visual`` capability پایین استفاده کنید.
 
-#: زیرمجموعه‌یِ ``COLUMN_AWARE_SECTION_KEYS`` که تغییرِ تعدادِ ستون
+#: زیرمجموعه‌یِ the ``columns`` capability که تغییرِ تعدادِ ستون
 #: واقعاً چیدمانِ رندرشده را عوض می‌کند (فیکسِ فازِ D، پس از گزارشِ
 #: تستِ دستیِ کاربر روی Brand Carousel: تغییرِ ستونِ موبایل هیچ اثرِ
 #: بصری‌ای نداشت). فقط همین مجموعه باید کنترلِ «تعدادِ ستون‌ها» را در
-#: فرمِ تنظیماتِ ادیتور نشان دهد — نه ``COLUMN_AWARE_SECTION_KEYS``ی
+#: فرمِ تنظیماتِ ادیتور نشان دهد — نه the ``columns`` capabilityی
 #: بالا. ``product_section`` از قبل یک grid/carousel پارامتری دارد
 #: (``.rsec-cols`` در ``product_card.css``)؛ ``multi_banner`` در Phase 3
 #: (کتابخانه‌ی بلوک‌هایِ صفحه‌ی اصلی — بستنِ شکافِ «Two-Banner Row»/
 #: «Multi-Banner Grid») به همین مجموعه اضافه شد و از همان کلاسِ
 #: ``.grid.rsec-cols``یِ موجود استفاده می‌کند (کدِ CSSِ تازه‌ای نساخته
 #: شد). وقتی چیدمانِ ``category_grid``/``promo_cards``/``brand_carousel``
-#: هم در آینده بازطراحی شد، همان کلید را از ``COLUMN_AWARE_SECTION_KEYS``
+#: هم در آینده بازطراحی شد، همان کلید را از the ``columns`` capability
 #: به اینجا هم منتقل کنید.
 #: Phase 8 P0-2 — این ۶ نوعِ دیگر هم اکنون از همان کلاسِ ``.grid.rsec-cols``
 #: استفاده می‌کنند (templateهایِ مربوطه به‌روزرسانی شدند)، پس دیگر
 #: «گمراه‌کننده» نیستند — تعدادِ ستونِ انتخابیِ تاجر واقعاً چیدمانِ
 #: رندرشده را تغییر می‌دهد.
-COLUMN_VISUAL_SECTION_KEYS = frozenset({
-    "product_section", "multi_banner", "featured_products", "newest_products",
-    "best_sellers", "discounted_products", "related_products", "collection_products",
-    "product_listing",
-    # Part 2D — same reason as COLUMN_AWARE_SECTION_KEYS above.
-    "catalog_product_wall",
-})
 
 #: مقادیرِ مجازِ enum بستهٔ تعدادِ ستون به‌ازای هر دستگاه — طبقِ بخشِ ۴
 #: مشخصات؛ هیچ عددِ دلخواهی پذیرفته نمی‌شود.
@@ -664,13 +913,13 @@ def default_responsive_settings(*, supports_columns: bool) -> dict:
     return validate_responsive_settings(None, supports_columns=supports_columns)
 
 
-def _with_responsive(section_key: str, validate_fn, default_fn):
+def _with_responsive(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
     بلوکِ ``responsive`` می‌پوشاند — منطقِ خودِ نوع (rich_text/image_text/
     product_section/passthrough) کاملاً دست‌نخورده و بی‌خبر از این پوشش
     باقی می‌ماند؛ کلیدِ ``responsive`` قبل از رسیدن به تابعِ اصلی جدا
     می‌شود و بعد از آن دوباره به نتیجه اضافه می‌شود."""
-    supports_columns = section_key in COLUMN_AWARE_SECTION_KEYS
+    supports_columns = "columns" in capabilities
 
     def wrapped_validate(raw: dict) -> dict:
         if not isinstance(raw, dict):
@@ -694,7 +943,7 @@ def _with_responsive(section_key: str, validate_fn, default_fn):
 #: انواعی که یک بلوکِ «لینک/مقصد» استاندارد (چکپوینتِ استانداردسازیِ لینک)
 #: در تنظیماتشان دارند — معادلِ JSON-شکلِ ``apps.content.models.DestinationMixin``
 #: برایِ محتوایِ ذخیره‌شده در ``StorefrontSection.settings`` (نه یک ردیفِ
-#: مدلِ جدا). عمداً مثلِ ``COLUMN_AWARE_SECTION_KEYS`` یک allowlist صریح
+#: مدلِ جدا). عمداً مثلِ the ``columns`` capability یک allowlist صریح
 #: است، نه پیش‌فرضِ همه‌ی انواع — چون بعضی انواع (rich_text، trust_features)
 #: اصلاً معنایِ «لینکِ سطحِ section» ندارند، و بعضیِ دیگر (hero_banner،
 #: single_banner/multi_banner) لینکشان per-slide/per-banner است، نه
@@ -702,7 +951,6 @@ def _with_responsive(section_key: str, validate_fn, default_fn):
 #: خودشان از قبل ``DestinationMixin`` واقعی دارند). برایِ ``product_section``
 #: این بلوک معنایِ «override دستیِ لینکِ "مشاهده همه"» را دارد؛ برایِ
 #: ``image_text`` معنایِ «لینکِ تصویر/دکمه» را دارد.
-DESTINATION_AWARE_SECTION_KEYS = frozenset({"image_text", "product_section", "brand_carousel"})
 
 _DEFAULT_DESTINATION_SETTINGS = {
     "destination_type": "none",
@@ -778,13 +1026,10 @@ def default_destination_settings() -> dict:
 #: destination/responsive/motion/card/layout/background/spacing/...) so
 #: every outer wrapper's own key-stripping still runs on a dict that
 #: already carries only legacy-shaped keys.
-_RESOURCE_SOURCE_AWARE_SECTION_KEYS = frozenset({
-    "product_section", "brand_carousel", "collection_tiles", "category_grid",
-})
 
 
-def _with_resource_source(section_key: str, validate_fn, default_fn):
-    if section_key not in _RESOURCE_SOURCE_AWARE_SECTION_KEYS:
+def _with_resource_source(section_key: str, capabilities: frozenset, validate_fn, default_fn):
+    if "resource_source" not in capabilities:
         return validate_fn, default_fn
 
     # The existing section-specific error class each wrapped section already
@@ -831,12 +1076,12 @@ def _with_resource_source(section_key: str, validate_fn, default_fn):
     return wrapped_validate, default_fn
 
 
-def _with_destination(section_key: str, validate_fn, default_fn):
+def _with_destination(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
     بلوکِ ``destination`` می‌پوشاند — فقط برایِ کلیدهایِ
-    ``DESTINATION_AWARE_SECTION_KEYS``. دقیقاً همان الگویِ ``_with_responsive``
+    the ``destination`` capability. دقیقاً همان الگویِ ``_with_responsive``
     بالا: منطقِ خودِ نوع کاملاً دست‌نخورده می‌ماند."""
-    if section_key not in DESTINATION_AWARE_SECTION_KEYS:
+    if "destination" not in capabilities:
         return validate_fn, default_fn
 
     def wrapped_validate(raw: dict) -> dict:
@@ -859,14 +1104,6 @@ def _with_destination(section_key: str, validate_fn, default_fn):
 #: طریقِ ``product_grid.html``) — تنها اینجا بلوکِ ``card`` معنا دارد.
 #: عمداً یک allowlist صریح، دقیقاً همان الگویِ بالا (بقیه‌یِ انواع مثلِ
 #: rich_text/hero_banner اصلاً کارتِ محصول ندارند).
-CARD_AWARE_SECTION_KEYS = frozenset({
-    "product_section", "featured_products", "newest_products", "best_sellers",
-    "discounted_products", "amazing_offers", "related_products", "product_listing",
-    "collection_products",
-    # Part 2D — ``catalog_product_wall``'s per-group rows render real
-    # product cards via the same ``product_grid.html`` partial.
-    "catalog_product_wall",
-})
 
 #: enum بستهٔ نسبتِ تصویرِ کارتِ محصول — طبقِ اصلِ «۴-۵ انتخابِ معنادار
 #: به‌جایِ عددِ دلخواهِ CSS» (نه aspect-ratio خام).
@@ -896,6 +1133,9 @@ CARD_STYLE_CHOICES = (
     "paper_frame", "price_first", "portrait_round", "catalog_index",
     "shipping_label", "shelf_editorial", "technical_spec", "tech_neon",
     "bold_outline",
+    # Reference-fidelity vocabulary (templates 51/53): a centred card with a
+    # quantity stepper + cart action, and a flat card over a pastel tile.
+    "center_stepper", "pastel_flat",
 )
 
 BADGE_TREATMENT_CHOICES = ("none", "sale")
@@ -926,6 +1166,10 @@ def validate_card_settings(raw) -> dict:
     cleaned["quick_add_reveal"] = reveal if reveal in QUICK_ADD_REVEAL_CHOICES else "hover_slide"
     style = raw.get("card_style")
     cleaned["card_style"] = style if style in CARD_STYLE_CHOICES else "standard"
+    # Optional: hide the quick-view trigger. Written only when explicitly False so the default shape
+    # (and every stored section) is unchanged.
+    if raw.get("show_quick_view") is False:
+        cleaned["show_quick_view"] = False
     return cleaned
 
 
@@ -933,11 +1177,11 @@ def default_card_settings() -> dict:
     return validate_card_settings(None)
 
 
-def _with_card(section_key: str, validate_fn, default_fn):
+def _with_card(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
-    بلوکِ ``card`` می‌پوشاند — فقط برایِ ``CARD_AWARE_SECTION_KEYS``. دقیقاً
+    بلوکِ ``card`` می‌پوشاند — فقط برایِ the ``card`` capability. دقیقاً
     همان الگویِ ``_with_responsive``/``_with_destination``/``_with_motion``."""
-    if section_key not in CARD_AWARE_SECTION_KEYS:
+    if "card" not in capabilities:
         return validate_fn, default_fn
 
     def wrapped_validate(raw: dict) -> dict:
@@ -964,21 +1208,18 @@ def _with_card(section_key: str, validate_fn, default_fn):
 #: ``cart_summary``/``collection_products`` — محافظت‌شده طبقِ بخشِ ۵۹ مشخصات:
 #: «Mandatory Components») و ``announcement_bar`` (نوارِ باریکِ سراسریِ هدر،
 #: پس‌زمینه‌یِ مستقل برایش بی‌معناست) کنار گذاشته شده‌اند.
-BACKGROUND_AWARE_SECTION_KEYS = frozenset({
-    "hero_banner", "image_slider", "single_banner", "multi_banner", "category_grid",
-    "featured_products", "newest_products", "best_sellers", "discounted_products",
-    "amazing_offers", "brand_carousel", "promo_cards", "rich_text", "image_text",
-    "product_section", "catalog_product_wall", "trust_features", "collection_tiles", "quick_links", "faq",
-    "testimonials", "video_section", "story_rail", "newsletter",
-    "product_description", "product_video", "related_products", "collection_header",
-})
 
 #: همان allowlist برایِ «فاصله‌گذاری» (بخشِ ۸ مشخصات) — دقیقاً همان مجموعه،
 #: چون هر دو معنایِ «این section چطور در صفحه جا می‌گیرد» دارند، نه محتوایِ
 #: خودِ section.
-SPACING_AWARE_SECTION_KEYS = BACKGROUND_AWARE_SECTION_KEYS
 
-BACKGROUND_MODE_CHOICES = ("theme", "palette", "palette_pattern", "color", "image", "pattern")
+BACKGROUND_MODE_CHOICES = ("theme", "palette", "palette_pattern", "color", "image", "pattern", "surface")
+#: Modes whose fill can optionally extend edge-to-edge behind a section that keeps its content inside the container.
+BACKGROUND_BLEED_MODES = ("palette", "palette_pattern", "color", "pattern", "image")
+#: Presentation of an ``image`` background (all optional, written only when not the default).
+BACKGROUND_IMAGE_FITS = ("cover", "contain")
+BACKGROUND_IMAGE_POSITION_X = ("left", "center", "right")
+BACKGROUND_IMAGE_POSITION_Y = ("top", "center", "bottom")
 BACKGROUND_PALETTE_ROLE_CHOICES = ("tone-1", "tone-2", "tone-3", "tone-4", "tone-5")
 
 #: G2.3 (Defect C) — وقتی مرچنت «رنگ از پالت» را انتخاب می‌کند اما نقشِ
@@ -1099,13 +1340,47 @@ def validate_background_settings(raw) -> dict:
         # سایر enumهای بصری بی‌صدا به theme برمی‌گردد.
         if candidate in PATTERN_REGISTRY:
             pattern_slug = candidate
+        elif not candidate:
+            # R4-08 — «رنگ + الگو» / «پالت + الگو» بدونِ الگوی انتخاب‌شده: رنگ/پالتی که مرچنت همین الان انتخاب کرده
+            # نباید با بازگشتِ بی‌صدا به theme ناپدید شود (همان باگِ «هیچ تغییری دیده نمی‌شد»)؛ بخشی از انتخاب که
+            # معنا دارد (رنگ یا پالت) اعمال می‌شود و الگو بعداً با انتخابِ الگو اضافه می‌شود.
+            mode = "color" if mode == "pattern" else "palette"
         else:
             mode = "theme"
 
-    return {
+    cleaned = {
         "mode": mode, "color": color, "media_asset_id": media_asset_id,
         "pattern_slug": pattern_slug, "palette_role": palette_role,
     }
+    # Optional presentation (written only when set): the fill spans the whole viewport width while the
+    # section's content stays inside the container.
+    if raw.get("bleed") is True and mode in BACKGROUND_BLEED_MODES:
+        cleaned["bleed"] = True
+    if mode == "image":
+        # Image presentation lives in the SAME block as the asset (one persistence authority): fit, focal position
+        # and an optional colour overlay. Anything left at its default is not stored.
+        if raw.get("image_fit") == "contain":
+            cleaned["image_fit"] = "contain"
+        if raw.get("image_position_x") in ("left", "right"):
+            cleaned["image_position_x"] = raw["image_position_x"]
+        if raw.get("image_position_y") in ("top", "bottom"):
+            cleaned["image_position_y"] = raw["image_position_y"]
+        try:
+            overlay_opacity = int(raw.get("overlay_opacity") or 0)
+        except (TypeError, ValueError):
+            raise BackgroundSettingsError("شفافیت پوشش تصویر باید عدد باشد") from None
+        overlay_opacity = max(0, min(100, overlay_opacity))
+        from .semantic_colors import SemanticColorError, clean_semantic_color
+
+        try:
+            overlay_color = clean_semantic_color(raw.get("overlay_color"))
+        except SemanticColorError as exc:
+            raise BackgroundSettingsError(str(exc)) from exc
+        if overlay_color:
+            cleaned["overlay_color"] = overlay_color
+        if overlay_opacity:
+            cleaned["overlay_opacity"] = overlay_opacity
+    return cleaned
 
 
 def default_background_settings() -> dict:
@@ -1115,11 +1390,11 @@ def default_background_settings() -> dict:
     }
 
 
-def _with_background(section_key: str, validate_fn, default_fn):
+def _with_background(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
-    بلوکِ ``background`` می‌پوشاند — فقط برایِ ``BACKGROUND_AWARE_SECTION_KEYS``.
+    بلوکِ ``background`` می‌پوشاند — فقط برایِ the ``background`` capability.
     دقیقاً همان الگویِ ``_with_card``/``_with_layout`` بالا."""
-    if section_key not in BACKGROUND_AWARE_SECTION_KEYS:
+    if "background" not in capabilities:
         return validate_fn, default_fn
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1138,11 +1413,48 @@ def _with_background(section_key: str, validate_fn, default_fn):
     return wrapped_validate, wrapped_default
 
 
-def _with_background_schema_field(section_key: str, schema):
+def _with_design(capabilities: frozenset, validate_fn, default_fn):
+    """Wrap a section's validator with the sparse ``design`` block (see ``design_block``).
+
+    Only for sections that declare applicable design properties. The block is never
+    materialised by default: it is written only when it holds at least one non-neutral value,
+    so sections without it stay byte-identical."""
+    applicable = design_block.properties_for_capabilities(capabilities)
+    if not applicable:
+        return validate_fn, default_fn
+
+    def wrapped_validate(raw: dict) -> dict:
+        if not isinstance(raw, dict):
+            return validate_fn(raw)
+        design_raw = raw.get("design")
+        base_raw = {k: v for k, v in raw.items() if k != "design"}
+        cleaned = validate_fn(base_raw)
+        design = design_block.validate_design_settings(design_raw, applicable)
+        if design:
+            cleaned["design"] = design
+        return cleaned
+
+    return wrapped_validate, default_fn
+
+
+def _with_design_schema_field(capabilities: frozenset, schema):
+    """Project the generic ``design`` Inspector field onto an applicable section's schema (idempotent)."""
+    applicable = design_block.properties_for_capabilities(capabilities)
+    if schema is None or not applicable or schema.get_field("design") is not None:
+        return schema
+    field = SettingsField(
+        "design", "ظاهر و استایل", "design", "advanced", default={}, widget_hint=",".join(applicable),
+    )
+    return dataclasses.replace(schema, fields=(*schema.fields, field))
+
+
+
+
+def _with_background_schema_field(capabilities: frozenset, schema):
     """Phase 5 Task 4 (remediation R1b) — the R4-Inspector counterpart of
     ``_with_background`` above.
 
-    ``_with_background`` already wraps every ``BACKGROUND_AWARE_SECTION_KEYS``
+    ``_with_background`` already wraps every the ``background`` capability
     section's ``validate_settings``/``default_settings`` to carry a
     ``background`` block. This projects the matching MERCHANT-FACING control
     onto the section's ``SettingsSchema`` — a single generic ``background``
@@ -1157,12 +1469,15 @@ def _with_background_schema_field(section_key: str, schema):
     background-aware families have no schema to attach to, a documented,
     out-of-Task-4-scope exception. Idempotent: never appends a second
     ``background`` field if one is somehow already declared."""
-    if schema is None or section_key not in BACKGROUND_AWARE_SECTION_KEYS:
+    if schema is None or "background" not in capabilities:
         return schema
     if schema.get_field("background") is not None:
         return schema
     background_field = SettingsField(
-        "background", "پس‌زمینه این بخش", "background", "advanced",
+        "background", "پس‌زمینه این بخش", "background",
+        # The fill is the primary design decision of a product band, so it sits in the Basic tab there; every other
+        # background-aware section keeps it under Advanced.
+        "basic" if "background_primary" in capabilities else "advanced",
         default=default_background_settings(),
         widget_hint="background_picker",
     )
@@ -1220,11 +1535,11 @@ def default_spacing_settings() -> dict:
     return {"vertical_spacing": "normal", "advanced": {field: None for field in _SPACING_ADVANCED_FIELDS}}
 
 
-def _with_spacing(section_key: str, validate_fn, default_fn):
+def _with_spacing(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
-    بلوکِ ``spacing`` می‌پوشاند — فقط برایِ ``SPACING_AWARE_SECTION_KEYS``.
+    بلوکِ ``spacing`` می‌پوشاند — فقط برایِ the ``spacing`` capability.
     دقیقاً همان الگویِ ``_with_background`` بالا."""
-    if section_key not in SPACING_AWARE_SECTION_KEYS:
+    if "spacing" not in capabilities:
         return validate_fn, default_fn
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1245,15 +1560,15 @@ def _with_spacing(section_key: str, validate_fn, default_fn):
 
 #: R4 Task 7 — Phase 1 slice: only ``hero_banner`` gets a local typography
 #: override. An explicit allowlist, not a default-for-all-types — the same
-#: pattern as ``DESTINATION_AWARE_SECTION_KEYS``/``MOTION_AWARE_SECTION_KEYS``.
+#: pattern as the ``destination`` capability/the ``motion`` capability.
 #:
 #: Task 6 (final-review fix, C1/I1) — every ``product_view``/``card``
 #: TEMPORARY-ADAPTER family carrier needs the SAME allowlist membership as
 #: hero_banner/brand_carousel/collection_tiles (unioned in via
-#: ``CARD_AWARE_SECTION_KEYS``, which already includes ``product_section``
+#: the ``card`` capability, which already includes ``product_section``
 #: — listing it again here would be redundant), or its own explicit-local
 #: marker (``variant_explicit`` for ``product_section``,
-#: ``card_style_explicit`` for every ``CARD_AWARE_SECTION_KEYS`` member) is
+#: ``card_style_explicit`` for every the ``card`` capability member) is
 #: silently dropped by ``validate_settings`` on the very next unrelated
 #: save — reproduced empirically by the independent Task-6 reviewer for
 #: both.
@@ -1265,25 +1580,12 @@ def _with_spacing(section_key: str, validate_fn, default_fn):
 #: mutation path validates; a future member with ``preserve_unmanaged=False``
 #: would silently lose its marker on the R4 path before
 #: ``_with_appearance_overrides`` below ever ran.
-APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS = frozenset({
-    "hero_banner",
-    # Phase 3 (V01) — brand_carousel joins the allowlist so its validator
-    # stops silently dropping the ``appearance_overrides`` block. The block
-    # it needs to carry is the internal explicit-local-variant marker
-    # (``variant_explicit``), NOT the client-writable typography contract —
-    # see ``_with_appearance_overrides`` for how the trusted marker is
-    # preserved without ever being accepted from raw client payload.
-    "brand_carousel",
-    # Phase 3 Task 6 -- Collection proves the same server-owned
-    # explicit-local-variant preservation contract for tile_style.
-    "collection_tiles",
-} | CARD_AWARE_SECTION_KEYS)
 
 
-def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
+def _with_appearance_overrides(capabilities: frozenset, validate_fn, default_fn):
     """Wraps (validate_settings, default_settings) with support for the
     ``appearance_overrides`` block — ONLY for
-    ``APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS``. Required because
+    the ``appearance_override`` capability. Required because
     ``settings_schema.clean_section_schema_patch`` already schema-cleans
     ``appearance_overrides`` (see ``_clean_field_value``), but that cleaned
     key would otherwise be silently dropped by
@@ -1296,7 +1598,7 @@ def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
     pre-Task-7 shape — sparse inheritance from Global Design is the whole
     point, not "every Hero secretly carries an empty override forever."
     """
-    if section_key not in APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS:
+    if "appearance_override" not in capabilities:
         return validate_fn, default_fn
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1348,15 +1650,11 @@ def _with_appearance_overrides(section_key: str, validate_fn, default_fn):
 #: Phase 8 P0-5 — انواعی که «عرضِ محتوا» برایشان معنایِ بصریِ روشنی
 #: دارد (بلوک‌هایِ تصویری/بنری کاملاً عرض‌گیر) — یک allowlist صریح،
 #: دقیقاً همان الگویِ بالا.
-LAYOUT_WIDTH_AWARE_SECTION_KEYS = frozenset({
-    "hero_banner", "image_slider", "image_text", "single_banner", "multi_banner",
-})
 #: زیرمجموعه‌ای از بالا که «ارتفاع» هم برایشان معنا دارد — فقط
 #: اسلایدرها (ارتفاعِ ثابتِ ``.hero-inner``)؛ برایِ بقیه (image_text/
 #: بنرها) ارتفاع یک مفهومِ محتوامحورِ متغیر است، نه یک بلوکِ با
 #: ارتفاعِ ثابتِ قابلِ‌تنظیم — نمایشِ این کنترل برایِ آن‌ها گمراه‌کننده
-#: بود (دقیقاً همان درسِ ``COLUMN_VISUAL_SECTION_KEYS`` در بالا).
-LAYOUT_HEIGHT_AWARE_SECTION_KEYS = frozenset({"hero_banner", "image_slider"})
+#: بود (دقیقاً همان درسِ the ``columns_visual`` capability در بالا).
 
 CONTENT_WIDTH_CHOICES = ("narrow", "standard", "full")
 HEIGHT_CHOICES = ("compact", "standard", "tall")
@@ -1383,13 +1681,13 @@ def default_layout_settings(*, supports_height: bool) -> dict:
     return validate_layout_settings(None, supports_height=supports_height)
 
 
-def _with_layout(section_key: str, validate_fn, default_fn):
+def _with_layout(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
-    بلوکِ ``layout`` می‌پوشاند — فقط برایِ ``LAYOUT_WIDTH_AWARE_SECTION_KEYS``.
+    بلوکِ ``layout`` می‌پوشاند — فقط برایِ the ``layout_width`` capability.
     دقیقاً همان الگویِ ``_with_card``/``_with_responsive`` بالا."""
-    if section_key not in LAYOUT_WIDTH_AWARE_SECTION_KEYS:
+    if "layout_width" not in capabilities:
         return validate_fn, default_fn
-    supports_height = section_key in LAYOUT_HEIGHT_AWARE_SECTION_KEYS
+    supports_height = "layout_height" in capabilities
 
     def wrapped_validate(raw: dict) -> dict:
         if not isinstance(raw, dict):
@@ -1410,15 +1708,10 @@ def _with_layout(section_key: str, validate_fn, default_fn):
 #: انواعی که یک بلوکِ «حرکت» (Phase 3: کتابخانه‌ی بلوک‌هایِ صفحه‌ی
 #: اصلی) دارند — جلوه‌ی ورود/hover که کاملاً config-محور است (CSS در
 #: storefront_builder.css)، نه کدِ Renderer/family. عمداً یک allowlist
-#: صریح است (مثلِ ``COLUMN_AWARE_SECTION_KEYS``/``DESTINATION_AWARE_SECTION_KEYS``
+#: صریح است (مثلِ the ``columns`` capability/the ``destination`` capability
 #: بالا)، نه پیش‌فرضِ همه‌ی انواع — بعضی انواع (rich_text/faq/testimonials/
 #: quick_links/video_section/trust_features/...) معنایِ بصریِ روشنی برایِ
 #: hover/ورودِ متحرک ندارند.
-MOTION_AWARE_SECTION_KEYS = frozenset({
-    "hero_banner", "image_slider", "single_banner", "multi_banner",
-    "category_grid", "brand_carousel", "product_section", "collection_tiles",
-    "image_text",
-})
 
 #: enum بستهٔ سبکِ حرکت — ``none`` پیش‌فرض (رفتارِ فعلی، بدونِ تغییر).
 MOTION_CHOICES = ("none", "fade", "slide", "subtle_zoom", "hover_lift")
@@ -1446,11 +1739,11 @@ def default_motion_settings() -> dict:
     return {"style": "none"}
 
 
-def _with_motion(section_key: str, validate_fn, default_fn):
+def _with_motion(capabilities: frozenset, validate_fn, default_fn):
     """هر جفتِ (validate_settings, default_settings) موجود را با پشتیبانیِ
-    بلوکِ ``motion`` می‌پوشاند — فقط برایِ کلیدهایِ ``MOTION_AWARE_SECTION_KEYS``.
+    بلوکِ ``motion`` می‌پوشاند — فقط برایِ کلیدهایِ the ``motion`` capability.
     دقیقاً همان الگویِ ``_with_responsive``/``_with_destination`` بالا."""
-    if section_key not in MOTION_AWARE_SECTION_KEYS:
+    if "motion" not in capabilities:
         return validate_fn, default_fn
 
     def wrapped_validate(raw: dict) -> dict:
@@ -1486,7 +1779,7 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: section that doesn't read it. Keeping the key in one shared validator
 #: (rather than forking a second near-identical function) is the same
 #: reuse choice already made for every other slider-level field.
-HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase")
+HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide")
 
 #: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
 #: for the shared hero/image slider. ``cut`` is the historical, byte-identical
@@ -1698,7 +1991,7 @@ _MAX_SECTION_TITLE_LENGTH = 60
 #: compact flat rail (small image, short label, no card chrome) distinct
 #: from ``image_strip``'s own CSS (which ``dense_marketplace`` already
 #: uses) so that template's rendering stays completely untouched.
-CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts")
+CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles")
 
 
 def _validate_category_grid_settings(raw: dict) -> dict:
@@ -1724,7 +2017,20 @@ def _validate_category_grid_settings(raw: dict) -> dict:
     except (TypeError, ValueError):
         raise CategoryGridSettingsError("تعداد دسته‌بندی باید عدد باشد") from None
     item_limit = max(2, min(12, item_limit))
-    return {"title": title, "display_mode": display_mode, "category_ids": category_ids, "item_limit": item_limit}
+    cleaned = {"title": title, "display_mode": display_mode, "category_ids": category_ids, "item_limit": item_limit}
+    # Optional presentation (written only when set): reserve this many visible positions; positions without a
+    # category render as neutral empty slots (never an invented category).
+    try:
+        min_slots = int(raw.get("min_slots", 0))
+    except (TypeError, ValueError):
+        min_slots = 0
+    if min_slots > 0:
+        cleaned["min_slots"] = max(2, min(12, min_slots))
+    # Optional auto-pick order (written only when not the historical default): which eligible categories fill
+    # the grid when the merchant has not picked any by hand — see services.category_selection.
+    if raw.get("category_source") in CATEGORY_SOURCE_MODES[1:]:
+        cleaned["category_source"] = raw["category_source"]
+    return cleaned
 
 
 def default_category_grid_settings() -> dict:
@@ -1754,6 +2060,19 @@ CATEGORY_GRID_SCHEMA = SettingsSchema(fields=(
         "item_limit", "حداکثر تعداد", "integer", "advanced",
         default=12, min_value=2, max_value=12,
     ),
+    SettingsField(
+        "min_slots", "حداقل جایگاه‌های نمایشی", "integer", "advanced",
+        default=0, min_value=0, max_value=12,
+    ),
+    SettingsField(
+        "category_source", "ترتیب انتخاب خودکار دسته‌ها", "choice", "advanced", default="top_level",
+        choices=(
+            ("top_level", "فقط دسته‌های سطح اول"),
+            ("top_then_descendants", "ابتدا سطح اول، سپس زیردسته‌ها"),
+            ("all", "همه دسته‌ها به ترتیب درختی"),
+            ("leaf", "فقط دسته‌های نهایی (بدون زیردسته)"),
+        ),
+    ),
 ))
 
 
@@ -1779,11 +2098,21 @@ def _validate_trust_feature_item(raw) -> dict:
     title = str(raw.get("title", "")).strip()[:_MAX_TRUST_FEATURE_TEXT_LENGTH]
     if not title:
         raise TrustFeaturesSettingsError("عنوانِ آیتمِ ردیفِ اعتماد نمی‌تواند خالی باشد")
-    return {
+    claim = str(raw.get("claim", "") or "").strip()
+    if claim not in {"", "payment", "shipping", "pickup"}:
+        claim = ""
+    verified = raw.get("verified") is True or str(raw.get("verified", "")).lower() in ("true", "1", "on")
+    cleaned = {
         "icon": str(raw.get("icon", "")).strip()[:_MAX_TRUST_FEATURE_ICON_LENGTH],
         "title": title,
         "subtitle": str(raw.get("subtitle", "")).strip()[:_MAX_TRUST_FEATURE_TEXT_LENGTH],
     }
+    # FOLLOWUP-10: only persisted when set, so legacy items keep their exact stored shape.
+    if claim:
+        cleaned["claim"] = claim
+    if verified:
+        cleaned["verified"] = True
+    return cleaned
 
 
 def validate_trust_features_settings(raw: dict) -> dict:
@@ -1815,6 +2144,17 @@ TRUST_FEATURES_SCHEMA = SettingsSchema(fields=(
             SettingsField("icon", "آیکون", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_ICON_LENGTH),
             SettingsField("title", "عنوان", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_TEXT_LENGTH),
             SettingsField("subtitle", "زیرعنوان", "text", "basic", default="", max_length=_MAX_TRUST_FEATURE_TEXT_LENGTH),
+            # FOLLOWUP-10: ادعای عملیاتی به وضعیتِ واقعیِ فروشگاه گره می‌خورد؛ ادعای دیگر فقط با «تأیید فروشنده» عمومی می‌شود.
+            SettingsField(
+                "claim", "نوع ادعا (برای نمایش فقط وقتی فعال است)", "choice", "basic", default="",
+                choices=(
+                    ("", "خودکار از روی عنوان / متن آزاد"),
+                    ("payment", "پرداخت (درگاه فعال لازم است)"),
+                    ("shipping", "ارسال (روش ارسال فعال لازم است)"),
+                    ("pickup", "تحویل حضوری (روش تحویل حضوری فعال لازم است)"),
+                ),
+            ),
+            SettingsField("verified", "تأیید می‌کنم این ادعا درست است (برای ادعاهای غیرعملیاتی)", "boolean", "basic", default=False),
         ),
     ),
 ))
@@ -1880,13 +2220,10 @@ AMAZING_OFFERS_SCHEMA = SettingsSchema(fields=(
 #: جدید «مطالب وبلاگ» (طبقِ نقشه‌ی V5→Universal Block، ردیفِ «Blog»: نه
 #: هیچ بلوکِ موجودی این نقش را پوشش می‌دهد، نه توجیهی برایِ بیش‌سازی
 #: هست — طبقِ الزامِ صریحِ کار «keep simple, do not overbuild»).
-#: ``apps.blog.models.BlogPost`` سراسریِ پلتفرم است (بدونِ FK به Store —
-#: واقعیتی از قبل موجود، نه چیزی که این چکپوینت اصلاح می‌کند)؛ این بخش
-#: صرفاً جدیدترین مطالبِ منتشرشده را نمایش می‌دهد. صفحه‌ی جزئیاتِ مطلب
-#: هنوز در پروژه وجود ندارد (``apps/blog`` فاقدِ url/view است) — دقیقاً
-#: همان محدودیتی که تمپلیتِ قدیمیِ ``catalog/home.html`` هم داشت
-#: (``href="#"``)؛ ساختنِ آن صفحه خارج از دامنه‌ی این فاز (Homepage
-#: فقط) است.
+#: مطلب جدید مالک یک Store است؛ مطالب قدیمیِ عمداً سراسری (store=NULL)
+#: برای سازگاری محفوظ می‌مانند. کوئری مشترک با صفحهٔ مجله از
+#: ``apps.blog.services.published_posts_for_store`` می‌آید؛ لینک واقعی از ``apps.blog``
+#: و پوسته‌ی یکپارچه‌ی عمومی می‌آید.
 _MIN_BLOG_POST_ITEMS = 3
 _MAX_BLOG_POST_ITEMS = 6
 _DEFAULT_BLOG_POST_ITEMS = 5
@@ -1905,7 +2242,19 @@ def validate_blog_posts_settings(raw: dict) -> dict:
         raise BlogPostsSettingsError("تعدادِ مطالب باید عدد باشد") from None
     item_limit = max(_MIN_BLOG_POST_ITEMS, min(_MAX_BLOG_POST_ITEMS, item_limit))
     title = str(raw.get("title", "")).strip()[:_MAX_SECTION_TITLE_LENGTH]
-    return {"item_limit": item_limit, "title": title}
+    cleaned = {"item_limit": item_limit, "title": title}
+    # Optional: reserve this many visible card positions in the panel presentation (empty positions stay neutral).
+    try:
+        min_slots = int(raw.get("min_slots", 0))
+    except (TypeError, ValueError):
+        min_slots = 0
+    if min_slots > 0:
+        cleaned["min_slots"] = max(_MIN_BLOG_POST_ITEMS, min(_MAX_BLOG_POST_ITEMS, min_slots))
+    # Optional presentation (written only when non-default): ``panel_carousel`` = one surface panel holding a
+    # single row of square-image cards with a category badge and an action pill.
+    if raw.get("style") == "panel_carousel":
+        cleaned["style"] = "panel_carousel"
+    return cleaned
 
 
 def default_blog_posts_settings() -> dict:
@@ -1923,6 +2272,14 @@ BLOG_POSTS_SCHEMA = SettingsSchema(fields=(
         default=_DEFAULT_BLOG_POST_ITEMS,
         min_value=_MIN_BLOG_POST_ITEMS, max_value=_MAX_BLOG_POST_ITEMS,
     ),
+    SettingsField(
+        "style", "نوع نمایش", "choice", "basic", default="grid",
+        choices=(("grid", "گرید"), ("panel_carousel", "پنل با ردیف کارت")),
+    ),
+    SettingsField(
+        "min_slots", "حداقل جایگاه‌های نمایشی", "integer", "advanced",
+        default=0, min_value=0, max_value=_MAX_BLOG_POST_ITEMS,
+    ),
 ))
 
 
@@ -1938,7 +2295,7 @@ def _validate_brand_carousel_settings(raw: dict) -> dict:
     """چکپوینتِ ۱۱: همان ارتقایِ ``category_grid`` برایِ ``brand_carousel``
     — ``brand_ids`` خالی یعنی رفتارِ قبل از این چکپوینت (همه‌ی برندهایِ
     فعالِ فروشگاه) دست‌نخورده می‌ماند. ``destination`` (لینکِ اختیاریِ
-    «مشاهده همه») از طریقِ ``DESTINATION_AWARE_SECTION_KEYS`` عمومی
+    «مشاهده همه») از طریقِ the ``destination`` capability عمومی
     اضافه می‌شود، نه اینجا — دقیقاً همان زیرساختِ لینکِ استانداردِ کارِ
     ۱."""
     if not isinstance(raw, dict):
@@ -2175,7 +2532,12 @@ def _validate_testimonials_settings(raw: dict) -> dict:
         if not name or not quote:
             continue
         items.append({"name": name, "quote": quote, "role": role})
-    return {"title": title, "items": items}
+    cleaned = {"title": title, "items": items}
+    # Optional presentation (written only when non-default): ``avatar_grid`` = two-column review cards
+    # with a round avatar chip beside the quote.
+    if raw.get("style") == "avatar_grid":
+        cleaned["style"] = "avatar_grid"
+    return cleaned
 
 
 def default_testimonials_settings() -> dict:
@@ -2273,6 +2635,183 @@ def default_newsletter_settings() -> dict:
     return {"title": "عضویت در خبرنامه", "subtitle": "", "button_label": "عضویت"}
 
 
+class SurfacePanelSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «پنل سطح» نامعتبر است."""
+
+
+_SURFACE_PANEL_MIN_HEIGHT = 40
+_SURFACE_PANEL_MAX_HEIGHT = 600
+_SURFACE_PANEL_DEFAULT_HEIGHT = 160
+
+
+def _validate_surface_panel_settings(raw: dict) -> dict:
+    """A structural, content-free surface (rounded white panel with a controlled minimum height).
+
+    It reserves a visible area in the page composition — for example one half of a pair row or one box of a slot
+    row that the merchant fills later — and never renders text, products or actions of its own."""
+    if not isinstance(raw, dict):
+        raise SurfacePanelSettingsError("تنظیمات باید یک شیء JSON باشد")
+    try:
+        min_height = int(raw.get("min_height", _SURFACE_PANEL_DEFAULT_HEIGHT))
+    except (TypeError, ValueError):
+        raise SurfacePanelSettingsError("حداقل ارتفاع باید عدد باشد") from None
+    return {"min_height": max(_SURFACE_PANEL_MIN_HEIGHT, min(_SURFACE_PANEL_MAX_HEIGHT, min_height))}
+
+
+def default_surface_panel_settings() -> dict:
+    return {"min_height": _SURFACE_PANEL_DEFAULT_HEIGHT}
+
+
+SURFACE_PANEL_SCHEMA = SettingsSchema(fields=(
+    SettingsField(
+        "min_height", "حداقل ارتفاع (پیکسل)", "integer", "basic",
+        default=_SURFACE_PANEL_DEFAULT_HEIGHT,
+        min_value=_SURFACE_PANEL_MIN_HEIGHT, max_value=_SURFACE_PANEL_MAX_HEIGHT,
+    ),
+))
+
+
+class DecorativeStripSettingsError(ValueError):
+    """شکلِ خامِ تنظیماتِ «نوار تزئینی» نامعتبر است."""
+
+
+DECORATIVE_STRIP_BACKGROUND_MODES = ("solid", "palette", "image", "pattern")
+DECORATIVE_STRIP_IMAGE_FITS = ("cover", "contain", "stretch", "auto")
+DECORATIVE_STRIP_IMAGE_REPEATS = ("no-repeat", "repeat", "repeat-x", "repeat-y")
+DECORATIVE_STRIP_ALIGNMENTS = ("start", "center", "end")
+_DECORATIVE_STRIP_HEIGHT_LIMITS = (8, 400)
+_DECORATIVE_STRIP_DEFAULTS = {
+    "enabled": True, "desktop_height": 52, "tablet_height": 44, "mobile_height": 36,
+    "background_mode": "palette", "background_color": "token:tone-1", "foreground_color": "",
+    "image_media_asset_id": None, "image_fit": "cover", "image_position_x": 50, "image_position_y": 50,
+    "image_repeat": "no-repeat", "pattern_slug": "", "overlay_color": "", "overlay_opacity": 0,
+    "radius": 8, "border_width": 0, "border_color": "", "shadow_enabled": False, "shadow_color": "",
+    "shadow_blur": 12, "bleed": False, "alignment": "center", "optional_text": "",
+    "visible_desktop": True, "visible_tablet": True, "visible_mobile": True,
+}
+_DECORATIVE_STRIP_COLOR_KEYS = ("background_color", "foreground_color", "overlay_color", "border_color", "shadow_color")
+_DECORATIVE_STRIP_BOOL_KEYS = ("enabled", "shadow_enabled", "bleed", "visible_desktop", "visible_tablet", "visible_mobile")
+_DECORATIVE_STRIP_INT_LIMITS = {
+    "desktop_height": _DECORATIVE_STRIP_HEIGHT_LIMITS, "tablet_height": _DECORATIVE_STRIP_HEIGHT_LIMITS,
+    "mobile_height": _DECORATIVE_STRIP_HEIGHT_LIMITS, "image_position_x": (0, 100), "image_position_y": (0, 100),
+    "overlay_opacity": (0, 100), "radius": (0, 40), "border_width": (0, 8), "shadow_blur": (0, 60),
+}
+_MAX_DECORATIVE_STRIP_TEXT_LENGTH = 120
+
+
+def _validate_decorative_strip_settings(raw: dict) -> dict:
+    """A purely decorative, content-light strip (generic engine primitive).
+
+    Persisted flat and sparse: only keys that differ from the primitive's own defaults are stored, so a
+    strip is exactly its defaults until a merchant (or a Ready Template recipe) overrides something. Colours
+    are semantic (palette role | custom hex | automatic); the image is a Store media asset id whose ownership
+    is enforced at render time."""
+    from .semantic_colors import SemanticColorError, clean_semantic_color
+
+    if not isinstance(raw, dict):
+        raise DecorativeStripSettingsError("تنظیمات باید یک شیء JSON باشد")
+    defaults = _DECORATIVE_STRIP_DEFAULTS
+    cleaned: dict = {}
+    for key, default in defaults.items():
+        value = raw.get(key, default)
+        if key in _DECORATIVE_STRIP_BOOL_KEYS:
+            value = _truthy_setting(value) if value is not None else default
+        elif key in _DECORATIVE_STRIP_INT_LIMITS:
+            low, high = _DECORATIVE_STRIP_INT_LIMITS[key]
+            try:
+                value = max(low, min(high, int(str(value).translate(_ASCII_DIGITS)))) if value not in (None, "") else default
+            except (TypeError, ValueError):
+                raise DecorativeStripSettingsError("مقادیر عددی نوار تزئینی باید عدد باشند") from None
+        elif key in _DECORATIVE_STRIP_COLOR_KEYS:
+            try:
+                value = clean_semantic_color(value)
+            except SemanticColorError as exc:
+                raise DecorativeStripSettingsError(str(exc)) from exc
+        elif key == "background_mode":
+            value = value if value in DECORATIVE_STRIP_BACKGROUND_MODES else default
+        elif key == "image_fit":
+            value = value if value in DECORATIVE_STRIP_IMAGE_FITS else default
+        elif key == "image_repeat":
+            value = value if value in DECORATIVE_STRIP_IMAGE_REPEATS else default
+        elif key == "alignment":
+            value = value if value in DECORATIVE_STRIP_ALIGNMENTS else default
+        elif key == "pattern_slug":
+            value = str(value or "").strip()
+            value = value if value in PATTERN_REGISTRY else ""
+        elif key == "image_media_asset_id":
+            if value in (None, "", "null"):
+                value = None
+            else:
+                try:
+                    value = int(str(value))
+                except (TypeError, ValueError):
+                    raise DecorativeStripSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است") from None
+                if value <= 0:
+                    raise DecorativeStripSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است")
+        elif key == "optional_text":
+            value = str(value or "").strip()[:_MAX_DECORATIVE_STRIP_TEXT_LENGTH]
+        if value != default:
+            cleaned[key] = value
+    # A tablet/mobile height that equals its own default is not stored, but an explicit desktop height always is.
+    return cleaned
+
+
+def default_decorative_strip_settings() -> dict:
+    return {}
+
+
+def _decorative_strip_schema_fields() -> tuple:
+    d = _DECORATIVE_STRIP_DEFAULTS
+    fields = [
+        SettingsField("enabled", "نمایش نوار", "boolean", "basic", default=d["enabled"]),
+        SettingsField("desktop_height", "ارتفاع در دسکتاپ (px)", "integer", "basic", default=d["desktop_height"], min_value=8, max_value=400),
+        SettingsField("tablet_height", "ارتفاع در تبلت (px)", "integer", "basic", default=d["tablet_height"], min_value=8, max_value=400),
+        SettingsField("mobile_height", "ارتفاع در موبایل (px)", "integer", "basic", default=d["mobile_height"], min_value=8, max_value=400),
+        SettingsField(
+            "background_mode", "نوع پس‌زمینه", "choice", "basic", default=d["background_mode"],
+            choices=(("solid", "رنگ ساده"), ("palette", "رنگ از پالت"), ("image", "تصویر"), ("pattern", "الگو")),
+        ),
+        SettingsField("background_color", "رنگ پس‌زمینه", "color", "basic", default=d["background_color"]),
+        SettingsField("foreground_color", "رنگ متن", "color", "basic", default=d["foreground_color"]),
+        SettingsField("image_media_asset_id", "تصویر نوار", "media", "basic", default=None),
+        SettingsField(
+            "image_fit", "نحوه جاگیری تصویر", "choice", "advanced", default=d["image_fit"],
+            choices=(("cover", "پوشش کامل"), ("contain", "کامل دیده شود"), ("stretch", "کشیده"), ("auto", "اندازه اصلی")),
+        ),
+        SettingsField("image_position_x", "موقعیت افقی تصویر (٪)", "integer", "advanced", default=d["image_position_x"], min_value=0, max_value=100),
+        SettingsField("image_position_y", "موقعیت عمودی تصویر (٪)", "integer", "advanced", default=d["image_position_y"], min_value=0, max_value=100),
+        SettingsField(
+            "image_repeat", "تکرار تصویر", "choice", "advanced", default=d["image_repeat"],
+            choices=(("no-repeat", "بدون تکرار"), ("repeat", "تکرار"), ("repeat-x", "تکرار افقی"), ("repeat-y", "تکرار عمودی")),
+        ),
+        SettingsField(
+            "pattern_slug", "الگو", "choice", "advanced", default="",
+            choices=(("", "— بدون الگو —"), *tuple(PATTERN_REGISTRY.items())),
+        ),
+        SettingsField("overlay_color", "رنگ لایه روی تصویر", "color", "advanced", default=d["overlay_color"]),
+        SettingsField("overlay_opacity", "شفافیت لایه (٪)", "integer", "advanced", default=d["overlay_opacity"], min_value=0, max_value=100),
+        SettingsField("radius", "گردیِ گوشه‌ها (px)", "integer", "advanced", default=d["radius"], min_value=0, max_value=40),
+        SettingsField("border_width", "ضخامت حاشیه (px)", "integer", "advanced", default=d["border_width"], min_value=0, max_value=8),
+        SettingsField("border_color", "رنگ حاشیه", "color", "advanced", default=d["border_color"]),
+        SettingsField("shadow_enabled", "سایه", "boolean", "advanced", default=d["shadow_enabled"]),
+        SettingsField("shadow_color", "رنگ سایه", "color", "advanced", default=d["shadow_color"]),
+        SettingsField("shadow_blur", "شدت پخش سایه (px)", "integer", "advanced", default=d["shadow_blur"], min_value=0, max_value=60),
+        SettingsField("bleed", "تا لبه‌ی صفحه ادامه یابد", "boolean", "advanced", default=d["bleed"]),
+        SettingsField(
+            "alignment", "تراز متن", "choice", "advanced", default=d["alignment"],
+            choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
+        ),
+        SettingsField("optional_text", "متن اختیاری", "text", "advanced", default="", max_length=_MAX_DECORATIVE_STRIP_TEXT_LENGTH),
+        SettingsField("visible_desktop", "نمایش در دسکتاپ", "boolean", "advanced", default=True),
+        SettingsField("visible_tablet", "نمایش در تبلت", "boolean", "advanced", default=True),
+        SettingsField("visible_mobile", "نمایش در موبایل", "boolean", "advanced", default=True),
+    ]
+    return tuple(fields)
+
+
+DECORATIVE_STRIP_SCHEMA = SettingsSchema(fields=_decorative_strip_schema_fields())
+
+
 #: R4 Task 6 (Group D) — declarative counterpart of
 #: ``_validate_newsletter_settings``.
 NEWSLETTER_SCHEMA = SettingsSchema(fields=(
@@ -2319,7 +2858,12 @@ def _validate_image_text_settings(raw: dict) -> dict:
         except ValidationError as exc:
             raise ValueError("; ".join(exc.messages)) from exc
     position = raw.get("image_position") if raw.get("image_position") in ("left", "right") else "right"
-    return {"title": title, "body_html": body_html, "image_url": image_url, "image_position": position}
+    cleaned = {"title": title, "body_html": body_html, "image_url": image_url, "image_position": position}
+    # Optional presentation: ``plain`` = flat white split block (image panel + text + action) instead
+    # of the cream card. Written only when non-default so existing sections stay byte-identical.
+    if raw.get("block_style") == "plain":
+        cleaned["block_style"] = "plain"
+    return cleaned
 
 
 #: Task 6 (Group B) — "simple auto-source catalog families, no
@@ -2449,7 +2993,7 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 #: state — Django's ``|default:'default'`` template filter treats an
 #: empty string exactly like an absent key, so this is byte-identical to
 #: today's un-set behaviour, never a new "promo-4" default).
-MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide")
+MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide", "tile-4")
 #: Merchant-facing names for the closed enum above (display only; the stored
 #: value stays the enum key).
 MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
@@ -2459,6 +3003,7 @@ MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
     "strip": "نوار باریک",
     "atelier-duo": "دو قاب آتلیه",
     "atelier-wide": "قاب عریض آتلیه",
+    "tile-4": "چهار کاشی تبلیغاتی (تقریباً مربع)",
 }
 
 
@@ -2544,6 +3089,7 @@ SECTION_LIBRARY_CATEGORIES = ["محصولات", "تصاویر و تبلیغات"
 _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "announcement_bar": SectionDefinition(
         key="announcement_bar", label_fa="نوار اعلان", icon="megaphone",
+        capabilities=frozenset(),
         template_name="storefront_builder/sections/announcement_bar.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, category_fa="ساختار",
@@ -2557,6 +3103,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "hero_banner": SectionDefinition(
         key="hero_banner", label_fa="اسلایدر اصلی", icon="image",
+        capabilities=frozenset({
+            "appearance_override", "background", "layout_height", "layout_width", "motion", "spacing", "design_image_position"}),
         template_name="storefront_builder/sections/hero_banner.html",
         validate_settings=_validate_slider_settings, default_settings=default_slider_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
@@ -2591,6 +3139,12 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
                 key="luxury_showcase", label_fa="ویترین لوکس تیره",
                 renderer="storefront_builder/sections/hero_banner_luxury.html",
             ),
+            # Wide poster slide: a contained, softly-rounded ~1.9:1 canvas with edge arrows;
+            # the slide artwork carries the message (same HeroSlide data as every hero).
+            VariantDefinition(
+                key="poster_wide", label_fa="پوستر عریض",
+                renderer="storefront_builder/sections/hero_banner_poster.html",
+            ),
         ),
         default_variant="overlay", variant_setting_key="hero_style",
         settings_schema=HERO_BANNER_SCHEMA,
@@ -2610,6 +3164,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # Template may also adopt, never a template-key branch.
     "fashion_lifestyle_hero": SectionDefinition(
         key="fashion_lifestyle_hero", label_fa="هیرو کمپینی (سبک زندگی)", icon="image",
+        capabilities=frozenset(),
         template_name="storefront_builder/sections/fashion_lifestyle_hero.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True,
@@ -2617,6 +3172,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "image_slider": SectionDefinition(
         key="image_slider", label_fa="اسلایدر تصویر", icon="images",
+        capabilities=frozenset({
+            "background", "layout_height", "layout_width", "motion", "spacing", "design_image_position"}),
         template_name="storefront_builder/sections/image_slider.html",
         validate_settings=_validate_slider_settings, default_settings=default_slider_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
@@ -2624,6 +3181,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "single_banner": SectionDefinition(
         key="single_banner", label_fa="بنر تکی", icon="image",
+        capabilities=frozenset({
+            "background", "layout_width", "motion", "spacing",
+        }),
         template_name="storefront_builder/sections/single_banner.html",
         # Task 6 (Group C) disposition: FIXED/STATIC, deliberately. Its
         # render context (``_single_banner_context``) reads only the
@@ -2639,6 +3199,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "multi_banner": SectionDefinition(
         key="multi_banner", label_fa="ردیف چند بنری", icon="layout-grid",
+        capabilities=frozenset({
+            "background", "columns", "columns_visual", "layout_width", "motion", "spacing", "design_image_position"}),
         template_name="storefront_builder/sections/multi_banner.html",
         # Task 6 (Group C) — the U1A finding above is now resolved: see
         # ``_validate_multi_banner_settings``/``MULTI_BANNER_SCHEMA``.
@@ -2657,6 +3219,10 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "category_grid": SectionDefinition(
         key="category_grid", label_fa="گرید دسته‌بندی", icon="grid",
+        capabilities=frozenset({
+            "background", "columns", "design_align", "design_columns", "design_frame", "design_gap",
+            "design_image_fit", "design_image_position", "design_item_width", "design_min_height",
+            "design_text", "design_visibility", "motion", "resource_source", "spacing", "design_image_ratio"}),
         template_name="storefront_builder/sections/category_grid.html",
         validate_settings=_validate_category_grid_settings, default_settings=default_category_grid_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
@@ -2690,17 +3256,32 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             # media, bold labels over imagery, no card chrome.
             VariantDefinition(key="atelier_mosaic", label_fa="موزاییک تصویری آتلیه"),
             VariantDefinition(key="luxury_shortcuts", label_fa="میانبرهای لوکس تصویری"),
+            # Flat rounded pastel tiles with the label beneath each one.
+            VariantDefinition(key="pastel_tiles", label_fa="کاشی‌های پاستلی"),
+            # Round grey-backed media with bold labels (stationery/art discovery rail).
+            VariantDefinition(key="grey_circles", label_fa="دایره‌های خاکستری"),
+            # Brand-colour rounded squares carrying the category glyph (monochrome),
+            # label below — the icon-shortcut rail of beauty/retail storefronts.
+            VariantDefinition(key="icon_tiles", label_fa="کاشی‌های آیکنی"),
+            # Large gradient editorial tiles: bold category name + representative
+            # media anchored to the bottom edge.
+            VariantDefinition(key="gradient_tiles", label_fa="کاشی‌های گرادیانی بزرگ"),
         ),
         default_variant="grid", variant_setting_key="display_mode",
     ),
     "featured_products": SectionDefinition(
         key="featured_products", label_fa="محصولات ویژه", icon="star",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "columns", "columns_visual", "spacing",
+        }),
         template_name="storefront_builder/sections/featured_products.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         duplicable=True, removable=True, category_fa="محصولات",
     ),
     "newest_products": SectionDefinition(
         key="newest_products", label_fa="جدیدترین محصولات", icon="sparkles",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "columns", "columns_visual", "spacing", "design_image_fit", "design_image_position", "design_image_ratio", "design_image_zoom"}),
         template_name="storefront_builder/sections/newest_products.html",
         validate_settings=_validate_newest_products_settings, default_settings=default_newest_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
@@ -2708,6 +3289,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "best_sellers": SectionDefinition(
         key="best_sellers", label_fa="پرفروش‌ترین‌ها", icon="trending-up",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "columns", "columns_visual", "spacing", "design_image_fit", "design_image_position", "design_image_ratio", "design_image_zoom"}),
         template_name="storefront_builder/sections/best_sellers.html",
         validate_settings=_validate_best_sellers_settings, default_settings=default_best_sellers_settings,
         duplicable=True, removable=True, category_fa="محصولات",
@@ -2715,6 +3298,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "discounted_products": SectionDefinition(
         key="discounted_products", label_fa="محصولات تخفیف‌دار", icon="percent",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "columns", "columns_visual", "spacing", "design_image_fit", "design_image_position", "design_image_ratio", "design_image_zoom"}),
         template_name="storefront_builder/sections/discounted_products.html",
         validate_settings=_validate_discounted_products_settings, default_settings=default_discounted_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
@@ -2722,6 +3307,10 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "amazing_offers": SectionDefinition(
         key="amazing_offers", label_fa="پیشنهادهای شگفت‌انگیز", icon="zap",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "design_buttons", "design_frame", "design_min_height",
+            "design_text", "design_visibility", "internal_surface", "spacing", "design_image_fit", "design_image_position",
+            "design_image_zoom"}),
         template_name="storefront_builder/sections/amazing_offers.html",
         validate_settings=validate_amazing_offers_settings, default_settings=default_amazing_offers_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محصولات",
@@ -2729,6 +3318,10 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "brand_carousel": SectionDefinition(
         key="brand_carousel", label_fa="کاروسل برندها", icon="award",
+        capabilities=frozenset({
+            "appearance_override", "background", "columns", "design_align", "design_frame", "design_gap",
+            "design_item_width", "design_min_height", "design_text", "design_visibility", "destination",
+            "internal_surface", "motion", "resource_source", "spacing", "design_image_fit", "design_image_position"}),
         template_name="storefront_builder/sections/brand_carousel.html",
         validate_settings=_validate_brand_carousel_settings, default_settings=default_brand_carousel_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
@@ -2745,6 +3338,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "promo_cards": SectionDefinition(
         key="promo_cards", label_fa="کارت‌های تبلیغاتی", icon="layout",
+        capabilities=frozenset({
+            "background", "columns", "spacing",
+        }),
         template_name="storefront_builder/sections/promo_cards.html",
         validate_settings=_validate_promo_cards_settings, default_settings=default_promo_cards_settings,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
@@ -2752,6 +3348,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "rich_text": SectionDefinition(
         key="rich_text", label_fa="متن", icon="text",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/rich_text.html",
         validate_settings=_validate_rich_text_settings, default_settings=lambda: {"body_html": ""},
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -2760,6 +3359,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "image_text": SectionDefinition(
         key="image_text", label_fa="متن و تصویر", icon="image-plus",
+        capabilities=frozenset({
+            "background", "destination", "layout_width", "motion", "spacing", "design_image_fit", "design_image_position"}),
         template_name="storefront_builder/sections/image_text.html",
         validate_settings=_validate_image_text_settings,
         default_settings=lambda: {"title": "", "body_html": "", "image_url": "", "image_position": "right"},
@@ -2777,6 +3378,11 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "blog_posts": SectionDefinition(
         key="blog_posts", label_fa="مطالب وبلاگ", icon="newspaper",
+        capabilities=frozenset({
+            "design_align", "design_buttons", "design_columns", "design_frame", "design_gap", "design_image_fit",
+            "design_image_ratio", "design_min_height", "design_text", "design_visibility",
+            "internal_surface",
+        }),
         template_name="storefront_builder/sections/blog_posts.html",
         validate_settings=validate_blog_posts_settings, default_settings=default_blog_posts_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -2784,6 +3390,13 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "product_section": SectionDefinition(
         key="product_section", label_fa="بخش محصولات", icon="shopping-bag",
+        capabilities=frozenset({
+            "appearance_override", "background", "background_primary", "card", "columns", "columns_visual",
+            "design_align", "design_buttons", "design_frame", "design_image_fit",
+            "design_image_position", "design_image_ratio", "design_image_zoom", "design_item_width_carousel",
+            "design_min_height", "design_price", "design_text", "design_visibility", "destination",
+            "internal_surface", "motion", "resource_source", "spacing",
+        }),
         template_name="storefront_builder/sections/product_section.html",
         validate_settings=_validate_product_section_settings, default_settings=_product_section_defaults,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محصولات",
@@ -2795,9 +3408,18 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             # rail beside a real product grid.  Copy, products and destination
             # remain section data; the renderer contains no Ready Template key.
             VariantDefinition(key="campaign_band", label_fa="نوار کمپینی کنار محصولات"),
+            # Catalogue page rhythm: centred heading with a short accent bar,
+            # a flat product grid and a closing bar carrying the view-all action.
+            VariantDefinition(key="catalog_grid", label_fa="گرید کاتالوگی با نوار پایین"),
         ),
         default_variant="carousel", variant_setting_key="display_mode",
         settings_schema=PRODUCT_SECTION_SCHEMA,
+        normalize_patch=pin_campaign_copy,
+        inspector_projection=lambda settings: {
+            key: value for key, value in zip(
+                ("campaign_panel_title", "campaign_panel_subtitle"), effective_campaign_copy(settings),
+            ) if key not in settings
+        },
     ),
     # Site-target-overhaul Part 2D — the generic, ID-free, multi-row
     # merchandising wall (see CATALOG_PRODUCT_WALL_SOURCE_MODES's own
@@ -2809,6 +3431,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # Home merchandising wall, not a general-purpose block for every page.
     "catalog_product_wall": SectionDefinition(
         key="catalog_product_wall", label_fa="دیوار محصولاتِ فروشگاه", icon="grid",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "columns", "columns_visual", "spacing",
+        }),
         template_name="storefront_builder/sections/catalog_product_wall.html",
         validate_settings=_validate_catalog_product_wall_settings,
         default_settings=default_catalog_product_wall_settings,
@@ -2829,6 +3454,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "trust_features": SectionDefinition(
         key="trust_features", label_fa="ردیف اعتماد و ویژگی‌ها", icon="shield-check",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/trust_features.html",
         validate_settings=validate_trust_features_settings, default_settings=default_trust_features_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="ساختار",
@@ -2837,6 +3465,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # -------------------------------------------------- چکپوینتِ ۱۲: بخش‌های جدید
     "collection_tiles": SectionDefinition(
         key="collection_tiles", label_fa="کارت‌های کالکشن", icon="layers",
+        capabilities=frozenset({
+            "appearance_override", "background", "motion", "resource_source", "spacing", "design_image_fit", "design_image_position", "design_image_ratio"}),
         template_name="storefront_builder/sections/collection_tiles.html",
         validate_settings=_validate_collection_tiles_settings, default_settings=default_collection_tiles_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
@@ -2851,6 +3481,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "quick_links": SectionDefinition(
         key="quick_links", label_fa="دسترسی سریع", icon="compass",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/quick_links.html",
         validate_settings=_validate_quick_links_settings, default_settings=default_quick_links_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
@@ -2858,6 +3491,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "faq": SectionDefinition(
         key="faq", label_fa="سوالات متداول", icon="help-circle",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/faq.html",
         validate_settings=_validate_faq_settings, default_settings=default_faq_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -2865,6 +3501,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "testimonials": SectionDefinition(
         key="testimonials", label_fa="نظرات مشتریان", icon="message-circle",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/testimonials.html",
         validate_settings=_validate_testimonials_settings, default_settings=default_testimonials_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -2872,6 +3511,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "video_section": SectionDefinition(
         key="video_section", label_fa="بخش ویدیو", icon="play-circle",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/video_section.html",
         validate_settings=_validate_video_section_settings, default_settings=default_video_section_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -2880,6 +3522,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # -------------------------------------------------- Story Rail (بخشِ مشترکِ اختیاری)
     "story_rail": SectionDefinition(
         key="story_rail", label_fa="ریلِ استوری", icon="circle",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/story_rail.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, category_fa="کشف و خرید",
@@ -2887,12 +3532,35 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # -------------------------------------------------- Phase 3: کتابخانه‌ی بلوک‌های صفحه اصلی
     "newsletter": SectionDefinition(
         key="newsletter", label_fa="خبرنامه", icon="mail",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/newsletter.html",
         validate_settings=_validate_newsletter_settings, default_settings=default_newsletter_settings,
         # یک بلوکِ ثبتِ ایمیلِ سراسری کافی‌ست — مثلِ trust_features/
         # story_rail، تکرارِ آن (دو فرمِ مستقل روی یک صفحه) گیج‌کننده است.
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
         settings_schema=NEWSLETTER_SCHEMA,
+    ),
+    "decorative_strip": SectionDefinition(
+        key="decorative_strip", label_fa="نوار تزئینی", icon="minus",
+        capabilities=frozenset({
+            "design_spacing", "spacing",
+        }),
+        template_name="storefront_builder/sections/decorative_strip.html",
+        validate_settings=_validate_decorative_strip_settings, default_settings=default_decorative_strip_settings,
+        duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=DECORATIVE_STRIP_SCHEMA,
+    ),
+    "surface_panel": SectionDefinition(
+        key="surface_panel", label_fa="پنل سطح خالی", icon="square",
+        capabilities=frozenset({
+            "design_frame", "design_visibility", "internal_surface", "spacing",
+        }),
+        template_name="storefront_builder/sections/surface_panel.html",
+        validate_settings=_validate_surface_panel_settings, default_settings=default_surface_panel_settings,
+        duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
+        settings_schema=SURFACE_PANEL_SCHEMA,
     ),
     # -------------------------------------------------- Phase 5: بخش‌های context-aware صفحه محصول
     # هر چهار نوعِ زیر فقط رویِ product_detail قابل‌افزودن‌اند (page_types)
@@ -2902,6 +3570,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # ``render_service._CONTEXT_AWARE_BUILDERS``.
     "product_main": SectionDefinition(
         key="product_main", label_fa="گالری و خرید محصول", icon="shopping-bag",
+        capabilities=frozenset(),
         template_name="storefront_builder/sections/product_main.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         # گالری/قیمت/انتخابِ تنوع/افزودن‌به‌سبد یک کامپوننتِ Alpine واحد
@@ -2914,6 +3583,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "product_description": SectionDefinition(
         key="product_description", label_fa="توضیحات، مشخصات و نظرات", icon="text",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/product_description.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         # سه‌تب (توضیحات/مشخصات/نظرات) یک کامپوننتِ Alpine مشترک
@@ -2925,6 +3597,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "product_video": SectionDefinition(
         key="product_video", label_fa="ویدئوهای محصول", icon="play-circle",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/product_video.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, category_fa="محصولات",
@@ -2932,6 +3607,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "related_products": SectionDefinition(
         key="related_products", label_fa="محصولات مرتبط", icon="grid",
+        capabilities=frozenset({
+            "appearance_override", "background", "card", "columns", "columns_visual", "spacing",
+        }),
         template_name="storefront_builder/sections/related_products.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, category_fa="محصولات",
@@ -2940,6 +3618,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # -------------------------------------------------- Phase 5: بخشِ context-aware صفحه لیست/جستجو
     "product_listing": SectionDefinition(
         key="product_listing", label_fa="فیلتر و گرید محصولات", icon="shopping-bag",
+        capabilities=frozenset({
+            "appearance_override", "card", "columns", "columns_visual",
+        }),
         template_name="storefront_builder/sections/product_listing.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         # همان دلیلِ product_main: بدونِ این بلوک صفحه‌یِ لیست/جستجو هیچ
@@ -2950,6 +3631,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # -------------------------------------------------- Phase 5: بخش‌های context-aware صفحه کالکشن
     "collection_header": SectionDefinition(
         key="collection_header", label_fa="عنوان و توضیح کالکشن", icon="layers",
+        capabilities=frozenset({
+            "background", "spacing",
+        }),
         template_name="storefront_builder/sections/collection_header.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, category_fa="محصولات",
@@ -2957,6 +3641,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "collection_products": SectionDefinition(
         key="collection_products", label_fa="محصولات کالکشن", icon="grid",
+        capabilities=frozenset({
+            "appearance_override", "card", "columns", "columns_visual",
+        }),
         template_name="storefront_builder/sections/collection_products.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=False, category_fa="محصولات",
@@ -2965,6 +3652,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # -------------------------------------------------- Phase 5: بخش‌های context-aware صفحه سبد خرید
     "cart_items": SectionDefinition(
         key="cart_items", label_fa="قلم‌های سبد خرید", icon="shopping-cart",
+        capabilities=frozenset(),
         template_name="storefront_builder/sections/cart_items.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         # همان استدلالِ product_main: بدونِ این بلوک سبدِ خرید هیچ راهی
@@ -2974,6 +3662,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "cart_summary": SectionDefinition(
         key="cart_summary", label_fa="خلاصه سفارش و تسویه‌حساب", icon="receipt",
+        capabilities=frozenset(),
         template_name="storefront_builder/sections/cart_summary.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         # حذفِ این بلوک یعنی مشتری راهی برایِ رفتن به تسویه‌حساب ندارد —
@@ -2984,36 +3673,38 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
 }
 
 
-#: U1A — نگاشتِ نامِ capability به allowlistِ موجودش؛ فقط برایِ استنتاجِ
-#: ``SectionDefinition.capabilities`` در ``_finalize_registry`` استفاده
-#: می‌شود. این allowlistها خودشان **حذف نمی‌شوند** و کدِ فعلیِ
-#: ادیتور/ویو همچنان مستقیماً از خودِ آن‌ها می‌خواند (طبقِ الزامِ صریحِ
-#: کار: «preserve current runtime/editor behavior») — این نگاشت فقط یک
-#: آینه‌یِ اضافی می‌سازد تا آزمونِ سازگاری (تستِ زیر) بتواند دو منبع را
-#: با هم مقایسه کند، و مسیرِ آینده به‌سویِ «SectionDefinition.capabilities
-#: تنها منبعِ حقیقت» باز بماند.
-_DERIVED_CAPABILITY_SOURCES: tuple[tuple[str, frozenset[str]], ...] = (
-    ("card", CARD_AWARE_SECTION_KEYS),
-    ("background", BACKGROUND_AWARE_SECTION_KEYS),
-    ("spacing", SPACING_AWARE_SECTION_KEYS),
-    ("motion", MOTION_AWARE_SECTION_KEYS),
-    ("destination", DESTINATION_AWARE_SECTION_KEYS),
-    ("layout_width", LAYOUT_WIDTH_AWARE_SECTION_KEYS),
-    ("layout_height", LAYOUT_HEIGHT_AWARE_SECTION_KEYS),
-    ("columns", COLUMN_AWARE_SECTION_KEYS),
-    ("columns_visual", COLUMN_VISUAL_SECTION_KEYS),
-)
+#: Every structural capability a ``SectionDefinition`` may declare. The registry
+#: is the ONE place capabilities live: ``SectionDefinition.capabilities`` →
+#: ``supports_capability()`` → settings validation wrappers → Inspector schema
+#: projection → renderer/Design-Block gating. Design-property capabilities
+#: (``design_*``) are owned by ``design_block.DESIGN_CAPABILITIES``.
+#:
+#: ``responsive`` is the universal baseline: it is added to every definition by
+#: ``_finalize_registry`` (the visibility block applies to every section type).
+STRUCTURAL_CAPABILITIES = frozenset({
+    "responsive",
+    "appearance_override",  # trusted ``appearance_overrides`` marker block survives validation
+    "background",           # Background Contract block (``settings.background``)
+    "background_primary",   # the fill is a primary decision: Inspector shows it in the Basic tab
+    "card",                 # product-card block (``settings.card``)
+    "columns",              # per-device column counts are stored/validated
+    "columns_visual",       # …and actually change the rendered layout (so the control is shown)
+    "destination",          # standard link/destination block
+    "internal_surface",     # the section owns an inner surface the Design Block can paint
+    "layout_height",        # content-height choice (implies layout_width)
+    "layout_width",         # content-width choice
+    "motion",               # entrance/hover motion block
+    "resource_source",      # typed ``source`` (resource picker) field
+    "spacing",              # vertical spacing block
+})
+
+KNOWN_CAPABILITIES = STRUCTURAL_CAPABILITIES | design_block.design_capability_names()
 
 
-def _derived_capabilities(section_key: str) -> frozenset[str]:
-    """``capabilities``یِ استنتاج‌شده از allowlistهایِ موجود — ``"responsive"``
-    برایِ همه‌ی کلیدها حاضر است چون ``_with_responsive`` بدونِ استثنا رویِ
-    همه اعمال می‌شود (نگاه کنید به حلقه‌ی پایین)."""
-    caps = {"responsive"}
-    for name, keys in _DERIVED_CAPABILITY_SOURCES:
-        if section_key in keys:
-            caps.add(name)
-    return frozenset(caps)
+def sections_with_capability(name: str) -> frozenset[str]:
+    """Registry keys whose definition declares ``name`` — the only supported way
+    to ask "which section types have X" (never hand-maintain a key list)."""
+    return frozenset(key for key, definition in SECTION_REGISTRY.items() if definition.supports_capability(name))
 
 
 def _with_variant_validation(definition: SectionDefinition, validate_fn):
@@ -3054,9 +3745,9 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
     در ``_BASE_SECTION_REGISTRY`` بالا کاملاً دست‌نخورده می‌ماند؛ این تابع
     فقط یک لایه‌یِ یکسان روی همه می‌کشد، نه بازنویسیِ تک‌تکِ ۱۷ ورودی.
 
-    U1A: علاوه‌براین، ``capabilities``یِ صریحِ هر تعریف (اگر بود) با
-    ``_derived_capabilities`` اجتماع می‌شود (نه جایگزین) و
-    ``variants``/``default_variant`` (اگر تعریف شده) اعتبارسنجی می‌شود —
+    ``capabilities``یِ صریحِ هر تعریف تنها مرجعِ قابلیت‌هاست (نامِ ناشناخته
+    در import رد می‌شود) و ``variants``/``default_variant`` (اگر تعریف شده)
+    اعتبارسنجی می‌شود —
     هیچ‌کدام رفتارِ ``validate_settings``/``default_settings``/رندر را
     تغییر نمی‌دهد.
 
@@ -3067,24 +3758,32 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
     finalized = {}
     for key, definition in base.items():
         validate_variants(definition.variants, default_variant=definition.default_variant)
-        validate_fn, default_fn = _with_resource_source(key, definition.validate_settings, definition.default_settings)
-        validate_fn, default_fn = _with_destination(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_responsive(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_motion(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_card(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_layout(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_background(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_spacing(key, validate_fn, default_fn)
-        validate_fn, default_fn = _with_appearance_overrides(key, validate_fn, default_fn)
+        capabilities = definition.capabilities | {"responsive"}
+        unknown = capabilities - KNOWN_CAPABILITIES
+        if unknown:
+            raise ValueError(f"{key}: unknown capability {sorted(unknown)!r}")
+        if "layout_height" in capabilities and "layout_width" not in capabilities:
+            raise ValueError(f"{key}: layout_height requires layout_width")
+        validate_fn, default_fn = _with_resource_source(key, capabilities, definition.validate_settings, definition.default_settings)
+        validate_fn, default_fn = _with_destination(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_responsive(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_motion(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_card(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_layout(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_background(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_spacing(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_design(capabilities, validate_fn, default_fn)
+        validate_fn, default_fn = _with_appearance_overrides(capabilities, validate_fn, default_fn)
         validate_fn = _with_variant_validation(definition, validate_fn)
         # Phase 5 Task 4 (remediation R1b) — project the generic background
         # picker field onto the schema for every schema-enabled background-aware
         # section, the single canonical source (mirrors the _with_background
         # validator wrapper applied above).
-        projected_schema = _with_background_schema_field(key, definition.settings_schema)
+        projected_schema = _with_design_schema_field(capabilities, definition.settings_schema)
+        projected_schema = _with_background_schema_field(capabilities, projected_schema)
         finalized[key] = dataclasses.replace(
             definition, validate_settings=validate_fn, default_settings=default_fn, has_settings_form=True,
-            capabilities=definition.capabilities | _derived_capabilities(key),
+            capabilities=capabilities,
             settings_schema=projected_schema,
         )
     return finalized

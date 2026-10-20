@@ -55,12 +55,18 @@ class SettingsHomeViewTests(SettingsViewsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "اعتبار پیامک")
 
-    def test_appearance_section_shows_visual_identity_form(self):
-        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
+    def test_general_section_has_the_logo_and_favicon_form_and_no_colour_controls(self):
+        """RS-13: لوگو/فاوآیکون در «اطلاعات فروشگاه» هستند؛ رنگ/قالب فقط در Design Studio."""
+        response = self.client.get(reverse("dashboard:settings") + "?section=general")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "هویت بصری")
+        self.assertContains(response, "لوگو و فاوآیکون")
         self.assertContains(response, 'enctype="multipart/form-data"')
-        self.assertContains(response, "رنگ اصلی")
+        self.assertContains(response, reverse("dashboard:settings-identity-assets"))
+        self.assertNotContains(response, "رنگ اصلی")
+
+    def test_legacy_appearance_section_redirects_to_the_studio_appearance_panel(self):
+        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
+        self.assertRedirects(response, "/admin-portal/storefront-builder/r4/?panel=appearance", fetch_redirect_response=False)
 
     def test_invalid_section_falls_back_to_general(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=nonexistent")
@@ -73,7 +79,7 @@ class SettingsHomeViewTests(SettingsViewsTestCase):
         self.assertContains(response, "مالی و مالیات")
         self.assertContains(response, "ارسال و درگاه")
         self.assertContains(response, "پیامک")
-        self.assertContains(response, "تم رنگی")
+        self.assertNotContains(response, "تم رنگی")  # RS-13: retired tab — design lives in the Studio
 
     def test_active_section_indicated(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=delivery-payment")
@@ -342,7 +348,7 @@ class VisualIdentityTests(SettingsViewsTestCase):
             "primary_color": "#1F2937",
             "accent_color": "#C59A45",
         })
-        self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         shop = ShopSettings.load()
         self.assertEqual(shop.primary_color, "#1F2937")
         self.assertEqual(shop.accent_color, "#C59A45")
@@ -394,7 +400,7 @@ class VisualIdentityTests(SettingsViewsTestCase):
             "primary_color": "#6D28D9",
             "accent_color": "#FF4D77",
         })
-        self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
 
     def test_appearance_validation_error_stays_on_appearance(self):
         response = self.client.post(reverse("dashboard:settings-appearance"), {
@@ -438,6 +444,7 @@ class VisualIdentityTests(SettingsViewsTestCase):
         self.assertNotIn("/admin-portal/login/", response.url)
         self.assertIn("admin_return=", response.url)
 import os
+import re
 import tempfile
 import shutil
 
@@ -475,21 +482,21 @@ class LogoUploadTests(SettingsViewsTestCase):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
             "primary_color": "#6D28D9", "accent_color": "#FF4D77", "logo": _make_image("PNG"),
         })
-        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         self.assertTrue(ShopSettings.load().logo)
 
     def test_valid_jpeg_saves(self):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
             "primary_color": "#6D28D9", "accent_color": "#FF4D77", "logo": _make_image("JPEG"),
         })
-        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         self.assertTrue(ShopSettings.load().logo)
 
     def test_valid_webp_saves(self):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
             "primary_color": "#6D28D9", "accent_color": "#FF4D77", "logo": _make_image("WEBP"),
         })
-        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         self.assertTrue(ShopSettings.load().logo)
 
     def test_oversized_rejected(self):
@@ -581,7 +588,7 @@ class FaviconUploadTests(SettingsViewsTestCase):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
             "primary_color": "#6D28D9", "accent_color": "#FF4D77", "favicon": self._fav(),
         })
-        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(resp, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         self.assertTrue(ShopSettings.load().favicon)
 
     def test_oversized_rejected(self):
@@ -731,12 +738,15 @@ class ThemeSectionNavigationTests(SettingsViewsTestCase):
     """پیمایش بین بخش‌های تنظیمات پس از بازآرایی به تب‌های افقی."""
 
     def test_each_valid_section_renders(self):
-        for key in ("general", "finance", "delivery-payment", "sms", "appearance"):
+        for key in ("general", "finance", "delivery-payment", "sms"):
             response = self.client.get(reverse("dashboard:settings") + f"?section={key}")
             self.assertEqual(response.status_code, 200, f"section={key} did not render")
+        # RS-13: the retired appearance section never renders — it redirects (safe GET, no loop)
+        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
+        self.assertEqual((response.status_code, response["Location"]), (302, "/admin-portal/storefront-builder/r4/?panel=appearance"))
 
     def test_active_tab_marked_correctly_for_each_section(self):
-        for key in ("general", "finance", "delivery-payment", "sms", "appearance"):
+        for key in ("general", "finance", "delivery-payment", "sms"):
             response = self.client.get(reverse("dashboard:settings") + f"?section={key}")
             self.assertEqual(response.context["active_section"], key)
             self.assertContains(response, 'aria-current="page"')
@@ -762,43 +772,58 @@ class ThemeSectionNavigationTests(SettingsViewsTestCase):
 # ============================================================ PR3: APPEARANCE RENDERING REGRESSION
 
 
-class AppearanceRenderingRegressionTests(SettingsViewsTestCase):
-    """اثبات این‌که صفحه‌ی تم رنگی واقعاً کنترل‌های خودش را رندر می‌کند و هرگز خالی نیست."""
+class LegacyAppearancePageRetiredTests(SettingsViewsTestCase):
+    """RS-13 — «تم رنگی» دیگر صفحهٔ جداگانه نیست (قبلاً AppearanceRenderingRegressionTests آن را می‌سنجید): طراحی فقط در
+    Design Studio (R4) است و آدرسِ قدیمی با یک redirect امن به همان‌جا می‌رود؛ هیچ‌جا دو محل برایِ رنگ/قالب نمی‌ماند."""
 
-    def test_appearance_page_contains_presets(self):
-        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
-        for label in ("بنفش دیجیتال", "رز صورتی", "سبز زمردی", "عسلی کهربایی", "فیروزه‌ای", "زرشکی قرمز"):
-            self.assertContains(response, label)
+    STUDIO = "/admin-portal/storefront-builder/r4/?panel=appearance"
 
-    def test_appearance_page_contains_all_custom_color_fields(self):
+    def test_get_redirects_without_rendering_any_legacy_colour_ui(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
-        for label in (
-            "رنگ اصلی", "رنگ مکمل", "رنگ ثانویه", "رنگ پس‌زمینه‌ی صفحه",
-            "رنگ پس‌زمینه‌ی کارت‌ها", "رنگ متن اصلی", "رنگ متن کم‌رنگ",
-        ):
-            self.assertContains(response, label)
+        self.assertRedirects(response, self.STUDIO, fetch_redirect_response=False)
 
-    def test_appearance_page_contains_live_preview(self):
-        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
-        self.assertContains(response, "پیش‌نمایش زنده")
-        self.assertContains(response, "theme-preview")
-
-    def test_appearance_page_is_not_blank(self):
-        """رگرسیون: صفحه‌ی تم رنگی باید محتوای واقعی و قابل‌توجه داشته باشد، نه یک ناحیه‌ی خالی."""
-        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
+    def test_the_redirect_target_is_the_real_studio_panel_for_this_store(self):
+        response = self.client.get(self.STUDIO)
         self.assertEqual(response.status_code, 200)
-        self.assertGreater(len(response.content), 8000)
-        self.assertContains(response, "پیش‌فرض‌های آماده")
-        self.assertContains(response, "ویرایشگر رنگ سفارشی")
-        self.assertContains(response, "ذخیره و اعمال در کل سایت")
-        self.assertContains(response, "بازگردانی به پیش‌فرض")
 
-    def test_appearance_page_renders_when_legacy_blank_tokens_present(self):
-        """اگر مقادیر جدید (قبل از migrate/بازسازی) خالی/نامعتبر باشند، صفحه با پیش‌فرض‌های امن رندر می‌شود."""
-        ShopSettings.objects.filter(store__slug="akhlaghi").update(background_color="", text_color="not-a-color")
+    def test_following_the_redirect_never_loops(self):
+        response = self.client.get(reverse("dashboard:settings") + "?section=appearance", follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], self.STUDIO)
+        self.assertEqual(len(response.redirect_chain), 1)
+
+    def test_bookmark_with_extra_params_still_lands_in_the_studio(self):
+        response = self.client.get(reverse("dashboard:settings") + "?section=appearance&x=1")
+        self.assertRedirects(response, self.STUDIO, fetch_redirect_response=False)
+
+    def test_anonymous_and_unprivileged_users_are_not_redirected_into_the_studio(self):
+        self.client.logout()
         response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "ویرایشگر رنگ سفارشی")
+        self.assertNotEqual(response.get("Location"), self.STUDIO)
+
+    def test_logo_and_favicon_live_in_general_settings_and_save_there(self):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        buf = BytesIO()
+        Image.new("RGB", (40, 40), "red").save(buf, "PNG")
+        response = self.client.post(reverse("dashboard:settings-identity-assets"), {
+            "logo": SimpleUploadedFile("logo.png", buf.getvalue(), content_type="image/png"),
+        })
+        self.assertRedirects(response, "/admin-portal/settings/?section=general", fetch_redirect_response=False)
+        self.assertTrue(ShopSettings.objects.get(store__slug="akhlaghi").logo)
+
+    def test_identity_assets_endpoint_rejects_a_non_image_and_touches_no_colour(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        before = ShopSettings.objects.get(store__slug="akhlaghi").primary_color
+        self.client.post(reverse("dashboard:settings-identity-assets"), {
+            "logo": SimpleUploadedFile("x.png", b"<script>alert(1)</script>", content_type="image/png"),
+            "primary_color": "#000001",
+        })
+        shop = ShopSettings.objects.get(store__slug="akhlaghi")
+        self.assertFalse(shop.logo)
+        self.assertEqual(shop.primary_color, before)
 
 
 # ============================================================ PR3: PRESETS
@@ -829,7 +854,7 @@ class ThemePresetTests(SettingsViewsTestCase):
                 "primary_color": preset.primary, "accent_color": preset.accent,
                 "secondary_color": preset.secondary, "background_color": preset.background,
             })
-            self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+            self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
             shop = ShopSettings.load()
             self.assertEqual(shop.primary_color, preset.primary.upper())
             self.assertEqual(shop.secondary_color, preset.secondary.upper())
@@ -843,16 +868,17 @@ class ThemePresetTests(SettingsViewsTestCase):
             "primary_color": preset.primary, "accent_color": preset.accent,
             "secondary_color": preset.secondary, "background_color": preset.background,
         })
-        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
-        self.assertEqual(response.context["selected_preset_key"], preset.key)
+        # RS-13: the preset picker page is retired; what remains contractual is that the POST persisted the preset exactly
+        shop = ShopSettings.objects.get(store__slug="akhlaghi")
+        self.assertEqual((shop.primary_color, shop.accent_color), (preset.primary.upper(), preset.accent.upper()))
 
     def test_manual_custom_colors_not_recognized_as_any_preset(self):
         self.client.post(reverse("dashboard:settings-appearance"), {
             "primary_color": "#123456", "accent_color": "#654321",
             "secondary_color": "#ABCDEF", "background_color": "#FEDCBA",
         })
-        response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
-        self.assertEqual(response.context["selected_preset_key"], "")
+        shop = ShopSettings.objects.get(store__slug="akhlaghi")
+        self.assertEqual((shop.primary_color, shop.background_color), ("#123456", "#FEDCBA"))
 
 
 # ============================================================ PR3: VALIDATION & CONTRAST
@@ -865,7 +891,7 @@ class ThemeValidationContrastTests(SettingsViewsTestCase):
             "secondary_color": "#111111", "background_color": "#EEEEEE",
             "surface_color": "#FFFFFF", "text_color": "#000000", "muted_text_color": "#555555",
         })
-        self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         shop = ShopSettings.load()
         self.assertEqual(shop.secondary_color, "#111111")
         self.assertEqual(shop.background_color, "#EEEEEE")
@@ -922,7 +948,7 @@ class ThemeValidationContrastTests(SettingsViewsTestCase):
             "text_color": "#241C3A", "background_color": "#F7F5FC", "surface_color": "#FFFFFF",
             "muted_text_color": "#8B86A3",
         })
-        self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
 
     def test_omitted_new_fields_keep_previously_saved_values(self):
         self.client.post(reverse("dashboard:settings-appearance"), {
@@ -941,7 +967,7 @@ class ThemeValidationContrastTests(SettingsViewsTestCase):
             "background_color": "#444444", "surface_color": "#555555",
         })
         response = self.client.post(reverse("dashboard:settings-appearance"), {"action": "reset"})
-        self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         shop = ShopSettings.load()
         self.assertEqual(shop.primary_color, "#6D28D9")
         self.assertEqual(shop.accent_color, "#FF4D77")
@@ -1012,8 +1038,13 @@ class StorefrontThemeTokenInjectionTests(SettingsViewsTestCase):
         )
         with open(css_path) as f:
             css = f.read()
-        self.assertIn("--green:#16a34a", css)
-        self.assertIn("--amber:#f59e0b", css)
+        # status colours are fixed literals — never derived from the merchant's brand variables…
+        self.assertRegex(css, r"--green:\s*#[0-9a-fA-F]{6}\s*;")
+        self.assertRegex(css, r"--amber:\s*#[0-9a-fA-F]{6}\s*;")
+        # …and the success green is usable both as a fill with white text and as text on white (>= 4.5:1)
+        from apps.core.color_utils import contrast_ratio
+        green = re.search(r"--green:\s*(#[0-9a-fA-F]{6})", css).group(1)
+        self.assertGreaterEqual(contrast_ratio(green, "#FFFFFF"), 4.5)
 
     def test_border_color_derived_from_text_and_surface(self):
         from apps.core.color_utils import mix_hex
@@ -1021,20 +1052,82 @@ class StorefrontThemeTokenInjectionTests(SettingsViewsTestCase):
             "primary_color": "#6D28D9", "accent_color": "#FF4D77",
             "text_color": "#111111", "surface_color": "#FFFFFF", "muted_text_color": "#555555",
         })
-        self.assertRedirects(response, "/admin-portal/settings/?section=appearance")
+        self.assertRedirects(response, "/admin-portal/settings/?section=appearance", fetch_redirect_response=False)
         expected = mix_hex("#111111", "#FFFFFF", 0.12)
         response = self.client.get(reverse("catalog:home"))
         self.assertContains(response, f"--brand-border:{expected}")
+
+    def _storefront_vars(self):
+        html = self.client.get(reverse("catalog:home")).content.decode()
+        style = re.search(r'<html[^>]*style="([^"]*)"', html).group(1)
+        return dict(item.split(":", 1) for item in style.split(";") if item.startswith("--"))
+
+    def test_unsafe_brand_colours_stay_raw_but_text_usage_variables_are_accessible(self):
+        """Merchant identity is stored/injected untouched (--brand-accent), while the colour text is actually
+        painted with (--brand-accent-text) is derived by WCAG luminance so a pale gold accent is not 2.3:1 text."""
+        from apps.core.color_utils import contrast_ratio
+
+        self.client.post(reverse("dashboard:settings-appearance"), {
+            "primary_color": "#FFE066", "accent_color": "#D3A13B",
+            "background_color": "#FFFFFF", "surface_color": "#FFFFFF",
+            "text_color": "#241C3A", "muted_text_color": "#8B86A3",
+        })
+        css_vars = self._storefront_vars()
+        self.assertEqual(css_vars["--brand-accent"].upper(), "#D3A13B")  # identity untouched
+        self.assertEqual(css_vars["--brand-primary"].upper(), "#FFE066")
+        self.assertNotEqual(css_vars["--brand-accent-text"].upper(), "#D3A13B")
+        for token in ("--brand-accent-text", "--brand-primary-text", "--brand-muted", "--theme-price-text"):
+            self.assertGreaterEqual(contrast_ratio(css_vars[token], "#FFFFFF"), 4.5, token)
+        # a pale primary needs dark label text; the hover state carries its OWN foreground
+        self.assertEqual(css_vars["--brand-primary-fg"].upper(), "#000000")
+        self.assertGreaterEqual(contrast_ratio(css_vars["--brand-primary-hover-fg"], css_vars["--brand-primary-hover"]), 4.5)
+
+    def test_mixed_dark_page_and_light_surface_derived_tokens_pass_on_both(self):
+        """Reachable theme: near-black page, white card/surface, mid-grey body text valid on both, saturated primary.
+        Pure black fails on the page and pure white fails on the card, so the derived usage tokens must land in the
+        mid-luminance band that is readable on BOTH (regression for ensure_contrast's multi-backdrop search)."""
+        from apps.core.color_utils import contrast_ratio
+
+        self.client.post(reverse("dashboard:settings-appearance"), {
+            "primary_color": "#FF0000", "accent_color": "#FFE066", "secondary_color": "#00A650",
+            "background_color": "#000000", "surface_color": "#FFFFFF",
+            "text_color": "#767676", "muted_text_color": "#767676",
+        })
+        css_vars = self._storefront_vars()
+        self.assertEqual(css_vars["--brand-background"].upper(), "#000000")  # the mixed theme was really saved
+        self.assertEqual(css_vars["--brand-surface"].upper(), "#FFFFFF")
+        self.assertEqual(css_vars["--brand-primary"].upper(), "#FF0000")     # identity untouched
+        for token in ("--brand-primary-text", "--brand-accent-text", "--brand-secondary-text", "--theme-price-text"):
+            for surface in ("--brand-background", "--brand-surface"):
+                self.assertGreaterEqual(
+                    contrast_ratio(css_vars[token], css_vars[surface]), 4.5, (token, css_vars[token], surface))
+            self.assertNotIn(css_vars[token].upper(), ("#000000", "#FFFFFF"), token)
+
+    def test_dark_brand_colours_get_light_foregrounds(self):
+        from apps.core.color_utils import contrast_ratio
+
+        self.client.post(reverse("dashboard:settings-appearance"), {
+            "primary_color": "#0A0A23", "accent_color": "#1E1B4B",
+            "background_color": "#FFFFFF", "surface_color": "#FFFFFF", "text_color": "#241C3A", "muted_text_color": "#6B6B80",
+        })
+        css_vars = self._storefront_vars()
+        self.assertEqual(css_vars["--brand-primary-fg"].upper(), "#FFFFFF")
+        self.assertGreaterEqual(contrast_ratio(css_vars["--brand-primary-fg"], css_vars["--brand-primary"]), 4.5)
+        self.assertGreaterEqual(contrast_ratio(css_vars["--brand-gradient-fg"], css_vars["--brand-primary"]), 4.5)
 
 
 # ============================================================ PR3: QUERY PERFORMANCE
 
 
 class SettingsPageQueryPerformanceTests(SettingsViewsTestCase):
-    def test_appearance_page_query_count_bounded(self):
-        self.client.get(reverse("dashboard:settings") + "?section=appearance")  # warm-up
+    def test_general_page_query_count_bounded_and_legacy_appearance_redirect_is_cheap(self):
+        self.client.get(reverse("dashboard:settings") + "?section=general")  # warm-up
+        with CaptureQueriesContext(connection) as redirect_ctx:
+            redirect = self.client.get(reverse("dashboard:settings") + "?section=appearance")
+        self.assertEqual(redirect.status_code, 302)
+        self.assertLessEqual(len(redirect_ctx), 8)
         with CaptureQueriesContext(connection) as ctx:
-            response = self.client.get(reverse("dashboard:settings") + "?section=appearance")
+            response = self.client.get(reverse("dashboard:settings") + "?section=general")
         self.assertEqual(response.status_code, 200)
         # Keep this as a regression ceiling, not an exact implementation
         # count. The shared settings context now includes the full operational

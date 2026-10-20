@@ -1,5 +1,5 @@
 {% extends "storefront_shell.html" %}
-{% load static %}
+{% load static storefront_builder_extras %}
 
 {% block title %}کالکشن‌ها | {{ SHOP_NAME }}{% endblock %}
 {% block meta_description %}<meta name="description" content="کالکشن‌های فروشگاه {{ SHOP_NAME }}">{% endblock %}
@@ -7,6 +7,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/product_list.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -19,12 +20,12 @@
   <h1 style="margin:0 0 16px">کالکشن‌ها</h1>
 
   {% if collections %}
-  <div class="grid g3" style="gap:16px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
     {% for collection in collections %}
     <a href="{% url 'catalog:collection-detail' collection.slug %}" style="display:block;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);text-decoration:none;color:inherit">
-      <div style="aspect-ratio:16/9;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <div class="img-frame" style="aspect-ratio:16/9;background:var(--bg);display:flex;align-items:center;justify-content:center">
         {% if collection.image %}
-        <img src="{{ collection.image.url }}" alt="{{ collection.name }}" style="width:100%;height:100%;object-fit:cover">
+        <img src="{{ collection.image.url }}" data-img-role="collection" alt="{{ collection.name }}" loading="lazy">
         {% else %}
         <span style="font-size:32px">🗂️</span>
         {% endif %}

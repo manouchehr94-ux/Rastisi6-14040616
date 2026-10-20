@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 
 from django.test import SimpleTestCase
 
@@ -9,8 +8,12 @@ from apps.storefront_builder.services import layout_service
 
 
 class Palette64RegistryContractTests(SimpleTestCase):
-    def test_public_palette_library_has_exactly_64_release_palettes(self):
-        self.assertEqual(len(appearance_registry.list_palettes()), 64)
+    def test_public_palette_library_has_the_release_palettes(self):
+        # 64 release palettes + the three reference-template palettes
+        # (``spectrum-stationery`` 51, ``orchid-retail`` 52, ``pastel-lilac`` 53).
+        self.assertEqual(len(appearance_registry.list_palettes()), 67)
+        for slug in ("spectrum-stationery", "orchid-retail", "pastel-lilac"):
+            self.assertIsNotNone(appearance_registry.get_palette(slug))
 
     def test_curated_pack_adds_26_stable_palettes(self):
         self.assertEqual(len(CURATED_PALETTE_PACK_64_ADDITIONS), 26)
@@ -61,11 +64,3 @@ class Palette64RegistryContractTests(SimpleTestCase):
         self.assertEqual(changed["footer_bg"], "#123456")
         for key in set(base) - {"footer_bg"}:
             self.assertEqual(changed[key], base[key], key)
-
-    def test_palette_gallery_has_search_and_no_template_filter_contract(self):
-        template_path = Path(__file__).resolve().parents[1] / "templates" / "dashboard" / "storefront_builder" / "partials" / "appearance_panel.html"
-        source = template_path.read_text(encoding="utf-8")
-        self.assertIn('id="sfbPaletteSearch"', source)
-        self.assertIn("paletteQuery", source)
-        self.assertNotIn("palette.allowed_templates", source)
-        self.assertNotIn("template_palette", source)

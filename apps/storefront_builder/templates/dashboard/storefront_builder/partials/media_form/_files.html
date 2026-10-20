@@ -1,4 +1,4 @@
-{% load storefront_builder_extras %}
+{% load storefront_builder_extras image_guide %}
 {# Media form field group — image files. Shared by the legacy linear form and the R4 modal's "تصاویر" tab. #}
 {% for f in config.file_fields %}
 {% with current_url=item|getattribute:f.thumb %}
@@ -21,6 +21,7 @@
     <p style="font-size:12px;color:var(--muted);margin:6px 0 0">تصویر فعلی حفظ می‌شود مگر فایل جدیدی انتخاب کنید.</p>
     {% endif %}
   {% endif %}
+  {% if f.guide_key %}{% image_guide f.guide_key f.name %}{% endif %}
 </div>
 {% endwith %}
 {% endfor %}

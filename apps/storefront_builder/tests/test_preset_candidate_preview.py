@@ -188,15 +188,20 @@ class InvalidCandidateNonMutatingTests(CandidatePreviewTestCase):
             preset_service.resolve_preset_candidate_by_key(self.draft, "__does_not_exist__")
         self.assertEqual(_snapshot(self.draft), before)
 
-    def test_locked_section_conflict_raises_and_does_not_mutate(self):
+    def test_locked_section_never_blocks_the_read_only_preview_but_still_blocks_apply(self):
+        """Owner contract: a read-only preview writes nothing, so a lock can never be at risk and must not make it
+        fail (it used to raise, surfacing as an HTTP 500). The DESTRUCTIVE ``apply_preset`` keeps its lock guard."""
         home = self.draft.get_page("home")
         StorefrontSection.objects.create(
             page=home, section_key="hero_banner", order=0, is_locked=True, settings={},
         )
         before = _snapshot(self.draft)
         preset = lpr.get_layout_preset("editorial_jewelry")
+        candidate = preset_service.resolve_preset_candidate(self.draft, preset)
+        self.assertEqual(len(candidate.pages["home"].sections), len(preset.pages["home"]))
+        self.assertEqual(_snapshot(self.draft), before)
         with self.assertRaises(preset_service.LockedSectionsPresentError):
-            preset_service.resolve_preset_candidate(self.draft, preset)
+            preset_service.apply_preset(self.draft, preset)
         self.assertEqual(_snapshot(self.draft), before)
 
 

@@ -250,6 +250,13 @@ def _is_owner_portal_identity(user) -> bool:
     )
 
 
+def _is_active_team_member(user) -> bool:
+    """True iff the user holds an ACTIVE StoreMembership (any role) — i.e. a merchant team member, not a plain Customer."""
+    from apps.stores.models import StoreMembership
+
+    return StoreMembership.objects.filter(user=user, status=StoreMembership.MembershipStatus.ACTIVE).exists()
+
+
 def _resolve_login_candidate(identifier: str):
     """شناسه (ایمیل / موبایل / نام‌کاربری) را به *یک* ``User`` تبدیل می‌کند، یا
     ``None``. مبهم (چند حسابِ هم‌نام) fail-closed است. اهلیتِ پرتال و رمز را
@@ -556,6 +563,12 @@ def resolve_owner_identity_by_phone(
 
         existing_profile = OwnerProfile.objects.select_for_update().filter(user=user).first()
         if existing_profile is None:
+            if not allow_new_owner and not user_created and _is_active_team_member(user):
+                # RS-14: an invited TEAM MEMBER (an ACTIVE StoreMembership, no OwnerProfile) proves the same phone by
+                # OTP and signs in as themselves — they must NOT be pushed through the owner signup step (which would
+                # make them a platform Owner with a trial Store of their own, or lock them out while registration is
+                # closed). No OwnerProfile is created here, so ``owner_created`` stays False and no store is provisioned.
+                return OwnerIdentityResult(user, user_created=False, owner_created=False)
             if not allow_new_owner:
                 raise NewOwnerRegistrationClosedError("ثبت‌نام فروشگاهِ تازه موقتاً بسته است.")
             if require_credentials and not user_created:

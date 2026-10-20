@@ -139,6 +139,12 @@ def select_ready_template(*, store, actor, template_key) -> SelectionResult:
         draft = r4_mutation_service.switch_template_current(
             store=store, actor=actor, template_key=preset.key, template_version=preset.version,
         )
-    except (r4_mutation_service.R4MutationError, preset_service.InvalidPresetError) as exc:
+    except r4_mutation_service.R4MutationError as exc:
+        body = r4_mutation_service.error_response_body(exc)
+        raise ReadyTemplateSelectionError(
+            str(exc) if str(exc) in r4_mutation_service.R4_ERROR_MESSAGES_FA else "invalid_template",
+            body.get("message") or str(exc),
+        ) from exc
+    except preset_service.InvalidPresetError as exc:
         raise ReadyTemplateSelectionError("invalid_template", str(exc)) from exc
     return SelectionResult(draft=draft, preset=preset, action="switched")

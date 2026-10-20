@@ -210,16 +210,6 @@ class StorefrontLayout(TimeStampedModel):
         "StorefrontLayoutVersion", verbose_name="نسخه پیش‌نویس",
         on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
     )
-    r4_editor_enabled = models.BooleanField(
-        default=True,
-        help_text=(
-            "Non-blocking compatibility flag for the R4 storefront-builder editor "
-            "shell. Pre-Task-10 remediation: R4 is now the default canonical "
-            "merchant editor (dashboard nav routes here); this flag exists only "
-            "so an individual Store can be pinned back to the legacy editor if a "
-            "regression is found, never to gate normal access."
-        ),
-    )
 
     class Meta:
         verbose_name = "چیدمان صفحه فروشگاه"

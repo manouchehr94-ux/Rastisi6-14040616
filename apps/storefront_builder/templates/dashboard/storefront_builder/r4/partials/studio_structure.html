@@ -11,6 +11,13 @@ sender). This whole element is re-fetched by R4 after structural mutations.
 <div class="panel-scroll" data-rs-structure-scroll>
   <div class="section-label"><span>{% for value, label in page_types %}{% if value == page_type %}{{ label }}{% endif %}{% endfor %}</span><span class="pill" data-rs-section-count>{{ structure_items|length|fa_number }} بخش</span></div>
 
+  {% comment %}FOLLOWUP-12: the two most common structure actions live at the TOP of the panel (they used to be below a
+  21-section list). Both open a workspace dialog and only chain existing R4 mutations.{% endcomment %}
+  <div class="rs-structure-actions" role="group" aria-label="افزودن به صفحه">
+    <button type="button" class="primary" data-rastisi-action="add-section" data-rs-add-section-top>{% rs_icon "plus" %}افزودن بخش</button>
+    <button type="button" class="outline" data-rastisi-action="add-row" data-rs-add-row-top>{% rs_icon "grid" %}ردیف دو‌ستونه</button>
+  </div>
+
   <div class="common-region">{% rs_icon "header" %} سربرگ فروشگاه <button type="button" data-rastisi-action="global" data-rs-global-focus="header" aria-label="تنظیم ظاهر مشترک سربرگ">{% rs_icon "sliders" %}</button></div>
 
   {% if not structure_items %}
@@ -23,16 +30,24 @@ sender). This whole element is re-fetched by R4 after structural mutations.
          data-rs-section-label="{{ item.label }}" data-rs-section-locked="{{ item.is_locked|yesno:'true,false' }}" data-rs-section-active="{{ item.is_active|yesno:'true,false' }}"
          data-rs-section-duplicable="{{ item.duplicable|yesno:'true,false' }}" data-rs-section-removable="{{ item.removable|yesno:'true,false' }}"
          data-rs-section-baseline="{{ item.has_baseline|yesno:'true,false' }}" data-rs-position="{{ forloop.counter }}">
-      <button type="button" class="r4-structure-label" data-rastisi-action="select-section" data-id="{{ item.id }}">
+      <button type="button" class="rs-row-select" data-rastisi-action="row-select" data-id="{{ item.id }}" aria-label="انتخاب {{ item.label }}">
         <span class="tree-symbol">{% rs_section_icon item.section_key %}</span>
         <span class="tree-copy"><strong>{{ item.label }}</strong><small>جایگاه {{ forloop.counter|fa_number }}{% if item.is_locked %} · قفل‌شده{% endif %}{% if not item.is_active %} · پنهان{% endif %}</small></span>
       </button>
-      <button type="button" class="r4-structure-label" data-rastisi-action="select-section" data-id="{{ item.id }}" aria-label="تنظیمات {{ item.label }}">{% if item.is_locked %}{% rs_icon "lock" %}{% else %}{% rs_icon "dots" %}{% endif %}</button>
+      <button type="button" class="r4-structure-label rs-row-settings" data-rastisi-action="select-section" data-id="{{ item.id }}" aria-label="تنظیمات {{ item.label }}" title="باز کردن تنظیمات این بخش">{% rs_icon "sliders" %}</button>
+      {% comment %}Quick structure actions: the SAME data-r4-structure-* hooks the existing structure listener in r4_editor.js
+      already handles (one sender, one mutation path) — they were previously reachable only inside the docked Inspector.{% endcomment %}
+      <div class="rs-row-actions" role="group" aria-label="اقدام‌های {{ item.label }}">
+        <button type="button" data-r4-structure-move="up" aria-label="یک جایگاه بالاتر" title="بالاتر" {% if forloop.first or item.is_locked %}disabled{% endif %}>{% rs_icon "up" %}</button>
+        <button type="button" data-r4-structure-move="down" aria-label="یک جایگاه پایین‌تر" title="پایین‌تر" {% if forloop.last or item.is_locked %}disabled{% endif %}>{% rs_icon "down" %}</button>
+        <button type="button" data-r4-structure-toggle-active aria-pressed="{{ item.is_active|yesno:'true,false' }}" aria-label="{% if item.is_active %}پنهان کردن از صفحه{% else %}نمایش در صفحه{% endif %}" title="{% if item.is_active %}پنهان کردن{% else %}نمایش در صفحه{% endif %}" {% if item.is_locked %}disabled{% endif %}>{% rs_icon "eye" %}</button>
+        <button type="button" data-r4-structure-toggle-locked aria-pressed="{{ item.is_locked|yesno:'true,false' }}" aria-label="{% if item.is_locked %}باز کردن قفل{% else %}قفل کردن ویرایش{% endif %}" title="{% if item.is_locked %}باز کردن قفل{% else %}قفل ویرایش{% endif %}">{% if item.is_locked %}{% rs_icon "lock" %}{% else %}{% rs_icon "unlock" %}{% endif %}</button>
+        <button type="button" data-r4-structure-duplicate aria-label="تکثیر این بخش" title="تکثیر" {% if item.is_locked or not item.duplicable %}disabled{% endif %}>{% rs_icon "copy" %}</button>
+        <button type="button" data-r4-structure-remove class="danger" aria-label="حذف این بخش" title="حذف" {% if item.is_locked or not item.removable %}disabled{% endif %}>{% rs_icon "trash" %}</button>
+      </div>
     </div>
     {% endfor %}
   </div>
-
-  <button type="button" data-rastisi-action="add-section" class="full add-block">{% rs_icon "plus" %}افزودن یک بخش تازه</button>
 
   {% comment %}
   Real per-Container composition (layout preset + container settings). The
@@ -41,7 +56,7 @@ sender). This whole element is re-fetched by R4 after structural mutations.
   {% endcomment %}
   {% regroup structure_items by container_id as container_groups %}
   <details class="rs-more rs-rows">
-    <summary>{% rs_icon "grid" %}<span>چیدمان ردیف‌ها</span><span class="pill">{{ container_groups|length|fa_number }} ردیف</span></summary>
+    <summary>{% rs_icon "grid" %}<span>ردیف‌ها و ستون‌بندی</span><span class="pill">{{ container_groups|length|fa_number }} ردیف</span></summary>
     <div class="rs-more-body">
       {% for group in container_groups %}{% with item=group.list.0 %}{% if item.container_id %}
       <div class="rs-container-group" data-r4-structure-container-row data-r4-structure-container-id="{{ item.container_id }}">
@@ -150,6 +165,36 @@ sender). This whole element is re-fetched by R4 after structural mutations.
       </label>
       <button type="button" id="r4StructureAddButton" class="primary full">{% rs_icon "plus" %}افزودن به انتهای صفحه</button>
     </div>
+  </template>
+
+  <template data-rs-add-row-template>
+    <form class="rs-add-row" data-rs-add-row-form novalidate>
+      <p class="rs-add-row-help">یک ردیف با دو ستون می‌سازد. ستون «اول» در سمت راست صفحه (راست‌چین) و ستون «دوم» سمت چپ آن قرار می‌گیرد؛ در موبایل زیر هم نمایش داده می‌شوند.</p>
+      <fieldset class="rs-add-row-layouts">
+        <legend>نسبت دو ستون</legend>
+        {% for preset_key, preset_label, widths in two_column_presets %}
+        <label class="rs-layout-card">
+          <input type="radio" name="rs_row_layout" value="{{ preset_key }}" {% if forloop.first %}checked{% endif %}>
+          <span class="rs-layout-preview" aria-hidden="true">{% for w in widths %}<i style="flex:{{ w }}"></i>{% endfor %}</span>
+          <span class="rs-layout-name">{{ preset_label }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <label class="field"><span>بخش ستون اول (راست)</span>
+        <select data-rs-add-row-first required>
+          <option value="">یک بخش انتخاب کنید…</option>
+          {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>بخش ستون دوم (چپ)</span>
+        <select data-rs-add-row-second>
+          <option value="">خالی بماند (بعداً از «خانه‌های خالی» پر می‌شود)</option>
+          {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
+        </select>
+      </label>
+      <p class="rs-add-row-note">ردیف به انتهای همین صفحه اضافه می‌شود و فقط در پیش‌نویس می‌ماند؛ تا «انتشار» نزنید، فروشگاه عمومی تغییر نمی‌کند. با «واگرد» مرحله‌به‌مرحله برمی‌گردد (ساخت ردیف سه مرحله دارد).</p>
+      <button type="submit" class="primary full" data-rs-add-row-submit>{% rs_icon "plus" %}ساختن ردیف دو‌ستونه</button>
+    </form>
   </template>
 
   <div class="template-nudge"><h3>از یک ایدهٔ آماده شروع کنید</h3><p>{{ studio.template_cards|length|fa_number }} قالب آماده؛ محتوای شما حفظ می‌شود.</p><button type="button" data-rastisi-action="templates">{% rs_icon "arrow" %}گشتن میان قالب‌ها</button></div>

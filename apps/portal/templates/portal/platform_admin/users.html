@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}کاربران | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead">
@@ -23,7 +24,7 @@
           <td style="direction:ltr;text-align:left">{{ u.owner_profile.phone|default:"—" }}</td>
           <td>{{ u.owned_store_count }}</td>
           <td>{% if u.is_active %}<span class="pa-badge pa-ok">فعال</span>{% else %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}</td>
-          <td>{{ u.date_joined|date:"Y/m/d" }}</td>
+          <td>{{ u.date_joined|jalali }}</td>
           <td><a class="pa-btn pa-small pa-soft" href="{% url 'portal_platform_admin:user-detail' u.pk %}">جزئیات</a></td>
         </tr>
         {% endfor %}

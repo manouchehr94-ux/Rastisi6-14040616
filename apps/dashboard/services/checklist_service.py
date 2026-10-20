@@ -324,11 +324,11 @@ def _steps():
         ),
         _ChecklistStep(
             "logo", "لوگو", "🖼️", _logo_complete,
-            lambda store, request: reverse("dashboard:settings") + "?section=appearance",
+            lambda store, request: reverse("dashboard:settings") + "?section=general",
         ),
         _ChecklistStep(
             "theme", "قالب و رنگ‌بندی", "🎨", _theme_complete,
-            lambda store, request: reverse("dashboard:settings") + "?section=appearance",
+            lambda store, request: reverse("dashboard:storefront-builder-r4-editor") + "?panel=appearance",
         ),
         _ChecklistStep(
             "payment_gateway", "درگاه پرداخت", "💳", _payment_gateway_complete,

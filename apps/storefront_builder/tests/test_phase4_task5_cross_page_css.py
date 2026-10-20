@@ -1,8 +1,8 @@
 """Phase 4, Task 5 — cross-page CSS completeness.
 
 Several section types were originally built Home-only: their CSS rules
-lived only in ``apps/catalog/static/css/home.css``, which loads ONLY on
-``catalog:home`` (see ``catalog/templates/catalog/home.html``). The five
+lived only in ``apps/catalog/static/css/home.css``, which loads only on
+the home / Preview contexts. The five
 other public envelopes (product detail, listing/search, collection, cart)
 load ``apps/storefront_builder/static/css/storefront_builder.css`` instead
 and never load ``home.css`` — so placing one of these Home-only-styled
@@ -103,8 +103,9 @@ class HeroSliderNonHomeCssCompletenessTests(TestCase):
         self.assertIn(".hero-slide{position:absolute;inset:0;width:100%;height:100%}", css)
         self.assertIn(".hero-media{display:block;width:100%;height:100%}", css)
         self.assertIn(
-            '.hero-inner{position:relative;overflow:hidden;border:1px solid #e2e5ea;'
-            'border-radius:8px;background:#fff;aspect-ratio:1053/420;min-height:0;'
+            # surface / border are semantic tokens (primary-surface contract), not fixed #fff / #e2e5ea
+            '.hero-inner{position:relative;overflow:hidden;border:1px solid var(--brand-border,#e2e5ea);'
+            'border-radius:8px;background:var(--brand-surface,#fff);aspect-ratio:1053/420;min-height:0;'
             'color:#fff;box-shadow:0 2px 10px rgba(15,23,42,.05)}',
             css,
         )
@@ -162,15 +163,6 @@ class HeroSliderNonHomeCssCompletenessTests(TestCase):
             css,
         )
 
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
-
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
 class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
@@ -195,7 +187,7 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
         vendor = Vendor.objects.create(store=self.store, slug="task5-vendor", name="فروشنده تست")
         Product.objects.create(
             store=self.store, vendor=vendor, name="کالای تست", slug="task5-product",
-            sku="T5-P", price="100000", status="active",
+            sku="T5-P", price="100000", status="active", stock=5,
         )
 
     def _place_and_publish(self, page_type: str, settings_patch: dict):
@@ -235,19 +227,20 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
         # background only exist in the second one) — both required.
         self.assertIn(".product-section--spotlight{height:100%;display:flex;flex-direction:column}", css)
         self.assertIn(
-            ".product-section--spotlight{height:100%;margin:0;border:1px solid #e1e4e8;"
+            ".product-section--spotlight{height:100%;margin:0;border:1px solid var(--brand-border,#e1e4e8);"
             "border-top:2px solid var(--brand-accent,#f43f5e);border-radius:6px;"
-            "background:#fff;overflow:hidden;display:flex;flex-direction:column}",
+            "background:var(--brand-surface,#fff);overflow:hidden;display:flex;flex-direction:column}",
             css,
         )
         self.assertIn(
             ".product-spotlight-track{position:relative;display:grid;"
-            "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}",
+            "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:var(--brand-surface,#fff)}",
             css,
         )
         self.assertIn(
+            # the panel width is now a merchant setting (--cp-w); unset it is the historical 2.05fr column
             ".product-campaign-band{display:grid;"
-            "grid-template-columns:minmax(168px,2.05fr) minmax(0,9.95fr);"
+            "grid-template-columns:minmax(168px,var(--cp-w,2.05fr)) minmax(0,9.95fr);"
             "gap:12px;align-items:stretch;min-width:0}",
             css,
         )
@@ -263,7 +256,7 @@ class ProductSectionSpotlightAndCampaignBandNonHomeCssTests(TestCase):
         self.assertIn(".beauty-section-title{gap:10px;margin-bottom:14px}", css)
         self.assertLess(
             css.index(".product-spotlight-track{position:relative;display:grid;"
-                       "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:#fff}"),
+                       "grid-template-columns:minmax(0,1fr);flex:1;min-height:0;background:var(--brand-surface,#fff)}"),
             css.index(".product-spotlight-head h2{font-size:13.5px}"),
         )
 
@@ -291,7 +284,7 @@ class AmazingOffersNonHomeCssTests(TestCase):
         for i in range(2):
             Product.objects.create(
                 store=self.store, vendor=vendor, name=f"کالای تست {i}", slug=f"task5-a3-product-{i}",
-                sku=f"T5A3-P{i}", price="100000", status="active", discount_percent=20,
+                sku=f"T5A3-P{i}", price="100000", status="active", discount_percent=20, stock=5,
             )
 
     def _place_and_publish(self, page_type: str):
@@ -328,26 +321,20 @@ class AmazingOffersNonHomeCssTests(TestCase):
         self.assertIn(".amazing-offers-section{margin:7px 0}", css)
         self.assertIn(
             ".special-wrap{display:grid;grid-template-columns:290px minmax(0,1fr);"
-            "gap:0;background:#fff;border:1px solid #e0e3e8;border-radius:5px;"
+            "gap:0;align-items:start;background:var(--brand-surface,#fff);border:1px solid var(--brand-border,#e0e3e8);border-radius:5px;"
             "overflow:hidden;box-shadow:0 1px 6px rgba(15,23,42,.05);min-height:250px}",
             css,
         )
         self.assertIn(
-            ".special-list{order:1;background:#f7f8fa;border-inline-end:1px solid #e5e7eb;"
-            "padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}",
+            ".special-list{order:1;background:color-mix(in srgb,var(--brand-text,#24272c) 4%,transparent);border-inline-end:1px solid color-mix(in srgb,currentColor 12%,transparent);padding:8px;display:flex;flex-direction:column;gap:4px;min-width:0}",
             css,
         )
         self.assertIn(
-            ".special-list-title{display:flex;flex-direction:column;gap:5px;"
-            "padding:2px 3px 6px;border-bottom:1px solid #e2e5e9;font-weight:800;"
-            "font-size:12px;color:#24272c}",
+            ".special-list-title{display:flex;flex-direction:column;gap:5px;padding:2px 3px 6px;border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);font-weight:800;font-size:12px;color:inherit}",
             css,
         )
         self.assertIn(
-            ".special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;"
-            "align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;"
-            "border:1px solid transparent;border-radius:3px;background:#fff;"
-            "color:#4b4f56;text-align:right;cursor:pointer}",
+            ".special-list>button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;border:1px solid transparent;border-radius:3px;background:var(--brand-surface,#fff);color:var(--brand-text,#4b4f56);text-align:right;cursor:pointer}",
             css,
         )
         self.assertIn(
@@ -355,7 +342,10 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
             css,
         )
-        self.assertIn(".special-list-price{font-size:9.8px;color:#767b84;white-space:nowrap}", css)
+        self.assertIn(
+            ".special-list-price{font-size:9.8px;color:var(--brand-muted,var(--muted,#6a6f77));white-space:nowrap}",
+            css,
+        )
         self.assertIn(
             ".special-main{grid-area:1/1;min-width:0;display:grid;"
             "grid-template-columns:minmax(0,1fr) minmax(230px,37%);align-items:center;"
@@ -367,31 +357,37 @@ class AmazingOffersNonHomeCssTests(TestCase):
             "gap:6px;min-width:0}",
             css,
         )
-        self.assertIn(".special-kicker{font-size:10.5px;color:#ef4444;font-weight:800}", css)
+        self.assertIn(
+            ".special-kicker{font-size:10.5px;color:var(--ssf-accent,var(--d-accent,var(--danger-text,#c93939)));font-weight:800}",
+            css,
+        )
         # The exact selector the CRITICAL merge error landed on.
         self.assertIn(
-            ".special-discount{display:inline-grid;place-items:center;min-width:39px;"
-            "height:22px;border-radius:999px;background:#ef4444;color:#fff;"
-            "font-size:9px;font-weight:900}",
+            '.special-discount{display:inline-grid;place-items:center;min-width:39px;height:22px;border-radius:999px;background:#d53d3d;color:#fff;font-size:9px;font-weight:900}',
             css,
         )
         self.assertIn(
-            ".special-copy h3{font-size:18px;line-height:1.55;font-weight:800;"
-            "color:#222;margin:0;max-width:520px}",
-            css,
-        )
-        self.assertIn(".special-brand{font-size:10px;color:#777d86;margin:0}", css)
-        self.assertIn(".special-price strong{font-size:18px;color:#169b62;font-weight:800}", css)
-        self.assertIn(".special-price del{font-size:10px;color:#9aa0a6}", css)
-        self.assertIn(
-            ".special-buy{margin-top:4px;border:1px solid #34383f;background:#fff;"
-            "color:#292d33;border-radius:2px;padding:6px 12px;font-size:10.5px;"
-            "font-weight:700}",
+            ".special-copy h3{font-size:18px;line-height:1.55;font-weight:800;color:inherit;margin:0;max-width:520px}",
             css,
         )
         self.assertIn(
-            ".special-image{height:215px;display:grid;place-items:center;"
-            "overflow:hidden;border-radius:4px;background:#fff}",
+            ".special-brand{font-size:10px;color:var(--ssf-muted,var(--brand-muted,#6a6f77));margin:0}",
+            css,
+        )
+        self.assertIn(
+            ".special-price strong{font-size:18px;color:var(--ssf-price,var(--green-text,#117f3a));font-weight:800}",
+            css,
+        )
+        self.assertIn(
+            ".special-price del{font-size:10px;color:var(--ssf-muted,var(--brand-muted,#6b6f74))}",
+            css,
+        )
+        self.assertIn(
+            ".special-buy{margin-top:4px;border:1px solid var(--brand-text,#34383f);background:var(--brand-surface,#fff);color:var(--brand-text,#292d33);border-radius:2px;padding:6px 12px;font-size:10.5px;font-weight:700}",
+            css,
+        )
+        self.assertIn(
+            ".special-image{height:215px;display:grid;place-items:center;overflow:hidden;border-radius:4px;background:var(--brand-surface,#fff)}",
             css,
         )
         self.assertIn(
@@ -518,9 +514,7 @@ class BannerNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".promo-grid--strip .promo-overlay{inset:0;display:flex;"
-            "align-items:center;justify-content:center;padding:0 14px;"
-            "background:#fff;text-align:center;color:#e4475d}",
+            '.promo-grid--strip .promo-overlay{inset:0;display:flex;align-items:center;justify-content:center;padding:0 14px;background:#fff;text-align:center;color:#c43d50}',
             css,
         )
         # Judgment call 2 (documented in the CSS comment): atelier-duo's
@@ -623,15 +617,13 @@ class CategoryGridTilesNonHomeCssTests(TestCase):
         self.assertIn(".tile:hover{transform:translateY(-3px)}", css)
         self.assertIn(".tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}", css)
         self.assertIn(
-            ".tile::after{content:'';position:absolute;inset:0;"
-            "background:linear-gradient(transparent 30%,rgba(0,0,0,.45))}",
+            ".tile::after{content:'';position:absolute;inset:0;background:linear-gradient(transparent 4%,rgba(0,0,0,.68) 38%)}",
             css,
         )
         self.assertIn(".tile>*{position:relative;z-index:2}", css)
         self.assertIn(".tile h4{font-size:16px;font-weight:800;margin-bottom:10px}", css)
         self.assertIn(
-            ".tile .btn{width:fit-content;padding:8px 16px;font-size:12px;"
-            "background:rgba(255,255,255,.92);color:var(--ink)}",
+            '.tile .btn{width:fit-content;padding:8px 16px;font-size:12px;background:rgba(255,255,255,.92);color:#1d1d24}',
             css,
         )
         self.assertIn(".t1{background:linear-gradient(135deg,#0ea5a3,#13c2c2)}", css)
@@ -659,15 +651,6 @@ class CategoryGridTilesNonHomeCssTests(TestCase):
             "padding-bottom:6px;-webkit-overflow-scrolling:touch}",
             css,
         )
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -744,7 +727,7 @@ class CategoryGridCircularNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".tile-circle{display:flex;flex-direction:column;align-items:center;"
-            "text-align:center;color:var(--ink);gap:5px;width:auto;min-width:0;"
+            "text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)));gap:5px;width:auto;min-width:0;"
             "flex:0 1 145px}",
             css,
         )
@@ -760,12 +743,12 @@ class CategoryGridCircularNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".tile-circle-img img{width:100%;height:100%;object-fit:contain;background:#fff;"
+            ".tile-circle-img img{width:100%;height:100%;object-fit:var(--img-fit,contain);background:#fff;"
             "border-radius:50%;border:1px solid #e3e5e8;padding:4px}",
             css,
         )
         self.assertIn(".tile-circle-wm{font-size:38px}", css)
-        self.assertIn(".tile-circle-label{font-size:11.8px;font-weight:600;color:#333}", css)
+        self.assertIn(".tile-circle-label{font-size:11.8px;font-weight:600;color:var(--sfb-section-fg,var(--brand-text,#333))}", css)
         self.assertIn(
             "@media(max-width:1000px){\n"
             "  .tiles-circular{overflow-x:auto;justify-content:flex-start;gap:14px}\n"
@@ -788,16 +771,6 @@ class CategoryGridCircularNonHomeCssTests(TestCase):
         self.assertNotIn(".tile-circle{flex-basis:88px;width:88px}", css)
         self.assertNotIn(".tile-circle-img{width:76px;height:76px}", css)
         self.assertNotIn(".tile-circle-img{width:78px;height:78px}", css)
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        self.assertNotIn("tiles-circular", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -841,7 +814,7 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         vendor = Vendor.objects.create(store=self.store, slug="task5-c25-vendor", name="فروشنده تست")
         Product.objects.create(
             store=self.store, vendor=vendor, name="کالای تست", slug="task5-c25-product",
-            sku="T5C25-P", price="100000", status="active",
+            sku="T5C25-P", price="100000", status="active", stock=5,
         )
 
     def test_newest_products_sec_head_renders_on_cart(self):
@@ -902,9 +875,7 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         )
         self.assertIn(".sec-head .more svg{width:16px;height:16px}", css)
         self.assertIn(
-            ".sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;"
-            "padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;"
-            "color:#ef4760;font-weight:700;box-shadow:none;font-size:10px}",
+            '.sec-head .btn,.product-section .sec-head .btn{height:23px;min-height:23px;padding:0 9px;border-radius:999px;background:#fff;border:1px solid #e3e5e9;color:#c63b50;font-weight:700;box-shadow:none;font-size:10px}',
             css,
         )
         # No @680px override for `.sec-head h2` font-size: that would
@@ -956,17 +927,12 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
         css = _PRODUCT_CARD_CSS.read_text(encoding="utf-8")
         self.assertIn(".rsec[data-pattern]>.section>.sec-head{margin-bottom:7px;align-items:center}", css)
         self.assertIn(
-            ".rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;"
-            "padding:4px 10px;border-radius:999px;background:#fff;color:#ef4760;"
-            "font-size:11.4px;line-height:1.4;font-weight:800;"
-            "box-shadow:0 1px 3px rgba(0,0,0,.05)}",
+            '.rsec[data-pattern]>.section>.sec-head h2{width:max-content;max-width:75%;padding:4px 10px;border-radius:999px;background:#fff;color:#c63b50;font-size:11.4px;line-height:1.4;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.05)}',
             css,
         )
         self.assertIn(".rsec[data-pattern]>.section>.sec-head h2 .bar{display:none;background:#ff5a72}", css)
         self.assertIn(
-            ".rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;"
-            "padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);"
-            "color:#ef4760;border-color:#fff}",
+            '.rsec[data-pattern]>.section>.sec-head .btn{height:21px;min-height:21px;padding-inline:8px;font-size:9.4px;background:rgba(255,255,255,.96);color:#c63b50;border-color:#fff}',
             css,
         )
         # The plain @680px override (11px) only wins at default density —
@@ -991,8 +957,7 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            '.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn'
-            "{background:#fff;border-color:#fff;color:var(--violet)}",
+            '.rsec[data-bg-mode="palette"]:has(.pcard.style-beauty_retail) .sec-head .btn{background:#fff;border-color:#fff;color:var(--violet-text,var(--violet))}',
             css,
         )
         self.assertIn(".product-section:has(.pcard.style-beauty_retail) .sec-head{margin-bottom:10px}", css)
@@ -1021,18 +986,6 @@ class SecHeadSharedBaselineNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(".product-section:has(.pcard.style-minimal) .sec-head h2 .bar{display:none}", css)
-
-    def test_home_page_is_unaffected_since_home_css_already_overrides_every_changed_property(self):
-        home_css = Path(settings.BASE_DIR, "apps", "catalog", "static", "css", "home.css").read_text(
-            encoding="utf-8",
-        )
-        # Home's OWN later cascade passes (not this fix) are what actually
-        # govern its rendering — confirm they still exist untouched.
-        self.assertIn(".sec-head{margin-bottom:9px}", home_css)
-        self.assertIn(".sec-head h2{font-size:16px}", home_css)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -1118,7 +1071,7 @@ class CategoryGridImageStripNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".category-image-tile{min-width:0;display:flex;flex-direction:column;"
-            "align-items:center;gap:4px;color:#25282d;text-align:center}",
+            "align-items:center;gap:4px;color:var(--sfb-section-fg,var(--brand-text,#25282d));text-align:center}",
             css,
         )
         self.assertIn(
@@ -1128,7 +1081,7 @@ class CategoryGridImageStripNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".category-image-media img{display:block;width:100%;height:100%;"
-            "object-fit:contain;border:0;border-radius:0;padding:0;box-shadow:none}",
+            "object-fit:var(--img-fit,contain);border:0;border-radius:0;padding:0;box-shadow:none}",
             css,
         )
         self.assertIn(".category-image-fallback{font-size:42px;line-height:1}", css)
@@ -1174,16 +1127,6 @@ class CategoryGridImageStripNonHomeCssTests(TestCase):
         # exception is the one genuinely family-specific piece that
         # needed adding, matching home.css's own real rendering.
         self.assertIn(".rcontainer:has(.category-image-strip-section){margin-bottom:5px}", css)
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        self.assertNotIn("category-image-strip", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -1318,8 +1261,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".category-fashion-tile{display:flex;flex-direction:column;align-items:center;"
-            "gap:6px;color:#25282d;text-align:center;flex:0 0 64px;scroll-snap-align:start}",
+            '.category-fashion-tile{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--sfb-section-fg,var(--brand-text,#25282d));text-align:center;flex:0 0 64px;scroll-snap-align:start}',
             css,
         )
         self.assertIn(
@@ -1387,7 +1329,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
         )
         self.assertIn(
             ".category-beauty-tile{display:flex;flex-direction:column;align-items:center;"
-            "gap:7px;text-align:center;color:var(--ink);min-width:0}",
+            "gap:7px;text-align:center;color:var(--sfb-section-fg,var(--brand-text,var(--ink)));min-width:0}",
             css,
         )
         self.assertIn(
@@ -1441,7 +1383,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
         self.assertIn(".category-chocolate-section{margin:16px 0 24px}", css)
         self.assertIn(".chocolate-section-title{text-align:center;margin-bottom:14px}", css)
         self.assertIn(
-            ".chocolate-section-title h2{font-size:15px;font-weight:800;color:#3c2b1d;margin:0}",
+            ".chocolate-section-title h2{font-size:15px;font-weight:800;color:var(--sfb-section-fg,var(--ink,#3c2b1d));margin:0}",
             css,
         )
         self.assertIn(
@@ -1492,8 +1434,7 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".category-atelier-shade{position:absolute;inset:0;background:linear-gradient"
-            "(180deg,rgba(20,16,12,.02) 45%,rgba(20,16,12,.64) 100%);pointer-events:none}",
+            '.category-atelier-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,12,.02) 30%,rgba(20,16,12,.74) 78%);pointer-events:none}',
             css,
         )
         self.assertIn(
@@ -1515,20 +1456,6 @@ class CategoryGridRemainingModesNonHomeCssTests(TestCase):
             "}",
             css,
         )
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        for marker in (
-            "category-fashion", "category-mosaic", "category-beauty",
-            "category-chocolate", "category-atelier",
-        ):
-            self.assertNotIn(marker, home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -1573,8 +1500,7 @@ class GroupDNonHomeCssTests(TestCase):
         self.assertIn(".tile .wm{position:absolute;top:10px;left:14px;font-size:90px;opacity:.22}", css)
         self.assertIn(".tile h4{font-size:16px;font-weight:800;margin-bottom:10px}", css)
         self.assertIn(
-            ".tile .btn{width:fit-content;padding:8px 16px;font-size:12px;"
-            "background:rgba(255,255,255,.92);color:var(--ink)}",
+            '.tile .btn{width:fit-content;padding:8px 16px;font-size:12px;background:rgba(255,255,255,.92);color:#1d1d24}',
             css,
         )
 
@@ -1664,7 +1590,7 @@ class GroupDNonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".blog-card .read{color:#444;font-size:9px;font-weight:700;display:flex;"
+            ".blog-card .read{color:var(--ink);font-size:9px;font-weight:700;display:flex;"
             "align-items:center;gap:4px}",
             css,
         )
@@ -1682,15 +1608,6 @@ class GroupDNonHomeCssTests(TestCase):
         # pass) must never reappear on their own.
         self.assertNotIn("grid-template-columns:repeat(auto-fill,minmax(200px,1fr))", css)
         self.assertNotIn(".blog-card{border-radius:var(--radius)}", css)
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -1749,8 +1666,9 @@ class GroupENonHomeCssTests(TestCase):
         self.assertIn('class="quote"', html)
         self.assertIn('class="who"', html)
 
-    def test_trust_features_renders_on_cart_with_default_items(self):
-        self._place("trust_features", StorefrontPage.PageType.CART, {})
+    def test_trust_features_renders_on_cart_with_verified_items(self):
+        # FOLLOWUP-10: public output only contains items backed by real state or the merchant's explicit confirmation.
+        self._place("trust_features", StorefrontPage.PageType.CART, {"items": [{"icon": "🛡", "title": "اصالت", "verified": True}]})
         svc.publish(self.store)
         resp = self.client.get(reverse("cart:detail"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
@@ -1814,19 +1732,18 @@ class GroupENonHomeCssTests(TestCase):
             css,
         )
         self.assertIn(
-            ".feat{background:#fff;border:1px solid var(--line);border-radius:5px;padding:6px 9px;"
+            ".feat{background:var(--brand-surface,#fff);border:1px solid var(--line);border-radius:5px;padding:6px 9px;"
             "display:flex;align-items:center;gap:8px;min-height:54px;"
             "box-shadow:0 1px 5px rgba(15,23,42,.04)}",
             css,
         )
         self.assertIn(
-            ".feat .ic{width:31px;height:31px;border-radius:4px;background:#fff;color:#f43f5e;"
-            "border:0;display:grid;place-items:center;flex-shrink:0;font-size:15px}",
+            '.feat .ic{width:31px;height:31px;border-radius:4px;background:#fff;color:#cb344e;border:0;display:grid;place-items:center;flex-shrink:0;font-size:15px}',
             css,
         )
         self.assertIn(".feat .ic svg{width:21px;height:21px}", css)
         self.assertIn(".feat b{font-size:11px;font-weight:600;line-height:1.45;display:block}", css)
-        self.assertIn(".feat small{color:var(--muted);font-size:9.5px;line-height:1.5}", css)
+        self.assertIn(".feat small{color:var(--ssf-muted,var(--muted));font-size:9.5px;line-height:1.5}", css)
         self.assertIn(
             'html[data-sfb-density="compact"] .features{gap:10px;margin:18px 0}', css,
         )
@@ -1861,15 +1778,6 @@ class GroupENonHomeCssTests(TestCase):
         # that gives the base rule its `gap:9px` (which wins at every
         # viewport, ≤680px included) — must never reappear.
         self.assertNotIn(".features{display:flex;overflow-x:auto;gap:8px}", css)
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css_group_e(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -1940,11 +1848,10 @@ class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
         )
         self.assertIn(".brand-beauty-tabs .brand-beauty-tab:last-child{border-inline-end:0}", css)
         self.assertIn(
-            ".brand-beauty-tabs .brand-beauty-tab:hover{background:#fff9fc;color:var(--violet)}", css,
+            '.brand-beauty-tabs .brand-beauty-tab:hover{background:#fff9fc;color:var(--violet-text,var(--violet))}', css,
         )
         self.assertIn(
-            ".brand-beauty-tabs .brand-tile-name{color:var(--violet);font-size:10.5px;"
-            "font-weight:700;text-align:center}",
+            '.brand-beauty-tabs .brand-tile-name{color:var(--violet-text,var(--violet));font-size:10.5px;font-weight:700;text-align:center}',
             css,
         )
         self.assertIn(
@@ -1954,12 +1861,3 @@ class BrandCarouselBeautyTabsNonHomeCssTests(TestCase):
             "}",
             css,
         )
-
-    def test_home_page_is_unaffected_since_it_never_loads_storefront_builder_css(self):
-        home_html = Path(settings.BASE_DIR, "apps", "catalog", "templates", "catalog", "home.html").read_text(
-            encoding="utf-8",
-        )
-        self.assertNotIn("storefront_builder.css", home_html)
-        svc.publish(self.store)
-        resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
-        self.assertEqual(resp.status_code, 200)

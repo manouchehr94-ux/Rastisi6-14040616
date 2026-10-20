@@ -1,5 +1,5 @@
 {% extends "storefront_shell.html" %}
-{% load static %}
+{% load static storefront_builder_extras %}
 
 {% block title %}فروشگاه — جستجو و فیلتر کالاها | {{ SHOP_NAME }}{% endblock %}
 {% comment %}Search results and price-filtered permutations are noindex,follow to avoid
@@ -10,7 +10,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/product_card.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_list.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 {% endblock %}
 
 {% block extra_js %}{{ block.super }}

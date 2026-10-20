@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}اشتراک و صورتحساب | پنل مدیریت{% endblock %}
 {% block page_title %}اشتراک و صورتحساب{% endblock %}
 {% block page_sub %}پلنِ فعلی، وضعیت، و دسترسی به تغییرِ پلن{% endblock %}
@@ -25,13 +26,13 @@
         {% if summary.trial_end_at %}
         <div>
           <div style="color:var(--muted);font-size:12px">پایانِ دوره‌ی آزمایشی</div>
-          <div>{{ summary.trial_end_at|date:"Y-m-d" }}</div>
+          <div>{{ summary.trial_end_at|jalali }}</div>
         </div>
         {% endif %}
         {% if summary.current_period_end %}
         <div>
           <div style="color:var(--muted);font-size:12px">پایانِ دوره‌ی جاری</div>
-          <div>{{ summary.current_period_end|date:"Y-m-d" }}</div>
+          <div>{{ summary.current_period_end|jalali }}</div>
         </div>
         {% endif %}
       </div>

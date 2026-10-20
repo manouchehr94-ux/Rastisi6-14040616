@@ -50,8 +50,6 @@ class GroupFReconciliationBase(StorefrontBuilderViewsTestCase):
         super().setUp()
         cache.clear()
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
         self.home = self.draft.get_page(StorefrontPage.PageType.HOME)
         self.home.sections.all().delete()
@@ -185,7 +183,7 @@ class ProductViewFamilyReconciliationTests(GroupFReconciliationBase):
 
     def test_variant_explicit_marker_survives_unrelated_r4_resave(self):
         # Task 6 (final-review fix, I1) — the independent reviewer found
-        # ``product_section`` was NOT in ``APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS``,
+        # ``product_section`` was NOT in ``sections_with_capability("appearance_override")``,
         # so ``validate_settings`` silently dropped the just-stamped
         # ``variant_explicit`` marker on the very next unrelated save (here,
         # an R4 ``item_limit`` patch that never touches ``display_mode``).
@@ -213,8 +211,7 @@ class ProductViewFamilyReconciliationTests(GroupFReconciliationBase):
 
 class CardFamilyReconciliationTests(GroupFReconciliationBase):
     """`card` family — the Store Appearance manifest overlays an unmarked
-    section's `card.card_style`; an explicit local edit through the real
-    legacy card-settings form (the one actual write path for this field)
+    section's `card.card_style`; an explicit local card style
     wins over a later, conflicting manifest selection — same contract as
     `hero`/`product_view`, via the independent `card_style_explicit` marker."""
 
@@ -237,31 +234,18 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
     def _card_style(self, item):
         return item["context"]["settings"].get("card", {}).get("card_style")
 
-    def _post_legacy_product_section_settings(self, section, *, card_style):
-        return self.client.post(
-            reverse("dashboard:storefront-builder-section-settings", args=[section.pk]),
-            {
-                "data_source": "newest", "display_mode": "grid", "item_limit": "8",
-                "title": "", "card_style": card_style,
-            },
-        )
+    def _mark_explicit_local_card_style(self, section, card_style):
+        """A section that carries an explicit local card style (e.g. one authored by a recipe or earlier edit). The Inspector
+        schema exposes no per-section card control any more — the Store-level ``card`` component is the editing surface — so the
+        durable state is set up directly and only the reconciliation / survival contracts are exercised."""
+        settings = dict(section.settings)
+        settings["card"] = {**settings.get("card", {}), "card_style": card_style}
+        settings["appearance_overrides"] = {**settings.get("appearance_overrides", {}), "card_style_explicit": True}
+        section.settings = settings
+        section.save(update_fields=["settings"])
 
     def test_explicit_local_card_style_wins_over_later_manifest_selection(self):
-        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
-        # True (binding policy) -- flip to legacy editor mode for this one
-        # call, then back to R4 mode (the base fixture's own setUp default)
-        # for the R4 component-update call that follows.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
-        self.assertEqual(r1.status_code, 302)
-        _w5a_layout.r4_editor_enabled = True
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        self.product_section.refresh_from_db()
-        self.assertTrue(
-            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
-        )
+        self._mark_explicit_local_card_style(self.product_section, "minimal")
 
         r2 = self._component_update("card", "card.luxury_dark.v1")
         self.assertEqual(r2.status_code, 200)
@@ -272,66 +256,8 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
         wall_item = self._item_for(self._render_items(), "catalog_product_wall")
         self.assertEqual(self._card_style(wall_item), "luxury_dark")
 
-    def test_card_style_explicit_marker_survives_unrelated_legacy_resave(self):
-        # Task 6 (final-review fix, C1) — the independent reviewer proved the
-        # prior fix survived exactly one Save: no CARD_AWARE_SECTION_KEYS
-        # member was in APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS, so
-        # validate_settings silently dropped the whole appearance_overrides
-        # block (marker included) on the very next unrelated legacy save.
-        # P5-W5A: both legacy calls below now fail closed under
-        # r4_editor_enabled=True (binding policy) -- flip to legacy editor
-        # mode for the two legacy resaves, then back to R4 mode (the base
-        # fixture's own setUp default) for the R4 component-update call.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
-        self.assertEqual(r1.status_code, 302)
-        self.product_section.refresh_from_db()
-        self.assertTrue(
-            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
-        )
-
-        r2 = self.client.post(
-            reverse("dashboard:storefront-builder-section-settings", args=[self.product_section.pk]),
-            {
-                "data_source": "newest", "display_mode": "grid", "item_limit": "9",
-                "title": "", "card_style": "minimal",
-            },
-        )
-        self.assertEqual(r2.status_code, 302)
-        _w5a_layout.r4_editor_enabled = True
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        self.product_section.refresh_from_db()
-        self.assertTrue(
-            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit"),
-            "card_style_explicit must survive an unrelated legacy resave (item_limit only)",
-        )
-        self.assertEqual(self.product_section.settings.get("item_limit"), 9)
-
-        r3 = self._component_update("card", "card.luxury_dark.v1")
-        self.assertEqual(r3.status_code, 200)
-        item = self._item_for(self._render_items(), "product_section")
-        self.assertEqual(self._card_style(item), "minimal")
-
     def test_card_style_explicit_marker_survives_unrelated_r4_patch(self):
-        # Same durability contract, exercised through the R4 mutation
-        # endpoint (clean_section_schema_patch) instead of the legacy form.
-        # P5-W5A: the legacy route now fails closed under r4_editor_enabled=
-        # True (binding policy) -- flip to legacy editor mode for the one
-        # legacy call, then back to R4 mode (the base fixture's own setUp
-        # default) for the R4 calls that follow.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        r1 = self._post_legacy_product_section_settings(self.product_section, card_style="minimal")
-        self.assertEqual(r1.status_code, 302)
-        _w5a_layout.r4_editor_enabled = True
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        self.product_section.refresh_from_db()
-        self.assertTrue(
-            self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit")
-        )
+        self._mark_explicit_local_card_style(self.product_section, "minimal")
 
         r2 = self._settings_update(self.product_section, {"item_limit": 9})
         self.assertEqual(r2.status_code, 200)
@@ -340,29 +266,13 @@ class CardFamilyReconciliationTests(GroupFReconciliationBase):
             self.product_section.settings.get("appearance_overrides", {}).get("card_style_explicit"),
             "card_style_explicit must survive an unrelated R4 settings patch",
         )
+        self.assertEqual(self.product_section.settings.get("item_limit"), 9)
+        self.assertEqual(self.product_section.settings["card"]["card_style"], "minimal")
 
         r3 = self._component_update("card", "card.luxury_dark.v1")
         self.assertEqual(r3.status_code, 200)
         item = self._item_for(self._render_items(), "product_section")
         self.assertEqual(self._card_style(item), "minimal")
-
-    def test_legacy_resubmission_of_same_card_style_does_not_mark_explicit(self):
-        # The legacy form always submits card_style on every POST; presence
-        # is not intent — only a genuine change marks the override, same
-        # "presence is not intent" rule as the variant marker.
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = layout_service.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self._post_legacy_product_section_settings(self.product_section, card_style="standard")
-        self.assertEqual(resp.status_code, 302)
-        self.product_section.refresh_from_db()
-        self.assertNotIn(
-            "card_style_explicit",
-            self.product_section.settings.get("appearance_overrides", {}),
-        )
 
     def test_manifest_card_selection_overlays_every_card_aware_section(self):
         resp = self._component_update("card", "card.luxury_dark.v1")

@@ -20,7 +20,7 @@ copy/image split, no copied concept/reference imagery and no Store IDs.
       <figure class="hero-luxury-media">
         <picture>
           {% if s.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ s.mobile_image_url }}">{% endif %}
-          {% if s.desktop_image_url %}<img src="{{ s.desktop_image_url }}" alt="{{ s.title|default:'تصویر مجموعه' }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">{% endif %}
+          {% if s.desktop_image_url %}<img src="{{ s.desktop_image_url }}" data-img-role="hero" alt="{{ s.title|default:'تصویر مجموعه' }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">{% endif %}
         </picture>
       </figure>
     </article>

@@ -1,10 +1,9 @@
 from pathlib import Path
 
 from django.conf import settings as django_settings
-from django.urls import reverse
 
 from apps.storefront_builder import appearance_registry, layout_preset_registry, section_registry
-from apps.storefront_builder.models import StorefrontPage, StorefrontSection
+from apps.storefront_builder.models import StorefrontPage
 from apps.storefront_builder.services import layout_service
 
 from .test_views import StorefrontBuilderViewsTestCase
@@ -69,28 +68,6 @@ class Phase38PaletteBackgroundEditorTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(cleaned["color"], "#123456")
         self.assertEqual(cleaned["palette_role"], "")
 
-    def test_background_editor_exposes_palette_and_custom_modes(self):
-        section = StorefrontSection.objects.create(
-            page=self.page,
-            section_key="product_section",
-            order=0,
-            settings={
-                **section_registry.get_definition("product_section").default_settings(),
-                "background": {
-                    "mode": "palette_pattern",
-                    "palette_role": "tone-2",
-                    "pattern_slug": "commerce-doodle",
-                },
-            },
-        )
-        response = self.client.get(
-            reverse("dashboard:storefront-builder-section-settings", args=[section.pk])
-        )
-        self.assertContains(response, "رنگ از پالت کل سایت")
-        self.assertContains(response, "پالت + الگوی ظریف")
-        self.assertContains(response, "رنگ دلخواه ثابت")
-        self.assertContains(response, "با تغییر پالت سایت، این رنگ هم خودکار عوض می‌شود.")
-
 
 class Phase38GlobalCssContractTests(StorefrontBuilderViewsTestCase):
     def test_core_shell_uses_brand_tokens(self):
@@ -101,16 +78,3 @@ class Phase38GlobalCssContractTests(StorefrontBuilderViewsTestCase):
         self.assertIn("background:var(--brand-text,#4b4b53)", layout_css)
         self.assertIn('.rsec[data-bg-mode="palette_pattern"]', tokens_css)
         self.assertIn("--palette-tone-5:", tokens_css)
-
-    def test_appearance_panel_calls_palette_a_whole_site_action(self):
-        draft = layout_service.get_or_create_draft(self.store, user=self.staff)
-        response = self.client.get(reverse("dashboard:storefront-builder-appearance"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "پالت کل سایت")
-        self.assertContains(response, "تم کامل:")
-        self.assertContains(response, "پس‌زمینه صفحه")
-        self.assertContains(response, "هدر")
-        self.assertContains(response, "کارت‌ها")
-        self.assertContains(response, "قیمت‌ها")
-        self.assertContains(response, "ردیف‌های رنگی")
-        self.assertContains(response, "فوتر")

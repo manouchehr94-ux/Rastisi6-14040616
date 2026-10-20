@@ -277,7 +277,7 @@ class HeroBannerVariantTests(TestCase):
     def test_registered_variants(self):
         definition = get_definition("hero_banner")
         keys = [v.key for v in definition.variants]
-        self.assertEqual(sorted(keys), ["atelier_triptych", "beauty_editorial", "chocolate_carousel", "luxury_showcase", "overlay", "split"])
+        self.assertEqual(sorted(keys), ["atelier_triptych", "beauty_editorial", "chocolate_carousel", "luxury_showcase", "overlay", "poster_wide", "split"])
         self.assertEqual(definition.default_variant, "overlay")
         self.assertEqual(definition.variant_setting_key, "hero_style")
 

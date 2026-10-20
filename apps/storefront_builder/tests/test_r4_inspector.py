@@ -20,6 +20,14 @@ def _inspector_url(pk):
     return reverse("dashboard:storefront-builder-r4-section-inspector", args=[pk])
 
 
+def _tab_panel(content, name):
+    """The markup of ONE workspace tab panel (content | design | advanced), up to the next panel / the footer."""
+    start = content.index(f'data-r4-tab-panel="{name}"')
+    ends = [content.find('data-r4-tab-panel="', start + 10), content.find('<footer class="r4-ws-footer"', start)]
+    ends = [e for e in ends if e != -1]
+    return content[start:min(ends) if ends else len(content)]
+
+
 class RichTextInspectorTests(R4MutationApiTestCase):
     def setUp(self):
         super().setUp()
@@ -34,14 +42,18 @@ class RichTextInspectorTests(R4MutationApiTestCase):
 
         self.assertContains(response, "data-r4-section-inspector")
         self.assertContains(response, f'data-r4-section-id="{self.rich_text_section.pk}"')
-        self.assertContains(response, 'data-r4-tab="basic"')
-        self.assertContains(response, 'data-r4-tab="advanced"')
+        for tab in ("content", "design", "advanced"):
+            self.assertContains(response, f'data-r4-tab="{tab}"')
         self.assertContains(response, 'aria-selected="true"')
         self.assertContains(response, 'aria-selected="false"')
 
-        # Advanced panel is initially hidden; Basic is not.
-        advanced_idx = content.index('data-r4-tab-panel="advanced"')
-        self.assertIn("hidden", content[advanced_idx:advanced_idx + 60])
+        # Only the Content panel is initially visible.
+        for tab in ("design", "advanced"):
+            idx = content.index(f'data-r4-tab-panel="{tab}"')
+            self.assertIn("hidden", content[idx:idx + 160])
+        content_idx = content.index('data-r4-tab-panel="content"')
+        self.assertNotIn(" hidden", content[content.rindex("<section", 0, content_idx):content.index(">", content_idx)])
+        self.assertIn("body_html", _tab_panel(content, "content"))
 
         self.assertContains(response, 'data-r4-field-key="body_html"')
         self.assertContains(response, 'data-r4-field-type="rich_text"')
@@ -55,24 +67,28 @@ class RichTextInspectorTests(R4MutationApiTestCase):
 
 
 class HeroInspectorGroupSplitTests(R4MutationApiTestCase):
-    def test_basic_and_advanced_fields_come_from_schema_group(self):
+    def test_fields_are_arranged_into_content_design_advanced_by_type_and_key(self):
         response = self.client.get(_inspector_url(self.section.pk))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
 
-        basic_start = content.index('data-r4-tab-panel="basic"')
-        advanced_start = content.index('data-r4-tab-panel="advanced"')
-        basic_chunk = content[basic_start:advanced_start]
-        advanced_chunk = content[advanced_start:]
+        content_chunk = _tab_panel(content, "content")
+        design_chunk = _tab_panel(content, "design")
+        advanced_chunk = _tab_panel(content, "advanced")
 
         for key in ("hero_style", "autoplay"):
-            self.assertIn(f'data-r4-field-key="{key}"', basic_chunk)
-        for key in ("interval_ms", "show_arrows", "show_dots", "loop", "text_position"):
+            self.assertIn(f'data-r4-field-key="{key}"', content_chunk)
+        # layout is a DESIGN concern; motion behaviour stays in Advanced.
+        self.assertIn('data-r4-field-key="text_position"', design_chunk)
+        self.assertIn('data-r4-field-key="background"', design_chunk)
+        for key in ("interval_ms", "show_arrows", "show_dots", "loop"):
             self.assertIn(f'data-r4-field-key="{key}"', advanced_chunk)
 
-        # None of the advanced-only keys leak into the basic panel.
+        # No field leaks across tabs.
         for key in ("interval_ms", "show_arrows", "show_dots", "loop", "text_position"):
-            self.assertNotIn(f'data-r4-field-key="{key}"', basic_chunk)
+            self.assertNotIn(f'data-r4-field-key="{key}"', content_chunk)
+        for key in ("hero_style", "autoplay", "text_position"):
+            self.assertNotIn(f'data-r4-field-key="{key}"', advanced_chunk)
 
 
 class CurrentValueHydrationTests(R4MutationApiTestCase):
@@ -135,14 +151,6 @@ class ActiveDraftTenantScopingTests(R4MutationApiTestCase):
             version=published, section_key="hero_banner", order=0,
         )
         response = self.client.get(_inspector_url(published_section.pk))
-        self.assertEqual(response.status_code, 404)
-
-
-class FeatureGateTests(R4MutationApiTestCase):
-    def test_inspector_unavailable_when_r4_gate_is_off(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self.client.get(_inspector_url(self.section.pk))
         self.assertEqual(response.status_code, 404)
 
 
@@ -239,7 +247,7 @@ class UnsupportedWidgetContractTests(R4MutationApiTestCase):
     def test_unsupported_field_type_raises_improperly_configured(self):
         real_definition = section_registry_module.get_definition("hero_banner")
         bad_schema = SettingsSchema(fields=(
-            SettingsField("swatch", "رنگ", "color", "basic"),
+            SettingsField("swatch", "گونه", "variant", "basic"),
         ))
         bad_definition = dataclasses.replace(real_definition, settings_schema=bad_schema)
         with patch(
@@ -395,7 +403,8 @@ class R4EditorJsSidebarContractTests(R4MutationApiTestCase):
         self.assertIn("focusout", self.js_source)
         # The focusout handler must itself call the same single queue —
         # not a second/parallel save path.
-        focusout_idx = self.js_source.index("focusout")
+        # Anchored on the real listener (the first literal "focusout" is a comment in the scalar handler above it).
+        focusout_idx = self.js_source.index("addEventListener('focusout'")
         self.assertIn("enqueueMutation", self.js_source[focusout_idx:focusout_idx + 800])
 
 
@@ -411,11 +420,14 @@ class BaseAdminTemplateUntouchedTests(R4MutationApiTestCase):
 
 
 class InspectorArchitectureUnchangedByPolishTests(R4MutationApiTestCase):
-    def test_inspector_still_has_exactly_basic_and_advanced_tabs(self):
+    def test_inspector_has_exactly_content_design_advanced_tabs(self):
         response = self.client.get(_inspector_url(self.section.pk))
-        self.assertContains(response, 'data-r4-tab="basic"')
-        self.assertContains(response, 'data-r4-tab="advanced"')
-        self.assertEqual(response.content.decode().count('role="tab"'), 2)
+        for tab in ("content", "design", "advanced"):
+            self.assertContains(response, f'data-r4-tab="{tab}"')
+        html = response.content.decode()
+        # R4-10: still exactly THREE primary tabs; the Design tab's sub-sections are a second, separate tablist
+        self.assertEqual(html.count('data-r4-tab="'), 3)
+        self.assertEqual(html.count('role="tab"'), 3 + html.count('data-r4-sub="'))
 
     def test_inspector_still_has_no_r3_modal_iframe_or_form_action(self):
         response = self.client.get(_inspector_url(self.section.pk))
@@ -437,28 +449,26 @@ class AppearanceOverrideWidgetTests(R4MutationApiTestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
 
-        advanced_start = content.index('data-r4-tab-panel="advanced"')
-        advanced_chunk = content[advanced_start:]
+        design_chunk = _tab_panel(content, "design")
 
-        self.assertIn('data-r4-field-key="appearance_overrides"', advanced_chunk)
-        self.assertIn('data-r4-field-type="appearance_override"', advanced_chunk)
-        self.assertIn("data-r4-appearance-enabled", advanced_chunk)
-        self.assertIn("data-r4-appearance-font", advanced_chunk)
-        self.assertIn("data-r4-appearance-type-scale", advanced_chunk)
+        self.assertIn('data-r4-field-key="appearance_overrides"', design_chunk)
+        self.assertIn('data-r4-field-type="appearance_override"', design_chunk)
+        self.assertIn("data-r4-appearance-enabled", design_chunk)
+        self.assertIn("data-r4-appearance-font", design_chunk)
+        self.assertIn("data-r4-appearance-type-scale", design_chunk)
         # Curated font/type-scale choices are real <option> controls, not a
         # free-text/JSON/CSS field.
-        self.assertIn("Vazirmatn", advanced_chunk)
-        self.assertIn("<select", advanced_chunk)
+        self.assertIn("Vazirmatn", design_chunk)
+        self.assertIn("<select", design_chunk)
 
     def test_no_json_or_css_free_text_input_for_appearance_override(self):
         response = self.client.get(_inspector_url(self.section.pk))
         content = response.content.decode()
         self.assertNotIn('data-r4-field-type="json"', content)
         # No CSS/style free-text input anywhere in the appearance widget.
-        advanced_start = content.index('data-r4-tab-panel="advanced"')
-        advanced_chunk = content[advanced_start:]
-        appearance_start = advanced_chunk.index('data-r4-field-type="appearance_override"')
-        appearance_chunk = advanced_chunk[appearance_start:appearance_start + 1500]
+        design_chunk = _tab_panel(content, "design")
+        appearance_start = design_chunk.index('data-r4-field-type="appearance_override"')
+        appearance_chunk = design_chunk[appearance_start:appearance_start + 1500]
         self.assertNotIn("<textarea", appearance_chunk)
         self.assertNotIn('type="text"', appearance_chunk)
 
@@ -473,10 +483,9 @@ class AppearanceOverrideWidgetTests(R4MutationApiTestCase):
         # contains no admin URL anywhere."
         response = self.client.get(_inspector_url(self.section.pk))
         content = response.content.decode()
-        advanced_start = content.index('data-r4-tab-panel="advanced"')
-        advanced_chunk = content[advanced_start:]
-        appearance_start = advanced_chunk.index('data-r4-field-type="appearance_override"')
-        appearance_chunk = advanced_chunk[appearance_start:appearance_start + 1500]
+        design_chunk = _tab_panel(content, "design")
+        appearance_start = design_chunk.index('data-r4-field-type="appearance_override"')
+        appearance_chunk = design_chunk[appearance_start:appearance_start + 1500]
         self.assertNotIn("/admin-portal/", appearance_chunk)
         self.assertNotIn("section-settings", appearance_chunk)
 
@@ -501,10 +510,10 @@ class AppearanceOverrideWidgetTests(R4MutationApiTestCase):
         self.assertNotIn("data-r4-appearance-enabled", content)
         self.assertIn('data-r4-field-key="body_html"', content)
 
-    def test_color_field_type_remains_unsupported(self):
+    def test_variant_field_type_remains_unsupported(self):
         real_definition = section_registry_module.get_definition("hero_banner")
         bad_schema = SettingsSchema(fields=(
-            SettingsField("swatch", "رنگ", "color", "basic"),
+            SettingsField("swatch", "گونه", "variant", "basic"),
         ))
         bad_definition = dataclasses.replace(real_definition, settings_schema=bad_schema)
         with patch(
@@ -584,7 +593,9 @@ class ResourceSourceWidgetTests(R4MutationApiTestCase):
             content = response.content.decode()
             self.assertNotIn("data-r4-picker", content)
             self.assertNotIn("data-r4-resource-search", content)
-            self.assertNotIn('type="search"', content)
+            # the workspace's own settings search is the ONLY search input (never a resource-picker search)
+            self.assertEqual(content.count('type="search"'), 1)
+            self.assertIn("data-r4-ws-search", content)
             self.assertNotIn("data-r4-manual-select", content)
 
     def test_no_new_r4_urls_were_added_for_the_picker(self):
@@ -596,16 +607,15 @@ class ResourceSourceWidgetTests(R4MutationApiTestCase):
     def test_resource_source_field_is_read_only_no_input_control(self):
         response = self.client.get(_inspector_url(self.product_section.pk))
         content = response.content.decode()
-        basic_start = content.index('data-r4-tab-panel="basic"')
-        advanced_start = content.index('data-r4-tab-panel="advanced"')
-        source_field_start = content.index('data-r4-field-type="resource_source"', basic_start)
-        self.assertLess(source_field_start, advanced_start)
+        content_start = content.index('data-r4-tab-panel="content"')
+        design_start = content.index('data-r4-tab-panel="design"')
+        source_field_start = content.index('data-r4-field-type="resource_source"', content_start)
+        self.assertLess(source_field_start, design_start)
         next_field_start = content.index('data-r4-field-row', source_field_start + 1)
         source_chunk = content[source_field_start:next_field_start]
         self.assertNotIn("<input", source_chunk)
         self.assertNotIn("<select", source_chunk)
         self.assertNotIn("<textarea", source_chunk)
-
 
 
 class BrandCarouselV02InspectorFilteringTests(R4MutationApiTestCase):
@@ -656,7 +666,6 @@ class BrandCarouselV02InspectorFilteringTests(R4MutationApiTestCase):
         section.refresh_from_db()
         self.assertEqual(section.settings, before)
         self.assertTrue(section.settings["show_view_all"])  # dormant, intact
-
 
 
 # ------------------------------------------------------------------------
@@ -770,7 +779,6 @@ class Task4AContextualExclusivityContractTests(R4MutationApiTestCase):
         self.assertIn("closeInspector()", open_global_chunk)
 
 
-
 # ------------------------------------------------------------------------
 # Phase 5 Task 4B — media/background editing ported INTO R4. A media/
 # background-capable section must render a real R4 picker control (a new
@@ -788,16 +796,15 @@ class Task4BBackgroundFieldInspectorTests(R4MutationApiTestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
 
-        advanced_start = content.index('data-r4-tab-panel="advanced"')
-        advanced_chunk = content[advanced_start:]
+        design_chunk = _tab_panel(content, "design")
 
         # A real, interactive control — not merely the passive out-link stub.
-        self.assertIn('data-r4-field-key="background"', advanced_chunk)
-        self.assertIn('data-r4-field-type="background"', advanced_chunk)
-        self.assertIn("data-r4-background-mode", advanced_chunk)
-        self.assertIn("data-r4-background-color", advanced_chunk)
-        self.assertIn("data-r4-background-pattern", advanced_chunk)
-        self.assertIn("data-r4-background-media", advanced_chunk)
+        self.assertIn('data-r4-field-key="background"', design_chunk)
+        self.assertIn('data-r4-field-type="background"', design_chunk)
+        self.assertIn("data-r4-background-mode", design_chunk)
+        self.assertIn("data-r4-background-color", design_chunk)
+        self.assertIn("data-r4-background-pattern", design_chunk)
+        self.assertIn("data-r4-background-media", design_chunk)
 
     def test_background_picker_reuses_store_media_library_assets(self):
         from apps.content.models import MediaAsset
@@ -870,7 +877,6 @@ class Task4BBackgroundJsContractTests(R4MutationApiTestCase):
         self.assertNotIn("modal", self.js_source.lower())
 
 
-
 # ------------------------------------------------------------------------
 # Phase 5 Task 4D — sidebar -> preview selection sync. When a Section is
 # selected from the R4 sidebar/structure UI, R4 must post the canonical
@@ -941,7 +947,6 @@ class Task4DPreviewStillOwnsHighlightTests(R4MutationApiTestCase):
         self.assertIn("sfb:setSelection", preview_source)
         self.assertIn("applyBuilderSelection", preview_source)
         self.assertIn("sfb-rsec-selected", preview_source)
-
 
 
 # ------------------------------------------------------------------------
@@ -1082,7 +1087,6 @@ class Task4AInspectorHtmxProcessedTests(R4MutationApiTestCase):
         open_idx = self.js_source.index("openSection = function")
         open_chunk = self.js_source[open_idx:open_idx + 1800]
         self.assertIn("htmx.process", open_chunk)
-
 
 
 # ------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-{% load static dashboard_nav %}<!DOCTYPE html>
+{% load static dashboard_nav storefront_builder_extras %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="{% static 'css/admin.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_entry_prototype.css' %}">
 <link rel="stylesheet" href="{% static 'css/admin_v2.css' %}">
+<link rel="stylesheet" href="{% static 'core/jalali_picker.css' %}">
+<link rel="stylesheet" href="{% static_v 'core/image_guide.css' %}">
 {% block extra_css %}{% endblock %}
 <script>
 // توابعِ زیر باید پیش از بارگذاریِ Alpine (که defer است) تعریف شوند تا x-data
@@ -88,6 +90,8 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
 <script src="{% static 'js/vendor/ckeditor5-classic/translations-fa.js' %}" defer></script>
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
 <script src="{% static 'js/admin_v2.js' %}" defer></script>
+<script src="{% static 'core/jalali_picker.js' %}" defer></script>
+<script src="{% static_v 'core/image_guide.js' %}" defer></script>
 </head>
 <body class="admin-body admin-v2-body"
       x-data="{ sidebarOpen: false, modalOpen: false, theme: localStorage.getItem('adminTheme') || '' }"

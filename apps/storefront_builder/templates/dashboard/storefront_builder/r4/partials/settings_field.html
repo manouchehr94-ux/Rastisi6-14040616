@@ -6,7 +6,7 @@ field types are added to settings_schema.ALLOWED_FIELD_TYPES first, then to
 the R4 Inspector's Phase 0 renderer allowlist (r4_views.py); this partial
 must never silently fall back to a plain text input for an unsupported type.
 {% endcomment %}
-<div class="r4-field r4-field--{{ field.field_type }}" data-r4-field-row data-r4-field-key="{{ field.key }}" data-r4-field-type="{{ field.field_type }}">
+<div class="r4-field r4-field--{{ field.field_type }}" data-r4-field-row data-r4-field-key="{{ field.key }}" data-r4-field-type="{{ field.field_type }}"{% if field.visible_when %} data-r4-visible-when='{{ field|visible_when_json }}'{% endif %}{% if field_hidden_map|dictget:field.key %} hidden{% endif %}>
   {% comment %}
   Phase 5 Task 4A — generic scope indicator. Every control the Section
   Inspector renders affects ONLY the selected section, so the marker is
@@ -15,7 +15,7 @@ must never silently fall back to a plain text input for an unsupported type.
   counterpart lives on the Global Design rendering path.
   {% endcomment %}
   <span class="r4-field-scope" data-r4-scope="section">فقط این بخش</span>
-  <label class="r4-field-label" for="r4Field-{{ field.key }}">{{ field.label }}</label>
+  <label class="r4-field-label" for="r4Field-{{ field.key }}{% if field.field_type == "design" and field_dom_suffix %}-{{ field_dom_suffix }}{% endif %}">{{ field.label }}</label>
 
   {% if field.field_type == "text" %}
   <input type="text"
@@ -39,12 +39,19 @@ must never silently fall back to a plain text input for an unsupported type.
   </div>
 
   {% elif field.field_type == "integer" %}
+  {# R4-08: the limits and the "empty = default" value are declared on the control (the script clamps/falls back); the same rule is enforced by the server. #}
   <input type="text"
          class="r4-control"
          inputmode="numeric"
          id="r4Field-{{ field.key }}"
          data-r4-field-key="{{ field.key }}"
-         data-r4-field-type="integer">
+         data-r4-field-type="integer"
+         {% if field.min_value is not None %}data-r4-min="{{ field.min_value }}"{% endif %}
+         {% if field.max_value is not None %}data-r4-max="{{ field.max_value }}"{% endif %}
+         {% if field.default is not None %}data-r4-default="{{ field.default }}"{% endif %}>
+  {% if field.min_value is not None or field.max_value is not None %}
+  <small class="r4-field-hint" data-r4-field-hint>{% if field.min_value is not None and field.max_value is not None %}بین {{ field.min_value }} تا {{ field.max_value }}{% elif field.min_value is not None %}حداقل {{ field.min_value }}{% else %}حداکثر {{ field.max_value }}{% endif %}{% if field.default is not None %} · خالی = {{ field.default }}{% endif %}</small>
+  {% endif %}
 
   {% elif field.field_type == "boolean" %}
   <input type="checkbox"
@@ -127,6 +134,15 @@ must never silently fall back to a plain text input for an unsupported type.
       <span class="r4-field-sublabel">قانون خودکار</span>
       <strong>{{ resource_source_summary.auto_rule_label }}</strong>
     </div>
+    {% if resource_source_summary.collection_label %}
+    <div class="r4-resource-source-row">
+      <span class="r4-field-sublabel">کالکشن</span>
+      <strong>{{ resource_source_summary.collection_label }}</strong>
+    </div>
+    {% if resource_source_summary.collection_campaign_url %}
+    <div class="r4-resource-source-row"><a href="{{ resource_source_summary.collection_campaign_url }}" target="_blank" rel="noopener">⏱️ شروع / زمان‌بندی کمپین این کالکشن</a></div>
+    {% endif %}
+    {% endif %}
     {% else %}
     <div class="r4-resource-source-row">
       <span class="r4-field-sublabel">تعداد انتخاب‌شده</span>
@@ -207,6 +223,73 @@ must never silently fall back to a plain text input for an unsupported type.
     <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن ردیف</button>
   </div>
 
+  {% elif field.field_type == "media" %}
+  {# Store-scoped Media Library picker: scalar value = MediaAsset id ("" = none); hydrated and saved by the generic scalar path. #}
+  <select id="r4Field-{{ field.key }}"
+          class="r4-control"
+          data-r4-field-key="{{ field.key }}"
+          data-r4-field-type="media">
+    <option value="">— بدون تصویر —</option>
+    {% for asset in media_assets %}
+    <option value="{{ asset.pk }}">{{ asset }}</option>
+    {% endfor %}
+  </select>
+  {% if not media_assets %}
+  <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
+  {% endif %}
+
+  {% elif field.field_type == "color" %}
+  {# Semantic colour: palette role | custom hex | automatic — see color_control.html. #}
+  <div class="r4-color-field"
+       id="r4Field-{{ field.key }}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="color">
+    {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=current_field_value aria_label=field.label %}
+  </div>
+
+  {% elif field.field_type == "design" %}
+  {% comment %}
+  Design-block engine — ONE compound widget for the sparse ``design`` object. Its controls are
+  generated from the section's applicable property registry (design_groups), so a control exists
+  only where the renderer consumes it. Nested controls carry NO data-r4-field-key; a dedicated
+  r4_editor.js listener collects every property into ONE {design:{...}} patch (omitted keys reset
+  to the engine default) through the existing section.update_settings mutation queue.
+  R4-10: the Design tab shows this ONE field as several SLICES (one per sub-section, each a wrapper with the same
+  data-r4-field-key and its own ``design_groups`` subset); the listener gathers the properties of ALL wrappers of the key,
+  so the patch is still the whole block.
+  {% endcomment %}
+  <div class="r4-design-block"
+       id="r4Field-{{ field.key }}{% if field_dom_suffix %}-{{ field_dom_suffix }}{% endif %}"
+       data-r4-field-key="{{ field.key }}"
+       data-r4-field-type="design">
+    {% for group in design_groups %}
+    <fieldset class="r4-design-group" data-r4-design-group="{{ group.group }}">
+      <legend>{{ group.label }}</legend>
+      {% for prop in group.properties %}
+      {# R4-08: no ``|default`` here — it swallows an explicit 0 (radius 0, border 0, padding 0 ...), showing the control EMPTY #}
+      {% with current=current_field_value|dictget:prop.key %}
+      <div class="r4-design-prop" data-r4-design-prop="{{ prop.key }}" data-r4-design-kind="{{ prop.kind }}"{% if prop.box %} data-r4-design-box{% if design_box_hidden %} hidden{% endif %}{% endif %}{% if prop.modes %} data-r4-design-modes="{{ prop.modes|join:' ' }}"{% if design_display_mode not in prop.modes %} hidden{% endif %}{% endif %}>
+        <label class="r4-field-sublabel">{{ prop.label }}</label>
+        {% if prop.hint %}<p class="r4-field-hint">{{ prop.hint }}</p>{% endif %}
+        {% if prop.kind == "color" %}
+          {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=current aria_label=prop.label %}
+        {% elif prop.kind == "int" %}
+          <input type="number" class="r4-control" data-r4-design-input inputmode="numeric"
+                 min="{{ prop.min }}" max="{{ prop.max }}" value="{% if current is not None and current != "" %}{{ current }}{% endif %}" placeholder="خودکار">
+        {% else %}
+          <select class="r4-control" data-r4-design-input>
+            {% for value, label in prop.choices %}
+            <option value="{{ value }}" {% if current == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        {% endif %}
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
+  </div>
+
   {% elif field.field_type == "background" %}
   {% comment %}
   Phase 5 Task 4B — a real in-R4 background/media picker, a compound widget
@@ -230,34 +313,72 @@ must never silently fall back to a plain text input for an unsupported type.
       {% endfor %}
     </select>
 
-    <label class="r4-field-sublabel">رنگ دلخواه</label>
-    <input type="color" class="r4-control" data-r4-background-color value="{{ current_field_value.color|default:'#ffffff' }}">
+    {% comment %}Context-sensitive: each group is offered only for the modes that consume it (data-r4-bg-modes);
+    r4_editor.js re-evaluates the same lists live when the mode select changes.{% endcomment %}
+    <div class="r4-bg-group" data-r4-bg-modes="color pattern" {% if current_field_value.mode|mode_not_in:"color,pattern" %}hidden{% endif %}>
+      <label class="r4-field-sublabel">رنگ دلخواه</label>
+      <input type="color" class="r4-control" data-r4-background-color value="{{ current_field_value.color|default:'#ffffff' }}">
+    </div>
 
-    <label class="r4-field-sublabel">طیف پالت</label>
-    <select class="r4-control" data-r4-background-palette-role>
-      {% for value, label in background_context.palette_role_choices %}
-      <option value="{{ value }}" {% if current_field_value.palette_role == value %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
+    <div class="r4-bg-group" data-r4-bg-modes="palette palette_pattern" {% if current_field_value.mode|mode_not_in:"palette,palette_pattern" %}hidden{% endif %}>
+      <label class="r4-field-sublabel">طیف پالت</label>
+      <select class="r4-control" data-r4-background-palette-role>
+        {% for value, label in background_context.palette_role_choices %}
+        <option value="{{ value }}" {% if current_field_value.palette_role == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-    <label class="r4-field-sublabel">الگو</label>
-    <select class="r4-control" data-r4-background-pattern>
-      <option value="">— بدون الگو —</option>
-      {% for slug, pattern_label in background_context.patterns.items %}
-      <option value="{{ slug }}" {% if current_field_value.pattern_slug == slug %}selected{% endif %}>{{ pattern_label }}</option>
-      {% endfor %}
-    </select>
+    <div class="r4-bg-group" data-r4-bg-modes="pattern palette_pattern" {% if current_field_value.mode|mode_not_in:"pattern,palette_pattern" %}hidden{% endif %}>
+      <label class="r4-field-sublabel">الگو</label>
+      <select class="r4-control" data-r4-background-pattern>
+        <option value="">— بدون الگو —</option>
+        {% for slug, pattern_label in background_context.patterns.items %}
+        <option value="{{ slug }}" {% if current_field_value.pattern_slug == slug %}selected{% endif %}>{{ pattern_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-    <label class="r4-field-sublabel">تصویر پس‌زمینه</label>
-    <select class="r4-control" data-r4-background-media>
-      <option value="">— بدون تصویر —</option>
-      {% for asset in background_context.media_assets %}
-      <option value="{{ asset.pk }}" {% if current_field_value.media_asset_id == asset.pk %}selected{% endif %}>{{ asset }}</option>
-      {% endfor %}
-    </select>
-    {% if not background_context.media_assets %}
-    <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
-    {% endif %}
+    <div class="r4-bg-group" data-r4-bg-modes="image" {% if current_field_value.mode|mode_not_in:"image" %}hidden{% endif %}>
+      <label class="r4-field-sublabel">تصویر پس‌زمینه (از کتابخانه رسانه)</label>
+      <select class="r4-control" data-r4-background-media>
+        <option value="">— تصویری انتخاب کنید —</option>
+        {% for asset in background_context.media_assets %}
+        <option value="{{ asset.pk }}" {% if current_field_value.media_asset_id == asset.pk %}selected{% endif %}>{{ asset }}</option>
+        {% endfor %}
+      </select>
+      {% if not background_context.media_assets %}
+      <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
+      {% endif %}
+      <label class="r4-field-sublabel">نحوه قرارگیری تصویر</label>
+      <select class="r4-control" data-r4-background-image-fit>
+        {% for value, label in background_context.fit_choices %}
+        <option value="{{ value }}" {% if current_field_value.image_fit == value or not current_field_value.image_fit and value == "cover" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="r4-field-sublabel">جایگاه افقی تصویر</label>
+      <select class="r4-control" data-r4-background-position-x>
+        {% for value, label in background_context.position_x_choices %}
+        <option value="{{ value }}" {% if current_field_value.image_position_x == value or not current_field_value.image_position_x and value == "center" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="r4-field-sublabel">جایگاه عمودی تصویر</label>
+      <select class="r4-control" data-r4-background-position-y>
+        {% for value, label in background_context.position_y_choices %}
+        <option value="{{ value }}" {% if current_field_value.image_position_y == value or not current_field_value.image_position_y and value == "center" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="r4-field-sublabel">رنگ پوشش روی تصویر</label>
+      <div data-r4-background-overlay-color>
+        {% include "dashboard/storefront_builder/r4/partials/color_control.html" with value=current_field_value.overlay_color color_choices=background_context.color_choices aria_label="رنگ پوشش روی تصویر" %}
+      </div>
+      <label class="r4-field-sublabel">شدت پوشش (٪)</label>
+      <input type="range" class="r4-control" min="0" max="90" step="5" data-r4-background-overlay-opacity value="{{ current_field_value.overlay_opacity|default:0 }}">
+    </div>
+
+    <div class="r4-bg-group" data-r4-bg-modes="palette palette_pattern color pattern image" {% if current_field_value.mode|mode_not_in:"palette,palette_pattern,color,pattern,image" %}hidden{% endif %}>
+      <label class="r4-field-sublabel"><input type="checkbox" data-r4-background-bleed {% if current_field_value.bleed %}checked{% endif %}> پس‌زمینه تا لبه‌ی صفحه ادامه یابد (محتوا در کادر بماند)</label>
+    </div>
   </div>
   {% endif %}
 </div>

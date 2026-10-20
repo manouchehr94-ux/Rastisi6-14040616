@@ -42,8 +42,6 @@ class R4ResourcePickerTestCase(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         self.product_section = StorefrontSection.objects.create(
             version=self.draft, section_key="product_section", order=0,
@@ -116,11 +114,6 @@ class EndpointExistsTests(R4ResourcePickerTestCase):
 
 
 class FeatureGateTests(R4ResourcePickerTestCase):
-    def test_gate_off_returns_404(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self.client.get(self._picker_url(kind="product"))
-        self.assertEqual(response.status_code, 404)
 
     def test_anonymous_denied(self):
         self.client.logout()
@@ -583,11 +576,6 @@ class CollectionManualOwnershipTests(R4ResourcePickerTestCase):
 
 
 class CollectionPickerGateTests(R4ResourcePickerTestCase):
-    def test_collection_picker_gate_off_returns_404(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self.client.get(self._picker_url(kind="collection"))
-        self.assertEqual(response.status_code, 404)
 
     def test_collection_picker_anonymous_denied(self):
         self.client.logout()
@@ -791,11 +779,6 @@ class CategoryManualOwnershipTests(R4ResourcePickerTestCase):
 
 
 class CategoryPickerGateTests(R4ResourcePickerTestCase):
-    def test_category_picker_gate_off_returns_404(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self.client.get(self._picker_url(kind="category"))
-        self.assertEqual(response.status_code, 404)
 
     def test_category_picker_anonymous_denied(self):
         self.client.logout()

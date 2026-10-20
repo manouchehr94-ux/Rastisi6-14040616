@@ -23,11 +23,11 @@
   <div class="card">
     <div class="card-head"><h3>زمان‌بندی</h3></div>
     <div class="card-body" style="font-size:12.5px;line-height:2">
-      درخواست: {{ return_request.created_at|date:"Y-m-d H:i" }}<br>
-      {% if return_request.approved_at %}تأیید: {{ return_request.approved_at|date:"Y-m-d H:i" }}<br>{% endif %}
-      {% if return_request.received_at %}دریافت: {{ return_request.received_at|date:"Y-m-d H:i" }}<br>{% endif %}
-      {% if return_request.completed_at %}تکمیل: {{ return_request.completed_at|date:"Y-m-d H:i" }}<br>{% endif %}
-      {% if return_request.rejected_at %}رد: {{ return_request.rejected_at|date:"Y-m-d H:i" }}<br>{% endif %}
+      درخواست: {{ return_request.created_at|jalali_dt }}<br>
+      {% if return_request.approved_at %}تأیید: {{ return_request.approved_at|jalali_dt }}<br>{% endif %}
+      {% if return_request.received_at %}دریافت: {{ return_request.received_at|jalali_dt }}<br>{% endif %}
+      {% if return_request.completed_at %}تکمیل: {{ return_request.completed_at|jalali_dt }}<br>{% endif %}
+      {% if return_request.rejected_at %}رد: {{ return_request.rejected_at|jalali_dt }}<br>{% endif %}
     </div>
   </div>
 </div>

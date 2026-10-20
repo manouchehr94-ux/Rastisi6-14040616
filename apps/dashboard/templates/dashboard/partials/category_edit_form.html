@@ -1,18 +1,40 @@
+{% load image_guide %}
 <div class="modal-head">
   <h3>ویرایش «{{ category.name }}»</h3>
   <button type="button" class="x-btn" @click="modalOpen = false">✕</button>
 </div>
-<form hx-post="{% url 'dashboard:category-edit' category.pk %}" hx-target="#admin-modal-content" hx-swap="innerHTML">
+<form hx-post="{% url 'dashboard:category-edit' category.pk %}" hx-target="#admin-modal-content" hx-swap="innerHTML" hx-encoding="multipart/form-data">
   {% csrf_token %}
   <div class="modal-body">
     <div class="form-group">
       <label>نام</label>
       <input class="inp" name="name" value="{{ form.name.value|default_if_none:'' }}">
-      {% for err in form.name.errors %}<div style="color:var(--red);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      {% for err in form.name.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
     </div>
     <div class="form-group">
       <label>آیکون (ایموجی)</label>
       <input class="inp" name="icon" value="{{ form.icon.value|default_if_none:'' }}">
+    </div>
+    <div class="form-group">
+      <label>تصویر دسته‌بندی</label>
+      {% if category.image %}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span class="thumb thumb-fit" style="width:64px;height:64px;background:var(--primary-soft)"><img src="{{ category.image.url }}" alt=""></span>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="checkbox" name="clear_image" value="1"> حذف تصویر (فایل پاک نمی‌شود)</label>
+      </div>
+      {% endif %}
+      <input class="inp" type="file" name="image" accept=".jpg,.jpeg,.png,.webp">
+      {% image_guide "category_image" "image" %}
+      {% for err in form.image.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-top:4px">{{ err }}</div>{% endfor %}
+      <small style="color:var(--muted)">هر نسبتی (مربع، افقی، عمودی) پذیرفته می‌شود؛ فروشگاه آن را در قاب استاندارد دسته نمایش می‌دهد و فایل اصلی تغییر نمی‌کند.</small>
+    </div>
+    <div class="form-group">
+      <label>حالت قیمت‌گذاری گروه</label>
+      <select class="inp" name="price_mode">
+        <option value="standard" {% if form.price_mode.value != "inquiry" %}selected{% endif %}>قیمت عادی</option>
+        <option value="inquiry" {% if form.price_mode.value == "inquiry" %}selected{% endif %}>استعلام قیمت برای همه‌ی کالاهای این گروه</option>
+      </select>
+      <small style="color:var(--muted)">کالایی که خودش «قیمت عادی» انتخاب شده باشد مستثنا می‌ماند. باز شدن «درباره ما» درخواستی ثبت نمی‌کند.</small>
     </div>
   </div>
   <div class="modal-foot">

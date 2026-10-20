@@ -200,7 +200,7 @@ class ProductSectionRenderTests(TestCase):
 
         return Product.objects.create(
             store=store, vendor=vendor, category=category, name=f"کالای {slug}", slug=slug,
-            sku=f"SKU-{slug}", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            sku=f"SKU-{slug}", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
         )
 
     def test_two_instances_with_different_collections_do_not_share_products(self):
@@ -513,7 +513,7 @@ class CategoryGridRenderTests(TestCase):
             store=store,
             vendor=Vendor.objects.create(store=store, name="فروشنده موزاییک رندر", slug="v-mosaic-render"),
             category=cat, name="کالای موزاییک رندر", slug="p-mosaic-render",
-            sku="SKU-MOSAIC-RENDER", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            sku="SKU-MOSAIC-RENDER", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
         )
         image = add_product_image(product, _img())
         draft = svc.get_or_create_draft(store)
@@ -563,7 +563,7 @@ class CatalogProductWallContextTests(TestCase):
         vendor = Vendor.objects.create(store=self.store, name=f"فروشنده {slug}", slug=f"v-{slug}")
         return Product.objects.create(
             store=self.store, vendor=vendor, category=category, name=f"کالای {slug}", slug=slug,
-            sku=f"SKU-{slug}", price=Decimal(price), status=Product.Status.ACTIVE,
+            sku=f"SKU-{slug}", price=Decimal(price), status=Product.Status.ACTIVE, stock=5,
         )
 
     def _wall_item(self, settings=None):
@@ -842,7 +842,7 @@ class CollectionTilesRenderTests(TestCase):
         for i in range(3):
             product = Product.objects.create(
                 store=store, vendor=vendor, category=category, name=f"کالای {i}", slug=f"ct-count-p{i}",
-                sku=f"SKU-CT-{i}", price=Decimal("10000"), status=Product.Status.ACTIVE,
+                sku=f"SKU-CT-{i}", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
             )
             MerchantCollectionItem.objects.create(collection=collection, product=product, order=i)
         draft = svc.get_or_create_draft(store)
@@ -873,11 +873,11 @@ class CollectionTilesRenderTests(TestCase):
         )
         active_product = Product.objects.create(
             store=store, vendor=vendor, category=category, name="کالای فعال", slug="ct-total-active",
-            sku="SKU-CT-ACTIVE", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            sku="SKU-CT-ACTIVE", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
         )
         inactive_product = Product.objects.create(
             store=store, vendor=vendor, category=category, name="کالای غیرفعال", slug="ct-total-inactive",
-            sku="SKU-CT-INACTIVE", price=Decimal("10000"), status=Product.Status.INACTIVE,
+            sku="SKU-CT-INACTIVE", price=Decimal("10000"), status=Product.Status.INACTIVE, stock=5,
         )
         MerchantCollectionItem.objects.create(collection=collection, product=active_product, order=0)
         MerchantCollectionItem.objects.create(collection=collection, product=inactive_product, order=1)
@@ -1472,7 +1472,7 @@ class CollectionContextAwareSectionsTests(TestCase):
         category = Category.objects.create(store=self.store, name="دسته برابری", slug="cat-parity", is_active=True)
         product = Product.objects.create(
             store=self.store, vendor=vendor, category=category, name="کالای برابری", slug="p-parity",
-            sku="SKU-PARITY-1", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            sku="SKU-PARITY-1", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
         )
         collection_service.add_product(collection, product)
 
@@ -1639,50 +1639,6 @@ class FreeShippingGoalTemplateTests(TestCase):
         self.assertNotIn("widthratio", tmpl)
 
 
-class BuildDefaultRenderItemsTests(TestCase):
-    """Phase 5: Storeای که هرگز Storefront V2 منتشر نکرده باید هنوز هم
-    دقیقاً همان محتوایِ سخت‌کدشده‌ی قدیمی را رویِ پنج صفحه‌ی محصول/لیست/
-    کالکشن/جستجو/سبد ببیند — بدونِ نیاز به هیچ ``StorefrontPage``/
-    ``StorefrontSection`` واقعی در دیتابیس."""
-
-    def setUp(self):
-        cache.clear()
-        self.store = _akhlaghi()
-
-    def test_returns_same_keys_as_build_default_non_home_sections(self):
-        from apps.storefront_builder.services import bootstrap_service
-        from apps.storefront_builder.services.render_service import build_default_render_items
-
-        for page_type in ("product_detail", "listing", "collection", "search", "cart"):
-            items = build_default_render_items(page_type, self.store)
-            expected_keys = [s["section_key"] for s in bootstrap_service.build_default_non_home_sections(page_type)]
-            self.assertEqual([i["section"].section_key for i in items], expected_keys, page_type)
-
-    def test_home_returns_empty_list(self):
-        from apps.storefront_builder.services.render_service import build_default_render_items
-        self.assertEqual(build_default_render_items("home", self.store), [])
-
-    def test_synthesized_sections_are_never_persisted(self):
-        from apps.storefront_builder.models import StorefrontSection
-        from apps.storefront_builder.services.render_service import build_default_render_items
-
-        before = StorefrontSection.objects.count()
-        items = build_default_render_items("cart", self.store)
-        after = StorefrontSection.objects.count()
-        self.assertEqual(before, after)
-        for item in items:
-            self.assertIsNone(item["section"].pk)
-
-    def test_page_context_still_reaches_context_aware_builders(self):
-        from apps.storefront_builder.services.render_service import build_default_render_items
-
-        items = build_default_render_items("cart", self.store, page_context={"cart": "SENTINEL", "item_count": 4})
-        cart_items_item = next(i for i in items if i["section"].section_key == "cart_items")
-        self.assertEqual(cart_items_item["context"]["cart"], "SENTINEL")
-        self.assertEqual(cart_items_item["context"]["item_count"], 4)
-
-
-
 class BrandCarouselViewAllAnchorTests(TestCase):
     """V02 — the "مشاهده همه" (view-all) anchor contract across the three
     Brand display variants and the destination resolution rules:
@@ -1800,7 +1756,6 @@ class BrandCarouselViewAllAnchorTests(TestCase):
         self.assertIn(f'href="{reverse("catalog:product-list")}"', html)
 
 
-
 class SliderTransitionRenderTests(TestCase):
     """Phase 5 Task 5 — STRANS: the slider ``transition`` reaches the render
     context via the SAME slider_settings path as every other slider field, and
@@ -1855,7 +1810,6 @@ class SliderTransitionRenderTests(TestCase):
         StorefrontSection.objects.create(version=draft, section_key="image_slider", order=901, settings={})
         item = self._items_for(draft, store, "image_slider")
         self.assertEqual(item["context"]["slider_settings"]["transition"], "cut")
-
 
 
 class SliderTransitionRuntimeContractTests(TestCase):

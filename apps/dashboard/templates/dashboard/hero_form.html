@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load image_guide %}
 {% block title %}{% if slide %}ویرایش{% else %}افزودن{% endif %} اسلاید{% endblock %}
 {% block page_title %}{% if slide %}ویرایش اسلاید{% else %}اسلاید جدید{% endif %}{% endblock %}
 {% block content %}
@@ -11,7 +12,9 @@
     </div>
     <div class="form-row">
       <div class="form-group"><label>تصویر دسکتاپ{% if not slide %} (الزامی){% endif %}</label><input class="inp" type="file" name="desktop_image" accept=".png,.jpg,.jpeg,.webp"></div>
+      {% image_guide "hero_desktop" "desktop_image" %}
       <div class="form-group"><label>تصویر موبایل</label><input class="inp" type="file" name="mobile_image" accept=".png,.jpg,.jpeg,.webp">{% if slide.mobile_image %}<label><input type="checkbox" name="remove_mobile"> حذف تصویر موبایل</label>{% endif %}</div>
+      {% image_guide "hero_mobile" "mobile_image" %}
     </div>
     <div class="form-row">
       <div class="form-group"><label><input type="checkbox" name="show_button" {% if slide.show_button %}checked{% endif %}> نمایش دکمه</label></div>

@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}دامنه‌ها | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead"><div><h1>دامنه‌ها</h1><p>وضعیتِ DNS/SSL همیشه به‌صورتِ زنده بررسی می‌شود — هیچ نتیجه‌ای شبیه‌سازی نمی‌شود.</p></div></div>
@@ -35,7 +36,7 @@
             {% elif domain.verification_status == "failed" %}<span class="pa-badge pa-off">ناموفق</span>
             {% else %}<span class="pa-badge pa-warn">{{ domain.get_verification_status_display }}</span>{% endif %}
           </td>
-          <td>{{ domain.created_at|date:"Y/m/d" }}</td>
+          <td>{{ domain.created_at|jalali }}</td>
           <td style="display:flex;gap:6px">
             <form method="post" action="{% url 'portal_platform_admin:domain-check' domain.pk %}"><input type="hidden" name="next" value="{{ request.get_full_path }}">{% csrf_token %}<button class="pa-btn pa-small" type="submit">بررسیِ DNS/SSL</button></form>
             {% if domain.verification_status == "verified" and not domain.is_primary %}

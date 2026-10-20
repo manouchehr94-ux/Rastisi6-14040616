@@ -1,4 +1,4 @@
-{% load persian %}
+{% load persian image_guide %}
 {{ existing_tags_list|json_script:"existing-tags-data" }}
 <div class="pe-prototype" x-data="{
       tab: '{{ error_step|default:'basic' }}',
@@ -260,7 +260,7 @@
                  @drop.prevent="
                    dragging = false;
                    $refs.editImagesInput.files = $event.dataTransfer.files;
-                   htmx.trigger($refs.editImagesInput, 'change');
+                   $refs.editImagesInput.dispatchEvent(new Event('change', { bubbles: true }));
                  ">
             <span style="font-size:26px">🖼️</span>
             <span>تصاویر را بکشید و رها کنید</span>
@@ -268,8 +268,9 @@
             <small style="color:var(--muted)">فرمت‌های مجاز: jpg، png، webp — حداکثر ۵ مگابایت — چندتصویری هم‌زمان مجاز است</small>
             <input type="file" x-ref="editImagesInput" name="images" multiple accept=".jpg,.jpeg,.png,.webp" style="display:none"
                    hx-post="{% url 'dashboard:product-image-upload' product.pk %}" hx-encoding="multipart/form-data"
-                   hx-trigger="change" hx-target="#productImagesList" hx-swap="outerHTML">
+                   hx-trigger="imgguide-confirm" hx-target="#productImagesList" hx-swap="outerHTML">
           </label>
+          {% image_guide "product_image" "images" "imgguide-confirm" %}
         </div>
         {% include "dashboard/partials/product_images_list.html" %}
 
@@ -381,6 +382,26 @@
                 <option value="link" {% if form.visibility.value == "link" %}selected{% endif %}>فقط با لینکِ مستقیم</option>
               </select>
               {% for err in form.visibility.errors %}<div class="pe-field-error">{{ err }}</div>{% endfor %}
+            </div>
+            <div class="field full">
+              <label>حالت قیمت‌گذاری <span class="opt-pill">اختیاری</span></label>
+              <select name="price_mode_override">
+                <option value="" {% if not form.price_mode_override.value %}selected{% endif %}>پیش‌فرض (ارث‌بری از گروه یا کالکشن)</option>
+                <option value="standard" {% if form.price_mode_override.value == "standard" %}selected{% endif %}>قیمت عادی (حتی اگر گروهش استعلامی است)</option>
+                <option value="inquiry" {% if form.price_mode_override.value == "inquiry" %}selected{% endif %}>استعلام قیمت — بهای عددی و دکمه‌ی خرید نمایش داده نمی‌شود</option>
+              </select>
+              <div class="pe-field-help">با «استعلام قیمت»، کالا در صفحه‌ها به‌جای قیمت «استعلام قیمت» نشان می‌دهد و مشتری به صفحه‌ی «درباره ما» می‌رود. قیمت و موجودیِ ثبت‌شده تغییر نمی‌کند.</div>
+            </div>
+            <div class="field">
+              <label>شروعِ اعتبارِ تخفیف <span class="opt-pill">اختیاری</span></label>
+              <input type="datetime-local" name="discount_starts_at" value="{{ form.discount_starts_at.value|default_if_none:'' }}">
+              {% for err in form.discount_starts_at.errors %}<div class="pe-field-error">{{ err }}</div>{% endfor %}
+            </div>
+            <div class="field">
+              <label>پایانِ اعتبارِ تخفیف <span class="opt-pill">اختیاری</span></label>
+              <input type="datetime-local" name="discount_ends_at" value="{{ form.discount_ends_at.value|default_if_none:'' }}">
+              <div class="pe-field-help">پس از این زمان قیمتِ عادی اعمال می‌شود و تایمرِ «پیشنهاد شگفت‌انگیز» از همین زمان می‌شمارد. خالی = تخفیفِ بدونِ پایان.</div>
+              {% for err in form.discount_ends_at.errors %}<div class="pe-field-error">{{ err }}</div>{% endfor %}
             </div>
             <div class="field">
               <label>زمان‌بندیِ انتشار <span class="opt-pill">اختیاری</span></label>

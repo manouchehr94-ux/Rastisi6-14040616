@@ -50,7 +50,7 @@ from pathlib import Path
 
 from .. import appearance_registry
 from ..layout_preset_registry import LayoutPresetDefinition
-from ..section_registry import CARD_AWARE_SECTION_KEYS
+from ..section_registry import sections_with_capability
 
 _VIEWBOX_W = 300
 _VIEWBOX_H = 188
@@ -80,9 +80,8 @@ _DARK_TECH_CHROME = {
 }
 
 #: Section types that render a grid of product cards — reuses the existing
-#: cross-cutting allowlist (``section_registry.CARD_AWARE_SECTION_KEYS``)
-#: rather than a second, possibly-diverging list.
-_PRODUCT_GRID_KEYS = CARD_AWARE_SECTION_KEYS
+#: registry ``card`` capability rather than a second, possibly-diverging list.
+_PRODUCT_GRID_KEYS = sections_with_capability("card")
 
 #: Section-type → schematic archetype + relative height weight (taller
 #: weight = visually dominant, matching how that section type actually
@@ -363,7 +362,7 @@ def resolve_gallery_thumbnail(preset: LayoutPresetDefinition) -> str:
 
 #: Relative to this app's ``static/`` directory (matches the existing
 #: ``{% static 'css/storefront_builder.css' %}`` flat-namespace convention
-#: already used by ``template_gallery.html``).
+#: already used by the Design Studio gallery tiles).
 _PREVIEWS_STATIC_SUBDIR = "ready_template_previews"
 
 APP_STATIC_DIR = Path(__file__).resolve().parents[1] / "static"

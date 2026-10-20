@@ -2,14 +2,14 @@
 <form hx-post="{% url 'customers:otp-request' %}" hx-target="#otp-login-body" hx-swap="innerHTML">
   {% csrf_token %}
   {% if otp_request_form.non_field_errors %}
-  <div style="color:var(--pink);font-size:12.5px;margin-bottom:10px">
+  <div style="color:var(--pink-text,var(--pink));font-size:12.5px;margin-bottom:10px">
     {% for err in otp_request_form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
   </div>
   {% endif %}
   <div class="fg">
     <label>شماره موبایل</label>
     <input type="text" name="phone" placeholder="09xxxxxxxxx" dir="ltr" autocomplete="tel" value="{{ otp_request_form.phone.value|default_if_none:'' }}">
-    {% for err in otp_request_form.phone.errors %}<div style="color:var(--pink);font-size:11px;margin-top:4px">{{ err }}</div>{% endfor %}
+    {% for err in otp_request_form.phone.errors %}<div style="color:var(--pink-text,var(--pink));font-size:11px;margin-top:4px">{{ err }}</div>{% endfor %}
   </div>
   <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin:6px 0 12px;cursor:pointer">
     <input type="checkbox" name="remember_me" style="width:auto"> مرا به خاطر بسپار
@@ -20,7 +20,7 @@
 <form hx-post="{% url 'customers:otp-login' %}" hx-target="#otp-login-body" hx-swap="innerHTML">
   {% csrf_token %}
   {% if otp_error %}
-  <div style="color:var(--pink);font-size:12.5px;margin-bottom:10px">{{ otp_error }}</div>
+  <div style="color:var(--pink-text,var(--pink));font-size:12.5px;margin-bottom:10px">{{ otp_error }}</div>
   {% endif %}
   <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
     کد تأیید برای شماره‌ی <b dir="ltr" style="color:var(--ink)">{{ phone }}</b> پیامک شد.
@@ -30,11 +30,11 @@
   <div class="fg">
     <label>کد تأیید</label>
     <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="- - - - - -" dir="ltr" autofocus>
-    {% for err in otp_verify_form.code.errors %}<div style="color:var(--pink);font-size:11px;margin-top:4px">{{ err }}</div>{% endfor %}
+    {% for err in otp_verify_form.code.errors %}<div style="color:var(--pink-text,var(--pink));font-size:11px;margin-top:4px">{{ err }}</div>{% endfor %}
   </div>
   <button type="submit" class="btn btn-primary">تأیید و ورود</button>
   <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:11.5px">
-    <button type="button" style="color:var(--violet-2);font-weight:700"
+    <button type="button" style="color:var(--secondary-text,var(--violet-2));font-weight:700"
             hx-post="{% url 'customers:otp-request' %}" hx-vals='{"phone": "{{ phone }}", "remember_me": "{{ remember_me|yesno:'on,' }}"}' hx-target="#otp-login-body" hx-swap="innerHTML">
       ارسال دوباره‌ی کد
     </button>

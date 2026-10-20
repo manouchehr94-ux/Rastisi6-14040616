@@ -30,6 +30,11 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.storefront_builder.tests._gallery_support import (
+    gallery_cards,
+    gallery_client_templates,
+    studio_gallery_response,
+)
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.models import (
     StorefrontContainer,
@@ -62,13 +67,12 @@ MINA_COMMUNITY = "mina_community"  # composition includes "community_gallery" ->
 ROOT_CATEGORY_NAME = "کفش"  # one of the 3 seeded root category groups
 A_SEEDED_BRAND_NAME = "Demo Motion"  # one of the 6 seeded fictional brand names
 # Real seeded content titles (apps/stores/management/commands/
-# seed_ready_template_fashion_demo.py) — golden_reference_service.py scopes
-# ALL of these to the single real hero_banner/story_rail section the
-# currently-applied Golden Reference baseline (fashion_promo_catalog)
-# created, never to ``section=None``. Asserting these exact titles appear
-# when previewing a DIFFERENT (non-baseline) template proves the Task 2
-# same-section-key fallback tier actually surfaces the store's real content,
-# not just that the section wrapper markup is present.
+# seed_ready_template_fashion_demo.py) — ARCH-02: these rows are the store's
+# SHARED default media (``section=None``); golden_reference_service no longer
+# moves them onto its own template's sections. Asserting these exact titles
+# appear when previewing a DIFFERENT (non-baseline) template proves every
+# template renders the store's shared media, not just that the section wrapper
+# markup is present.
 A_SEEDED_HERO_SLIDE_TITLE = "کالکشن پاییز و زمستان Rasti Mode"
 
 
@@ -212,13 +216,10 @@ class TwoDistinctTemplatesProduceDifferentOutputTests(LiveDemoTemplatePreviewTes
 class HeroBannerStoryRailContentIsNotEmptyTests(LiveDemoTemplatePreviewTestCase):
     """Browser-QA (Task 2) CRITICAL finding: hero/banner/story_rail sections
     rendered completely empty in every live-previewed Ready Template,
-    because the Demo Store's real seeded content is scoped (by
-    ``golden_reference_service.apply_golden_reference_storefront``) to the
-    ONE real section the currently-applied baseline (``fashion_promo_
-    catalog``) created — never to ``section=None`` — so previewing any
-    OTHER template's unsaved candidate section found nothing via either the
-    exact-pk match (impossible, unsaved) or the store-wide fallback (no
-    unscoped rows exist). These assert the store's real seeded titles are
+    because the Demo Store's real seeded content was scoped to the ONE real
+    section the applied baseline created — so previewing any OTHER template's
+    unsaved candidate section found nothing. ARCH-02 fixed the root cause: the
+    content stays store-owned (``section=None``) and every template renders it. These assert the store's real seeded titles are
     present, not just that the section wrapper markup exists."""
 
     def test_hero_slide_real_title_appears_for_non_baseline_hero_template(self):
@@ -471,20 +472,20 @@ class InvalidTemplateKeyTests(LiveDemoTemplatePreviewTestCase):
 
 class GalleryStillHasFiftyTemplatesTests(LiveDemoTemplatePreviewTestCase):
     def test_gallery_still_lists_exactly_fifty_ready_templates(self):
-        response = self.admin_client.get(reverse("dashboard:storefront-builder-templates"))
+        response = studio_gallery_response(self.admin_client)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["template_cards"]), 50)
+        self.assertEqual(len(gallery_cards(response)), 53)
 
     def test_gallery_cards_link_to_the_new_live_preview_route(self):
-        response = self.admin_client.get(reverse("dashboard:storefront-builder-templates"))
-        html = response.content.decode()
-        self.assertIn(self._preview_url(EDITORIAL_JEWELRY), html)
+        response = studio_gallery_response(self.admin_client)
+        live = response.context["studio"]["client"]["live_preview_url"]
+        self.assertEqual(live.replace("__KEY__", EDITORIAL_JEWELRY), self._preview_url(EDITORIAL_JEWELRY))
 
 
 class ExistingStaticThumbnailPathStillUsableTests(LiveDemoTemplatePreviewTestCase):
     def test_gallery_thumbnail_fields_still_populated_per_card(self):
-        response = self.admin_client.get(reverse("dashboard:storefront-builder-templates"))
-        cards = response.context["template_cards"]
+        response = studio_gallery_response(self.admin_client)
+        cards = gallery_cards(response)
         for card in cards:
             self.assertIn(card["thumbnail_kind"], ("screenshot", "svg"))
             if card["thumbnail_kind"] == "screenshot":

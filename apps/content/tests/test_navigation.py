@@ -1,6 +1,5 @@
 """تست‌های مدیریت منوهای ناوبری — مدل، داشبورد، فروشگاه."""
 
-from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -11,8 +10,8 @@ from django.urls import reverse
 
 from django.utils import timezone
 
-from apps.catalog.models import Category, Product, Vendor
-from apps.content.models import DestinationType, Menu, MenuItem
+from apps.catalog.models import Category, Vendor
+from apps.content.models import Menu, MenuItem
 from apps.stores.models import Store, StoreMembership
 
 
@@ -659,7 +658,7 @@ class NavigationFallbackRemovalTests(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "عضویت در خبرنامه")
-        self.assertContains(response, "تماس با ما")
+        self.assertContains(response, "ارتباط با ما")
 
 
 # ============================================================ DESTINATION POLICY TESTS
@@ -1085,7 +1084,6 @@ class NavigationQueryCountTests(TestCase):
 
     def test_navigation_context_bounded_queries(self):
         """Navigation context processor uses at most 2 queries regardless of item count."""
-        from django.test.utils import override_settings
         from apps.content.context_processors import navigation_menus
 
         class FakeRequest:
@@ -1198,7 +1196,6 @@ class NavigationAccessibilityTests(TestCase):
         response = self.client.get("/")
         content = response.content.decode()
         # Should have both <a class="nl"...>Nav</a> AND <button...nav-submenu-trigger
-        import re
         # The link
         self.assertIn('>Nav</a>', content)
         # The button trigger (separate)

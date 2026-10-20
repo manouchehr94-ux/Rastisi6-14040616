@@ -33,6 +33,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.catalog.models import Category, Product, Vendor
+from apps.orders.models import ShippingMethod
 from apps.stores.models import Store
 
 
@@ -57,15 +58,23 @@ class PdpShippingClaimTests(TestCase):
         """No regression: the default, physical case must render exactly
         the same copy as before this phase."""
         product = self._make_product(slug="physical", requires_shipping=True)
+        ShippingMethod.objects.create(store=self.store, name="پست", slug="u6-post", is_active=True)   # FOLLOWUP-10: claimed only with a real method
         response = self.client.get(reverse("catalog:product-detail", args=[product.slug]))
         self.assertContains(response, "موجود در انبار — آماده ارسال")
-        self.assertContains(response, "ارسال سریع و بیمه‌شده")
+        self.assertContains(response, "ارسال سفارش")
+        self.assertNotContains(response, "ارسال سریع و بیمه‌شده")        # the speed/insurance promise is gone
+
+    def test_physical_product_without_an_active_shipping_method_claims_nothing(self):
+        product = self._make_product(slug="physical-no-method", requires_shipping=True)
+        response = self.client.get(reverse("catalog:product-detail", args=[product.slug]))
+        self.assertNotContains(response, "ارسال سفارش")
+        self.assertNotContains(response, "ارسال سریع")
 
     def test_non_shippable_product_makes_no_shipping_claim(self):
         product = self._make_product(slug="non-shippable", requires_shipping=False)
         response = self.client.get(reverse("catalog:product-detail", args=[product.slug]))
         self.assertNotContains(response, "موجود در انبار — آماده ارسال")
-        self.assertNotContains(response, "ارسال سریع و بیمه‌شده")
+        self.assertNotContains(response, "ارسال سفارش")
 
     def test_non_shippable_product_shows_honest_alternative_copy(self):
         """Not just removed — a real, honest fact about this exact product,

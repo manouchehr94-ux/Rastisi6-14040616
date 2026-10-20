@@ -6,10 +6,10 @@
   {% endif %}
   <div class="{% if settings.tile_style == 'carousel' %}tiles-carousel collection-tiles-carousel{% else %}grid g4{% endif %}">
     {% for row in collection_tiles %}
-    <a{% if is_builder_preview %} data-admin-edit-kind="collection" data-admin-edit-id="{{ row.collection.pk }}" data-admin-edit-title="{{ row.collection.name|escape }}"{% endif %} href="{% url 'catalog:collection-detail' row.collection.slug %}" class="pcard">
+    <a{% if is_builder_preview %} data-admin-edit-kind="collection" data-admin-edit-id="{{ row.collection.pk }}" data-admin-edit-title="{{ row.collection.name|escape }}"{% endif %} href="{% url 'catalog:collection-detail' row.collection.slug %}" class="pcard collection-tile">
       <div class="img">
         {% if row.collection.image %}
-        <img src="{{ row.collection.image.url }}" alt="{{ row.collection.name }}" style="width:100%;height:100%;object-fit:cover">
+        <img src="{{ row.collection.image.url }}" data-img-role="collection" alt="{{ row.collection.name }}" loading="lazy">
         {% else %}
         <span class="emo">🗂️</span>
         {% endif %}

@@ -8,20 +8,12 @@ from apps.storefront_builder import section_registry as section_registry_module
 from apps.storefront_builder import variant_contract as variant_contract_module
 from apps.storefront_builder.models import StorefrontPage
 from apps.storefront_builder.section_registry import (
+    sections_with_capability,
     ALL_PAGE_TYPES,
-    BACKGROUND_AWARE_SECTION_KEYS,
-    BACKGROUND_MODE_CHOICES,
-    CARD_AWARE_SECTION_KEYS,
-    COLUMN_AWARE_SECTION_KEYS,
-    COLUMN_VISUAL_SECTION_KEYS,
     CONTENT_WIDTH_CHOICES,
-    DESTINATION_AWARE_SECTION_KEYS,
     HEIGHT_CHOICES,
     IMAGE_RATIO_CHOICES,
     QUICK_ADD_REVEAL_CHOICES,
-    LAYOUT_HEIGHT_AWARE_SECTION_KEYS,
-    LAYOUT_WIDTH_AWARE_SECTION_KEYS,
-    MOTION_AWARE_SECTION_KEYS,
     MOTION_CHOICES,
     MULTI_BANNER_KNOWN_LAYOUT_VARIANTS,
     PAGE_TYPE_CART,
@@ -33,8 +25,6 @@ from apps.storefront_builder.section_registry import (
     PRODUCT_SECTION_DISPLAY_MODES,
     SECTION_LIBRARY_CATEGORIES,
     SECTION_REGISTRY,
-    SPACING_AWARE_SECTION_KEYS,
-    SPACING_SIZE_CHOICES,
     BackgroundSettingsError,
     CardSettingsError,
     DestinationSettingsError,
@@ -102,6 +92,12 @@ EXPECTED_KEYS = {
     # list_definitions()/ResponsiveIntegrationAcrossRegistryTests. This
     # fixture was simply never updated when story_rail was added.
     "story_rail",
+    # surface_panel — structural, content-free surface (reference rebuild of Template 51); covered by
+    # test_reference_templates_51_53.py::GenericRebuildPrimitiveTests.
+    "surface_panel",
+    # decorative_strip — generic decorative band (engine primitive replacing the Template-51 banner abuse); covered by
+    # test_engine_stabilization.py.
+    "decorative_strip",
     # newsletter — Phase 3 (Home page reusable blocks), dedicated coverage
     # in test_views.py::NewsletterSectionTests and apps.content's own
     # NewsletterSubscriber/subscribe_to_newsletter/view tests.
@@ -462,7 +458,7 @@ class BrandCarouselSettingsTests(TestCase):
         self.assertEqual(cleaned["brand_ids"], [])
         self.assertEqual(cleaned["display_mode"], "grid")
         self.assertFalse(cleaned["show_view_all"])
-        # عضوِ DESTINATION_AWARE_SECTION_KEYS است — بلوکِ destination هم باید حاضر باشد
+        # عضوِ sections_with_capability("destination") است — بلوکِ destination هم باید حاضر باشد
         self.assertEqual(cleaned["destination"]["destination_type"], "none")
 
     def test_non_dict_rejected(self):
@@ -688,13 +684,13 @@ class ResponsiveIntegrationAcrossRegistryTests(TestCase):
             self.assertTrue(definition.has_settings_form, definition.key)
 
     def test_column_aware_keys_get_column_defaults(self):
-        for key in COLUMN_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("columns"):
             defaults = get_definition(key).default_settings()
             self.assertIn("desktop_columns", defaults["responsive"], key)
 
     def test_non_column_aware_keys_have_no_column_fields(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in COLUMN_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("columns"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("desktop_columns", defaults["responsive"], key)
@@ -780,14 +776,14 @@ class DestinationSettingsTests(TestCase):
 
 class DestinationAwareIntegrationTests(TestCase):
     def test_destination_aware_keys_get_destination_defaults(self):
-        for key in DESTINATION_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("destination"):
             defaults = get_definition(key).default_settings()
             self.assertIn("destination", defaults, key)
             self.assertEqual(defaults["destination"]["destination_type"], "none", key)
 
     def test_non_destination_aware_keys_have_no_destination_field(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in DESTINATION_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("destination"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("destination", defaults, key)
@@ -833,14 +829,14 @@ class MotionSettingsTests(TestCase):
 
 class MotionAwareIntegrationTests(TestCase):
     def test_motion_aware_keys_get_motion_defaults(self):
-        for key in MOTION_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("motion"):
             defaults = get_definition(key).default_settings()
             self.assertIn("motion", defaults, key)
             self.assertEqual(defaults["motion"]["style"], "none", key)
 
     def test_non_motion_aware_keys_have_no_motion_field(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in MOTION_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("motion"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("motion", defaults, key)
@@ -861,13 +857,13 @@ class MultiBannerColumnLayoutTests(TestCase):
     منتقل شد (چیدمانِ گریدِ واقعی، نگاه کنید به multi_banner.html)."""
 
     def test_multi_banner_is_column_aware_and_visual(self):
-        self.assertIn("multi_banner", COLUMN_AWARE_SECTION_KEYS)
-        self.assertIn("multi_banner", COLUMN_VISUAL_SECTION_KEYS)
+        self.assertIn("multi_banner", sections_with_capability("columns"))
+        self.assertIn("multi_banner", sections_with_capability("columns_visual"))
 
     def test_other_previously_static_types_remain_non_visual(self):
         for key in ("category_grid", "promo_cards", "brand_carousel"):
-            self.assertIn(key, COLUMN_AWARE_SECTION_KEYS)
-            self.assertNotIn(key, COLUMN_VISUAL_SECTION_KEYS)
+            self.assertIn(key, sections_with_capability("columns"))
+            self.assertNotIn(key, sections_with_capability("columns_visual"))
 
 
 class CardSettingsTests(TestCase):
@@ -913,14 +909,14 @@ class CardSettingsTests(TestCase):
 
 class CardAwareIntegrationTests(TestCase):
     def test_card_aware_keys_get_card_defaults(self):
-        for key in CARD_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("card"):
             defaults = get_definition(key).default_settings()
             self.assertIn("card", defaults, key)
             self.assertEqual(defaults["card"], default_card_settings(), key)
 
     def test_non_card_aware_keys_have_no_card_field(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in CARD_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("card"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("card", defaults, key)
@@ -936,7 +932,7 @@ class CardAwareIntegrationTests(TestCase):
     def test_unknown_card_awareness_types_are_the_expected_nine(self):
         """طبقِ برنامه‌ی پیاده‌سازیِ فاز ۸ — همان ۸ نوعی که واقعاً کارتِ
         محصول رندر می‌کنند (به‌علاوه‌ی amazing_offers)."""
-        self.assertEqual(CARD_AWARE_SECTION_KEYS, frozenset({
+        self.assertEqual(sections_with_capability("card"), frozenset({
             "product_section", "featured_products", "newest_products", "best_sellers",
             "discounted_products", "amazing_offers", "related_products", "product_listing",
             "collection_products",
@@ -961,9 +957,9 @@ class Phase8ColumnExpansionTests(TestCase):
             # .rsec-cols mechanism as product_section.
             "catalog_product_wall",
         }
-        self.assertEqual(expected, COLUMN_VISUAL_SECTION_KEYS)
+        self.assertEqual(expected, sections_with_capability("columns_visual"))
         for key in expected:
-            self.assertIn(key, COLUMN_AWARE_SECTION_KEYS, key)
+            self.assertIn(key, sections_with_capability("columns"), key)
 
 
 class LayoutSettingsTests(TestCase):
@@ -1010,22 +1006,22 @@ class LayoutSettingsTests(TestCase):
 
 class LayoutAwareIntegrationTests(TestCase):
     def test_width_aware_keys_get_layout_defaults(self):
-        for key in LAYOUT_WIDTH_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("layout_width"):
             defaults = get_definition(key).default_settings()
             self.assertIn("layout", defaults, key)
             self.assertEqual(defaults["layout"]["content_width"], "standard", key)
-            self.assertEqual("height" in defaults["layout"], key in LAYOUT_HEIGHT_AWARE_SECTION_KEYS, key)
+            self.assertEqual("height" in defaults["layout"], key in sections_with_capability("layout_height"), key)
 
     def test_non_width_aware_keys_have_no_layout_field(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in LAYOUT_WIDTH_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("layout_width"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("layout", defaults, key)
 
     def test_height_only_aware_for_hero_and_slider(self):
-        self.assertEqual(LAYOUT_HEIGHT_AWARE_SECTION_KEYS, frozenset({"hero_banner", "image_slider"}))
-        self.assertTrue(LAYOUT_HEIGHT_AWARE_SECTION_KEYS.issubset(LAYOUT_WIDTH_AWARE_SECTION_KEYS))
+        self.assertEqual(sections_with_capability("layout_height"), frozenset({"hero_banner", "image_slider"}))
+        self.assertTrue(sections_with_capability("layout_height").issubset(sections_with_capability("layout_width")))
 
     def test_layout_round_trips(self):
         definition = get_definition("image_text")
@@ -1119,14 +1115,14 @@ class BackgroundSettingsTests(TestCase):
 
 class BackgroundAwareIntegrationTests(TestCase):
     def test_background_aware_keys_get_background_defaults(self):
-        for key in BACKGROUND_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("background"):
             defaults = get_definition(key).default_settings()
             self.assertIn("background", defaults, key)
             self.assertEqual(defaults["background"]["mode"], "theme", key)
 
     def test_non_background_aware_keys_have_no_background_field(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in BACKGROUND_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("background"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("background", defaults, key)
@@ -1135,7 +1131,7 @@ class BackgroundAwareIntegrationTests(TestCase):
         """spec §59 — sectionهایِ حیاتیِ محافظت‌شده (خرید/سبد/لیست) عمداً
         از override پس‌زمینه کنار گذاشته شده‌اند."""
         protected = {"product_main", "product_listing", "cart_items", "cart_summary", "collection_products"}
-        self.assertTrue(protected.isdisjoint(BACKGROUND_AWARE_SECTION_KEYS))
+        self.assertTrue(protected.isdisjoint(sections_with_capability("background")))
 
     def test_background_round_trips(self):
         definition = get_definition("multi_banner")
@@ -1182,20 +1178,23 @@ class SpacingSettingsTests(TestCase):
 
 class SpacingAwareIntegrationTests(TestCase):
     def test_spacing_aware_keys_get_spacing_defaults(self):
-        for key in SPACING_AWARE_SECTION_KEYS:
+        for key in sections_with_capability("spacing"):
             defaults = get_definition(key).default_settings()
             self.assertIn("spacing", defaults, key)
             self.assertEqual(defaults["spacing"]["vertical_spacing"], "normal", key)
 
     def test_non_spacing_aware_keys_have_no_spacing_field(self):
         for key, definition in SECTION_REGISTRY.items():
-            if key in SPACING_AWARE_SECTION_KEYS:
+            if key in sections_with_capability("spacing"):
                 continue
             defaults = definition.default_settings()
             self.assertNotIn("spacing", defaults, key)
 
     def test_background_and_spacing_share_exactly_the_same_allowlist(self):
-        self.assertEqual(BACKGROUND_AWARE_SECTION_KEYS, SPACING_AWARE_SECTION_KEYS)
+        # Spacing is the background-aware set plus the structural/presentation-only sections that own their own fill.
+        self.assertEqual(
+            sections_with_capability("spacing"), sections_with_capability("background") | {"surface_panel", "decorative_strip"},
+        )
 
 
 class NewsletterSectionRegistryTests(TestCase):
@@ -1328,7 +1327,7 @@ class U1ABackwardsCompatibilityTests(TestCase):
     """Test #1, #13, #14, #15 — nothing about the existing registry moved."""
 
     def test_all_34_definitions_still_construct_and_are_gettable(self):
-        self.assertEqual(len(list_definitions()), 36)
+        self.assertEqual(len(list_definitions()), 38)
         for key in U1A_EXPECTED_SECTION_KEYS:
             definition = get_definition(key)
             self.assertEqual(definition.key, key)
@@ -1389,20 +1388,8 @@ class U1ABackwardsCompatibilityTests(TestCase):
 
 
 class U1ACapabilitiesConsistencyTests(TestCase):
-    """Test #8 — capabilities are immutable (frozenset) and, per R1 §7,
-    consistent with the pre-existing allowlists they were derived from."""
-
-    _ALLOWLIST_BY_CAPABILITY = {
-        "card": CARD_AWARE_SECTION_KEYS,
-        "background": BACKGROUND_AWARE_SECTION_KEYS,
-        "spacing": SPACING_AWARE_SECTION_KEYS,
-        "motion": MOTION_AWARE_SECTION_KEYS,
-        "destination": DESTINATION_AWARE_SECTION_KEYS,
-        "layout_width": LAYOUT_WIDTH_AWARE_SECTION_KEYS,
-        "layout_height": LAYOUT_HEIGHT_AWARE_SECTION_KEYS,
-        "columns": COLUMN_AWARE_SECTION_KEYS,
-        "columns_visual": COLUMN_VISUAL_SECTION_KEYS,
-    }
+    """Test #8 — capabilities are immutable (frozenset), come from the closed
+    ``KNOWN_CAPABILITIES`` vocabulary, and are the one declaration all gating reads."""
 
     def test_capabilities_field_is_a_frozenset_on_every_definition(self):
         for definition in list_definitions():
@@ -1413,15 +1400,26 @@ class U1ACapabilitiesConsistencyTests(TestCase):
         for definition in list_definitions():
             self.assertIn("responsive", definition.capabilities, definition.key)
 
-    def test_capabilities_agree_with_every_pre_existing_allowlist(self):
-        for capability, allowlist in self._ALLOWLIST_BY_CAPABILITY.items():
-            for definition in list_definitions():
-                expected = definition.key in allowlist
-                actual = capability in definition.capabilities
-                self.assertEqual(
-                    actual, expected,
-                    f"{definition.key}: capability {capability!r} disagrees with its allowlist",
-                )
+    def test_every_declared_capability_is_a_known_capability(self):
+        for definition in list_definitions():
+            self.assertLessEqual(definition.capabilities, section_registry_module.KNOWN_CAPABILITIES, definition.key)
+
+    def test_unknown_capability_is_rejected_at_registry_build_time(self):
+        bogus = dataclasses.replace(get_definition("rich_text"), capabilities=frozenset({"not_a_capability"}))
+        with self.assertRaises(ValueError):
+            section_registry_module._finalize_registry({"rich_text": bogus})
+
+    def test_layout_height_requires_layout_width(self):
+        bogus = dataclasses.replace(get_definition("rich_text"), capabilities=frozenset({"layout_height"}))
+        with self.assertRaises(ValueError):
+            section_registry_module._finalize_registry({"rich_text": bogus})
+
+    def test_sections_with_capability_is_derived_from_the_declarations(self):
+        for capability in ("card", "background", "spacing", "motion", "destination", "columns"):
+            self.assertEqual(
+                section_registry_module.sections_with_capability(capability),
+                frozenset(d.key for d in list_definitions() if capability in d.capabilities),
+            )
 
     def test_resolve_capabilities_matches_definition_field_with_no_variant(self):
         definition = get_definition("rich_text")
@@ -1442,7 +1440,7 @@ class U1AVariantContractTests(TestCase):
         """Test #3 — a definition can declare multiple variants."""
         definition = get_definition("category_grid")
         keys = {v.key for v in list_variants(definition)}
-        self.assertEqual(keys, {"grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts"})
+        self.assertEqual(keys, {"grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles"})
         self.assertEqual(definition.default_variant, "grid")
         self.assertEqual(definition.variant_setting_key, "display_mode")
 

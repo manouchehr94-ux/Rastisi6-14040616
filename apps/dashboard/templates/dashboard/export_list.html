@@ -49,8 +49,8 @@
       <tr>
         <td>{{ job.get_export_type_display }}</td>
         <td>{{ job.row_count|fa_number }}</td>
-        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.created_at|date:"Y-m-d H:i" }}</td>
-        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.expires_at|date:"Y-m-d" }}</td>
+        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.created_at|jalali_dt }}</td>
+        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.expires_at|jalali }}</td>
         <td><a class="btn btn-sm" href="{% url 'dashboard:export-download' job.pk %}">دریافت فایل</a></td>
       </tr>
     {% endfor %}

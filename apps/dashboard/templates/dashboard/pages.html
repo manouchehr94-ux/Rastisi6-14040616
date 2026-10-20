@@ -6,6 +6,21 @@
 {% block page_sub %}مدیریت صفحات اطلاع‌رسانی، قوانین و محتوای فروشگاه{% endblock %}
 
 {% block content %}
+{% if about.state != "published" %}
+<div class="card" style="margin-bottom:14px;border-color:#fdba74">
+  <div class="card-body" style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    <div>
+      <b>صفحهٔ «درباره ما» {% if about.state == "missing" %}هنوز ساخته نشده است{% else %}هنوز منتشر نشده است{% endif %}</b>
+      <p style="margin:4px 0 0;color:var(--muted);font-size:13px;line-height:1.9">دکمه‌های «استعلام قیمت» محصولات به این صفحه می‌روند؛ تا وقتی منتشر نشود، مشتری به جایی هدایت نمی‌شود. هیچ درخواستی ثبت یا ارسال نمی‌شود — فقط صفحهٔ اطلاعات و راه‌های ارتباطِ شما نمایش داده می‌شود.</p>
+    </div>
+    {% if about.state == "missing" %}
+    <form method="post" action="{% url 'dashboard:page-create-about' %}">{% csrf_token %}<button class="btn btn-primary" type="submit">ساختِ پیش‌نویسِ «درباره ما»</button></form>
+    {% else %}
+    <a class="btn btn-primary" href="{% url 'dashboard:page-edit' about.page.pk %}">ویرایش و انتشار</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 <div class="card">
   <div class="card-head">
     <h3>صفحات ({{ pages|length }})</h3>

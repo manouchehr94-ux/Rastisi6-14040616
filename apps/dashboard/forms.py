@@ -5,6 +5,7 @@ from django import forms
 
 from apps.catalog.models import Attribute, Brand, Category, Product, ProductTag
 from apps.core.color_utils import contrast_ratio, safe_hex
+from apps.core.image_validation import validate_uploaded_image
 from apps.core.models import ShopSettings
 from apps.core.utils import normalize_digits
 from apps.orders.models import TaxClass
@@ -112,6 +113,14 @@ class ProductForm(NumericCleanMixin, forms.Form):
         label="نمایش", choices=Product.Visibility.choices, required=False, initial=Product.Visibility.PUBLIC,
     )
     publish_at = forms.CharField(label="زمانِ انتشارِ زمان‌بندی‌شده", required=False)
+    # بازه‌ی اعتبارِ تخفیف — اختیاری؛ هر دو خالی = تخفیفِ بدونِ زمان‌بندی (رفتارِ قبلی).
+    # «استعلام قیمت»: '' = ارث‌بری از گروه/کالکشن، standard = قیمت عادی حتی اگر گروهش استعلامی است.
+    price_mode_override = forms.ChoiceField(
+        label="حالت قیمت‌گذاری", required=False,
+        choices=[("", "پیش‌فرض (ارث‌بری از گروه/کالکشن)"), ("standard", "قیمت عادی"), ("inquiry", "استعلام قیمت")],
+    )
+    discount_starts_at = forms.CharField(label="شروعِ اعتبارِ تخفیف", required=False)
+    discount_ends_at = forms.CharField(label="پایانِ اعتبارِ تخفیف", required=False)
     # برچسب‌ها — رشته‌ی جداشده با کاما که ویجتِ چیپِ Alpine.js پر می‌کند.
     tags = forms.CharField(label="برچسب‌ها", required=False, widget=forms.HiddenInput)
 
@@ -201,6 +210,32 @@ class ProductForm(NumericCleanMixin, forms.Form):
         if is_naive(parsed):
             parsed = make_aware(parsed)
         return parsed
+
+    @staticmethod
+    def _aware_datetime(raw, message):
+        from django.utils.dateparse import parse_datetime
+        from django.utils.timezone import is_naive, make_aware
+
+        raw = (raw or "").strip()
+        if not raw:
+            return None
+        parsed = parse_datetime(raw)
+        if parsed is None:
+            raise forms.ValidationError(message)
+        return make_aware(parsed) if is_naive(parsed) else parsed
+
+    def clean_discount_starts_at(self):
+        return self._aware_datetime(self.cleaned_data.get("discount_starts_at"), "زمانِ شروعِ تخفیف معتبر نیست.")
+
+    def clean_discount_ends_at(self):
+        return self._aware_datetime(self.cleaned_data.get("discount_ends_at"), "زمانِ پایانِ تخفیف معتبر نیست.")
+
+    def clean(self):
+        cleaned = super().clean()
+        starts, ends = cleaned.get("discount_starts_at"), cleaned.get("discount_ends_at")
+        if starts and ends and ends <= starts:
+            self.add_error("discount_ends_at", "پایانِ تخفیف باید بعد از شروعِ آن باشد.")
+        return cleaned
 
     def clean_price(self):
         # پیش‌نویس (دکمه‌ی «ذخیره‌ی پیش‌نویس») صراحتاً وعده می‌دهد که فقط
@@ -331,6 +366,9 @@ class BrandForm(forms.Form):
     country = forms.CharField(label="کشور (اختیاری)", max_length=80, required=False)
     logo = forms.ImageField(label="لوگو", required=False)
 
+    def clean_logo(self):
+        return validate_uploaded_image(self.cleaned_data.get("logo"), max_bytes=IMAGE_MAX_BYTES, label="لوگوی برند")
+
     def clean_name(self):
         name = self.cleaned_data["name"].strip()
         if not name:
@@ -344,8 +382,15 @@ class CollectionForm(forms.Form):
     name = forms.CharField(label="نام کالکشن", max_length=150)
     description = forms.CharField(label="توضیحات (اختیاری)", required=False, widget=forms.Textarea)
     image = forms.ImageField(label="تصویر (اختیاری)", required=False)
+
+    def clean_image(self):
+        return validate_uploaded_image(self.cleaned_data.get("image"), max_bytes=IMAGE_MAX_BYTES, label="تصویر کالکشن")
     seo_title = forms.CharField(label="عنوان سئو (اختیاری)", max_length=70, required=False)
     seo_description = forms.CharField(label="توضیحات متا (اختیاری)", max_length=160, required=False, widget=forms.Textarea)
+    price_mode = forms.ChoiceField(
+        label="حالت قیمت‌گذاری", required=False,
+        choices=[("standard", "قیمت عادی"), ("inquiry", "استعلام قیمت برای همه‌ی کالاهای کالکشن")],
+    )
 
     def clean_name(self):
         name = self.cleaned_data["name"].strip()
@@ -406,6 +451,9 @@ class AttributeValueForm(forms.Form):
     value = forms.CharField(label="مقدار داخلی", max_length=120, required=False)
     color_hex = forms.CharField(label="کد رنگ (Hex)", max_length=9, required=False)
     swatch_image = forms.ImageField(label="تصویر نمونه (اختیاری)", required=False)
+
+    def clean_swatch_image(self):
+        return validate_uploaded_image(self.cleaned_data.get("swatch_image"), max_bytes=IMAGE_MAX_BYTES, label="تصویر نمونه")
 
     def clean_label(self):
         label = self.cleaned_data["label"].strip()
@@ -494,6 +542,9 @@ class MainCategoryForm(forms.Form):
     icon = forms.CharField(label="آیکون (ایموجی)", max_length=10, required=False, initial="📁")
     image = forms.ImageField(label="تصویر دسته‌بندی", required=False)
 
+    def clean_image(self):
+        return validate_uploaded_image(self.cleaned_data.get("image"), max_bytes=IMAGE_MAX_BYTES, label="تصویر دسته‌بندی")
+
 
 class SubCategoryForm(forms.Form):
     parent = forms.ModelChoiceField(
@@ -534,7 +585,14 @@ class CategoryEditForm(forms.Form):
     name = forms.CharField(label="نام", max_length=120)
     icon = forms.CharField(label="آیکون (ایموجی)", max_length=10, required=False)
     image = forms.ImageField(label="تصویر دسته‌بندی", required=False)
+
+    def clean_image(self):
+        return validate_uploaded_image(self.cleaned_data.get("image"), max_bytes=IMAGE_MAX_BYTES, label="تصویر دسته‌بندی")
     clear_image = forms.BooleanField(label="حذف تصویر", required=False)
+    price_mode = forms.ChoiceField(
+        label="حالت قیمت‌گذاری گروه", required=False,
+        choices=[("standard", "قیمت عادی"), ("inquiry", "استعلام قیمت برای همه‌ی کالاهای این گروه")],
+    )
 
 
 class ShopInfoForm(forms.Form):
@@ -592,6 +650,9 @@ class GiftWrapSettingsForm(NumericCleanMixin, forms.Form):
     )
     gift_wrap_message_enabled = forms.BooleanField(label="امکان نوشتن پیام کارت هدیه", required=False)
     gift_wrap_image = forms.ImageField(label="تصویر نمونه", required=False)
+
+    def clean_gift_wrap_image(self):
+        return validate_uploaded_image(self.cleaned_data.get("gift_wrap_image"), max_bytes=IMAGE_MAX_BYTES, label="تصویر نمونهٔ کادوپیچی")
     remove_gift_wrap_image = forms.BooleanField(label="حذف تصویر فعلی", required=False)
 
     def clean_gift_wrap_price(self):
@@ -685,6 +746,8 @@ HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/webp"}
 ALLOWED_FAVICON_TYPES = {"image/png", "image/x-icon", "image/vnd.microsoft.icon"}
+#: R4-14 — one byte ceiling for every storefront picture upload that is not the shop logo/favicon (matches the guide)
+IMAGE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_LOGO_SIZE = 2 * 1024 * 1024  # 2 MB
 MAX_FAVICON_SIZE = 512 * 1024  # 512 KB
 
@@ -697,24 +760,22 @@ def _validate_hex_color(value):
     return value.upper()
 
 
-def _validate_image_upload(file, allowed_types, max_size, label):
-    """اعتبارسنجی فایل تصویر: نوع، اندازه، و محتوای واقعی."""
+def _validate_image_upload(file, allowed_types, max_size, label, formats=("JPEG", "PNG", "WEBP")):
+    """اعتبارسنجی فایل تصویر: نوع، اندازه، و محتوای واقعی (فرمتِ تشخیص‌داده‌شدهٔ Pillow، نه فقط Content-Type)."""
     if file.size > max_size:
         max_mb = max_size / (1024 * 1024)
-        raise forms.ValidationError(f"حجم {label} نباید بیشتر از {max_mb:.0f} مگابایت باشد")
+        raise forms.ValidationError(f"حجم {label} نباید بیشتر از {max_mb:g} مگابایت باشد")
 
     if file.content_type not in allowed_types:
-        raise forms.ValidationError(f"فرمت {label} معتبر نیست. فرمت‌های مجاز: PNG, JPEG, WebP")
+        raise forms.ValidationError(f"فرمت {label} معتبر نیست. فرمت‌های مجاز: PNG, JPEG, WebP" if "ICO" not in formats else f"فرمت {label} معتبر نیست. فرمت‌های مجاز: PNG, ICO")
 
-    # Verify actual image content
+    from django.core.exceptions import ValidationError as _DjangoValidationError
+    from apps.core.image_validation import open_and_verify
+
     try:
-        from PIL import Image
-        img = Image.open(file)
-        img.verify()
-        file.seek(0)
-    except Exception:
-        raise forms.ValidationError(f"فایل {label} یک تصویر معتبر نیست")
-
+        open_and_verify(file, label=label, formats=formats)
+    except _DjangoValidationError as exc:
+        raise forms.ValidationError(exc.messages[0]) from exc
     return file
 
 
@@ -788,7 +849,7 @@ class VisualIdentityForm(forms.Form):
     def clean_favicon(self):
         favicon = self.cleaned_data.get("favicon")
         if favicon:
-            return _validate_image_upload(favicon, ALLOWED_FAVICON_TYPES, MAX_FAVICON_SIZE, "فاوآیکون")
+            return _validate_image_upload(favicon, ALLOWED_FAVICON_TYPES, MAX_FAVICON_SIZE, "فاوآیکون", formats=("PNG", "ICO"))
         return favicon
 
     def clean(self):
@@ -814,6 +875,23 @@ class VisualIdentityForm(forms.Form):
         if failures:
             raise forms.ValidationError(failures)
         return cleaned
+
+
+class IdentityAssetsForm(forms.Form):
+    """RS-13 — لوگو و فاوآیکون (دارایی‌های هویتِ فروشگاه). رنگ/قالب دیگر این‌جا نیست: مرجعِ طراحی فقط Design Studio (R4) است."""
+
+    logo = forms.ImageField(label="لوگوی فروشگاه", required=False)
+    remove_logo = forms.BooleanField(label="حذف لوگوی فعلی", required=False)
+    favicon = forms.ImageField(label="فاوآیکون", required=False)
+    remove_favicon = forms.BooleanField(label="حذف فاوآیکون فعلی", required=False)
+
+    def clean_logo(self):
+        logo = self.cleaned_data.get("logo")
+        return _validate_image_upload(logo, ALLOWED_LOGO_TYPES, MAX_LOGO_SIZE, "لوگو") if logo else logo
+
+    def clean_favicon(self):
+        favicon = self.cleaned_data.get("favicon")
+        return _validate_image_upload(favicon, ALLOWED_FAVICON_TYPES, MAX_FAVICON_SIZE, "فاوآیکون", formats=("PNG", "ICO")) if favicon else favicon
 
 
 class OrderExpirySettingsForm(forms.Form):

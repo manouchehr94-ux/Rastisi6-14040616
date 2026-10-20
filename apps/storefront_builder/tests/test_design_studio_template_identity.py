@@ -18,7 +18,7 @@ from django.urls import reverse
 
 from apps.storefront_builder import layout_preset_registry
 from apps.storefront_builder.services import layout_service, preset_service
-from apps.storefront_builder.views import (
+from apps.storefront_builder.services.ready_template_card_service import (
     build_ready_template_cards,
     resolve_applied_template_card,
 )
@@ -34,8 +34,6 @@ class _TemplateIdentityCase(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
         self.latest = layout_preset_registry.get_layout_preset(KEY)
         self.historical = layout_preset_registry.get_layout_preset_version(KEY, HISTORICAL)
@@ -165,9 +163,11 @@ class StudioHistoricalTemplateTests(_TemplateIdentityCase):
 
 class GalleryAndStudioShareSemanticsTests(_TemplateIdentityCase):
     def _gallery_current(self):
-        response = self.client.get(reverse("dashboard:storefront-builder-templates"))
+        # ARCH-02b: the old dashboard gallery forwards to the Studio; its server cards and the Studio's client
+        # catalog (two projections of ONE builder) must still agree.
+        response = self.client.get(reverse("dashboard:storefront-builder-templates"), follow=True)
         self.assertEqual(response.status_code, 200)
-        return {c["preset"].key: c["is_current"] for c in response.context["template_cards"]}
+        return {c["preset"].key: c["is_current"] for c in response.context["studio"]["template_cards"]}
 
     def _studio_current(self):
         _, studio = self._studio()
@@ -187,7 +187,7 @@ class GalleryAndStudioShareSemanticsTests(_TemplateIdentityCase):
 
     def test_historical_gallery_card_keeps_its_apply_action(self):
         self._apply(self.historical)
-        response = self.client.get(reverse("dashboard:storefront-builder-templates"))
-        html = response.content.decode()
-        self.assertNotIn("قالبِ فعلی", html)
-        self.assertIn(f'value="{KEY}"', html)
+        response = self.client.get(reverse("dashboard:storefront-builder-templates"), follow=True)
+        by_key = {t["key"]: t for t in response.context["studio"]["client"]["templates"]}
+        self.assertFalse(by_key[KEY]["is_current"])          # a historical draft is not "the latest"...
+        self.assertEqual(by_key[KEY]["version"], LATEST)     # ...and the latest stays applicable as a key+version pair

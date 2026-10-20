@@ -28,6 +28,11 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.storefront_builder.tests._gallery_support import (
+    gallery_cards_by_key,
+    gallery_client_templates,
+    studio_gallery_response,
+)
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.models import StorefrontLayoutVersion
 from apps.storefront_builder.services import layout_service as svc
@@ -144,30 +149,25 @@ class GalleryPreviewIntegrationTests(TestCase):
         self.admin_client.login(username="batch3_gallery_owner", password="pass12345")
         self.url = reverse("dashboard:storefront-builder-templates")
 
-    def test_b_every_card_renders_an_svg_thumbnail(self):
-        response = self.admin_client.get(self.url)
+    def test_b_every_card_carries_a_thumbnail(self):
+        """Every Studio gallery tile carries its own thumbnail — an inline SVG or a real screenshot image."""
+        response = studio_gallery_response(self.admin_client)
         self.assertEqual(response.status_code, 200)
-        content = response.content.decode()
-        self.assertEqual(content.count('<div class="tpl-thumb"'), 50)
-        # Every card must carry its own thumbnail — an inline SVG or a screenshot
-        # image. (This used to count every "<svg" on the page, which only reached 50
-        # because the admin sidebar's nav icons were included in the total.)
-        from bs4 import BeautifulSoup
-
-        thumbs = BeautifulSoup(content, "html.parser").select(".tpl-thumb")
-        self.assertEqual(len(thumbs), 50)
-        missing = [t.get("aria-label") for t in thumbs if not (t.find("svg") or t.find("img"))]
+        templates = gallery_client_templates(response)
+        self.assertEqual(len(templates), 53)
+        missing = [
+            t["key"] for t in templates
+            if not (t["thumbnail_svg"].startswith("<svg") or (t["thumbnail_kind"] == "screenshot" and t["thumbnail_url"]))
+        ]
         self.assertEqual(missing, [], "template cards without a thumbnail")
 
     def test_i_current_template_badge_and_disabled_action_still_correct(self):
         draft = svc.get_or_create_draft(self.store)
         preset_service.apply_preset(draft, lpr.get_layout_preset("dark_digital"))
-        response = self.admin_client.get(self.url)
-        cards = {c["preset"].key: c for c in response.context["template_cards"]}
+        response = studio_gallery_response(self.admin_client)
+        cards = gallery_cards_by_key(response)
         self.assertTrue(cards["dark_digital"]["is_current"])
-        self.assertContains(response, "قالبِ فعلی")
-        self.assertContains(response, "در حال استفاده")
-        self.assertNotContains(response, 'name="preset_key" value="dark_digital"')
+        self.assertEqual([t["key"] for t in gallery_client_templates(response) if t["is_current"]], ["dark_digital"])
         # the current card still gets a real thumbnail, not a blank slot —
         # either the Batch 3 SVG schematic, or (post-Batch-4) a real
         # captured screenshot when one exists for this Template.
@@ -175,24 +175,6 @@ class GalleryPreviewIntegrationTests(TestCase):
         self.assertTrue(
             card["thumbnail_svg"].startswith("<svg") or bool(card.get("thumbnail_url")),
         )
-
-    def test_k_mobile_usable_thumbnail_markup_is_responsive_not_fixed_pixels(self):
-        response = self.admin_client.get(self.url)
-        content = response.content.decode()
-        self.assertIn(".tpl-thumb{", content)
-        # a responsive sizing rule (percentage width, not a hard pixel box)
-        # so the card scales down on a narrow/mobile viewport.
-        thumb_rule_start = content.index(".tpl-thumb{")
-        thumb_rule = content[thumb_rule_start:content.index("}", thumb_rule_start)]
-        self.assertIn("width:100%", thumb_rule)
-
-    def test_no_internal_registry_keys_or_json_leak_into_the_page(self):
-        response = self.admin_client.get(self.url)
-        content = response.content.decode()
-        self.assertNotIn("template_baseline_snapshot", content)
-        self.assertNotIn("template_slot_key", content)
-
-    # --- No-mutation contract (E-H) ---
 
     def test_e_gallery_get_does_not_change_draft_version_id_or_content(self):
         draft_before = svc.get_or_create_draft(self.store)
@@ -204,7 +186,7 @@ class GalleryPreviewIntegrationTests(TestCase):
         snapshot_before = dict(draft_before.template_baseline_snapshot)
 
         response = self.admin_client.get(self.url)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)  # the legacy gallery URL only forwards to the Studio
 
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version_id, draft_before_id)
@@ -248,7 +230,7 @@ class GalleryPreviewIntegrationTests(TestCase):
         with mock.patch.object(preset_service, "apply_preset") as mocked_apply, \
              mock.patch.object(preset_service, "apply_preset_with_checkpoint") as mocked_apply_checkpoint:
             response = self.admin_client.get(self.url)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         mocked_apply.assert_not_called()
         mocked_apply_checkpoint.assert_not_called()
 
@@ -257,9 +239,11 @@ class GalleryPreviewIntegrationTests(TestCase):
         other_draft = svc.get_or_create_draft(other_store)
         preset_service.apply_preset(other_draft, lpr.get_layout_preset("dark_digital"))
 
-        response = self.admin_client.get(self.url)
-        cards = {c["preset"].key: c for c in response.context["template_cards"]}
+        response = studio_gallery_response(self.admin_client)
+        cards = gallery_cards_by_key(response)
         self.assertFalse(cards["dark_digital"]["is_current"])
-        content = response.content.decode()
-        self.assertNotIn(other_store.slug, content)
-        self.assertNotIn(other_store.name, content)
+        import json
+
+        catalog_json = json.dumps(gallery_client_templates(response), ensure_ascii=False)
+        self.assertNotIn(other_store.slug, catalog_json)
+        self.assertNotIn(other_store.name, catalog_json)

@@ -32,6 +32,11 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.storefront_builder.tests._gallery_support import (
+    gallery_cards_by_key,
+    gallery_client_templates,
+    studio_gallery_response,
+)
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
@@ -165,17 +170,18 @@ class ReadyTemplateGallerySeparationTests(TestCase):
         "روایت‌محور", also ``editorial_story``'s label), which would make a
         naive text-absence check false-fail without indicating any real
         separation bug."""
-        self.assertEqual(len(lpr.list_ready_templates()), 50)
+        self.assertEqual(len(lpr.list_ready_templates()), 53)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset({p.key for p in lpr.list_ready_templates()}))
-        response = self.admin_client.get(self.url)
-        cards = response.context["template_cards"]
-        self.assertEqual(len(cards), 50)
+        response = studio_gallery_response(self.admin_client)
+        cards = response.context["studio"]["template_cards"]
+        self.assertEqual(len(cards), 53)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset({c["preset"].key for c in cards}))
+        labels = {t["label"] for t in gallery_client_templates(response)}
         for key in READY_TEMPLATE_KEYS:
-            self.assertContains(response, lpr.get_layout_preset(key).label_fa)
+            self.assertIn(lpr.get_layout_preset(key).label_fa, labels)
 
     def test_b_historical_presets_remain_registered_and_directly_applicable(self):
-        self.assertEqual(len(lpr.list_layout_presets()), 55)
+        self.assertEqual(len(lpr.list_layout_presets()), 58)
         for key in HISTORICAL_KEYS:
             preset = lpr.get_layout_preset(key)
             self.assertIsNotNone(preset, key)
@@ -188,33 +194,33 @@ class ReadyTemplateGallerySeparationTests(TestCase):
     def test_c_selected_ready_template_is_marked_current_not_as_an_apply_action(self):
         draft = svc.get_or_create_draft(self.store)
         preset_service.apply_preset(draft, lpr.get_layout_preset("dark_digital"))
-        response = self.admin_client.get(self.url)
-        cards = {c["preset"].key: c for c in response.context["template_cards"]}
+        response = studio_gallery_response(self.admin_client)
+        cards = gallery_cards_by_key(response)
         self.assertTrue(cards["dark_digital"]["is_current"])
         for key in READY_TEMPLATE_KEYS:
             if key != "dark_digital":
                 self.assertFalse(cards[key]["is_current"], key)
-        self.assertContains(response, "قالبِ فعلی")
-        self.assertContains(response, "در حال استفاده")
-        # the current card must never carry the "apply" form/action for its
-        # own preset — no hidden preset_key input for dark_digital at all.
-        self.assertNotContains(response, 'name="preset_key" value="dark_digital"')
+        # the Studio gallery data marks exactly one template current (its UI disables "apply" for it)
+        self.assertEqual([t["key"] for t in gallery_client_templates(response) if t["is_current"]], ["dark_digital"])
 
     def test_d_a_different_ready_template_remains_applicable_from_the_gallery(self):
         draft = svc.get_or_create_draft(self.store)
         preset_service.apply_preset(draft, lpr.get_layout_preset("dark_digital"))
-        response = self.admin_client.get(self.url)
-        self.assertContains(response, 'name="preset_key" value="warm_boutique"')
+        response = studio_gallery_response(self.admin_client)
+        other = {t["key"]: t for t in gallery_client_templates(response)}["warm_boutique"]
+        self.assertFalse(other["is_current"])
+        # ...and it applies through the very same switch the Studio uses (key + version pair)
+        self.assertEqual(other["version"], lpr.get_layout_preset("warm_boutique").version)
 
     def test_e_no_cross_store_current_template_leakage(self):
         other_store = _second_store()
         other_draft = svc.get_or_create_draft(other_store)
         preset_service.apply_preset(other_draft, lpr.get_layout_preset("dark_digital"))
 
-        response = self.admin_client.get(self.url)
-        cards = {c["preset"].key: c for c in response.context["template_cards"]}
+        response = studio_gallery_response(self.admin_client)
+        cards = gallery_cards_by_key(response)
         self.assertFalse(cards["dark_digital"]["is_current"])
-        self.assertNotContains(response, "قالبِ فعلی")
+        self.assertFalse(any(t["is_current"] for t in gallery_client_templates(response)))
 
     def test_f_ready_template_keys_are_not_reference_store_or_family_names(self):
         for key in READY_TEMPLATE_KEYS:
@@ -262,20 +268,26 @@ class EmptyDataDrivenSectionsHiddenOnPublicTests(TestCase):
         return Product.objects.create(
             store=self.store, vendor=vendor, category=category, name="کالای تخفیف‌دار Batch1",
             slug="batch1-discounted-product", sku="SKU-BATCH1-DISC", price=Decimal("100000"),
-            discount_percent=20, status=Product.Status.ACTIVE,
+            discount_percent=20, status=Product.Status.ACTIVE, stock=5,
         )
 
-    def test_a_empty_data_driven_sections_are_hidden_on_public_home(self):
+    def test_a_empty_data_driven_sections_stay_on_public_home_with_a_neutral_note(self):
+        """Owner contract (exact template composition): a template-owned section is never dropped for lack of data.
+        The public page keeps it and shows a polished, NON-administrative note — never the Studio instructions."""
         svc.publish(self.store)
         response = self.public_client.get(reverse("catalog:home"))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, self.EMPTY_STATE_TEXT)
-        self.assertNotContains(response, "پرفروش‌ترین‌ها")
+        self.assertContains(response, "پرفروش‌ترین‌ها")
+        self.assertContains(response, 'data-empty-state="product"')
+        self.assertContains(response, "محصولات این بخش به‌زودی اضافه می‌شوند.")
+        self.assertNotContains(response, "با افزودن کالای واجد شرایط")      # Studio hint never reaches shoppers
+        self.assertNotContains(response, "مدیریت محصولات")                    # no admin link on the public page
 
-    def test_b_same_empty_sections_still_show_explanatory_empty_state_in_builder(self):
+    def test_b_same_empty_sections_show_the_explanatory_empty_state_in_builder(self):
         response = self.admin_client.get(reverse("dashboard:storefront-builder-preview"), {"page": "home"})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, self.EMPTY_STATE_TEXT)
+        self.assertContains(response, "هنوز کالایی برای نمایش در این بخش وجود ندارد.")
+        self.assertContains(response, "با افزودن کالای واجد شرایط")
         self.assertContains(response, "پرفروش‌ترین‌ها")
 
     def test_c_non_empty_discounted_products_section_renders_normally_on_public_home(self):
@@ -284,16 +296,15 @@ class EmptyDataDrivenSectionsHiddenOnPublicTests(TestCase):
         response = self.public_client.get(reverse("catalog:home"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "کالای تخفیف‌دار Batch1")
-        self.assertNotContains(response, self.EMPTY_STATE_TEXT)
 
-    def test_d_no_blank_wrapper_remains_for_a_hidden_section(self):
+    def test_d_an_empty_section_keeps_its_place_in_the_public_composition(self):
         svc.publish(self.store)
         response = self.public_client.get(reverse("catalog:home"))
         content = response.content.decode()
-        best_sellers_section = next(
-            s for s in self.draft.get_page("home").sections.all() if s.settings.get("data_source") == "best_sellers"
-        )
-        self.assertNotIn(f'data-section-key="{best_sellers_section.section_key}"', content)
+        # Every empty data-driven row of the recipe (best sellers, discounted, amazing offers) is still in the page,
+        # each with its own empty-state body (the public page carries no ``data-section-key`` attributes).
+        self.assertGreaterEqual(content.count('data-empty-state="product"'), 2)
+        self.assertIn("پرفروش‌ترین‌ها", content)
 
     def test_e_tenant_and_store_scoping_are_intact(self):
         """A second store's non-empty discounted product must never leak

@@ -1,0 +1,13 @@
+{% comment %}
+Body of the shared template-owned empty state (section_empty_state_service). ``empty_state`` is the resolved dict.
+Studio (is_builder_preview): the Persian message + hint + the existing management link. Public: a neutral note.
+{% endcomment %}
+{% if is_builder_preview %}
+<div class="sec-empty-body" data-sfb-section-surface="ink" role="status" data-empty-state="{{ empty_state.kind }}">
+  <p class="sec-empty-title">{{ empty_state.studio_message }}</p>
+  <p class="sec-empty-hint">{{ empty_state.studio_hint }}</p>
+  {% if empty_state.action_url %}<a class="sec-empty-action" href="{{ empty_state.action_url }}" target="_blank" rel="noopener">{{ empty_state.action_label }}</a>{% endif %}
+</div>
+{% else %}
+<div class="sec-empty-body" data-sfb-section-surface="ink" role="status" data-empty-state="{{ empty_state.kind }}"><p class="sec-empty-note">{{ empty_state.public_note }}</p></div>
+{% endif %}

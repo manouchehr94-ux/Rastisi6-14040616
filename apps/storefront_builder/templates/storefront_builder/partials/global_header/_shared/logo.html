@@ -18,7 +18,7 @@ applied to ``account_action.html``'s ``show_label``).
 {% endcomment %}
 <a class="gh-logo" href="{% if is_live_storefront %}/{% else %}#{% endif %}"{% if is_builder_preview %} onclick="return false"{% endif %}>
   {% if SHOP_LOGO %}
-  <img src="{{ SHOP_LOGO.url }}" alt="{{ SHOP_NAME }}">
+  <img src="{{ SHOP_LOGO.url }}" data-img-role="logo" alt="{{ SHOP_NAME }}">
   {% else %}
   <span class="gh-logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a2 2 0 00-1 3.73V8L3 14v2h18v-2L13 8V6.73A2 2 0 0012 3z"/></svg></span>
   {% endif %}

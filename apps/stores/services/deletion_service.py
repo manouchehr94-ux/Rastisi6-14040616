@@ -55,7 +55,11 @@ def _notify_deletion_requested(*, store: Store, actor) -> None:
     from apps.notifications.services.notification_service import notify_security_event
 
     phone = getattr(getattr(actor, "owner_profile", None), "phone", "")
-    purge_date = store.deletion_scheduled_purge_at.strftime("%Y-%m-%d") if store.deletion_scheduled_purge_at else ""
+    from apps.core.jalali_utils import format_jalali
+    from apps.core.utils import to_fa_digits
+
+    # FOLLOWUP-14: human-facing dates are Jalali (the stored instant stays UTC/aware).
+    purge_date = to_fa_digits(format_jalali(store.deletion_scheduled_purge_at)) if store.deletion_scheduled_purge_at else ""
     notify_security_event(
         subject="درخواستِ حذفِ فروشگاه ثبت شد",
         body=f"درخواستِ حذفِ فروشگاهِ «{store.name}» ثبت شد. اگر این درخواست را شما نداده‌اید، فوراً وارد "

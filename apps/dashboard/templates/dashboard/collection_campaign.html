@@ -1,0 +1,125 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+
+{% block title %}کمپین «{{ collection.name }}» | پنل مدیریت{% endblock %}
+{% block page_title %}کمپین «{{ collection.name }}»{% endblock %}
+{% block page_sub %}زمان‌بندیِ تخفیفِ اعضای این کالکشن — هیچ‌چیز بدون پیش‌نمایش و تأیید صریح شما اعمال نمی‌شود{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><b>وضعیت</b></div>
+  <div class="card-body">
+    <p style="margin:0 0 8px">
+      <b>کمپینِ زمان‌دار:</b>
+      {% if summary.status == "active" %}<span class="badge b-green">در حال اجرا</span>
+      {% elif summary.status == "scheduled" %}<span class="badge b-amber">برنامه‌ریزی‌شده</span>
+      {% elif summary.status == "ended" %}<span class="badge b-gray">پایان‌یافته</span>
+      {% else %}<span class="badge b-gray">کمپینی ثبت نشده</span>{% endif %}
+      <span class="field-help" style="display:inline">(«کمپین» یعنی تخفیفِ دارایِ تاریخِ پایان؛ فعال/غیرفعال بودنِ خودِ کالکشن جداست.)</span>
+    </p>
+    <p style="margin:0 0 8px">
+      <b>تخفیفِ ثابتِ خودِ کالاها (مستقل از کمپین):</b> {{ summary.counts.standing|fa_number }} کالا — بدونِ تاریخِ پایان‌اند، تایمر ندارند و با این صفحه تغییر نمی‌کنند مگر اینکه آگاهانه با کمپینِ جدید جایگزین شوند.
+    </p>
+    <ul class="field-help" style="margin:8px 0 0;padding-inline-start:18px">
+      <li>{{ summary.member_count|fa_number }} کالا در کالکشن · در حال اجرا: {{ summary.counts.active|fa_number }} · برنامه‌ریزی‌شده: {{ summary.counts.scheduled|fa_number }} · پایان‌یافته: {{ summary.counts.ended|fa_number }} · بدون تخفیف: {{ summary.counts.none|fa_number }}</li>
+      {% if summary.counts.inquiry %}<li>«استعلام قیمت» (شاملِ کمپین نمی‌شود): {{ summary.counts.inquiry|fa_number }}</li>{% endif %}
+      {% if summary.deadline %}<li>نزدیک‌ترین پایانِ واقعی: <span dir="ltr">{{ summary.deadline|jalali_dt }}</span></li>{% endif %}
+    </ul>
+    {% if summary.status == "active" or summary.status == "scheduled" or has_snapshot %}
+    <form method="post" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      {% csrf_token %}<input type="hidden" name="action" value="end_preview">
+      {% if summary.status == "active" or summary.status == "scheduled" %}<button type="submit" name="mode" value="end" class="btn btn-sm">پیش‌نمایشِ پایانِ کمپین</button>{% endif %}
+      {% if has_snapshot %}<button type="submit" name="mode" value="restore" class="btn btn-sm">پیش‌نمایشِ بازگرداندنِ تخفیفِ قبل از کمپین</button>{% endif %}
+    </form>
+    {% else %}
+    <p class="field-help" style="margin-top:10px">کمپینِ زمان‌داری برای پایان‌دادن وجود ندارد؛ تخفیف‌های موجود به خودِ کالاها مربوط‌اند.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if end_plan %}
+<div class="card" style="margin-bottom:14px;border:2px solid #f59e0b">
+  <div class="card-head"><b>{% if end_mode == "restore" %}پیش‌نمایشِ بازگرداندنِ تخفیفِ قبل از کمپین{% else %}پیش‌نمایشِ پایانِ کمپین{% endif %} (هنوز چیزی تغییر نکرده)</b></div>
+  <div class="card-body">
+    {% for e in errors %}<div class="form-error" role="alert" style="color:#b91c1c;margin-bottom:8px">{{ e }}</div>{% endfor %}
+    {% if end_plan.rows %}
+      <p>{{ end_plan.rows|length|fa_number }} کالا تغییر می‌کند. {% if end_plan.untouched.standing %}{{ end_plan.untouched.standing|fa_number }} کالا تخفیفِ ثابتِ خودشان را حفظ می‌کنند. {% endif %}{% if end_plan.untouched.changed_since %}{{ end_plan.untouched.changed_since|fa_number }} کالا پس از کمپین ویرایش شده‌اند و دست نمی‌خورند.{% endif %}</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>SKU</th><th>کالا</th><th>قیمتِ فعلیِ فروش</th><th>پس از این عملیات</th></tr></thead>
+        <tbody>{% for r in end_plan.rows|slice:":30" %}<tr><td dir="ltr">{{ r.sku }}</td><td>{{ r.name }}</td><td>{{ r.now|toman }}</td><td>{{ r.after|toman }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% if end_plan.rows|length > 30 %}<p class="field-help">فقط ۳۰ ردیفِ اول نمایش داده شد؛ همهٔ {{ end_plan.rows|length|fa_number }} کالا تغییر می‌کنند.</p>{% endif %}
+      <form method="post" style="margin-top:10px">
+        {% csrf_token %}<input type="hidden" name="action" value="end_confirm"><input type="hidden" name="mode" value="{{ end_mode }}"><input type="hidden" name="confirm_token" value="{{ end_token }}">
+        <label style="display:block;margin-bottom:10px"><input type="checkbox" name="acknowledge" value="1"> فهرستِ بالا را دیدم و می‌خواهم {% if end_mode == "restore" %}تخفیفِ قبل از کمپین برگردد{% else %}کمپین همین الان پایان یابد{% endif %}.</label>
+        <button type="submit" class="btn btn-danger">{% if end_mode == "restore" %}بازگرداندنِ تخفیفِ قبلی{% else %}پایانِ کمپین{% endif %}</button>
+        <a class="btn" href="">انصراف (بدونِ تغییر)</a>
+      </form>
+    {% else %}
+      <p>{{ end_plan.reason }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head"><b>تعریف / زمان‌بندی کمپین</b></div>
+  <div class="card-body">
+    {% if not end_plan %}{% for e in errors %}<div class="form-error" role="alert" style="color:#b91c1c;margin-bottom:8px">{{ e }}</div>{% endfor %}{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <label>درصد تخفیف (۱ تا ۱۰۰)
+          <input class="inp" type="number" min="1" max="100" name="percent" value="{{ form.percent }}" required>
+        </label>
+        <label>شروع
+          <select class="inp" name="start_mode">
+            <option value="now" {% if form.start_mode == "now" %}selected{% endif %}>همین الان</option>
+            <option value="at" {% if form.start_mode == "at" %}selected{% endif %}>زمان مشخص</option>
+          </select>
+        </label>
+        <label>زمان شروع (اگر «زمان مشخص»)
+          <input class="inp" type="datetime-local" name="starts_at" value="{{ form.starts_at }}">
+        </label>
+        <label>زمان پایان
+          <input class="inp" type="datetime-local" name="ends_at" value="{{ form.ends_at }}">
+        </label>
+        <label>یا مدت (ساعت)
+          <input class="inp" type="number" min="1" name="hours" value="{{ form.hours }}" placeholder="مثلاً ۲۴">
+        </label>
+      </div>
+      <p class="field-help">تاریخ‌ها شمسی‌اند و بر اساس منطقه‌ی زمانی فروشگاه (تهران) ذخیره می‌شوند. تایمرِ فروشگاه فقط از «پایان»ِ ثبت‌شده ساخته می‌شود و با رفرش یا مرورگر دیگر تغییر نمی‌کند.</p>
+
+      {% if preview %}
+      <div class="card" style="background:#f8fafc;margin:12px 0">
+        <div class="card-body">
+          <b>پیش‌نمایش (هنوز چیزی نوشته نشده)</b>
+          <ul style="margin:8px 0 0;padding-inline-start:18px">
+            <li>{{ preview.eligible|fa_number }} کالا به {{ preview.percent|fa_number }}٪ می‌رسد، از <span dir="ltr">{{ preview.starts_at|jalali_dt }}</span> تا <span dir="ltr">{{ preview.ends_at|jalali_dt }}</span>.</li>
+            {% if preview.overwritten %}<li style="color:#92400e">{{ preview.overwritten|fa_number }} کالا هم‌اکنون تخفیفِ دیگری دارد که با این کمپین جایگزین می‌شود (تخفیفِ قبلی در سابقه ذخیره می‌شود و از «بازگرداندنِ تخفیفِ قبل از کمپین» قابل برگشت است).</li>{% endif %}
+            {% if preview.skipped_inquiry %}<li>{{ preview.skipped_inquiry|fa_number }} کالای «استعلام قیمت» نادیده گرفته می‌شود.</li>{% endif %}
+          </ul>
+          {% if preview.rows %}
+          <div class="table-wrap" style="margin-top:8px"><table>
+            <thead><tr><th>SKU</th><th>کالا</th><th>قیمتِ فعلیِ فروش</th><th>در طولِ کمپین</th><th></th></tr></thead>
+            <tbody>{% for r in preview.rows|slice:":30" %}<tr><td dir="ltr">{{ r.sku }}</td><td>{{ r.name }}</td><td>{{ r.now|toman }}</td><td>{{ r.after|toman }}</td><td>{% if r.changes_existing %}<span class="badge b-amber">جایگزینِ تخفیفِ فعلی</span>{% endif %}</td></tr>{% endfor %}</tbody>
+          </table></div>
+          {% if preview.rows|length > 30 %}<p class="field-help">۳۰ ردیفِ اول نمایش داده شد؛ همهٔ {{ preview.rows|length|fa_number }} کالا در کمپین قرار می‌گیرند.</p>{% endif %}
+          {% endif %}
+          <input type="hidden" name="confirm_token" value="{{ preview.token }}">
+          <label style="display:block;margin-top:10px">
+            <input type="checkbox" name="acknowledge" value="1"> فهرستِ بالا را دیدم و می‌دانم که تخفیف و بازهٔ فعلیِ این کالاها با این کمپین جایگزین می‌شود.
+          </label>
+        </div>
+      </div>
+      {% endif %}
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button type="submit" name="action" value="preview" class="btn">پیش‌نمایش</button>
+        {% if preview %}<button type="submit" name="action" value="confirm" class="btn btn-primary">تأیید و ثبت کمپین</button>{% endif %}
+        <a class="btn" href="{% url 'dashboard:collection-products' collection.pk %}">بازگشت</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

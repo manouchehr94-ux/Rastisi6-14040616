@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+{% extends "storefront_shell.html" %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
-{% load static persian %}
+{% load static persian storefront_builder_extras %}
 
 {% block title %}
 {% if order %}سفارش {{ order.code }}{% else %}سفارش یافت نشد{% endif %} | {{ SHOP_NAME }}
@@ -8,6 +8,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cart.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% static 'css/checkout.css' %}">
 <link rel="stylesheet" href="{% static 'css/account.css' %}">
 {% endblock %}
@@ -93,8 +94,11 @@
         <div class="card-h"><span class="ic">🧾</span>خلاصه‌ی مالی</div>
         <div class="card-b">
           <div class="totals">
-            <div class="ln"><span>جمع کالاها</span><b>{{ order.items_total|toman }}</b></div>
-            {% if order.product_discount > 0 %}<div class="ln disc"><span>تخفیف کالاها</span><b>− {{ order.product_discount|toman }}</b></div>{% endif %}
+            {% if order.product_discount > 0 %}
+            <div class="ln"><span>جمع کالاها (قیمت اصلی)</span><b>{{ order.items_total|add:order.product_discount|toman }}</b></div>
+            <div class="ln disc"><span>تخفیف کالاها</span><b>− {{ order.product_discount|toman }}</b></div>
+            <div class="ln sub"><span>جمع پس از تخفیف کالا</span><b>{{ order.items_total|toman }}</b></div>
+            {% else %}<div class="ln"><span>جمع کالاها</span><b>{{ order.items_total|toman }}</b></div>{% endif %}
             {% if order.coupon_discount > 0 %}<div class="ln disc"><span>کد تخفیف</span><b>− {{ order.coupon_discount|toman }}</b></div>{% endif %}
             {% if order.gift_wrap_total > 0 %}<div class="ln"><span>🎁 کادوپیچی</span><b>{{ order.gift_wrap_total|toman }}</b></div>{% endif %}
             <div class="ln"><span>هزینه ارسال ({{ order.shipping_method.name }})</span><b>{{ order.shipping_cost|toman }}</b></div>

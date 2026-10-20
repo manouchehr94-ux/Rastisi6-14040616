@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}{{ template.name }} | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <p><a href="{% url 'portal_platform_admin:industries' %}" class="pa-help">← بازگشت به فهرستِ صنف‌ها</a></p>
@@ -51,14 +52,14 @@
         <td><a href="{% url 'portal_platform_admin:store-detail' installation.store.public_id %}">{{ installation.store.name }}</a></td>
         <td>v{{ installation.installed_version }}</td>
         <td>{% if installation.status == "completed" %}<span class="pa-badge pa-ok">نصب‌شده</span>{% else %}<span class="pa-badge pa-off">ناموفق</span>{% endif %}</td>
-        <td>{{ installation.created_at|date:"Y/m/d" }}</td>
+        <td>{{ installation.created_at|jalali }}</td>
       </tr>
       {% empty %}<tr><td colspan="4" class="pa-help">این قالب هنوز روی هیچ فروشگاهی نصب نشده.</td></tr>{% endfor %}
     </tbody></table>
   </div>
 </div>
 
-<div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue)">
+<div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue-ink)">
   ساختِ قالبِ صنفِ تازه/ویرایشِ دسته‌بندی‌ها و ویژگی‌ها از طریقِ ابزارهایِ توسعه (کد/فیکسچر) انجام می‌شود، نه این پنل — این صفحه فقط نظارت/چرخه‌ی عمر (اعتبارسنجی، فعال/غیرفعال‌سازی، مشاهده‌ی نصب‌ها) را پوشش می‌دهد.
 </div>
 {% endblock %}

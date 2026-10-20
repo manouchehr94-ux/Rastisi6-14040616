@@ -1,4 +1,4 @@
-{% load persian catalog_extras %}
+{% load persian catalog_extras storefront_builder_extras %}
 {% comment %}
 Phase 5 — گالری/عنوان/قیمت/انتخابِ تنوع/تعداد/افزودن‌به‌سبد صفحه محصول.
 یک بلوکِ Alpine واحد (``variantSelector``) — طبقِ همان دلیلِ فنی که
@@ -39,8 +39,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
       <div class="main">
         {% for slide in gallery_slides %}
           {% if slide.type == "image" %}
-          <img data-slide data-slide-url="{{ slide.url }}" data-cover="{% if slide.is_cover %}true{% else %}false{% endif %}" x-show="activeSlide === {{ forloop.counter0 }}" src="{{ slide.url }}" alt="{{ slide.alt }}"
-               style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:22px">
+          <img data-slide data-slide-url="{{ slide.url }}" data-cover="{% if slide.is_cover %}true{% else %}false{% endif %}" x-show="activeSlide === {{ forloop.counter0 }}" src="{{ slide.url }}" data-img-role="product" alt="{{ slide.alt }}">
           {% else %}
           <span data-slide data-slide-url="" data-cover="false" x-show="activeSlide === {{ forloop.counter0 }}"
                 style="position:absolute;inset:0;display:grid;place-items:center;border-radius:22px;background:{{ slide.tint }}">{{ slide.emoji }}</span>
@@ -51,7 +50,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
       <div class="thumbs">
         {% for slide in gallery_slides %}
         <button type="button" class="th" :class="{ active: activeSlide === {{ forloop.counter0 }} }" @click="activeSlide = {{ forloop.counter0 }}"
-                style="{% if slide.type == 'image' %}background-image:url('{{ slide.thumb_url }}');background-size:cover{% else %}background:{{ slide.tint }}{% endif %}">
+                {% if slide.type == 'image' %}data-img-role="thumb" style="background-image:url('{{ slide.thumb_url }}')"{% else %}style="background:{{ slide.tint }}"{% endif %}>
           {% if slide.type == "emoji" %}{{ slide.emoji }}{% endif %}
         </button>
         {% endfor %}
@@ -125,6 +124,16 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           </div>
         </template>
 
+        {% if price_inquiry %}
+        {% comment %}«استعلام قیمت»: هیچ قیمت، تخفیف یا دکمه‌ی خریدی نمایش داده نمی‌شود. باز شدن
+        «درباره ما» فقط یک ناوبری است و درخواستی ثبت/ارسال نمی‌کند.{% endcomment %}
+        <div class="pricebox pricebox-inquiry">
+          <div class="now">استعلام قیمت</div>
+          <p class="pdp-inquiry-note">قیمت این کالا با استعلام تعیین می‌شود.</p>
+          {% if price_inquiry.url %}<a class="btn btn-primary pdp-inquiry-cta" href="{{ price_inquiry.url }}">استعلام قیمت</a>{% else %}<p class="pdp-inquiry-note" role="status">راه ارتباطی برای استعلام هنوز توسط فروشگاه منتشر نشده است.</p>{% endif %}
+          <div class="sku-line">کد کالا: <span dir="ltr">{{ product.sku }}</span></div>
+        </div>
+        {% else %}
         <div class="pricebox">
           <div class="row1" x-show="displayPrice.savings > 0">
             <span class="save" x-text="'صرفه‌جویی ' + formatToman(displayPrice.savings)"></span>
@@ -148,8 +157,9 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           </div>
           <div class="sku-line" x-show="current && current.sku">کد کالا: <span dir="ltr" x-text="current ? current.sku : ''"></span></div>
         </div>
+        {% endif %}
 
-        {% if gift_wrap and gift_wrap.eligible %}
+        {% if gift_wrap and gift_wrap.eligible and not price_inquiry %}
         <div class="gift-wrap-option" style="margin:12px 0;padding:10px 12px;border:1px dashed var(--line,#d9dce3);border-radius:12px;display:grid;gap:6px">
           <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
             <input type="checkbox" name="gift_wrap" value="1" x-model="giftWrapSelected" aria-describedby="gw-desc-pdp">
@@ -157,7 +167,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
               <b>{% if gift_wrap.price %}(+{{ gift_wrap.price|toman }} {{ gift_wrap.scope_hint }}){% else %}(رایگان){% endif %}</b></span>
           </label>
           {% if gift_wrap.description %}<small id="gw-desc-pdp" style="color:var(--muted,#6b7280)">{{ gift_wrap.description }}</small>{% endif %}
-          {% if gift_wrap.image_url %}<img src="{{ gift_wrap.image_url }}" alt="نمونه‌ی {{ gift_wrap.title }}" width="72" height="72" loading="lazy" style="border-radius:8px;object-fit:cover">{% endif %}
+          {% if gift_wrap.image_url %}<img src="{{ gift_wrap.image_url }}" data-img-role="thumb" alt="نمونه‌ی {{ gift_wrap.title }}" width="72" height="72" loading="lazy" style="border-radius:8px">{% endif %}
           {% if gift_wrap.message_enabled %}
           <input type="text" name="gift_message" maxlength="200" x-show="giftWrapSelected" x-cloak placeholder="پیام کارت هدیه (اختیاری)" aria-label="پیام کارت هدیه"
                  style="width:100%;padding:8px;border:1px solid var(--line,#d9dce3);border-radius:8px">
@@ -165,6 +175,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         </div>
         {% endif %}
 
+        {% if not price_inquiry %}
         <div class="qty" x-data="{ qty: 1 }">
           <span class="lbl">تعداد:</span>
           <div class="stepper">
@@ -211,6 +222,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
             <span x-text="needsSelection ? 'ابتدا یک گزینه را انتخاب کنید' : (displayStock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید')"></span>
           </button>
         </div>
+        {% endif %}
       </form>
 
       {% comment %}PDTX (Phase 5 Task 5) — this hard-coded guarantee strip is
@@ -219,18 +231,20 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
       sets ``suppress_guarantee_strip`` when a sibling trust_features exists),
       so the two trust modules never both show on one PDP.{% endcomment %}
       {% if not suppress_guarantee_strip %}
+      {% service_claims as svc_claims %}
+      {% comment %}FOLLOWUP-10 — «ضمانت اصالت کالا» و «۷ روز ضمانت بازگشت» وعده‌هایی بودند که هیچ سیاست/تأییدیه‌ای پشتشان نبود و
+      روی هر صفحهٔ محصول عمومی بودند؛ دیگر اینجا ثابت نمایش داده نمی‌شوند (فروشنده می‌تواند آن‌ها را در «ردیف اعتماد و ویژگی‌ها»
+      با تیک «تأییدشده» اضافه کند). ارسال فقط وقتی ادعا می‌شود که حداقل یک روش ارسال فعال باشد.{% endcomment %}
+      {% if product.requires_shipping and svc_claims.shipping or not product.requires_shipping %}
       <div class="guarantee">
-        <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="shield-check" %}</span>ضمانت اصالت کالا</div>
         {% if product.requires_shipping %}
-        <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="truck" %}</span>ارسال سریع و بیمه‌شده</div>
+        <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="truck" %}</span>ارسال سفارش</div>
         {% else %}
-        {% comment %}U6 — no physical shipping claim for a non-shippable
-        (digital/service) product; a real, honest fact about this exact
-        product rather than a removed/blank slot.{% endcomment %}
+        {% comment %}U6 — no physical shipping claim for a non-shippable (digital/service) product; a real, honest fact.{% endcomment %}
         <div class="g"><span class="ic">📦</span>بدون نیاز به ارسال فیزیکی</div>
         {% endif %}
-        <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="return-policy" %}</span>۷ روز ضمانت بازگشت</div>
       </div>
+      {% endif %}
       {% endif %}
     </div>
   </div>

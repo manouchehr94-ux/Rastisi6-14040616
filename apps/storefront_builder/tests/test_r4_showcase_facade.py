@@ -41,9 +41,6 @@ class ShowcaseFacadeServerProjectionTests(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         layout = svc.get_or_create_layout(self.store)
-        layout.r4_editor_enabled = True
-        layout.save(update_fields=["r4_editor_enabled"])
-
     def _editor(self, page="home"):
         return self.client.get(
             reverse("dashboard:storefront-builder-r4-editor") + f"?page={page}"
@@ -198,8 +195,6 @@ class ShowcaseFacadeCreatesCanonicalSectionTests(StorefrontBuilderViewsTestCase)
     def setUp(self):
         super().setUp()
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
 
     def _add_via_facade(self, section_key, page_type="home"):
@@ -291,12 +286,9 @@ class ShowcaseFacadeTenantIsolationTests(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
 
     def test_foreign_store_resource_rejected_on_facade_created_section(self):
-        from decimal import Decimal
         from apps.catalog.models import Brand
         from apps.stores.models import Store
 

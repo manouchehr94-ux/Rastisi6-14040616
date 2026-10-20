@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
+from apps.catalog.services.search_service import apply_text_search
 from apps.content.models import Menu
 from apps.core.services.rate_limit import RateLimitExceeded
 from apps.dashboard.decorators import permission_required, staff_required
@@ -19,12 +20,17 @@ from apps.stores.resolution import resolve_store_for_service
 
 from . import (
     appearance_registry,
+    design_block,
     global_region_registry,
     layout_preset_registry,
     media_views,
     resource_source,
     section_registry,
+    semantic_colors,
+    settings_schema,
+    shell_geometry,
     variant_contract,
+    workspace_layout,
 )
 from .models import (
     FOOTER_RESPONSIVE_AWARE_KEYS,
@@ -63,6 +69,13 @@ _INSPECTOR_SUPPORTED_FIELD_TYPES = frozenset({
     #: settings_field.html and saved through the existing section.update_settings
     #: mutation; never a section-name branch, never a second media authority.
     "background",
+    #: Design-block engine — the sparse per-section ``design`` object and the
+    #: standalone semantic ``color`` control (palette role | custom hex | automatic).
+    "design",
+    "color",
+    #: A Store-scoped Media Library asset picker (value = MediaAsset id or empty). Ownership is
+    #: re-checked at render time (content.services.resolve_background_media_url), never trusted here.
+    "media",
 })
 
 #: Phase 5 Task 6 — the "Storefront Showcase" R4 CREATION FACADE.
@@ -157,6 +170,7 @@ _BACKGROUND_MODE_LABELS_FA = {
     "color": "رنگ دلخواه",
     "image": "تصویر",
     "pattern": "رنگ + الگو",
+    "surface": "پنل سفید (سطح کارت)",
 }
 _BACKGROUND_PALETTE_ROLE_LABELS_FA = {
     "tone-1": "طیف ۱",
@@ -204,7 +218,7 @@ def _search_products(store, query):
 def _search_brands(store, query):
     qs = Brand.objects.filter(store=store)
     if query:
-        qs = qs.filter(Q(name__icontains=query) | Q(name_en__icontains=query))
+        qs = apply_text_search(qs, query, fields=("name", "name_en"))
     return list(qs.order_by("sort_order", "name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
 
 
@@ -214,7 +228,7 @@ def _search_collections(store, query):
     # the public storefront and legacy ownership check use.
     qs = MerchantCollection.objects.filter(store=store, is_active=True)
     if query:
-        qs = qs.filter(name__icontains=query)
+        qs = apply_text_search(qs, query, fields=("name",))
     return list(qs.order_by("name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
 
 
@@ -224,7 +238,7 @@ def _search_categories(store, query):
     # (section_registry._validate_category_grid_settings / render_service).
     qs = Category.objects.filter(store=store, is_active=True)
     if query:
-        qs = qs.filter(name__icontains=query)
+        qs = apply_text_search(qs, query, fields=("name",))
     return list(qs.order_by("order", "name", "id")[:_PICKER_SEARCH_RESULT_LIMIT])
 
 
@@ -250,6 +264,35 @@ def _serialize_picker_item(kind, obj):
     if kind == "category":
         return {"id": obj.pk, "label": obj.name, "sublabel": obj.slug}
     return {"id": obj.pk, "label": obj.name, "sublabel": obj.name_en}
+
+
+def _summary_collection_label(store, source):
+    """RS-01 — the name of the referenced collection for the Inspector summary; an honest note when it was deleted,
+    deactivated or belongs elsewhere (the section then renders its empty state, never another store's data)."""
+    if source.kind != "product" or source.auto_rule != "by_collection":
+        return None
+    source_id = (source.auto_parameters or {}).get("source_id")
+    collection = MerchantCollection.objects.filter(store=store, pk=source_id).first() if source_id else None
+    if collection is None:
+        return "کالکشن پیدا نشد (حذف شده است)"
+    if not collection.is_active:
+        return f"{collection.name} — غیرفعال است؛ بخش خالی نمایش داده می‌شود"
+    return collection.name
+
+
+def _picker_collection_choices(store):
+    """RS-01 — active, same-store collections a product section may reference, with the count the storefront would
+    actually show (same visibility rule as the public collection page), so the merchant sees what a pick will produce."""
+    from apps.catalog.services import collection_service
+
+    choices = []
+    for collection in MerchantCollection.objects.filter(store=store, is_active=True).order_by("name", "id"):
+        choices.append({
+            "id": collection.pk,
+            "name": collection.name,
+            "visible_count": collection_service.collection_visible_items(collection, store).count(),
+        })
+    return choices
 
 
 def _parse_selected_ids(request) -> list[int]:
@@ -320,6 +363,26 @@ _THEME_FIELD_LABELS_FA = (
     ("footer_text", "متن فوتر"),
     ("price", "رنگ قیمت"),
 )
+_COLOR_SOURCE_LABELS_FA = {
+    "override": "سفارشی (دستی)", "palette": "از پالت", "default": "پیش‌فرض", "derived": "مشتق از رنگ‌های پالت",
+    "template": "از قالب", "carry_over": "از تنظیمات پیشین فروشگاه",
+}
+
+
+def _provenance_rows(labels, group: str, provenance: dict) -> list[dict]:
+    """One row per colour/role for the Studio: current value, the value a reset returns to, and whether it is inherited."""
+    rows = []
+    for key, label in labels:
+        entry = provenance[group][key]
+        rows.append({
+            "key": key, "label": label, "value": entry["value"], "default": entry["default"],
+            "source": entry["source"], "source_label": _COLOR_SOURCE_LABELS_FA[entry["source"]],
+            "overridden": entry["source"] == "override",
+            "stored": entry["stored"],
+        })
+    return rows
+
+
 _HEADER_TOGGLE_LABELS_FA = {
     "show_search": "نمایش جستجو",
     "show_account": "نمایش حساب کاربری",
@@ -357,6 +420,7 @@ _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "custom_text": "متن دلخواه (عنوان + متن)",
     "link": "لینک تکی (برچسب + آدرس)",
     "social": "شبکه‌های اجتماعی",
+    "badge_slots": "جایگاه نشان‌های اعتماد (فقط نشان‌های واقعیِ بارگذاری‌شده نمایش داده می‌شوند)",
 }
 
 
@@ -376,6 +440,8 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
     appearance = draft.effective_appearance_config()
     header = draft.effective_header_config()
     footer = draft.effective_footer_config()
+    provenance = appearance_registry.resolve_color_provenance(appearance, draft.template_baseline_snapshot)
+    applicable_roles = global_region_registry.applicable_theme_roles(header, footer, appearance_registry.THEME_ROLE_KEYS)
     return {
         "appearance": appearance,
         "header": header,
@@ -422,6 +488,23 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "resolved_theme_roles": appearance_registry.resolve_theme_roles(appearance),
         "color_field_labels": _COLOR_FIELD_LABELS_FA,
         "theme_field_labels": _THEME_FIELD_LABELS_FA,
+        # Inherited-vs-overridden rows (same resolver as the renderer: ``appearance_registry.resolve_color_provenance``).
+        "has_global_color_overrides": bool(appearance.get("color_overrides") or appearance.get("theme_overrides")),
+        "color_rows": _provenance_rows(_COLOR_FIELD_LABELS_FA, "colors", provenance),
+        # only the region roles the SELECTED header/footer variants paint (no dead controls)
+        "theme_rows": _provenance_rows(
+            [(key, label) for key, label in _THEME_FIELD_LABELS_FA if key in applicable_roles], "roles", provenance,
+        ),
+        # Merchant-editable geometry/colour of the SELECTED header/footer variant (only the properties that
+        # variant actually draws — shell_geometry.SHELL_GEOMETRY).
+        "header_geometry": shell_geometry.serialize_for_inspector(
+            "header", header.get("header_variant"), header.get("geometry"),
+        ),
+        "footer_geometry": shell_geometry.serialize_for_inspector(
+            "footer", footer.get("footer_variant"), footer.get("geometry"),
+        ),
+        "color_choices": semantic_colors.semantic_color_choices(),
+        "color_hex": semantic_colors.token_hex_map(appearance),
         "header_toggle_fields": [
             (key, _HEADER_TOGGLE_LABELS_FA[key]) for key in HEADER_TOGGLE_FIELDS
         ],
@@ -532,8 +615,6 @@ def _build_design_lab_design_context(draft: StorefrontLayoutVersion) -> dict:
 def storefront_r4_editor(request):
     store = resolve_store_for_service(request)
     layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     draft = layout_service.get_or_create_draft(store, user=request.user)
     # Phase 4 (Task 3B) — the exact same validated PageType input the legacy
@@ -663,10 +744,15 @@ def storefront_r4_editor(request):
                 (key, container_service.LAYOUT_PRESET_LABELS_FA.get(key, key))
                 for key in container_service.LAYOUT_PRESETS
             ],
-            # R4 Task 7 (Batch 2) — same gating condition the legacy editor's
-            # own "Reset page/storefront to Template" buttons already use
-            # (``editor.html``: ``draft.template_baseline_snapshot.pages|
-            # dictget:page_type`` / ``draft.template_baseline_snapshot``):
+            # FOLLOWUP-12 — the 2-cell subset of the SAME registry, for the guided
+            # "two-column row" dialog (no second preset list).
+            "two_column_presets": [
+                (key, container_service.LAYOUT_PRESET_LABELS_FA.get(key, key), widths)
+                for key, widths in container_service.LAYOUT_PRESETS.items()
+                if len(widths) == 2
+            ],
+            # Gating condition of the "Reset page/storefront to Template" buttons
+            # (``draft.template_baseline_snapshot.pages|dictget:page_type`` / ``draft.template_baseline_snapshot``):
             # a Draft that never had a Ready Template applied has nothing
             # to reset to, and ``preset_service`` itself already rejects
             # that case (``NoTemplateBaselineError``/``UnknownBaselinePageError``)
@@ -724,7 +810,7 @@ def _build_studio_context(
 
     from . import appearance_registry, theme_catalog
     from .studio_icons import STUDIO_ICON_PATHS
-    from .views import build_ready_template_cards, resolve_applied_template_card
+    from .services.ready_template_card_service import build_ready_template_cards, resolve_applied_template_card
 
     provenance = variant_contract.validate_template_provenance(draft.template_provenance)
     current_key = provenance["template"]["key"]
@@ -873,9 +959,6 @@ def _is_strict_int(value: object) -> bool:
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_r4_mutation(request):
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -907,9 +990,27 @@ def storefront_r4_mutation(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
-    return JsonResponse({"ok": True, "new_revision": new_revision, "mutation_type": mutation_type})
+    response = {"ok": True, "new_revision": new_revision, "mutation_type": mutation_type}
+    # Partial refresh: an accepted section/container settings write returns the canonical server-rendered fragment of the
+    # affected region (the Studio swaps only that region). Any problem -> no fragment -> the Studio falls back to the
+    # atomic full-frame refresh; the mutation itself is already committed and is never failed by a render problem.
+    if payload.get("fragment") is True and mutation_type in ("section.update_settings", "container.update_settings"):
+        from .views import render_preview_fragment
+
+        try:
+            draft = layout_service.get_or_create_draft(store, user=request.user)
+            if mutation_type == "section.update_settings":
+                response["fragment"] = render_preview_fragment(request, store, draft, section_id=mutation.get("section_id"))
+            else:
+                response["fragment"] = render_preview_fragment(request, store, draft, container_id=mutation.get("container_id"))
+        except Exception:  # noqa: BLE001 - never turn a committed write into an error response
+            import logging
+
+            logging.getLogger(__name__).exception("R4 preview fragment render failed")
+            response["fragment"] = None
+    return JsonResponse(response)
 
 
 @require_POST
@@ -933,9 +1034,6 @@ def storefront_r4_design_lab(request):
     from apps.storefront_builder.services import design_lab_service
 
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1073,7 +1171,7 @@ def storefront_r4_design_lab(request):
                     intensity=payload.get("intensity"),
                 )
             except ValueError as exc:
-                return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+                return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
         elif action == "reset_to_base":
             candidate = design_lab_service.reset_experiment_to_base(prior_candidate)
         elif action == "return_to_template_dna":
@@ -1156,6 +1254,13 @@ def _random_design_lab_seed() -> int:
 _BRAND_VIEW_ALL_SUPPORTING_VARIANTS = frozenset({"grid", "carousel"})
 
 
+def _schema_ordered_fields(schema, *processed_groups):
+    """The Inspector's final (label-projected, filtered) fields, in SCHEMA order — the settings workspace arranges them
+    into cards by type/key, so the order inside a card must follow the schema, not the basic/advanced split."""
+    processed = {f.key: f for group in processed_groups for f in group}
+    return [processed[f.key] for f in schema.fields if f.key in processed]
+
+
 def _with_variant_choice_labels(fields, definition):
     """Display-only: replace a choice label that is just its raw key with the
     registered variant's ``label_fa`` from the same section definition."""
@@ -1204,8 +1309,6 @@ def _brand_view_all_control_offered(store, definition, current_settings: dict) -
 def storefront_r4_section_inspector(request, pk):
     store = resolve_store_for_service(request)
     layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     # The currently active Draft pointer only — never resolved/switched
     # here (see r4_mutation_service.apply_mutation for the same rule).
@@ -1313,9 +1416,26 @@ def storefront_r4_section_inspector(request, pk):
     ):
         basic_fields = tuple(f for f in basic_fields if f.key != "show_view_all")
         advanced_fields = tuple(f for f in advanced_fields if f.key != "show_view_all")
-    field_values = {
-        field.key: current_settings.get(field.key, field.default)
-        for field in schema.fields
+    projected_values = definition.inspector_projection(current_settings) if definition.inspector_projection else {}
+
+    def _inspector_current_value(field):
+        if field.key in current_settings:
+            return current_settings[field.key]
+        if field.key in projected_values:
+            return projected_values[field.key]
+        if field.key in ("desktop_columns", "tablet_columns", "mobile_columns"):
+            # The stored column counts of older sections live in the shared ``responsive`` block.
+            stored = (current_settings.get("responsive") or {}).get(field.key)
+            if stored is not None:
+                return stored
+        return field.default
+
+    field_values = {field.key: _inspector_current_value(field) for field in schema.fields}
+    # Context-sensitive Inspector: controls whose ``visible_when`` rule does not hold for the current values are
+    # rendered hidden (and re-evaluated live by r4_editor.js); nothing hidden is ever deleted from the settings.
+    field_hidden_map = {
+        key: True for key, visible in settings_schema.compute_field_visibility(schema.fields, field_values).items()
+        if not visible
     }
 
     # R4 Task 7 — the Inspector needs to show what an appearance_override
@@ -1357,6 +1477,11 @@ def storefront_r4_section_inspector(request, pk):
                 if projected_source.auto_rule else None
             ),
             "manual_count": len(projected_source.manual_ids),
+            "collection_label": _summary_collection_label(store, projected_source),
+            "collection_campaign_url": (
+                reverse("dashboard:collection-campaign", args=[projected_source.auto_parameters["source_id"]])
+                if projected_source.kind == "product" and projected_source.auto_rule == "by_collection" else None
+            ),
         }
 
     # Pre-Task-10 corrective closure — a menu_picker field's dropdown is
@@ -1402,16 +1527,50 @@ def storefront_r4_section_inspector(request, pk):
             ],
             "patterns": picker_context["background_patterns"],
             "media_assets": picker_context["background_media_assets"],
+            "color_choices": semantic_colors.semantic_color_choices(),
+            "fit_choices": (("cover", "پوشش کامل (برش لبه‌ها)"), ("contain", "کامل دیده شود")),
+            "position_x_choices": (("left", "چپ"), ("center", "وسط"), ("right", "راست")),
+            "position_y_choices": (("top", "بالا"), ("center", "وسط"), ("bottom", "پایین")),
         }
+
+    # Design-block engine — one shared, registry-driven control set. Built only when a
+    # ``design`` / ``color`` field is present (same "only if this field type is present"
+    # pattern as resource_source/menu_picker/background above).
+    design_groups = None
+    color_choices = None
+    media_assets = None
+    if any(field.field_type == "media" for field in schema.fields):
+        from .views import _background_picker_context
+
+        media_assets = _background_picker_context(request, section)["background_media_assets"]
+    if any(field.field_type in ("design", "color") for field in schema.fields):
+        from .semantic_colors import semantic_color_choices
+
+        color_choices = semantic_color_choices()
+    if any(field.field_type == "design" for field in schema.fields):
+        design_groups = design_block.serialize_registry_for_inspector(section.section_key)
 
     return render(
         request,
         "dashboard/storefront_builder/r4/partials/section_inspector.html",
         {
+            "field_hidden_map": field_hidden_map,
+            # edge-to-edge (bleed) backgrounds have no section box to round / outline / shadow
+            "design_display_mode": field_values.get("display_mode", ""),
+            "design_box_hidden": bool((current_settings.get("background") or {}).get("bleed")),
+            "design_groups": design_groups,
+            "color_choices": color_choices,
+            "color_hex": semantic_colors.token_hex_map(global_appearance),
+            "media_assets": media_assets,
             "section": section,
             "definition": definition,
             "basic_fields": basic_fields,
             "advanced_fields": advanced_fields,
+            "workspace_tabs": workspace_layout.build_workspace_tabs(
+                _schema_ordered_fields(schema, basic_fields, advanced_fields),
+                has_media_manager=bool(media_manage_url),
+                design_groups=design_groups,
+            ),
             "field_values": field_values,
             "appearance_font_choices": appearance_registry.FONT_CHOICES,
             "appearance_type_scale_choices": [
@@ -1440,9 +1599,6 @@ def storefront_r4_resource_picker(request):
     Section. The only Section write remains the existing Task 5 mutation
     endpoint (``section.update_settings`` with a ``source`` patch)."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     kind = request.GET.get("kind")
     if kind not in _PICKER_UI_KINDS:
@@ -1478,6 +1634,8 @@ def storefront_r4_resource_picker(request):
             "results": results,
             "selected_items": selected_items,
             "auto_rules": _PICKER_AUTO_RULES_BY_KIND[kind],
+            # RS-01: a product section can point at an existing collection (reference only — memberships are never copied).
+            "collections": _picker_collection_choices(store) if kind == "product" else None,
         },
     )
 
@@ -1491,9 +1649,6 @@ def storefront_r4_history_command(request):
     never go through ``r4_mutation_service.apply_mutation``'s normal
     record_change path, or Undo itself would become a new undoable edit."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1521,7 +1676,7 @@ def storefront_r4_history_command(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({
         "ok": True,
@@ -1541,9 +1696,6 @@ def storefront_r4_publish(request):
     remains owned by ``layout_service.publish``; this view only adds the
     R4 revision check and a JSON contract around it."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1567,7 +1719,7 @@ def storefront_r4_publish(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({
         "ok": True,
@@ -1585,9 +1737,6 @@ def storefront_r4_discard(request):
     on success) — the client reloads on success exactly like Publish/Undo/
     Redo already do, since discarding replaces the Draft's identity."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1609,7 +1758,7 @@ def storefront_r4_discard(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({"ok": True})
 
@@ -1625,9 +1774,6 @@ def storefront_r4_reset_page(request):
     from .models import StorefrontPage
 
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1655,7 +1801,7 @@ def storefront_r4_reset_page(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({"ok": True})
 
@@ -1667,9 +1813,6 @@ def storefront_r4_reset_storefront(request):
     """R4 Task 7 (Batch 2) — RESET STOREFRONT (checkpoint-then-replace the
     whole Draft). Same contract shape as ``storefront_r4_reset_page``."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1691,7 +1834,7 @@ def storefront_r4_reset_storefront(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({"ok": True})
 
@@ -1738,13 +1881,8 @@ def storefront_r4_restore(request, pk):
     Same contract shape as every other whole-Draft-identity-replacing R4
     action above; delegates to ``r4_mutation_service.restore_version_safe``,
     which itself delegates to the existing, unmodified ``layout_service.
-    restore_version()`` — never a second restore implementation. The
-    legacy ``storefront_restore`` POST remains the rollback path for a
-    Store explicitly pinned to ``r4_editor_enabled=False`` only."""
+    restore_version()`` — never a second restore implementation."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1780,7 +1918,7 @@ def storefront_r4_restore(request, pk):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({"ok": True})
 
@@ -1792,17 +1930,10 @@ def storefront_r4_apply_industry_layout(request):
     """P5-W5A Class C — the canonical R4-safe Apply Industry Layout entry
     point. Delegates to ``r4_mutation_service.apply_industry_layout_safe``,
     which itself delegates to the existing, unmodified ``layout_service.
-    apply_industry_layout()`` — never a second implementation. The legacy
-    ``storefront_apply_industry_layout`` POST remains the rollback path
-    for a Store explicitly pinned to ``r4_editor_enabled=False`` only."""
+    apply_industry_layout()`` — never a second implementation."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
     if getattr(store, "industry_installation", None) is None:
-        # Same convention the legacy ``storefront_apply_industry_layout``
-        # already uses for this exact condition — a Store with no
-        # installation of its own has nothing to apply, tenant-scoped.
+        # A Store with no installation of its own has nothing to apply (tenant-scoped).
         raise Http404
 
     try:
@@ -1848,7 +1979,7 @@ def storefront_r4_apply_industry_layout(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({"ok": True})
 
@@ -1868,9 +1999,6 @@ def storefront_r4_switch_template(request):
     it must be rejected, not silently applied against a mismatched
     recipe)."""
     store = resolve_store_for_service(request)
-    layout = layout_service.get_or_create_layout(store)
-    if not layout.r4_editor_enabled:
-        raise Http404
 
     try:
         payload = json.loads(request.body)
@@ -1891,6 +2019,8 @@ def storefront_r4_switch_template(request):
         r4_mutation_service.switch_template(
             store=store, actor=request.user, base_revision=base_revision,
             template_key=template_key, template_version=template_version,
+            confirm_replace=payload.get("confirm_replace") is True,
+            allow_locked=payload.get("allow_locked") is True,
         )
     except r4_mutation_service.R4StaleRevision as exc:
         return JsonResponse(
@@ -1898,6 +2028,6 @@ def storefront_r4_switch_template(request):
             status=409,
         )
     except r4_mutation_service.R4MutationError as exc:
-        return JsonResponse({"ok": False, "code": str(exc)}, status=400)
+        return JsonResponse(r4_mutation_service.error_response_body(exc), status=400)
 
     return JsonResponse({"ok": True})

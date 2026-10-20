@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+{% extends "storefront_shell.html" %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
-{% load static persian %}
+{% load static persian storefront_builder_extras %}
 
 {% block title %}حساب کاربری | {{ SHOP_NAME }}{% endblock %}
 
@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{% static 'css/product_card.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 <link rel="stylesheet" href="{% static 'css/cart.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% static 'css/checkout.css' %}">
 <link rel="stylesheet" href="{% static 'css/account.css' %}">
 {% endblock %}
@@ -35,7 +36,7 @@
     </div>
     <form method="post" action="{% url 'customers:logout' %}">
       {% csrf_token %}
-      <button type="submit" style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--violet-3);color:var(--violet);height:38px;padding:0 14px;border-radius:12px;font-weight:700;font-size:12.5px">
+      <button type="submit" style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--violet-3);color:var(--violet-text,var(--violet));height:38px;padding:0 14px;border-radius:12px;font-weight:700;font-size:12.5px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
         خروج
       </button>

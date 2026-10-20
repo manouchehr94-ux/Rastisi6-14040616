@@ -47,15 +47,16 @@ _UNRESOLVED = ResolvedStorefrontPage(version=None, page=None)
 
 
 def _published_layout_queryset(**filter_kwargs):
-    """کوئریِ مشترک — تنها جایِ نوشته‌شدنِ شرطِ ``uses_visual_storefront_layout=True
-    AND published_version__isnull=False`` در کلِ کدبیس. Phase 1B: پیش از
+    """کوئریِ مشترک — تنها جایِ نوشته‌شدنِ شرطِ ``published_version__isnull=False``
+    در کلِ کدبیس (اشاره‌گرِ منتشرشده تنها منبعِ حقیقت است؛ پرچمِ منسوخِ
+    ``uses_visual_storefront_layout`` دیگر خوانده نمی‌شود). Phase 1B: پیش از
     این، همین شرط به‌صورتِ کپی‌شده در دو جایِ مستقل نوشته شده بود
     (``apps.catalog.views.home()`` و
     ``apps.core.context_processors._global_identity_version``) — هر دو
     اکنون به این تابع (از طریقِ ``get_published_layout``/
     ``get_published_layout_for_store_id``) مهاجرت کرده‌اند."""
     return sfb_models.StorefrontLayout.objects.filter(
-        uses_visual_storefront_layout=True, published_version__isnull=False, **filter_kwargs,
+        published_version__isnull=False, **filter_kwargs,
     ).select_related("published_version")
 
 

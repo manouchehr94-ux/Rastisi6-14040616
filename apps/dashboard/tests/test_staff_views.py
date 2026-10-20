@@ -2,6 +2,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+
+from apps.dashboard.tests.staff_flow import confirmed_action, confirmed_add
 from django.utils import timezone
 
 from apps.stores.models import Store, StoreMembership
@@ -66,9 +68,9 @@ class StaffListViewTests(StaffViewsTestCase):
 
 class StaffAddViewTests(StaffViewsTestCase):
     def test_owner_can_add_staff_member(self):
-        response = self.client.post(reverse("dashboard:staff-add"), {
+        response = confirmed_add(self.client, reverse("dashboard:staff-add"), {
             "phone": "09122288200", "role": StoreMembership.Role.CATALOG_MANAGER,
-        }, follow=True)
+        })
         self.assertEqual(response.status_code, 200)
         self.assertTrue(
             StoreMembership.objects.filter(
@@ -103,7 +105,7 @@ class StaffAddViewTests(StaffViewsTestCase):
 class StaffChangeRoleViewTests(StaffViewsTestCase):
     def test_owner_can_change_role(self):
         membership = add_staff_member(self.store, phone="09122288300", role=StoreMembership.Role.ANALYST, invited_by=self.owner)
-        self.client.post(reverse("dashboard:staff-change-role", args=[membership.pk]), {
+        confirmed_action(self.client, reverse("dashboard:staff-change-role", args=[membership.pk]), {
             "role": StoreMembership.Role.ORDER_MANAGER,
         })
         membership.refresh_from_db()
@@ -138,7 +140,7 @@ class StaffRevokeViewTests(StaffViewsTestCase):
 
     def test_post_revokes(self):
         membership = add_staff_member(self.store, phone="09122288401", role=StoreMembership.Role.ANALYST, invited_by=self.owner)
-        self.client.post(reverse("dashboard:staff-revoke", args=[membership.pk]))
+        confirmed_action(self.client, reverse("dashboard:staff-revoke", args=[membership.pk]))
         membership.refresh_from_db()
         self.assertEqual(membership.status, StoreMembership.MembershipStatus.REVOKED)
 
@@ -163,7 +165,7 @@ class StaffReactivateViewTests(StaffViewsTestCase):
     def test_reactivates_revoked_membership(self):
         membership = add_staff_member(self.store, phone="09122288500", role=StoreMembership.Role.ANALYST, invited_by=self.owner)
         revoke_membership(membership)
-        self.client.post(reverse("dashboard:staff-reactivate", args=[membership.pk]))
+        confirmed_action(self.client, reverse("dashboard:staff-reactivate", args=[membership.pk]))
         membership.refresh_from_db()
         self.assertEqual(membership.status, StoreMembership.MembershipStatus.ACTIVE)
 
@@ -177,7 +179,7 @@ class StaffTransferOwnershipViewTests(StaffViewsTestCase):
 
     def test_post_transfers_ownership(self):
         target = add_staff_member(self.store, phone="09122288601", role=StoreMembership.Role.ADMINISTRATOR, invited_by=self.owner)
-        self.client.post(reverse("dashboard:staff-transfer-ownership", args=[target.pk]))
+        confirmed_action(self.client, reverse("dashboard:staff-transfer-ownership", args=[target.pk]), extra={"confirm_phone": target.user.username})
         target.refresh_from_db()
         self.owner_membership.refresh_from_db()
         self.assertEqual(target.role, StoreMembership.Role.OWNER)
@@ -185,7 +187,7 @@ class StaffTransferOwnershipViewTests(StaffViewsTestCase):
 
     def test_former_owner_loses_staff_manage_after_transfer(self):
         target = add_staff_member(self.store, phone="09122288602", role=StoreMembership.Role.ADMINISTRATOR, invited_by=self.owner)
-        self.client.post(reverse("dashboard:staff-transfer-ownership", args=[target.pk]))
+        confirmed_action(self.client, reverse("dashboard:staff-transfer-ownership", args=[target.pk]), extra={"confirm_phone": target.user.username})
         response = self.client.get(reverse("dashboard:staff-list"))
         self.assertEqual(response.status_code, 403)
 

@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}فاکتور {{ invoice.number }} | پنل مدیریت{% endblock %}
 {% block page_title %}فاکتور {{ invoice.number }}{% endblock %}
 {% block page_sub %}{{ invoice.get_kind_display }} — {{ invoice.get_status_display }}{% endblock %}
@@ -36,7 +37,7 @@
     <tbody>
     {% for a in attempts %}
       <tr><td>{{ a.attempt_number }}</td><td>{{ a.provider }}</td><td>{{ a.get_status_display }}</td><td>{{ a.amount }}</td>
-        <td style="color:var(--muted);font-size:12px">{{ a.created_at|date:"Y-m-d H:i" }}</td></tr>
+        <td style="color:var(--muted);font-size:12px">{{ a.created_at|jalali_dt }}</td></tr>
     {% empty %}<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">بدونِ تلاشِ پرداخت</td></tr>{% endfor %}
     </tbody>
   </table></div>

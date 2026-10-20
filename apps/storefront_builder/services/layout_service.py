@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from apps.core.services.rate_limit import enforce_rate_limit
 
-from .. import appearance_registry, global_region_registry, layout_preset_registry
+from .. import appearance_registry, global_region_registry, layout_preset_registry, shell_geometry
 from . import container_service
 from ..section_media_contract import (
     ASSET_FK_FIELDS as _ASSET_FK_FIELDS,
@@ -253,6 +253,14 @@ def validate_header_config(config: dict) -> dict:
     except global_region_registry.UnknownGlobalVariantSelectionError as exc:
         raise HeaderConfigValidationError(str(exc)) from exc
 
+    # Optional, sparse: merchant-editable header geometry/colours (shell_geometry.py).
+    try:
+        geometry = shell_geometry.validate_geometry(config.get("geometry"), "header")
+    except shell_geometry.ShellGeometryError as exc:
+        raise HeaderConfigValidationError(str(exc)) from exc
+    if geometry:
+        cleaned["geometry"] = geometry
+
     if not cleaned["show_cart"]:
         raise HeaderConfigValidationError(
             "دسترسی به سبد خرید نمی‌تواند از هدر حذف شود — در حال حاضر هیچ مسیر "
@@ -266,7 +274,10 @@ def validate_header_config(config: dict) -> dict:
 #: هویتِ زنده (``SOCIAL_LINKS_FOOTER``) می‌خواند که ``show_social``ی
 #: موجود هم استفاده می‌کند — تکرارِ همان بلوک، مثلاً برایِ نمایشِ آن در
 #: هر دو انتهای فوتر.
-FOOTER_EXTRA_BLOCK_TYPES = ("custom_text", "link", "social")
+#: ``badge_slots`` reserves N visible credential squares (real uploaded trust badges fill the first slots; the
+#: remaining slots stay neutral and empty) — it never invents a badge.
+FOOTER_EXTRA_BLOCK_TYPES = ("custom_text", "link", "social", "badge_slots")
+_MAX_FOOTER_BADGE_SLOTS = 8
 _MAX_FOOTER_EXTRA_BLOCKS = 4
 _MAX_FOOTER_BLOCK_TITLE_LENGTH = 40
 _MAX_FOOTER_BLOCK_TEXT_LENGTH = 400
@@ -304,6 +315,12 @@ def _validate_footer_extra_blocks(raw) -> list[dict]:
                 except DjangoValidationError as exc:
                     raise ShellBlockError("; ".join(exc.messages)) from exc
             block["url"] = url
+        elif block_type == "badge_slots":
+            try:
+                count = int(entry.get("count", 5))
+            except (TypeError, ValueError):
+                raise ShellBlockError("تعدادِ جایگاه‌هایِ نشان باید عدد باشد") from None
+            block["count"] = max(1, min(_MAX_FOOTER_BADGE_SLOTS, count))
         cleaned.append(block)
     return cleaned
 
@@ -342,6 +359,14 @@ def validate_footer_config(config: dict) -> dict:
         )
     except global_region_registry.UnknownGlobalVariantSelectionError as exc:
         raise FooterConfigValidationError(str(exc)) from exc
+
+    # Optional, sparse: merchant-editable footer geometry/colours (shell_geometry.py).
+    try:
+        geometry = shell_geometry.validate_geometry(config.get("geometry"), "footer")
+    except shell_geometry.ShellGeometryError as exc:
+        raise FooterConfigValidationError(str(exc)) from exc
+    if geometry:
+        cleaned["geometry"] = geometry
 
     if not any(cleaned[field] for field in FOOTER_TOGGLE_FIELDS):
         raise FooterConfigValidationError(
@@ -591,6 +616,16 @@ def get_or_create_layout(store) -> StorefrontLayout:
     return StorefrontLayout.provision_for(store)
 
 
+def _lock_layout(store) -> StorefrontLayout:
+    """The Store's layout row, locked for the rest of the surrounding transaction.
+
+    The ONE serialisation point for lifecycle writers of a Store's versions (``publish`` and the default provisioning):
+    a concurrent writer blocks here, then re-reads the committed row, so version numbers and the Published pointer can
+    never be raced. Must be called inside ``transaction.atomic``."""
+    layout = get_or_create_layout(store)
+    return StorefrontLayout.objects.select_for_update().get(pk=layout.pk)
+
+
 def get_existing_draft(store) -> StorefrontLayoutVersion | None:
     """Return the current Draft without provisioning or mutating lifecycle state.
 
@@ -628,7 +663,9 @@ def _next_version_number(layout: StorefrontLayout) -> int:
 #: independently-maintained copy.
 
 
-def _clone_section_scoped_media(source_section: StorefrontSection, target_section: StorefrontSection) -> None:
+def _clone_section_scoped_media(
+    source_section: StorefrontSection, target_section: StorefrontSection, *, include_legacy_files: bool = False,
+) -> None:
     """برایِ ``source_section`` (متعلق به نسخه‌ی منبع — معمولاً Published)،
     هر ردیفِ رسانه‌یِ section-scoped (``HeroSlide``/``PromotionalBanner``/
     ``StoryRailItem`` که ``section == source_section``) را روی
@@ -641,7 +678,15 @@ def _clone_section_scoped_media(source_section: StorefrontSection, target_sectio
     asset_id — بدونِ ساختنِ asset تازه، بدونِ کپیِ بایتِ فایل؛ تصمیمِ
     مالک ۵) — پس اگر Placementِ منبع به یک ``MediaAsset`` مشترک اشاره
     می‌کند، Placementِ جدیدِ کلون‌شده هم به **همان** ردیفِ ``MediaAsset``
-    اشاره می‌کند."""
+    اشاره می‌کند.
+
+    ``include_legacy_files=True`` (فقط برایِ نسخه‌ی پشتیبانِ پیش از جایگزینیِ قالب،
+    ``archive_draft_snapshot``): ردیف‌هایی که هنوز ``MediaAsset`` ندارند و فقط
+    فیلدِ فایلِ legacy دارند هم کلون می‌شوند — با همان مسیرِ فایل (بدونِ کپیِ
+    بایت؛ حذفِ ردیف فایل را پاک نمی‌کند). چون در جایگزینیِ درجا ردیفِ اصلی (با
+    CASCADE) از بین می‌رود، بدونِ این، بازگردانیِ طراحیِ قبلی رسانه را از دست می‌داد."""
+    from django.db import models as dj_models
+
     from apps.content.models import HeroSlide, PromotionalBanner, StoryRailItem
 
     model_by_related_name = {
@@ -668,6 +713,13 @@ def _clone_section_scoped_media(source_section: StorefrontSection, target_sectio
             # این Fix هم برایِ *همه‌ی* Placementهایِ section-scoped وجود
             # داشت (نگاه کنید به بخشِ «محدودیت‌های باقی‌مانده» در گزارش).
             has_any_asset = any(kwargs[f] for f in _ASSET_FK_FIELDS[related_name])
+            if include_legacy_files:
+                for legacy in model._meta.get_fields():
+                    if isinstance(legacy, dj_models.ImageField):
+                        value = getattr(row, legacy.name)
+                        if value:
+                            kwargs[legacy.name] = value.name
+                            has_any_asset = True
             if not has_any_asset:
                 continue
             clones.append(model(**kwargs))
@@ -675,7 +727,9 @@ def _clone_section_scoped_media(source_section: StorefrontSection, target_sectio
             model.objects.bulk_create(clones)
 
 
-def _clone_version_content(source: StorefrontLayoutVersion | None, target: StorefrontLayoutVersion) -> None:
+def _clone_version_content(
+    source: StorefrontLayoutVersion | None, target: StorefrontLayoutVersion, *, include_legacy_media: bool = False,
+) -> None:
     """کپی هدر/فوتر/تمامِ صفحات/بخش‌های ``source`` روی ``target``.
 
     Phase 1A (تصمیمِ مالک ۲/۳/۵ — ارتقاءِ کلون از «فقط صفحه اصلی» به
@@ -761,7 +815,9 @@ def _clone_version_content(source: StorefrontLayoutVersion | None, target: Store
             target_section = cloned_by_stable_id.get(source_section.stable_id)
             if target_section is None:
                 continue
-            _clone_section_scoped_media(source_section, target_section)
+            _clone_section_scoped_media(
+                source_section, target_section, include_legacy_files=include_legacy_media,
+            )
 
         # Phase 3.0 — layout placement is cloned independently from content.
         # Empty Cells therefore survive Draft creation/Restore too.
@@ -830,7 +886,7 @@ def publish(store, *, user=None) -> StorefrontLayoutVersion:
     """
     enforce_rate_limit("storefront_layout.publish", str(store.pk), **_PUBLISH_RATE_LIMIT)
 
-    layout = get_or_create_layout(store)
+    layout = _lock_layout(store)
     draft = layout.draft_version
     if draft is None:
         raise NoDraftToPublishError("هیچ پیش‌نویسی برای انتشار وجود ندارد")
@@ -868,6 +924,69 @@ def publish(store, *, user=None) -> StorefrontLayoutVersion:
     return draft
 
 
+@transaction.atomic
+def ensure_default_published_layout(store) -> StorefrontLayout:
+    """The Universal Engine is the ONLY storefront renderer: every Store always has a published, engine-native layout.
+
+    A Store that has never published (a brand-new Store, or one whose published pointer was lost) gets a deterministic
+    DEFAULT published version generated by the engine itself — the bootstrap composition of registered sections
+    (``bootstrap_service``) placed in containers, exactly what its first Draft would start from. A merchant's Draft is
+    never published implicitly and never touched.
+
+    * The Published POINTER is the only truth: an existing Published version is returned as is — never replaced, archived,
+      or written to by a public request (``uses_visual_storefront_layout`` is not consulted). Older rows that violate the
+      placement invariant are normalised at the explicit boundary ``normalize_published_composition``, never here.
+    * Idempotent under real concurrency: the first writer holds the layout row lock (``_lock_layout``); concurrent first
+      requests wait, re-read the committed pointer and return it, so exactly one version is created."""
+    layout = get_or_create_layout(store)
+    if layout.published_version_id:
+        return layout
+
+    layout = _lock_layout(store)
+    if layout.published_version_id:  # a concurrent first request won the race while we waited for the lock
+        return layout
+
+    from . import bootstrap_service
+
+    version = StorefrontLayoutVersion.objects.create(
+        layout=layout, version_number=_next_version_number(layout),
+        status=StorefrontLayoutVersion.Status.PUBLISHED,
+        source=StorefrontLayoutVersion.Source.LEGACY_BOOTSTRAP,
+        published_at=timezone.now(),
+    )
+    bootstrap_service.apply_bootstrap_content(version, store)
+    container_service.ensure_version_containers(version)
+    version.content_fingerprint = version.compute_fingerprint()
+    version.save(update_fields=["content_fingerprint", "updated_at"])
+    layout.published_version = version
+    layout.uses_visual_storefront_layout = True
+    layout.save(update_fields=["published_version", "uses_visual_storefront_layout", "updated_at"])
+    return layout
+
+
+@transaction.atomic
+def normalize_published_composition(store) -> bool:
+    """Explicit lifecycle boundary for LEGACY Published versions: place every active section that sits in no cell (rows
+    older than the placement invariant ``publish()`` enforces) and refresh the content fingerprint so it keeps
+    representing the actual published composition. Returns whether anything changed.
+
+    Never called from a public request (a public GET is strictly read-only). Idempotent; a Store without a Published
+    version, or one already engine-complete, is left untouched. Run it per Store with the management command
+    ``normalize_published_layouts``."""
+    layout = StorefrontLayout.objects.select_for_update().filter(store=store).first()
+    if layout is None or not layout.published_version_id:
+        return False
+    published = layout.published_version
+    if not StorefrontSection.objects.filter(
+        page__version=published, is_active=True, placement_cell__isnull=True, cell__isnull=True,
+    ).exists():
+        return False
+    container_service.ensure_version_containers(published)
+    published.content_fingerprint = published.compute_fingerprint()
+    published.save(update_fields=["content_fingerprint", "updated_at"])
+    return True
+
+
 def list_versions(store):
     """تاریخچه‌ی کامل نسخه‌ها (منتشرشده + بایگانی‌شده + پیش‌نویس فعلی، اگر باشد)."""
     layout = get_or_create_layout(store)
@@ -900,7 +1019,8 @@ def restore_version(store, version_id, *, user=None) -> StorefrontLayoutVersion:
         label=f"بازگردانی از نسخه {source.version_number}",
         created_by=user if (user and user.is_authenticated) else None,
     )
-    _clone_version_content(source, new_draft)
+    # Restoring a saved design must be lossless, including section media that only has a legacy file field.
+    _clone_version_content(source, new_draft, include_legacy_media=True)
     layout.draft_version = new_draft
     layout.save(update_fields=["draft_version", "updated_at"])
     return new_draft
@@ -1015,6 +1135,33 @@ def checkpoint_draft_before_replacement(store, *, reason_label: str, user=None) 
     layout.draft_version = new_draft
     layout.save(update_fields=["draft_version", "updated_at"])
     return new_draft
+
+
+@transaction.atomic
+def archive_draft_snapshot(store, draft: StorefrontLayoutVersion, *, label: str, user=None):
+    """Save a complete, restorable copy of ``draft`` as an ARCHIVED version
+    WITHOUT replacing the active Draft (its pk, revision and lock stay intact).
+
+    The recoverable-previous-design half of an explicit Ready Template
+    replacement: ``checkpoint_draft_before_replacement`` swaps the Draft's
+    identity (incompatible with the R4 optimistic-lock boundary that mutates the
+    SAME Draft in place), this one only snapshots. The clone is the full
+    ``_clone_version_content`` copy — every page, stable ids, locks, Container/
+    Cell graph and section-scoped media — so ``restore_version`` brings the
+    previous design back exactly. Returns ``None`` (no pointless checkpoint) when
+    the Draft carries no meaningful content."""
+    if not _draft_has_any_content(draft):
+        return None
+    layout = draft.layout
+    checkpoint = StorefrontLayoutVersion.objects.create(
+        layout=layout, version_number=_next_version_number(layout),
+        status=StorefrontLayoutVersion.Status.ARCHIVED,
+        source=StorefrontLayoutVersion.Source.MANUAL,
+        label=label[:150],
+        created_by=user if (user and getattr(user, "is_authenticated", False)) else None,
+    )
+    _clone_version_content(draft, checkpoint, include_legacy_media=True)
+    return checkpoint
 
 
 @transaction.atomic

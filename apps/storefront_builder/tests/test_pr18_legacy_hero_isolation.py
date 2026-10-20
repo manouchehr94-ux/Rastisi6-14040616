@@ -188,9 +188,9 @@ class LegacyBannerIsolationTests(MediaViewsTestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["legacy-home.example.com", "testserver"])
-class LegacyPublicHomepageMediaTests(TestCase):
-    """The legacy (non-visual-shell) public homepage must never render
-    section-scoped — i.e. Draft/R4-managed — media."""
+class PublicHomepageMediaIsolationTests(TestCase):
+    """The public engine homepage must never render section-scoped — i.e. Draft/R4-managed — media that belongs to an
+    unpublished Draft section."""
 
     HOST = "legacy-home.example.com"
 
@@ -219,14 +219,11 @@ class LegacyPublicHomepageMediaTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         return resp
 
-    def test_draft_scoped_media_is_not_rendered_on_the_legacy_homepage(self):
+    def test_draft_scoped_media_is_not_rendered_on_the_public_homepage(self):
         resp = self.get_home()
-        self.assertIn("hero_slides", resp.context, "expected the legacy (non-visual-shell) homepage")
-        self.assertEqual([s.pk for s in resp.context["hero_slides"]], [self.wide_slide.pk])
-        self.assertEqual([b.pk for b in resp.context["promo_banners"]], [self.wide_banner.pk])
         html = resp.content.decode()
         self.assertNotIn("پیش‌نویس‌اسلاید", html)
         self.assertNotIn("پیش‌نویس‌بنر", html)
 
-    def test_store_wide_media_still_renders_on_the_legacy_homepage(self):
+    def test_store_wide_media_still_renders_on_the_public_homepage(self):
         self.assertContains(self.get_home(), "سراسری")

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "storefront_shell.html" %}
 {% load static persian %}
 
 {% block title %}{% if order.payment_status == "paid" %}پرداخت موفق{% else %}پرداخت ناموفق{% endif %} | {{ SHOP_NAME }}{% endblock %}

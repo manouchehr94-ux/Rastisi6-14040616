@@ -3,7 +3,7 @@
   <div class="card-head"><h3>پیش‌نمایشِ مشتریانِ مشمول</h3></div>
   <div class="card-body">
   {% if error %}
-    <p style="color:var(--red)">{{ error }}</p>
+    <p style="color:var(--red-ink)">{{ error }}</p>
   {% else %}
     <p><b>{{ info.count|fa_number }}</b> مشتریِ مشمول{% if info.already_issued %} — از این تعداد <b>{{ info.already_issued|fa_number }}</b> نفر قبلاً دریافت کرده‌اند{% endif %}.
        <small style="color:var(--muted)">(چیزی صادر یا ارسال نشد)</small></p>

@@ -1,3 +1,4 @@
+{% load image_guide %}
 {% load persian %}
 <div class="modal-head">
   <h3>مدیریت تصاویر و ویدیو — {{ product.name }}</h3>
@@ -5,7 +6,7 @@
 </div>
 <div class="modal-body">
   <form hx-post="{% url 'dashboard:product-image-upload' product.pk %}" hx-target="#productImagesList" hx-swap="outerHTML"
-        hx-encoding="multipart/form-data" hx-trigger="change from:#imageDropInput, drop-upload"
+        hx-encoding="multipart/form-data" hx-trigger="imgguide-confirm"
         x-data="{ dragging: false }">
     <label class="dropzone" :class="{ dragging: dragging }"
            @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false"
@@ -13,13 +14,14 @@
              dragging = false;
              const input = $refs.dropInput;
              input.files = $event.dataTransfer.files;
-             $el.closest('form').dispatchEvent(new Event('drop-upload'));
+             input.dispatchEvent(new Event('change', { bubbles: true }));
            ">
       <span style="font-size:26px">📤</span>
       <span>تصاویر را اینجا رها کنید یا کلیک کنید</span>
       <small style="color:var(--muted)">فرمت‌های مجاز: jpg، png، webp — حداکثر ۵ مگابایت برای هر تصویر — چندتصویری هم‌زمان مجاز است</small>
       <input class="inp" id="imageDropInput" x-ref="dropInput" type="file" name="images" multiple accept=".jpg,.jpeg,.png,.webp" style="display:none">
     </label>
+    {% image_guide "product_image" "images" "imgguide-confirm" %}
   </form>
 
   <hr style="margin:16px 0;border-color:var(--border)">
@@ -60,7 +62,7 @@
       </div>
       <button type="submit" class="btn btn-sm btn-primary" :disabled="url.trim() && !embedUrl">افزودنِ ویدیو</button>
     </div>
-    <div x-show="url.trim() && !embedUrl" x-cloak style="color:var(--red);font-size:11.5px;margin-top:6px">
+    <div x-show="url.trim() && !embedUrl" x-cloak style="color:var(--red-ink);font-size:11.5px;margin-top:6px">
       این لینک شناخته‌شده نیست — فقط لینکِ یوتیوب یا آپارات پذیرفته می‌شود.
     </div>
     <div x-show="embedUrl" x-cloak style="margin-top:10px;width:220px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:#000">

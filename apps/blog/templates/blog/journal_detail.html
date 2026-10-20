@@ -1,0 +1,20 @@
+{% extends "storefront_shell.html" %}
+{% load static persian %}
+{% block title %}{{ post.title }} | {{ SHOP_NAME }}{% endblock %}
+{% block meta_description %}{% if post.excerpt %}<meta name="description" content="{{ post.excerpt }}">{% endif %}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap journal-page">
+  <article class="journal-article">
+    <a href="{% url 'blog:index' %}" class="journal-back">← بازگشت به مجله</a>
+    <header class="journal-head">
+      <p>{{ post.category_label|default:"مجله فروشگاه" }}</p>
+      <h1>{{ post.title }}</h1>
+      {% if post.published_at %}<time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|jalali }}</time>{% endif %}
+      {% if post.excerpt %}<p>{{ post.excerpt }}</p>{% endif %}
+    </header>
+    {% if post.has_available_cover %}<figure class="journal-article-cover"><img src="{{ post.cover_image.url }}" data-img-role="article" alt="{{ post.title }}"></figure>{% endif %}
+    <div class="journal-article-body">{{ post.body|linebreaks }}</div>
+  </article>
+</div>
+{% endblock %}

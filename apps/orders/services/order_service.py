@@ -156,6 +156,12 @@ def _lock_and_revalidate_items(items, *, store):
             raise ValueError(f"کالای «{product.name}» متعلق به این فروشگاه نیست")
         if product.status != Product.Status.ACTIVE:
             raise ValueError(f"کالای «{product.name}» دیگر برای فروش موجود نیست")
+        if product.is_price_inquiry:
+            # سبدِ کهنه (کالا پس از افزودن «استعلام قیمت» شده) هرگز نباید با
+            # قیمتِ قدیمی سفارش شود — حتی اگر ردیفِ سبد هنوز وجود دارد.
+            raise ValueError(
+                f"کالای «{product.name}» اکنون «استعلام قیمت» است و امکان خرید مستقیم ندارد؛ آن را از سبد حذف کنید"
+            )
 
         variant = None
         if item.variant_id:

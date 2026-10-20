@@ -193,18 +193,19 @@ SECTIONS: tuple = (
     Section(
         key="store", label="فروشگاه", icon="palette",
         tabs=(
+            # FOLLOWUP-02: «ظاهر و طراحی» و «ساختار صفحه‌ها» دو نمای معنادار از «همان» Design Studio‌اند (نه دو موتور):
+            # اولی مستقیم «طراحی سراسری» (رنگ، فونت، هدر، فوتر) را باز می‌کند و دومی خود Studio را با «ساختار صفحه» (بخش‌ها و ردیف‌ها).
             Tab("appearance", "ظاهر و طراحی", "storefront-builder-r4-editor",
                 perms=("can_manage_storefront_layout",), query="?panel=appearance",
                 matches=(
                     _m("storefront-builder-r4-editor", get={"panel": ("appearance",)}),
-                    _m("storefront-builder-appearance", "storefront-builder-apply-preset",
-                       "storefront-builder-appearance-field-reset"),
+                    _m("storefront-builder-apply-preset"),
                 ),
                 keywords="ظاهر رنگ پالت فونت استایل appearance palette"),
-            Tab("builder", "سازنده فروشگاه", "storefront-builder-r4-editor",
+            Tab("builder", "ساختار صفحه‌ها", "storefront-builder-r4-editor",
                 perms=("can_manage_storefront_layout",),
                 matches=(_m(prefix="storefront-builder-"),), pages=("storefront_builder",),
-                keywords="سازنده storefront builder طراحی صفحه سکشن section هیرو ادیتور"),
+                keywords="سازنده فروشگاه سازنده storefront builder ساختار صفحه طراحی صفحه سکشن section هیرو ادیتور استودیو"),
             Tab("templates", "قالب‌های آماده", "storefront-builder-templates",
                 perms=("can_manage_storefront_layout",),
                 matches=(_m("storefront-builder-templates", "storefront-builder-template-live-preview",
@@ -216,9 +217,12 @@ SECTIONS: tuple = (
             Tab("content", "محتوا", "page-list", perms=("can_manage_content",),
                 matches=(_m(prefix="page-"),), pages=("pages",),
                 keywords="محتوا صفحه صفحات بلاگ content"),
-            Tab("homepage", "صفحه اصلی", "hero-list", perms=("can_manage_content",),
+            Tab("journal", "مجله", "journal-list", perms=("can_manage_content",),
+                matches=(_m(prefix="journal-"),), pages=("journal",),
+                keywords="مجله مقاله مقالات بلاگ وبلاگ کاور journal blog"),
+            Tab("homepage", "رسانه‌های مشترک فروشگاه", "hero-list", perms=("can_manage_content",),
                 matches=(_m(prefix=("hero-", "banner-")),), pages=("homepage",),
-                keywords="صفحه اصلی اسلاید بنر هیرو homepage banner slider"),
+                keywords="رسانه مشترک پیش‌فرض اسلاید بنر هیرو تصاویر فروشگاه homepage banner slider media"),
             Tab("menus", "منوها", "menu-list", perms=("can_manage_content",),
                 matches=(_m(prefix="menu-"),), pages=("menus",),
                 keywords="منو مگامنو منوها navigation menu"),
@@ -298,6 +302,9 @@ PALETTE_EXTRAS: tuple = (
     PaletteExtra("لوگو", "فروشگاه ← ظاهر و طراحی ← هدر ← لوگو", "storefront-builder-r4-editor",
                  "?panel=header&focus=logo", ("can_manage_storefront_layout",),
                  "لوگو آرم نشان فروشگاه logo header", "R"),
+    PaletteExtra("لوگو و فاوآیکون", "تنظیمات ← اطلاعات فروشگاه ← لوگو", "settings",
+                 "?section=general", ("can_manage_settings",),
+                 "لوگو آرم نشان فاوآیکون فروشگاه logo favicon", "R"),
     PaletteExtra("هدر فروشگاه", "فروشگاه ← ظاهر و طراحی ← هدر", "storefront-builder-r4-editor",
                  "?panel=header", ("can_manage_storefront_layout",),
                  "هدر سربرگ جستجو سبد حساب کاربری header", "⌃"),
@@ -316,9 +323,6 @@ PALETTE_EXTRAS: tuple = (
                  ("can_manage_settings",), "کادوپیچی کادو بسته بندی هدیه gift wrap", "🎁"),
     PaletteExtra("برچسب‌های مشتری", "مشتریان ← مشتریان ← برچسب‌ها", "customer-tag-list", "",
                  ("can_view_customers",), "برچسب تگ مشتری tag", "#"),
-    PaletteExtra("ادیتور قدیمی فروشگاه", "فروشگاه ← سازنده فروشگاه ← ادیتور قدیمی",
-                 "storefront-builder-editor", "", ("can_manage_storefront_layout",),
-                 "ادیتور قدیمی تنظیمات پیشرفته legacy editor", "✎"),
 )
 
 # Dashboard URL names that are not navigable pages (auth/handoff plumbing).

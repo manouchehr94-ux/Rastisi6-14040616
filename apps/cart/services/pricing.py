@@ -98,6 +98,69 @@ def build_coupon_lines(items, coupon: Coupon | None) -> list[coupon_rules.Coupon
     ]
 
 
+def build_totals_breakdown(totals: dict) -> dict:
+    """سطرهایِ «خلاصه سفارش» را از ``totals`` (منبعِ واحدِ قیمت) می‌سازد — فقط نمایش؛ هیچ محاسبهٔ قیمتیِ تازه‌ای نیست.
+
+    قرارداد (RS-11): ``items_total`` در ``cart_totals`` *پس از تخفیفِ کالا* است (جمعِ ``unit_price × تعداد``). برایِ این‌که
+    ستونِ ارقام قابلِ جمع‌زدن باشد، «جمعِ کالاها» به‌صورت *قیمتِ اصلی* (``items_total + product_discount``) نشان داده
+    می‌شود، سپس تخفیفِ کالا، سپس در صورتِ وجودِ تخفیف «جمع پس از تخفیف». مالیاتِ ارسال (اگر هست) جزیی از ردیفِ مالیات
+    است، و در حالتِ «قیمت‌ها شاملِ مالیات» مالیاتِ کالا فقط توضیحی است و در جمع نمی‌آید.
+
+    ``rows``: لیستی از ``{key, label, amount, kind}``؛ ``kind`` یکی از ``plus|minus|subtotal|info|free``.
+    ``checked_total``: جمعِ جبریِ ردیف‌هایِ ``plus/minus/subtotal-base`` که باید با ``grand_total`` برابر باشد."""
+    zero = Decimal("0")
+    get = lambda key: totals.get(key) or zero  # noqa: E731
+    items_net = get("items_total")
+    product_discount = get("product_discount")
+    rows = []
+    running = zero
+
+    def add(key, label, amount, kind, *, counts=True):
+        nonlocal running
+        rows.append({"key": key, "label": label, "amount": amount, "kind": kind, "counts": counts})
+        if counts:
+            running += amount if kind in ("plus", "free") else -amount if kind == "minus" else zero
+
+    gross = items_net + product_discount
+    add("gross", "جمع کالاها" + (" (قیمت اصلی)" if product_discount > 0 else ""), gross, "plus")
+    if product_discount > 0:
+        add("product_discount", "تخفیف کالاها", product_discount, "minus")
+        rows.append({"key": "items_net", "label": "جمع پس از تخفیف کالا", "amount": items_net, "kind": "subtotal", "counts": False})
+    coupon_items = get("coupon_item_discount")
+    if coupon_items > 0:
+        add("coupon", "کد تخفیف", coupon_items, "minus")
+    gift = get("gift_wrap_total")
+    if gift > 0:
+        add("gift_wrap", "کادوپیچی", gift, "plus")
+    gift_disc = get("gift_wrap_discount")
+    if gift_disc > 0:
+        add("gift_wrap_discount", "تخفیف کادوپیچی", gift_disc, "minus")
+    shipping = get("shipping_cost")
+    free = bool(totals.get("free_shipping"))
+    if totals.get("shipping_method_selected"):
+        if free:
+            add("shipping", "هزینه ارسال", zero, "free")
+        else:
+            add("shipping", "هزینه ارسال", shipping, "plus")
+
+    rates = {line.get("tax_rate_percent") for line in totals.get("tax_lines") or [] if line.get("tax_rate_percent") is not None}
+    rate_label = ""
+    if len(rates) == 1:
+        rate = next(iter(rates))
+        rate_label = f" ({rate.normalize():f}٪)" if rate else ""
+    line_tax, shipping_tax = get("tax"), get("shipping_tax")
+    if totals.get("prices_include_tax"):
+        if line_tax > 0:
+            add("tax_included", "مالیات بر ارزش افزوده" + rate_label + " — شامل در قیمت‌ها", line_tax, "info", counts=False)
+        if shipping_tax > 0:
+            add("shipping_tax", "مالیات ارسال", shipping_tax, "plus")
+    else:
+        added = line_tax + shipping_tax
+        add("tax", "مالیات بر ارزش افزوده" + rate_label, added, "plus")
+    grand = get("grand_total")
+    return {"rows": rows, "grand_total": grand, "checked_total": running, "reconciles": running == grand}
+
+
 def cart_totals(
     cart, *, store, coupon: Coupon | None = None, shipping_method=None,
     province: str = "", city: str = "", postal_code: str = "",
@@ -256,7 +319,7 @@ def cart_totals(
         + gift_wrap_total - coupon_gift_wrap_discount
     )
 
-    return {
+    result = {
         "items_total": items_total,
         "product_discount": product_discount,
         "coupon_discount": coupon_discount,
@@ -264,6 +327,7 @@ def cart_totals(
         "shipping_zone": shipping_zone,
         "shipping_rate_rule": shipping_rate_rule,
         "free_shipping": free_shipping,
+        "shipping_method_selected": shipping_method is not None,
         # P5-W1 — presentation-ready Free-Shipping Goal state (all computed here).
         "free_shipping_threshold": free_shipping_threshold,
         "free_shipping_by_threshold": free_by_threshold,
@@ -287,3 +351,5 @@ def cart_totals(
         "coupon_error_code": coupon_error_code,
         "coupon_error_message": coupon_error_message,
     }
+    result["breakdown"] = build_totals_breakdown(result)
+    return result

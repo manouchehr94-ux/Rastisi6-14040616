@@ -1,50 +1,68 @@
 {% load storefront_builder_extras %}
-<div class="r4-inspector-panel" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
-  <header class="r4-inspector-header">
-    <strong class="r4-inspector-title">{{ definition.label_fa }}</strong>
-    <button type="button" class="r4-icon-btn" data-r4-inspector-close aria-label="بستن تنظیمات">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </button>
+{% comment %}
+Large settings WORKSPACE for one section (rendered into #r4Inspector, which lives inside the fixed overlay of editor.html).
+Same schema, same field renderer (settings_field.html), same mutation pipeline as ever — only the arrangement changed:
+three primary tabs (محتوا / طراحی / پیشرفته), each a responsive two-column set of titled cards built by
+workspace_layout.build_workspace_tabs from field type + key (never from a section or template key).
+{% endcomment %}
+<div class="r4-inspector-panel r4-ws" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
+  <header class="r4-ws-header">
+    <div class="r4-ws-identity">
+      <span class="r4-ws-glyph" aria-hidden="true">{% rs_icon "sliders" %}</span>
+      <div class="r4-ws-titles">
+        <div class="r4-ws-crumb" data-rs-inspector-scope><span>{{ definition.label_fa }}</span></div>
+        <div class="r4-ws-titlerow"><h2 class="r4-inspector-title r4-ws-title" data-rs-inspector-title>{{ definition.label_fa }}</h2><span class="r4-ws-scope" data-r4-ws-scope>فقط این بخش</span></div>
+      </div>
+    </div>
+    <label class="r4-ws-search">
+      <span class="visually-hidden">جستجو در تنظیمات این بخش</span>
+      {% rs_icon "search" %}
+      <input type="search" data-r4-ws-search placeholder="جستجو در تنظیمات…" autocomplete="off" aria-label="جستجو در تنظیمات این بخش">
+    </label>
+    <div class="r4-ws-save" data-r4-ws-save role="status" aria-live="polite">{% rs_icon "check" %}<span data-r4-ws-save-text>پیش‌نویس ذخیره شد</span></div>
+    <button type="button" class="r4-ws-close" data-r4-inspector-close aria-label="بستن تنظیمات">{% rs_icon "close" %}<span>بستن</span></button>
   </header>
 
-  {% if media_manage_url %}
-  {% comment %}
-  Phase 5 Task 4 (remediation R1a) — R4-NATIVE media editing embedded inline.
-  Reuses the canonical media manager body (media_views models/CRUD/authority)
-  via htmx; never a passive target="_blank" out-link workflow, never a second
-  media system.
-  {% endcomment %}
-  {% comment %}
-  hx-headers on the manager container is INHERITED by every descendant htmx
-  request, so add/edit/toggle/delete/move all carry the explicit R4-inline
-  marker (HX-R4-Inline) — the media_views endpoints use THIS, never HX-Request
-  alone, to decide inline vs legacy context. The drag-reorder htmx.ajax call
-  passes it explicitly too (see section_media_list_body.html).
-  {% endcomment %}
-  <div class="r4-inspector-media" data-r4-media-manager hx-headers='{"HX-R4-Inline": "1"}'>
-    <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
-    {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" with config=media_config items=media_items kind=media_kind %}
-  </div>
-  {% endif %}
+  <div class="r4-ws-locked" data-rs-inspector-locked hidden>برای ویرایش، ابتدا قفل این بخش را باز کنید (در تب «پیشرفته» ← «مدیریت بخش»).</div>
 
-  <div class="r4-inspector-tabs" role="tablist">
-    <button type="button" class="r4-inspector-tab" role="tab" data-r4-tab="basic" aria-selected="true">تنظیمات اصلی</button>
-    <button type="button" class="r4-inspector-tab" role="tab" data-r4-tab="advanced" aria-selected="false">تنظیمات پیشرفته</button>
+  <div class="r4-inspector-tabs r4-ws-tabs" role="tablist" aria-label="دسته‌بندی تنظیمات">
+    {% for tab in workspace_tabs %}
+    <button type="button" class="r4-inspector-tab r4-ws-tab" role="tab" id="r4Tab-{{ tab.key }}" data-r4-tab="{{ tab.key }}" aria-controls="r4Panel-{{ tab.key }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">{{ tab.label }}<span class="r4-ws-tab-count" data-r4-ws-tab-count hidden></span></button>
+    {% endfor %}
   </div>
 
-  <div class="r4-inspector-body">
-    <section class="r4-inspector-panel-fields" role="tabpanel" data-r4-tab-panel="basic">
-      {% for field in basic_fields %}
-        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key %}
+  <div class="r4-ws-main">
+    <div class="r4-inspector-body r4-ws-body">
+      {% for tab in workspace_tabs %}
+      <section class="r4-inspector-panel-fields r4-ws-panel" id="r4Panel-{{ tab.key }}" role="tabpanel" aria-labelledby="r4Tab-{{ tab.key }}" data-r4-tab-panel="{{ tab.key }}"{% if not forloop.first %} hidden{% endif %}>
+        <p class="r4-ws-empty" data-r4-ws-tab-empty{% if tab.cards %} hidden{% endif %}>در حالت فعلی این بخش، تنظیمی در این دسته وجود ندارد.</p>
+        {% if tab.cards %}
+        {% if tab.subsections|length > 1 %}
+        {% comment %}R4-10 — Design tab: a sub-section bar + one panel per sub-section. Hidden panels stay in the DOM, so no value is lost when switching.{% endcomment %}
+        <nav class="r4-ws-subnav" role="tablist" aria-label="بخش‌های تنظیمات طراحی" data-r4-subnav>
+          {% for sub in tab.subsections %}
+          <button type="button" class="r4-ws-subtab" role="tab" id="r4Sub-{{ sub.key }}" data-r4-sub="{{ sub.key }}" aria-controls="r4SubPanel-{{ sub.key }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}" tabindex="{% if forloop.first %}0{% else %}-1{% endif %}" title="{{ sub.hint }}"><span class="r4-ws-subtab-label">{{ sub.label }}</span><span class="r4-ws-tab-count" data-r4-ws-tab-count hidden></span></button>
+          {% endfor %}
+        </nav>
+        {% for sub in tab.subsections %}
+        <div class="r4-ws-subpanel" role="tabpanel" id="r4SubPanel-{{ sub.key }}" aria-labelledby="r4Sub-{{ sub.key }}" data-r4-sub-panel="{{ sub.key }}"{% if not forloop.first %} hidden{% endif %}>
+          {% include "dashboard/storefront_builder/r4/partials/workspace_cols.html" with region=sub %}
+        </div>
+        {% endfor %}
+        {% else %}
+        {% include "dashboard/storefront_builder/r4/partials/workspace_cols.html" with region=tab %}
+        {% endif %}
+        <p class="r4-ws-noresults" data-r4-ws-noresults hidden>هیچ تنظیمی با این عبارت پیدا نشد.</p>
+        {% endif %}
+      </section>
       {% endfor %}
-    </section>
-
-    <section class="r4-inspector-panel-fields" role="tabpanel" data-r4-tab-panel="advanced" hidden>
-      {% for field in advanced_fields %}
-        {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key %}
-      {% endfor %}
-    </section>
+    </div>
   </div>
+
+  <footer class="r4-ws-footer">
+    <span class="r4-ws-footnote">{% rs_icon "check" %}تغییرات به‌صورت خودکار ذخیره می‌شوند</span>
+    <button type="button" class="r4-ws-done primary" data-r4-inspector-close>انجام شد</button>
+  </footer>
 
   {{ field_values|json_script:"r4InspectorFieldValues" }}
   {{ inherited_appearance_by_field|json_script:"r4InspectorInheritedAppearance" }}

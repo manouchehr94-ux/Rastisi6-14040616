@@ -1,0 +1,72 @@
+{% extends "dashboard/base_admin.html" %}
+{% load image_guide persian %}
+{% block title %}{% if post %}ویرایش مقاله{% else %}مقالهٔ جدید{% endif %} | پنل مدیریت{% endblock %}
+{% block page_title %}{% if post %}ویرایش مقاله{% else %}مقالهٔ جدید{% endif %}{% endblock %}
+{% block page_sub %}{% if post %}{{ post.title }}{% else %}مقالهٔ تازه همیشه به‌صورت پیش‌نویس ساخته می‌شود و فقط با «ذخیره و انتشار» در سایت دیده می‌شود{% endif %}{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:860px" novalidate>
+  {% csrf_token %}
+  <div class="card-body">
+    {% if form.non_field_errors %}<div class="form-error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-group">
+      <label for="{{ form.title.id_for_label }}">عنوان مقاله *</label>
+      {{ form.title }}
+      {% for e in form.title.errors %}<span class="field-error" role="alert" style="color:#b91c1c">{{ e }}</span>{% endfor %}
+    </div>
+    <div class="form-group">
+      <label for="{{ form.excerpt.id_for_label }}">خلاصه (در کارتِ مجله دیده می‌شود)</label>
+      {{ form.excerpt }}
+      <span class="field-help">حداکثر ۳۰۰ نویسه.</span>
+      {% for e in form.excerpt.errors %}<span class="field-error" role="alert" style="color:#b91c1c">{{ e }}</span>{% endfor %}
+    </div>
+    <div class="form-group">
+      <label for="{{ form.body.id_for_label }}">متن کامل مقاله *</label>
+      {{ form.body }}
+      <span class="field-help" id="journalBodyCount" aria-live="polite">هر خطِ خالی یک پاراگرافِ تازه می‌سازد. متن به‌صورت ساده ذخیره می‌شود (HTML اجرا نمی‌شود).</span>
+      {% for e in form.body.errors %}<span class="field-error" role="alert" style="color:#b91c1c">{{ e }}</span>{% endfor %}
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.category_label.id_for_label }}">برچسب دسته (اختیاری)</label>
+        {{ form.category_label }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.slug.id_for_label }}">نشانی مقاله (اسلاگ)</label>
+        {{ form.slug }}
+        {% if form.slug_locked %}<span class="field-help">مقالهٔ منتشرشده است؛ نشانی تغییر نمی‌کند تا لینک‌ها نشکنند: <span dir="ltr">/journal/{{ post.slug }}/</span></span>
+        {% else %}<span class="field-help">خالی بگذارید تا از عنوان ساخته شود. فقط حروف، عدد و خط‌تیره.</span>{% endif %}
+        {% for e in form.slug.errors %}<span class="field-error" role="alert" style="color:#b91c1c">{{ e }}</span>{% endfor %}
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.cover_image.id_for_label }}">تصویر کاور</label>
+      <p class="field-help" role="status" style="margin:0 0 8px">
+        {% if post.cover_state == "ok" %}تصویر کاور فعلی در صفحهٔ مجله و بالای مقاله نمایش داده می‌شود: <img src="{{ post.cover_image.url }}" alt="" style="height:56px;vertical-align:middle;border-radius:8px">
+        {% elif post.cover_state == "missing" %}<b>فایل تصویر کاور روی سرور پیدا نشد</b> (احتمالاً رسانه منتقل نشده). همان تصویر یا تصویر دیگری را دوباره بارگذاری کنید.
+        {% else %}بارگذاریِ کاور اجباری نیست؛ تصویر مرتبط با خودِ مقاله را بگذارید.{% endif %}
+      </p>
+      {{ form.cover_image }}
+      {% image_guide "journal_cover" "cover_image" %}
+      {% for e in form.cover_image.errors %}<span class="field-error" role="alert" style="color:#b91c1c">{{ e }}</span>{% endfor %}
+      {% if post and post.cover_state != "none" %}<label style="display:block;margin-top:6px">{{ form.remove_cover }} {{ form.remove_cover.label }}</label>{% endif %}
+    </div>
+    <div class="form-group">
+      <span class="field-label">وضعیت</span>
+      <p class="field-help" style="margin:2px 0 0">
+        {% if post.publication_state == "published" %}<span class="badge b-green">منتشرشده</span> — <a href="{{ post.get_absolute_url }}" target="_blank" rel="noopener">مشاهده در سایت</a>
+        {% elif post.publication_state == "scheduled" %}<span class="badge b-amber">زمان‌بندی‌شده</span>
+        {% else %}<span class="badge">پیش‌نویس</span> — در سایت دیده نمی‌شود تا آن را منتشر کنید.{% endif %}
+      </p>
+    </div>
+    <div class="btn-row" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="submit" name="action" value="save" class="btn btn-primary">ذخیره{% if not post or post.publication_state == "draft" %} (به‌صورت پیش‌نویس){% endif %}</button>
+      {% if not post or post.publication_state == "draft" %}<button type="submit" name="action" value="publish" class="btn">ذخیره و انتشار</button>{% endif %}
+      <a href="{% url 'dashboard:journal-list' %}" class="btn btn-secondary">بازگشت به فهرست</a>
+    </div>
+  </div>
+</form>
+<script>
+(function(){var t=document.getElementById('{{ form.body.id_for_label }}'),c=document.getElementById('journalBodyCount');if(!t||!c)return;
+var base=c.textContent;function u(){var n=(t.value.match(/\S+/g)||[]).length;c.textContent=base+' — '+n.toLocaleString('fa-IR')+' واژه';}t.addEventListener('input',u);u();})();
+</script>
+{% endblock %}

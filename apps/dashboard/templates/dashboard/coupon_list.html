@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}کدهای تخفیف | پنل مدیریت{% endblock %}
 {% block page_title %}کدهای تخفیف{% endblock %}
 {% block page_sub %}مدیریت کدهای تخفیف این فروشگاه{% endblock %}
@@ -30,7 +31,7 @@
       <td>{{ coupon.value }}</td>
       <td>{{ coupon.min_order }}</td>
       <td>{{ coupon.used_count }}{% if coupon.usage_limit %} / {{ coupon.usage_limit }}{% endif %}</td>
-      <td>{{ coupon.expires_at|date:"Y-m-d"|default:"—" }}</td>
+      <td>{{ coupon.expires_at|jalali|default:"—" }}</td>
       <td>{% if coupon.is_active %}<span class="badge b-green">فعال</span>{% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}</td>
       {% if can_manage_coupons %}
       <td style="display:flex;gap:6px">

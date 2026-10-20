@@ -34,10 +34,10 @@
           {{ job.total_rows|fa_number }} کل
           {% if job.created_rows %}· {{ job.created_rows|fa_number }} ساخت{% endif %}
           {% if job.updated_rows %}· {{ job.updated_rows|fa_number }} به‌روز{% endif %}
-          {% if job.failed_rows %}· <span style="color:var(--red)">{{ job.failed_rows|fa_number }} ناموفق</span>{% endif %}
+          {% if job.failed_rows %}· <span style="color:var(--red-ink)">{{ job.failed_rows|fa_number }} ناموفق</span>{% endif %}
         </td>
         <td>{{ job.requested_by.username|default:"—" }}</td>
-        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.created_at|date:"Y-m-d H:i" }}</td>
+        <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ job.created_at|jalali_dt }}</td>
         <td><a class="btn btn-sm" href="{% url 'dashboard:import-detail' job.pk %}">مشاهده</a></td>
       </tr>
     {% empty %}

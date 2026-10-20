@@ -172,6 +172,7 @@ class ProductDetailVideoTests(TestCase):
                 product=self.product, provider=ProductVideo.Provider.YOUTUBE,
                 url="https://www.youtube.com/watch?v=dQw4w9WgXcQ", display_order=i,
             )
+        self.client.get(self.url)  # first request provisions the Store's default composition once
         with CaptureQueriesContext(connection) as ctx_one:
             self.client.get(self.url)
         ProductVideo.objects.create(

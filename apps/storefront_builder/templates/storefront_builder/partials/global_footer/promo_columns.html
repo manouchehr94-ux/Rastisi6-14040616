@@ -60,24 +60,25 @@ Required context: ``footer_config``/``is_live_storefront``/``is_builder_preview`
     ``FOOTER_PAYMENT_LOGOS`` merchant-uploaded querysets above, so it can
     never change what any other Ready Template's footer renders.
     {% endcomment %}
+    {% service_claims as svc_claims %}
+    {% comment %}FOLLOWUP-10 — only claims the store can back up: shipping needs an active shipping method, payment an active
+    gateway. «ضمانت اصالت کالا» و «۷ روز ضمانت بازگشت» سیاست/تأییدیه‌ای نداشتند و از این ردیف ثابت حذف شدند.{% endcomment %}
+    {% if svc_claims.shipping or svc_claims.payment %}
     <div class="gf-promo-guarantee">
-      <div class="gf-promo-guarantee-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>ضمانت اصالت کالا</span>
-      </div>
+      {% if svc_claims.shipping %}
       <div class="gf-promo-guarantee-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-        <span>ارسال سریع و بیمه‌شده</span>
+        <span>ارسال سفارش</span>
       </div>
+      {% endif %}
+      {% if svc_claims.payment %}
       <div class="gf-promo-guarantee-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
         <span>پرداخت امن آنلاین</span>
       </div>
-      <div class="gf-promo-guarantee-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-        <span>۷ روز ضمانت بازگشت کالا</span>
-      </div>
+      {% endif %}
     </div>
+    {% endif %}
 
     {% if fc.show_copyright or fc.show_social and SOCIAL_LINKS_FOOTER %}
     <div class="gf-legal-row">

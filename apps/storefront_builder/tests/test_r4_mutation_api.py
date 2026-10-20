@@ -24,8 +24,6 @@ class R4MutationApiTestCase(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         self.section = StorefrontSection.objects.create(
             version=self.draft, section_key="hero_banner", order=0,
@@ -267,41 +265,6 @@ class TransactionalFailureRegressionTests(R4MutationApiTestCase):
         self.assertEqual(self._history_count(), before_count)
 
 
-class R3CompatibilityTests(R4MutationApiTestCase):
-    def test_existing_r3_section_settings_route_still_works_without_base_revision(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        rich_text_section = StorefrontSection.objects.create(
-            version=self.draft, section_key="rich_text", order=2,
-        )
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-section-settings", args=[rich_text_section.pk]),
-            {"body_html": "<p>متن تست R3</p>"},
-        )
-        self.assertEqual(response.status_code, 302)
-        rich_text_section.refresh_from_db()
-        self.assertIn("متن تست R3", rich_text_section.settings["body_html"])
-
-
-class R4FeatureGateTests(R4MutationApiTestCase):
-    def test_mutation_endpoint_is_unavailable_when_r4_gate_is_off(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self._post_json({
-            "base_revision": self.draft.edit_revision,
-            "mutation": {
-                "type": "section.update_settings",
-                "section_id": self.section.pk,
-                "patch": {"autoplay": False},
-            },
-        })
-        self.assertEqual(response.status_code, 404)
-
-
 class MethodContractTests(R4MutationApiTestCase):
     def test_get_is_rejected_with_405_and_does_not_mutate(self):
         starting_revision = self.draft.edit_revision
@@ -461,7 +424,6 @@ class StableSettingsErrorCodeTests(R4MutationApiTestCase):
         self.draft.refresh_from_db()
         self.assertEqual(self.draft.edit_revision, starting_revision)
         self.assertEqual(self._history_count(), before_count)
-
 
 
 # ------------------------------------------------------------------------
@@ -712,7 +674,6 @@ class BrandCarouselV01V02MutationTests(R4MutationApiTestCase):
         self._assert_unchanged(section, before, before_revision, before_history)
 
 
-
 # ------------------------------------------------------------------------
 # Task 4 (V03) — collection_tiles negative discipline at the R4 mutation
 # boundary (schema-enabled, atomic reject leaves settings/revision/history
@@ -767,11 +728,6 @@ class CollectionTilesNegativeMutationTests(R4MutationApiTestCase):
         self.assertEqual(r.json()["code"], "invalid_settings")
         self._assert_unchanged(section, before, before_revision, before_history)
 
-    def test_gate_disabled_returns_404(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        r = self._update(self.collection_section, {"title": "x"})
-        self.assertEqual(r.status_code, 404)
 
     def test_anonymous_actor_denied(self):
         self.client.logout()
@@ -785,7 +741,6 @@ class CollectionTilesNegativeMutationTests(R4MutationApiTestCase):
         self.assertEqual(r.status_code, 200)
         section.refresh_from_db()
         self.assertEqual(section.settings["tile_style"], "carousel")
-
 
 
 class Task4BBackgroundMutationTests(R4MutationApiTestCase):
@@ -841,7 +796,6 @@ class Task4BBackgroundMutationTests(R4MutationApiTestCase):
             },
         })
         self.assertEqual(self._history_count(), before + 1)
-
 
 
 class Task4BBackgroundAssetTenantIsolationTests(R4MutationApiTestCase):
@@ -929,19 +883,6 @@ class Task4BBackgroundOwnershipSingleAuthorityTests(R4MutationApiTestCase):
         # The canonical, store-scoped ownership entry point exists.
         self.assertTrue(hasattr(section_data_service, "validate_background_asset_ownership"))
 
-    def test_legacy_view_helper_delegates_to_the_same_canonical_authority(self):
-        from pathlib import Path
-
-        from django.conf import settings as dj_settings
-
-        views_source = Path(
-            dj_settings.BASE_DIR, "apps/storefront_builder/views.py",
-        ).read_text(encoding="utf-8")
-        # Legacy path routes background ownership through the shared service,
-        # not its own inline MediaAsset query.
-        self.assertIn("validate_background_asset_ownership", views_source)
-
-
 
 class Task4AR4NativeMediaHtmxTests(R4MutationApiTestCase):
     """R1a — the canonical media list/form views return BODY-ONLY partials
@@ -1021,7 +962,6 @@ class Task4AR4NativeMediaTenantIsolationTests(R4MutationApiTestCase):
         )
         self.assertEqual(self.client.get(url).status_code, 404)
         self.assertEqual(self.client.get(url, HTTP_HX_REQUEST="true").status_code, 404)
-
 
 
 class Task4MediaContextBoundaryTests(R4MutationApiTestCase):

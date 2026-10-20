@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}پرداخت‌ها و فاکتورها | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead">
@@ -36,7 +37,7 @@
             {% elif invoice.status == "void" or invoice.status == "uncollectible" %}<span class="pa-badge pa-off">{{ invoice.get_status_display }}</span>
             {% else %}<span class="pa-badge pa-warn">{{ invoice.get_status_display }}</span>{% endif %}
           </td>
-          <td>{{ invoice.created_at|date:"Y/m/d" }}</td>
+          <td>{{ invoice.created_at|jalali }}</td>
           <td><a class="pa-btn pa-small pa-soft" href="{% url 'portal_platform_admin:payment-invoice-detail' invoice.pk %}">جزئیات</a></td>
         </tr>
         {% endfor %}

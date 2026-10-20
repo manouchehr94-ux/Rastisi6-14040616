@@ -1,0 +1,83 @@
+{% comment %}
+Full retail footer on a dark surface (key: stationery_dark).
+Layers, top to bottom: a link bar (the merchant's third footer menu, else the second, else the top categories), a
+four-column information grid (quick links, categories, contact, address), a divider, a brand region (store identity +
+the merchant's own paragraph, a custom-text block), a row of credential squares (uploaded trust badges first, then
+neutral empty squares up to the ``badge_slots`` block count) and a legal row.  Reuses only the shared merchant/footer
+data partials; nothing is invented — a layer without data renders its structure empty or is omitted.
+{% endcomment %}
+{% load storefront_builder_extras %}
+{% with fc=footer_config rc=footer_config.responsive %}
+<footer class="gf gf--stationery"{% with gstyle=fc.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
+  <div class="wrap">
+    {% if NAV_FOOTER_3 %}{% with bar=NAV_FOOTER_3.items %}
+    <nav class="gf-st-bar" aria-label="{{ NAV_FOOTER_3.title|default:'پیوندهای فوتر' }}">
+      {% for item in bar|slice:":6" %}{% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}{% endfor %}
+    </nav>
+    {% endwith %}
+    {% elif NAV_FOOTER_2 %}
+    <nav class="gf-st-bar" aria-label="{{ NAV_FOOTER_2.title|default:'پیوندهای فوتر' }}">
+      {% for item in NAV_FOOTER_2.items|slice:":6" %}{% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}{% endfor %}
+    </nav>
+    {% elif top_level_categories %}
+    <nav class="gf-st-bar" aria-label="دسته‌بندی‌ها">
+      {% for cat in top_level_categories|slice:":6" %}<a href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">{{ cat.name }}</a>{% endfor %}
+    </nav>
+    {% endif %}
+    {% if fc.show_newsletter and FOOTER_SETTINGS.show_newsletter %}
+    <div class="gf-st-newsletter" {% if rc.show_newsletter.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_newsletter.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% include "storefront_builder/partials/global_footer/_shared/newsletter.html" %}
+    </div>
+    {% endif %}
+    <div class="gf-st-grid">
+      {% if fc.show_quick_links %}
+      <div {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/nav_column.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_categories %}
+      <div {% if rc.show_categories.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_categories.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/categories_column.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_contact %}
+      <div class="gf-col gf-col-contact" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/contact_column.html" with hide_address=True %}
+      </div>
+      {% if FOOTER_SETTINGS.address %}
+      <div class="gf-col gf-col-address" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        <h5>آدرس فروشگاه</h5>
+        <p class="gf-address-text">{{ FOOTER_SETTINGS.address }}</p>
+        {% if FOOTER_SETTINGS.show_map_link %}<a class="gf-map-link" href="https://www.openstreetmap.org/search?query={{ FOOTER_SETTINGS.address|urlencode }}" target="_blank" rel="noopener noreferrer">مشاهده نشانی روی نقشه ↗</a>{% endif %}
+      </div>
+      {% endif %}
+      {% endif %}
+    </div>
+    <div class="gf-st-identity">
+      {% if fc.show_about %}
+      <div class="gf-col gf-col-brand" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
+      </div>
+      {% endif %}
+      {% for block in fc.extra_blocks %}{% if block.type == "custom_text" and block.text %}
+      <p class="gf-st-paragraph">{{ block.text }}</p>
+      {% endif %}{% endfor %}
+    </div>
+    {% include "storefront_builder/partials/global_footer/_shared/badge_slots_row.html" %}
+    {% if fc.show_copyright or fc.show_social and SOCIAL_LINKS_FOOTER %}
+    <div class="gf-legal-row">
+      {% if fc.show_copyright %}
+      <div {% if rc.show_copyright.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_copyright.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/legal_row.html" %}
+      </div>
+      {% endif %}
+      {% if fc.show_social %}
+      <div {% if rc.show_social.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_social.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+        {% include "storefront_builder/partials/global_footer/_shared/social_links.html" %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</footer>
+{% endwith %}

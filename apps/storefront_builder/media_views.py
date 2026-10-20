@@ -64,8 +64,8 @@ _MEDIA_KINDS = {
         # فقط با اشاره‌گر به همان فایلِ تازه‌آپلودشده.
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
-            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url"},
-            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url",
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url", "guide_key": "hero_desktop"},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url", "guide_key": "hero_mobile",
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
         # Phase 4 (Task 6) — the model attribute the media LIST partial shows
@@ -82,8 +82,8 @@ _MEDIA_KINDS = {
         "section_keys": {"single_banner", "multi_banner"},
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
-            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url"},
-            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url",
+            {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url", "guide_key": "banner_desktop"},
+            {"name": "mobile_image", "label": "تصویر موبایل (اختیاری)", "required": False, "thumb": "mobile_image_url", "guide_key": "banner_mobile",
              "remove_field": "remove_mobile", "remove_label": "حذف تصویر موبایلِ فعلی"},
         ),
         "thumb_field": "desktop_image_url",
@@ -101,7 +101,7 @@ _MEDIA_KINDS = {
         # pair exists.
         "asset_fields": {"image": "image_asset"},
         "file_fields": (
-            {"name": "image", "label": "تصویر", "required": True, "thumb": "image_url"},
+            {"name": "image", "label": "تصویر", "required": True, "thumb": "image_url", "guide_key": "story_item"},
         ),
         # ``StoryRailItem`` has no ``desktop_image_url``; its own resolved
         # thumbnail property is ``image_url`` (``apps.content.models.StoryRailItem``).
@@ -613,6 +613,8 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
         "inline_media": is_r4_inline,
         "form_errors": form_errors, "error_tabs": error_tabs, "error_tab": error_tab,
         "reselect_fields": reselect_fields,
+        # R4-14 — the upload guide resolves its frames from THIS section (its own design/fit/focal settings)
+        "guide_sections": [section],
     })
 
 

@@ -250,7 +250,7 @@ class WrapperSparseBehaviorTests(SimpleTestCase):
 
     def test_image_slider_ignores_appearance_overrides_key(self):
         # image_slider shares _validate_slider_settings with hero_banner but
-        # is NOT in APPEARANCE_OVERRIDE_AWARE_SECTION_KEYS.
+        # is NOT in sections_with_capability("appearance_override").
         image_slider = section_registry.get_definition("image_slider")
         cleaned = image_slider.validate_settings({
             "appearance_overrides": {"typography": {"enabled": True, "font": "Vazirmatn"}},
@@ -346,13 +346,6 @@ class RendererEffectiveAppearanceTests(R4MutationApiTestCase):
         hero_item = items["hero_banner"]
         self.assertIn("hero_banner_split", hero_item["template_name"])
         self.assertEqual(hero_item["context"]["effective_section_appearance"]["font"], "Georgia")
-
-    def test_build_default_render_items_unaffected_no_version_no_crash(self):
-        # No persisted version — legacy in-memory bootstrap path. Must not
-        # crash and must not fabricate a Draft.
-        items = render_service.build_default_render_items("home", self.store)
-        for item in items:
-            self.assertNotIn("effective_section_appearance", item["context"])
 
 
 class PreviewPublicSharedRenderTests(R4MutationApiTestCase):

@@ -29,11 +29,29 @@ def toggle_gateway(pk: int, *, store) -> PaymentGateway:
     return gateway
 
 
+class ShippingMethodIncomplete(ValueError):
+    """روشِ ارسال به‌دلیلِ نامعتبر/ناقص بودن فعال نشد."""
+
+
 def toggle_shipping_method(pk: int, *, store) -> ShippingMethod:
     """۴۰۴ استاندارد (نه استثنای بدون‌مدیریت) برای روش ارسال متعلق به Store دیگر."""
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
     method = get_object_or_404(ShippingMethod, pk=pk, store=store)
     method.is_active = not method.is_active
+    if method.is_active:
+        # FOLLOWUP-09: همان اعتبارسنجیِ صفحهٔ «راه‌اندازیِ ارسال» (یک مرجع)؛ روشِ ناقص/نامعتبر فعال نمی‌شود.
+        try:
+            method.full_clean()
+        except DjangoValidationError as exc:
+            raise ShippingMethodIncomplete("؛ ".join(sum(exc.message_dict.values(), []))) from exc
     method.save(update_fields=["is_active", "updated_at"])
+    from apps.core.services.audit_service import record_audit_event
+
+    record_audit_event(
+        store=store, action_code="shipping_method.updated", object_type="ShippingMethod", object_id=method.pk,
+        object_label=method.name, after={"is_active": method.is_active, "via": "settings"},
+    )
     return method
 
 

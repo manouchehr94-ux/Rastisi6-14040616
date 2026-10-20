@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}انتقالِ انبار | پنل مدیریت{% endblock %}
 {% block page_title %}انتقالِ انبار{% endblock %}
 {% block page_sub %}جابه‌جاییِ موجودی بین انبارهای این فروشگاه{% endblock %}
@@ -24,7 +25,7 @@
       <td>{{ transfer.source_warehouse.name }}</td>
       <td>{{ transfer.destination_warehouse.name }}</td>
       <td><span class="badge">{{ transfer.get_status_display }}</span></td>
-      <td>{{ transfer.created_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ transfer.created_at|jalali_dt }}</td>
       <td><a class="btn btn-sm" href="{% url 'dashboard:transfer-detail' transfer.pk %}">مشاهده</a></td>
     </tr>
     {% endfor %}

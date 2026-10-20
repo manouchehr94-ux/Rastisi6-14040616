@@ -61,6 +61,13 @@ Visible only at the mobile breakpoint (CSS).
       <p class="mobile-nav-drawer__empty">منویی برای نمایش تنظیم نشده است.</p>
       {% endif %}
       {% endwith %}
+      {% comment %}RS-08: published pages the merchant flagged for the footer «دسترسی سریع» (About, Contact…) are also reachable here —
+      on a phone the footer is far down the page. Same ContentPage authority; no second menu system.{% endcomment %}
+      {% if footer_pages_quick_access %}
+      <ul class="mobile-nav-drawer__list mobile-nav-drawer__pages">
+        {% for page in footer_pages_quick_access %}<li><a href="{{ page.get_absolute_url }}">{{ page.title }}</a></li>{% endfor %}
+      </ul>
+      {% endif %}
     </nav>
   </aside>
 </div>

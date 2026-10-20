@@ -25,8 +25,8 @@
       <td>{{ reservation.quantity }}</td>
       <td><span class="badge">{{ reservation.get_status_display }}</span></td>
       <td>{{ reservation.source }}</td>
-      <td>{{ reservation.expires_at|date:"Y-m-d H:i"|default:"—" }}</td>
-      <td>{{ reservation.created_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ reservation.expires_at|jalali_dt|default:"—" }}</td>
+      <td>{{ reservation.created_at|jalali_dt }}</td>
       {% if can_manage_reservations %}
       <td>
         {% if reservation.status == "active" %}

@@ -60,7 +60,6 @@ class ShellOnlyContextTests(TestCase):
             request, self.store, "wishlist", shell_only=True,
         )
 
-        self.assertIs(shell_ctx["uses_universal_shell"], True)
         self.assertIsNotNone(shell_ctx["storefront_version"])
         self.assertIsNone(shell_ctx["storefront_page"])
         self.assertEqual(shell_ctx["page_type"], "wishlist")
@@ -86,37 +85,29 @@ class ShellOnlyContextTests(TestCase):
             list(shell_ctx["top_level_categories"]), list(home_ctx["top_level_categories"])
         )
 
-    def test_shell_only_unpublished_store_returns_legacy_fallback(self):
-        # No get_or_create_draft/publish call -> genuinely unpublished.
+    def test_shell_only_unpublished_store_gets_the_engine_default_shell(self):
+        # No get_or_create_draft/publish call -> never published: the deterministic engine default is provisioned.
         request = self._request()
         shell_ctx = build_universal_storefront_context(
             request, self.store, "wishlist", shell_only=True,
         )
-        self.assertIs(shell_ctx["uses_universal_shell"], False)
-        self.assertIsNone(shell_ctx["storefront_version"])
+        self.assertNotIn("uses_universal_shell", shell_ctx)
+        self.assertIsNotNone(shell_ctx["storefront_version"])
         self.assertIsNone(shell_ctx["storefront_page"])
         self.assertEqual(shell_ctx["page_type"], "wishlist")
-        self.assertIsNone(shell_ctx["mobile_bottom_nav_template"])
-        self.assertNotIn("header_variant_template", shell_ctx)
-        self.assertNotIn("footer_variant_template", shell_ctx)
+        self.assertIn("header_variant_template", shell_ctx)
+        self.assertIn("footer_variant_template", shell_ctx)
         self.assertEqual(shell_ctx["render_items"], [])
 
-    def test_invalid_normal_page_type_preserves_todays_fail_safe(self):
+    def test_an_unknown_page_type_is_a_programming_error_not_a_silent_fallback(self):
         svc.get_or_create_draft(self.store)
         _publish(self.store)
         self.store.refresh_from_db()
 
-        request = self._request()
-        # shell_only NOT passed -> defaults False. A typo'd "real" page_type
-        # must NOT silently become a valid shell-only page.
-        ctx = build_universal_storefront_context(request, self.store, "prodcut_detail")
-
-        self.assertIs(ctx["uses_universal_shell"], False)
-        self.assertIsNone(ctx["storefront_version"])
-        self.assertIsNone(ctx["storefront_page"])
-        self.assertIsNone(ctx["mobile_bottom_nav_template"])
-        self.assertNotIn("header_variant_template", ctx)
-        self.assertEqual(ctx["render_items"], [])
+        # shell_only NOT passed -> defaults False. A typo'd "real" page_type must neither become a valid shell-only
+        # page nor silently render another page's body.
+        with self.assertRaises(ValueError):
+            build_universal_storefront_context(self._request(), self.store, "prodcut_detail")
 
     def test_shell_only_never_resolves_a_storefront_page(self):
         svc.get_or_create_draft(self.store)

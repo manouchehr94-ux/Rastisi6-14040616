@@ -50,15 +50,6 @@ class Phase32BuilderUXTests(StorefrontBuilderViewsTestCase):
         html = response.content.decode("utf-8")
         self.assertNotIn(f'data-container-remove="{container.pk}"', html)
 
-    def test_editor_library_cards_are_draggable_to_real_cells(self):
-        response = self.client.get(reverse("dashboard:storefront-builder-editor") + "?page=home")
-        html = response.content.decode("utf-8")
-        self.assertIn('draggable="true"', html)
-        self.assertIn("@dragstart=", html)
-        self.assertIn("sfb-library-cell-drop-layer", html)
-        self.assertIn("refreshLibraryCellDropZones", html)
-        self.assertIn("dropLibraryToCellOverlay", html)
-        self.assertIn("addContentBlockToCell", html)
 
     def test_preview_exposes_direct_settings_and_selection_sync_contract(self):
         section = self._section()
@@ -77,13 +68,3 @@ class Phase32BuilderUXTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(rich.label_fa, "متن")
         self.assertIn("پاراگراف", rich.description_fa)
         self.assertIn("تصویر", image_text.description_fa)
-
-    def test_container_settings_no_longer_offer_equal_height_stretch(self):
-        container = container_service.create_empty_container(self.page, "half", settings={"vertical_align": "stretch"})
-        response = self.client.get(reverse("dashboard:storefront-builder-container-settings", args=[container.pk]))
-        html = response.content.decode("utf-8")
-        self.assertNotIn('value="stretch"', html)
-        self.assertIn("هر خانه فقط به اندازه محتوای خودش قاب می‌گیرد", html)
-        self.assertIn("ارتفاع برابر", html)
-        self.assertIn("برای محتواهای نامتناسب، حالت طبیعی بهتر است", html)
-        self.assertNotIn('value="stretch"', html)

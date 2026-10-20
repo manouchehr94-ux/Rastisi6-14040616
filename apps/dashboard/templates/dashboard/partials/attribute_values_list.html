@@ -1,3 +1,4 @@
+{% load image_guide %}
 {% load persian %}
 <div id="attributeValuesList">
   <form hx-post="{% url 'dashboard:attribute-value-add' attribute.pk %}" hx-target="#attributeValuesList" hx-swap="outerHTML" hx-encoding="multipart/form-data"
@@ -19,11 +20,12 @@
     <div class="form-group" style="margin-bottom:0">
       <label>تصویر نمونه (اختیاری) <span class="help-icon" title="مثلاً بافتِ پارچه یا الگوی طرح — برای مقادیری که یک رنگِ ساده کافی نیست.">؟</span></label>
       <input class="inp" type="file" name="swatch_image" accept=".jpg,.jpeg,.png,.webp" style="width:170px">
+      {% image_guide "swatch_image" "swatch_image" %}
     </div>
     <button type="submit" class="btn btn-sm btn-primary">افزودن</button>
   </form>
-  {% if form_error %}<div style="color:var(--red);font-size:12.5px;margin-bottom:10px">{{ form_error }}</div>{% endif %}
-  {% for err in value_form.label.errors %}<div style="color:var(--red);font-size:11.5px;margin-bottom:10px">{{ err }}</div>{% endfor %}
+  {% if form_error %}<div style="color:var(--red-ink);font-size:12.5px;margin-bottom:10px">{{ form_error }}</div>{% endif %}
+  {% for err in value_form.label.errors %}<div style="color:var(--red-ink);font-size:11.5px;margin-bottom:10px">{{ err }}</div>{% endfor %}
 
   <table x-data="{ dragId: null }">
     <thead><tr><th style="width:24px"></th><th>نمونه</th><th>برچسب</th><th>وضعیت</th><th>عملیات</th></tr></thead>

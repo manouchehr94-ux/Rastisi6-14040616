@@ -4,7 +4,6 @@
 وقتی نمایش داده می‌شود که مرچنت هم فعالش کرده و هم یک مقصدِ واقعی
 انتخاب کرده (بدونِ مقصد = هیچ لینکی، طبقِ الزامِ «هرگز دکمه‌ی بی‌اثر»).
 {% endcomment %}
-{% if brands %}
 <section class="section{% if brand_carousel_settings.display_mode == 'beauty_tabs' %} brand-section--beauty-tabs{% endif %}">
   {% if brand_carousel_settings.display_mode == 'beauty_tabs' %}
   <div class="beauty-section-title beauty-brand-title">
@@ -27,12 +26,13 @@
   stylesheet rules; they only guarantee the block-level ``.brand-tile``
   anchors never stack vertically for lack of a flex/grid parent.
   {% endcomment %}
+  {% comment %}Empty data is owned by the shared contract (section_empty_state_service); this body only renders with brands.{% endcomment %}
   <div class="{% if brand_carousel_settings.display_mode == 'carousel' %}brand-carousel{% elif brand_carousel_settings.display_mode == 'beauty_tabs' %}brand-beauty-tabs{% else %}grid{% endif %}"
        {% if brand_carousel_settings.display_mode == 'carousel' %}style="display:flex;gap:14px;overflow-x:auto"{% elif brand_carousel_settings.display_mode == 'beauty_tabs' %}style="display:flex;overflow-x:auto"{% else %}style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px"{% endif %}>
     {% for brand in brands %}
-    <a{% if is_builder_preview %} data-admin-edit-kind="brand" data-admin-edit-id="{{ brand.pk }}" data-admin-edit-title="{{ brand.name|escape }}"{% endif %} href="{% url 'catalog:product-list' %}?brand={{ brand.slug }}" class="brand-tile{% if brand_carousel_settings.display_mode == 'beauty_tabs' %} brand-beauty-tab{% endif %}">
+    <a{% if is_builder_preview %} data-admin-edit-kind="brand" data-admin-edit-id="{{ brand.pk }}" data-admin-edit-title="{{ brand.name|escape }}"{% endif %} href="{% url 'catalog:product-list' %}?brand={{ brand.slug }}" data-sfb-card-surface class="brand-tile{% if brand_carousel_settings.display_mode == 'beauty_tabs' %} brand-beauty-tab{% endif %}">
       {% if brand.logo %}
-      <img src="{{ brand.logo.url }}" alt="{{ brand.name }}">
+      <img src="{{ brand.logo.url }}" data-img-role="logo" alt="{{ brand.name }}" loading="lazy">
       {% else %}
       <span class="brand-tile-name">{{ brand.name }}</span>
       {% endif %}
@@ -40,4 +40,3 @@
     {% endfor %}
   </div>
 </section>
-{% endif %}

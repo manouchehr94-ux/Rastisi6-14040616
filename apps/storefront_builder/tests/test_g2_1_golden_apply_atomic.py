@@ -54,7 +54,7 @@ class GoldenApplyAtomicRollbackTests(TestCase):
         # 2) Force media attachment to raise AFTER the publish call.
         boom = RuntimeError("forced media-attach failure")
         with mock.patch.object(
-            golden_reference_service, "_attach_golden_section_media", side_effect=boom
+            golden_reference_service, "_back_shared_media_with_assets", side_effect=boom
         ):
             # 3/4) The exception must propagate.
             with self.assertRaises(RuntimeError):
@@ -80,11 +80,22 @@ class GoldenApplyAtomicRollbackTests(TestCase):
         home = layout.published_version.home_page()
         self.assertGreater(home.sections.count(), 0)
 
-    def test_successful_apply_still_publishes_and_attaches_media(self):
-        # Guard that the atomic wrapper didn't break the happy path.
-        from apps.content.models import HeroSlide
+    def test_successful_apply_still_publishes_and_keeps_media_shared_and_asset_backed(self):
+        # Guard that the atomic wrapper didn't break the happy path. ARCH-02: the store's media
+        # stays store-owned (section=NULL) and MediaAsset-backed; it is NOT moved onto the
+        # sections of the Golden template.
+        from apps.content.models import HeroSlide, PromotionalBanner, StoryRailItem
 
         published = golden_reference_service.apply_golden_reference_storefront(self.store)
         home = published.home_page()
         hero = next(s for s in home.sections.order_by("order") if s.section_key == "hero_banner")
-        self.assertGreater(HeroSlide.objects.filter(section=hero).count(), 0)
+        self.assertEqual(HeroSlide.objects.filter(section=hero).count(), 0)
+        shared = HeroSlide.objects.filter(store=self.store, section__isnull=True)
+        self.assertGreater(shared.count(), 0)
+        self.assertFalse(shared.filter(desktop_asset__isnull=True).exists())
+        self.assertFalse(PromotionalBanner.objects.filter(store=self.store, section__isnull=True, desktop_asset__isnull=True).exists())
+        self.assertFalse(StoryRailItem.objects.filter(store=self.store, section__isnull=True, image_asset__isnull=True).exists())
+        # idempotent: a second apply neither moves nor duplicates anything
+        counts = (HeroSlide.objects.count(), PromotionalBanner.objects.count(), StoryRailItem.objects.count())
+        golden_reference_service.apply_golden_reference_storefront(self.store)
+        self.assertEqual(counts, (HeroSlide.objects.count(), PromotionalBanner.objects.count(), StoryRailItem.objects.count()))

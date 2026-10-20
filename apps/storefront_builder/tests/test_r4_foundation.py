@@ -1,20 +1,13 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.storefront_builder.models import StorefrontLayout, StorefrontLayoutVersion
+from apps.storefront_builder.models import StorefrontLayoutVersion
 from apps.storefront_builder.services import layout_service as svc
 
 from .test_views import StorefrontBuilderViewsTestCase
 
 
 class R4FoundationModelTests(TestCase):
-    def test_r4_editor_is_enabled_by_default(self):
-        # Pre-Task-10 remediation (R4 live cutover) — R4 is now the
-        # canonical merchant editor; the field remains a non-blocking
-        # compatibility flag a Store can be explicitly pinned back with
-        # (see R4EditorRouteGateTests below), never a blocking rollout gate.
-        field = StorefrontLayout._meta.get_field("r4_editor_enabled")
-        self.assertTrue(field.default)
 
     def test_draft_edit_revision_starts_at_zero(self):
         field = StorefrontLayoutVersion._meta.get_field("edit_revision")
@@ -26,15 +19,8 @@ class R4EditorRouteGateTests(StorefrontBuilderViewsTestCase):
         super().setUp()
         self.layout = svc.get_or_create_layout(self.store)
 
-    def test_r4_route_is_unavailable_when_gate_is_off(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
-        self.assertEqual(response.status_code, 404)
 
     def test_r4_route_renders_one_shell_when_gate_is_on(self):
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         response = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-r4-shell="true"')
@@ -52,8 +38,6 @@ class R4EditorRouteGateTests(StorefrontBuilderViewsTestCase):
         # legacy editor body; this test's whole point is the real model
         # default (True), so it explicitly restores it rather than
         # inheriting the base's pin.
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         response = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-r4-shell="true"')
@@ -74,8 +58,6 @@ class DashboardNavRoutesToR4Tests(StorefrontBuilderViewsTestCase):
         # Pre-Task-10 CORRECTIVE closure (Item 2) — restore the real model
         # default (True); the shared base fixture now pins it False for
         # every OTHER test in this file (see the sibling test above).
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         response = self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
         self.assertEqual(response.status_code, 200)
         r4_url = reverse("dashboard:storefront-builder-r4-editor")
@@ -90,7 +72,6 @@ class DashboardNavRoutesToR4Tests(StorefrontBuilderViewsTestCase):
         # docs/qa_evidence/.../pre_task10_r4_cutover.md), just no longer
         # the primary nav target (it stays in the command palette).
         self.assertIn(legacy_url, content)
-
 
 
 # ------------------------------------------------------------------------
@@ -110,9 +91,6 @@ class R4DevicePreviewMarkupTests(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
-
     def _editor(self):
         return self.client.get(reverse("dashboard:storefront-builder-r4-editor"))
 
@@ -133,9 +111,15 @@ class R4DevicePreviewMarkupTests(StorefrontBuilderViewsTestCase):
     def test_device_switcher_does_not_introduce_a_second_preview_frame(self):
         response = self._editor()
         content = response.content.decode()
-        # Still exactly one preview iframe, the canonical #r4PreviewFrame.
-        self.assertEqual(content.count("<iframe"), 1)
-        self.assertIn('id="r4PreviewFrame"', content)
+        # Still exactly one PREVIEW iframe, the canonical #r4PreviewFrame. The only other frame is the settings
+        # workspace's live view of the same section: a static element with no src in the markup (r4_editor.js points
+        # it at the SAME draft preview URL when a section's settings open) — never a second renderer.
+        self.assertEqual(content.count("<iframe"), 2)
+        self.assertEqual(content.count('id="r4PreviewFrame"'), 1)
+        live = content[content.index("<iframe data-r4-ws-live-frame"):]
+        live = live[:live.index(">")]
+        self.assertNotIn("src=", live)
+        self.assertNotIn("srcdoc", live)
         # No srcdoc / fake preview markup.
         self.assertNotIn("srcdoc", content)
 

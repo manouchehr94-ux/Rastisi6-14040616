@@ -28,18 +28,19 @@ class PublicHomepageIntegrationTests(TestCase):
         self.store = Store.objects.get(slug="akhlaghi")
         _verified_domain(self.store, HOST)
 
-    def test_legacy_homepage_used_when_never_published(self):
+    def test_engine_homepage_is_served_even_when_never_published(self):
+        """There is no legacy homepage: a Store that never published gets the deterministic engine default."""
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
         template_names = [t.name for t in resp.templates if t.name]
-        self.assertIn("catalog/home.html", template_names)
-        self.assertNotIn("catalog/home_visual.html", template_names)
+        self.assertIn("catalog/home_visual.html", template_names)
+        self.assertNotIn("catalog/home.html", template_names)
 
-    def test_legacy_homepage_still_used_while_draft_exists_but_unpublished(self):
+    def test_engine_homepage_is_served_while_an_unpublished_draft_exists(self):
         svc.get_or_create_draft(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         template_names = [t.name for t in resp.templates if t.name]
-        self.assertIn("catalog/home.html", template_names)
+        self.assertIn("catalog/home_visual.html", template_names)
 
     def test_visual_homepage_used_after_first_publish(self):
         svc.get_or_create_draft(self.store)
@@ -176,7 +177,7 @@ class PublicHomepageIntegrationTests(TestCase):
         category = Category.objects.create(store=self.store, name="دسته صفحه اصلی", slug="c-home-ps")
         product = Product.objects.create(
             store=self.store, vendor=vendor, category=category, name="کالای صفحه اصلی خاص",
-            slug="home-ps-p1", sku="SKU-HOME-PS-1", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            slug="home-ps-p1", sku="SKU-HOME-PS-1", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
         )
         collection_service.add_product(collection, product)
 
@@ -199,9 +200,9 @@ class PublicHomepageIntegrationTests(TestCase):
         """Acceptance Batch 1 (post-U11): a product_section resolving to
         zero products (here: a deleted/nonexistent collection) must still
         never crash — the original point of this test — but now correctly
-        renders nothing at all on the public page (see
-        ``render_service.hide_empty_public_sections``) instead of showing
-        its title/shell over an empty grid."""
+        keeps its place on the public page with a neutral, non-administrative
+        note (owner contract: template-owned sections are never dropped for
+        lack of data)."""
         draft = svc.get_or_create_draft(self.store)
         StorefrontSection.objects.create(
             version=draft, section_key="product_section", order=999,
@@ -214,7 +215,9 @@ class PublicHomepageIntegrationTests(TestCase):
         svc.publish(self.store)
         resp = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST)
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, "کالکشن حذف‌شده")
+        self.assertContains(resp, "کالکشن حذف‌شده")                     # the section (its title) stays
+        self.assertContains(resp, 'data-empty-state="product"')
+        self.assertNotContains(resp, "با افزودن کالای واجد شرایط")      # no Studio instruction for shoppers
 
     def test_view_all_link_actually_renders_on_public_page(self):
         """رگرسیون: ``view_all_url`` قبلاً در include مشترکِ
@@ -231,7 +234,7 @@ class PublicHomepageIntegrationTests(TestCase):
         category = Category.objects.create(store=self.store, name="دسته دکمه", slug="c-viewall")
         product = Product.objects.create(
             store=self.store, vendor=vendor, category=category, name="کالای دکمه مشاهده همه",
-            slug="viewall-p1", sku="SKU-VIEWALL-1", price=Decimal("10000"), status=Product.Status.ACTIVE,
+            slug="viewall-p1", sku="SKU-VIEWALL-1", price=Decimal("10000"), status=Product.Status.ACTIVE, stock=5,
         )
         collection_service.add_product(collection, product)
 

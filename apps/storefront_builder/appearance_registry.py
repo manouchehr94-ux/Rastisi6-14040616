@@ -11,7 +11,37 @@
 مثلِ SECTION_REGISTRY، نسخه‌بندی/بازبینیِ آن‌ها با Code Review و git history
 اتفاق می‌افتد، نه با یک migration/admin UI جداگانه. اضافه‌کردنِ Templateی
 جدید یعنی یک ورودیِ جدید اینجا (تک‌تکِ فروشگاه‌ها بدونِ migration بلافاصله
-می‌توانند آن را انتخاب کنند)."""
+می‌توانند آن را انتخاب کنند).
+
+COLOR RESOLUTION CONTRACT — the ONE token-resolution authority
+==============================================================
+Every colour the storefront paints resolves through this module (``resolve_colors`` → ``resolve_theme_roles`` →
+``resolve_section_tones``; accessible *usage* colours are then derived from the result in ``accessible_colors``), for Preview and
+Published alike. Precedence, lowest → highest, per property category:
+
+  1. Engine / component defaults ........ ``DEFAULT_COLORS`` and the CSS fallbacks in ``tokens.css`` (a Store with no palette).
+  2. Ready Template baseline ............ the template's recipe writes ``palette_slug`` (+ any overrides) into the Draft's
+                                          ``appearance_config`` and snapshots it; it is a *starting configuration*, never a layer
+                                          that is re-applied on top of later choices ("reset to baseline" restores it on request).
+  3. Selected palette ................... ``PaletteDefinition.colors`` (8 base colours), ``theme_roles`` (region roles) and
+                                          ``section_tones``; a role the palette does not define is derived from the final base colours.
+  4. Merchant global overrides .......... ``appearance_config.color_overrides`` (base colours) and ``theme_overrides`` (region roles).
+                                          Base-colour overrides REACH every role that is derived from, or is identical to, that base
+                                          colour in the palette (so overriding ``surface`` repaints header / nav / card surfaces);
+                                          a role the palette makes deliberately different keeps the palette value until the merchant
+                                          sets that role itself (``theme_overrides`` always wins over everything below it).
+  5. Explicit section / component ....... ``StorefrontSection.settings`` (Background, internal card Surface, ink, campaign panel,
+                                          borders) — stored on the section, so a global palette change never rewrites them; they sit
+                                          above every global layer for that section only.
+
+Switching the palette changes the INHERITED colours (layer 3) only: the merchant's explicit global overrides (layer 4) and every
+layer-5 value survive by default. The one thing a palette switch does drop is colours that were never a merchant choice — values
+a Ready Template installed and the merchant did not modify, and bootstrap carry-over. Origin is decided PER PROPERTY by comparing each
+stored value with the template baseline snapshot (``override_origins``), for base colours and region colours alike, so changing one
+template colour makes only that colour the merchant's.
+Clearing ONE override (``appearance.update`` with a ``null`` value) returns just that property to the layer below it; clearing ALL
+global overrides is the explicit, labelled action ``appearance.update`` ``clear_global_color_overrides`` — never a side effect. A store-specific custom palette is exactly ``palette_slug`` + ``color_overrides`` /
+``theme_overrides`` on that Store's own Draft/Published version: it never mutates ``PALETTE_REGISTRY`` and is invisible to other Stores."""
 
 from __future__ import annotations
 
@@ -170,47 +200,71 @@ THEME_ROLE_KEYS = (
     "price",
 )
 
+#: The base colour each region role is derived from when the palette does not define the role (and the colour a palette role
+#: "follows" when it is identical to it). Single source for both the derivation and the merchant-override propagation below.
+ROLE_BASE_COLOR = {
+    "header_bg": "surface", "header_text": "text",
+    "nav_bg": "surface", "nav_text": "text",
+    "card_bg": "surface",
+    "footer_bg": "text", "footer_text": "surface",
+    "price": "accent",
+}
+
+
+def _same_hex(a, b) -> bool:
+    return isinstance(a, str) and isinstance(b, str) and a.strip().upper() == b.strip().upper()
+
+
+def _palette_of(appearance_config: dict):
+    slug = appearance_config.get("palette_slug")
+    return get_palette(slug) if slug else None
+
+
+def _palette_base_colors(appearance_config: dict) -> dict:
+    palette = _palette_of(appearance_config)
+    return dict(palette.colors) if palette is not None else dict(DEFAULT_COLORS)
+
+
+def _derived_roles(colors: dict) -> dict[str, str]:
+    return {role: colors[base] for role, base in ROLE_BASE_COLOR.items()}
+
+
+def _palette_roles(appearance_config: dict) -> dict[str, str]:
+    """Region roles at precedence layers 3+4a: derived from the final base colours, replaced by the palette's explicit roles —
+    except a palette role that is just its own base colour keeps FOLLOWING that base colour when the merchant overrode it."""
+    colors = resolve_colors(appearance_config)
+    palette = _palette_of(appearance_config)
+    roles = _derived_roles(colors)
+    if palette is not None and palette.theme_roles:
+        base = _palette_base_colors(appearance_config)
+        overrides = appearance_config.get("color_overrides") or {}
+        for role, value in palette.theme_roles.items():
+            base_key = ROLE_BASE_COLOR.get(role)
+            if base_key in overrides and _same_hex(value, base.get(base_key)):
+                continue  # the palette never meant this role to differ from its base colour
+            roles[role] = value
+    return roles
+
 
 def resolve_theme_roles(appearance_config: dict) -> dict[str, str]:
-    """رنگ‌های ناحیه‌ایِ کل فروشگاه.
+    """رنگ‌های ناحیه‌ایِ کل فروشگاه — لایه‌های ۳ و ۴ از «COLOR RESOLUTION CONTRACT» بالا.
 
-    نقش‌های پایه از رنگ‌های نهاییِ پالت مشتق می‌شوند؛ پالت‌های «تم کامل»
-    می‌توانند بعضی/همه‌ی نقش‌ها را دقیق‌تر تعریف کنند. در آخر overrideهای
-    دستی مرچنت اعمال می‌شوند. هیچ CSS/Store-specific branch لازم نیست.
-    """
-    colors = resolve_colors(appearance_config)
-    palette_slug = appearance_config.get("palette_slug")
-    palette = get_palette(palette_slug) if palette_slug else None
-
-    roles = {
-        "header_bg": colors["surface"],
-        "header_text": colors["text"],
-        "nav_bg": colors["surface"],
-        "nav_text": colors["text"],
-        "card_bg": colors["surface"],
-        "footer_bg": colors["text"],
-        "footer_text": colors["surface"],
-        "price": colors["accent"],
-    }
-    if palette is not None and palette.theme_roles:
-        roles.update(palette.theme_roles)
-
+    نقش‌های پایه از رنگ‌های نهاییِ پالت (بعد از overrideهای مرچنت) مشتق می‌شوند؛ پالت‌های «تم کامل» می‌توانند نقش‌ها را دقیق‌تر
+    تعریف کنند؛ در آخر ``theme_overrides`` مرچنت بالاتر از همه می‌نشیند. هیچ CSS/Store-specific branch لازم نیست."""
     overrides = appearance_config.get("theme_overrides") or {}
-    return {**roles, **overrides}
+    return {**_palette_roles(appearance_config), **overrides}
 
 
 def resolve_section_tones(appearance_config: dict) -> tuple[str, str, str, str, str]:
     """پنج tone سراسری برایِ ردیف‌ها/سطوح رنگی.
 
-    اگر خود Palette toneهای کیوریت‌شده داشته باشد و مرچنت رنگ‌های Palette
-    را دستی override نکرده باشد، همان‌ها استفاده می‌شوند. در غیر این صورت
-    toneها از رنگ‌های نهاییِ همان فروشگاه مشتق می‌شوند؛ بنابراین شخصی‌سازی
-    دستی هم رفتار قابل‌پیش‌بینی دارد.
+    toneها فقط به ``primary``/``secondary``/``accent`` وابسته‌اند: اگر Palette toneهای کیوریت‌شده داشته باشد و مرچنت هیچ‌کدام از این
+    سه رنگ را override نکرده باشد، همان‌ها استفاده می‌شوند (override کردنِ ``surface`` یا ``text`` toneهای کیوریت‌شده را از بین
+    نمی‌برد). در غیر این صورت toneها از رنگ‌های نهاییِ همان فروشگاه مشتق می‌شوند؛ بنابراین شخصی‌سازیِ دستی هم قابل‌پیش‌بینی است.
     """
-    palette_slug = appearance_config.get("palette_slug")
-    palette = get_palette(palette_slug) if palette_slug else None
+    palette = _palette_of(appearance_config)
     overrides = appearance_config.get("color_overrides") or {}
-    if palette is not None and palette.section_tones and not overrides:
+    if palette is not None and palette.section_tones and not (set(overrides) & {"primary", "secondary", "accent"}):
         return palette.section_tones
 
     from apps.core.color_utils import mix_hex
@@ -224,6 +278,86 @@ def resolve_section_tones(appearance_config: dict) -> tuple[str, str, str, str, 
         mix_hex(colors["secondary"], colors["accent"], 0.45),
     )
 
+
+OVERRIDE_GROUPS = ("color_overrides", "theme_overrides")
+
+
+def override_origins(appearance_config: dict, baseline_snapshot: dict | None = None) -> dict[str, dict[str, str]]:
+    """Per-PROPERTY origin of every stored global override: ``{group: {key: "template" | "carry_over" | "merchant"}}``.
+
+    ``color_overrides_customized`` is ONE boolean and cannot say which colours the merchant touched, so the origin of each stored
+    value comes from comparing it with the Ready Template baseline snapshot recorded at install (``template_baseline_snapshot
+    ["appearance"]``): a value identical to what the template installed for that key is ``template``; anything else is the
+    merchant's — except a base colour that is not in the baseline while the merchant has never customised base colours, which is
+    ``carry_over`` (bootstrap mirror of the Store's legacy colours: never a deliberate choice). No new stored state."""
+    installed = (baseline_snapshot or {}).get("appearance") or {}
+    customized = bool(appearance_config.get("color_overrides_customized"))
+    origins: dict[str, dict[str, str]] = {}
+    for group in OVERRIDE_GROUPS:
+        stored = appearance_config.get(group) or {}
+        template_values = installed.get(group) or {}
+        origins[group] = {}
+        for key, value in stored.items():
+            if key in template_values and _same_hex(value, template_values[key]):
+                origins[group][key] = "template"
+            elif group == "color_overrides" and not customized:
+                origins[group][key] = "carry_over"
+            else:
+                origins[group][key] = "merchant"
+    return origins
+
+
+def merchant_overrides(appearance_config: dict, baseline_snapshot: dict | None = None) -> dict[str, dict[str, str]]:
+    """The overrides that are the MERCHANT'S (the ones a palette switch or a template switch must keep)."""
+    origins = override_origins(appearance_config, baseline_snapshot)
+    return {
+        group: {k: v for k, v in (appearance_config.get(group) or {}).items() if origins[group].get(k) == "merchant"}
+        for group in OVERRIDE_GROUPS
+    }
+
+
+def resolve_color_provenance(appearance_config: dict, baseline_snapshot: dict | None = None) -> dict:
+    """Where every global colour comes from — for the Studio's "inherited vs overridden" display and per-property reset.
+
+    ``colors`` (8 base colours) and ``roles`` (8 region roles), each ``{key: {"value", "default", "source", "stored"}}`` where
+    ``default`` is what the property resolves to WITHOUT its stored override (the value a reset returns it to), ``stored`` says an
+    override is stored for it, and ``source`` is ``"override"`` (the merchant's own), ``"template"`` (installed by the Ready Template
+    and not modified), ``"carry_over"`` (legacy Store colour mirror), ``"palette"`` (selected palette defines it) or ``"default"`` /
+    ``"derived"`` (engine default / derived from the base colours). The origin of each stored value is per property
+    (``override_origins``)."""
+    palette = _palette_of(appearance_config)
+    base = _palette_base_colors(appearance_config)
+    color_overrides = appearance_config.get("color_overrides") or {}
+    theme_overrides = appearance_config.get("theme_overrides") or {}
+    origins = override_origins(appearance_config, baseline_snapshot)
+    source_of = {"merchant": "override", "template": "template", "carry_over": "carry_over"}
+
+    colors = {}
+    for key, default in base.items():
+        stored = key in color_overrides  # a stored override is explicit even if it now equals the palette's
+        colors[key] = {
+            "value": color_overrides[key] if stored else default,
+            "default": default,
+            "stored": stored,
+            "source": source_of[origins["color_overrides"][key]] if stored else ("palette" if palette is not None else "default"),
+        }
+
+    no_role_override = {**appearance_config, "theme_overrides": {}}
+    inherited = resolve_theme_roles(no_role_override)
+    explicit = (
+        {role for role, value in (palette.theme_roles or {}).items() if _same_hex(value, inherited.get(role))}
+        if palette is not None else set()
+    )  # roles the palette really defines (a role following an overridden base colour is "derived")
+    roles = {}
+    for role in THEME_ROLE_KEYS:
+        stored = role in theme_overrides
+        roles[role] = {
+            "value": theme_overrides[role] if stored else inherited[role],
+            "default": inherited[role],
+            "stored": stored,
+            "source": source_of[origins["theme_overrides"][role]] if stored else ("palette" if role in explicit else "derived"),
+        }
+    return {"colors": colors, "roles": roles}
 
 
 # ---------------------------------------------------------------- تم‌های کامل

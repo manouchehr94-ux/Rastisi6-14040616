@@ -43,6 +43,14 @@ class Vendor(TimeStampedModel):
         return self.name
 
 
+class PriceMode(models.TextChoices):
+    """حالتِ نمایشِ قیمت. ``inquiry`` = به‌جایِ بهای عددی «استعلام قیمت» و
+    بدونِ امکانِ خرید (مرجعِ واحد: ``catalog.services.pricing_mode_service``)."""
+
+    STANDARD = "standard", "قیمت عادی"
+    INQUIRY = "inquiry", "استعلام قیمت"
+
+
 class Category(TimeStampedModel):
     """دسته‌بندی درختی، خودارجاع (حداقل دو سطح) — مالکیت مستقیم Store."""
 
@@ -66,6 +74,10 @@ class Category(TimeStampedModel):
     )
     order = models.PositiveIntegerField("ترتیب", default=0)
     is_active = models.BooleanField("فعال", default=True)
+    price_mode = models.CharField(
+        "حالت قیمت‌گذاری گروه", max_length=10, choices=PriceMode.choices, default=PriceMode.STANDARD,
+        help_text="«استعلام قیمت» برای همه‌ی کالاهای این گروه (و زیرگروه‌هایش) اعمال می‌شود، مگر کالایی صراحتاً مستثنا شده باشد.",
+    )
 
     # ردیابی صرفاً اطلاعاتی منشأ نصب صنف (Phase 1E) — نگاه کنید به ADR-22.
     # این دسته پس از نصب کاملاً مالکیت Store را دارد؛ حذف قالب پلتفرم هرگز
@@ -179,6 +191,22 @@ class Product(TimeStampedModel):
     discount_percent = models.PositiveSmallIntegerField(
         "درصد تخفیف", default=0, validators=[MinValueValidator(0), MaxValueValidator(100)]
     )
+    # بازه‌ی اعتبارِ تخفیف (اختیاری). هر دو خالی = تخفیفِ بدونِ زمان‌بندی (رفتارِ
+    # قبلی، بدونِ تغییر). مرجعِ واحدِ «آیا الان تخفیف معتبر است» —
+    # قیمتِ نهایی، سبد/پرداخت، کارت و «پیشنهاد شگفت‌انگیز» همگی از همین بازه
+    # می‌خوانند؛ زمانِ پایانِ تایمر هرگز از ساعتِ مرورگر یا زمانِ رندر ساخته نمی‌شود.
+    discount_starts_at = models.DateTimeField("شروع اعتبار تخفیف", null=True, blank=True)
+    discount_ends_at = models.DateTimeField("پایان اعتبار تخفیف", null=True, blank=True)
+
+    # «استعلام قیمت»: انتخابِ صریحِ مرچنت برایِ همین کالا ('' = ارث‌بری از گروه/
+    # کالکشن؛ ``standard`` = حتی اگر گروهش استعلامی است، قیمت عادی؛
+    # ``inquiry`` = استعلامی). ``is_price_inquiry`` مقدارِ *مؤثرِ* محاسبه‌شده است
+    # (دِنُرمالایز برای کوئری/کارت/سبد) و فقط توسطِ ``pricing_mode_service``
+    # نوشته می‌شود؛ هرگز دستی ویرایش نمی‌شود. قیمتِ واقعیِ کالا دست‌نخورده می‌ماند.
+    price_mode_override = models.CharField(
+        "حالت قیمت‌گذاری کالا", max_length=10, choices=PriceMode.choices, blank=True, default="",
+    )
+    is_price_inquiry = models.BooleanField("استعلام قیمت (مؤثر)", default=False, db_index=True, editable=False)
 
     # کادوپیچی — فقط وقتی مؤثر است که کادوپیچی در ``ShopSettings`` هم فعال
     # باشد. تنوع‌ها (variants) همیشه از کالای والد ارث می‌برند.
@@ -303,10 +331,29 @@ class Product(TimeStampedModel):
         if errors:
             raise ValidationError(errors)
 
+    def is_discount_active(self, now=None) -> bool:
+        """آیا تخفیفِ این کالا در لحظه‌ی ``now`` معتبر است (درصد > ۰ و داخلِ بازه)."""
+        if not self.discount_percent:
+            return False
+        if self.discount_starts_at is None and self.discount_ends_at is None:
+            return True
+        from django.utils import timezone
+
+        now = now or timezone.now()
+        if self.discount_starts_at is not None and now < self.discount_starts_at:
+            return False
+        if self.discount_ends_at is not None and now >= self.discount_ends_at:
+            return False
+        return True
+
+    def active_discount_percent(self, now=None) -> int:
+        """درصدِ تخفیفِ *معتبر* در لحظه‌ی ``now`` (۰ اگر منقضی/هنوز شروع‌نشده)."""
+        return self.discount_percent if self.is_discount_active(now) else 0
+
     @property
     def final_price(self):
-        """قیمت نهایی = price * (1 - discount_percent/100)، گرد شده."""
-        factor = (Decimal(100) - self.discount_percent) / Decimal(100)
+        """قیمت نهایی = price * (1 - تخفیفِ معتبر/100)، گرد شده."""
+        factor = (Decimal(100) - self.active_discount_percent()) / Decimal(100)
         return (self.price * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
     @property
@@ -1343,6 +1390,10 @@ class MerchantCollection(TimeStampedModel):
     description = models.TextField("توضیحات", blank=True)
     image = models.ImageField("تصویر", upload_to="collections/images/", null=True, blank=True)
     is_active = models.BooleanField("فعال", default=True)
+    price_mode = models.CharField(
+        "حالت قیمت‌گذاری کالکشن", max_length=10, choices=PriceMode.choices, default=PriceMode.STANDARD,
+        help_text="«استعلام قیمت» برای همه‌ی کالاهای عضو این کالکشن اعمال می‌شود، مگر کالایی صراحتاً مستثنا شده باشد.",
+    )
     collection_type = models.CharField(
         "نوع کالکشن", max_length=10, choices=CollectionType.choices, default=CollectionType.MANUAL,
     )

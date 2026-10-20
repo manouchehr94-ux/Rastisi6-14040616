@@ -137,9 +137,15 @@ class CatalogTests(Base):
             None, current_template_key=None, current_template_version=None,
         )
         self.assertEqual([c["thumbnail_url"] for c in cards], [c["thumbnail_url"] for c in shared])
-        from apps.storefront_builder import views as builder_views
+        import inspect
 
-        self.assertIs(builder_views.build_ready_template_cards, ready_template_card_service.build_ready_template_cards)
+        from apps.storefront_builder import r4_views
+
+        # The Design Studio (the one official gallery) builds its catalog from this very function.
+        self.assertIn(
+            "ready_template_card_service import build_ready_template_cards",
+            " ".join(inspect.getsource(r4_views._build_studio_context).split()),
+        )
 
     def test_portal_has_no_second_catalog_or_application_logic(self):
         portal = Path(portal_app_module.__file__).resolve().parent

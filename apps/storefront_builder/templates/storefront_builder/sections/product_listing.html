@@ -80,7 +80,10 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
           فقط کالاهای موجود
         </label>
 
-        <button type="submit" class="btn btn-primary" style="width:100%">اعمال فیلتر</button>
+        <div class="plp-actions">
+          <button type="submit" class="btn btn-primary plp-apply">اعمال فیلتر</button>
+          <a href="{% url 'catalog:product-list' %}" class="plp-reset plp-clear-all">حذف همه‌ی فیلترها</a>
+        </div>
       </details>
     </form>
 
@@ -153,15 +156,16 @@ may opt into ``"sidebar_dense"`` too; nothing here names a Store/template.
           </select>
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width:100%">اعمال فیلتر</button>
-        <a href="{% url 'catalog:product-list' %}" class="plp-reset">حذف همه‌ی فیلترها</a>
+        <div class="plp-actions">
+          <button type="submit" class="btn btn-primary plp-apply">اعمال فیلتر</button>
+          <a href="{% url 'catalog:product-list' %}" class="plp-reset plp-clear-all">حذف همه‌ی فیلترها</a>
+        </div>
       </form>
     </details>
 
-    <div>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-        <span id="plpLoading" class="htmx-indicator plp-loading">⏳ در حال بارگذاری...</span>
-      </div>
+    <div class="plp-content-col">
+      {% comment %}The loading indicator is overlaid (absolute), so it no longer reserves an empty row above the grid.{% endcomment %}
+      <span id="plpLoading" class="htmx-indicator plp-loading plp-loading-overlay">⏳ در حال بارگذاری...</span>
       <div id="product-results" class="plp-results">
         {% include "catalog/partials/product_list_results.html" with card_settings=settings.card %}
       </div>

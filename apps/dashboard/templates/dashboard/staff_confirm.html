@@ -1,0 +1,25 @@
+{% extends "dashboard/base_admin.html" %}
+{% block title %}{{ title }} | پنل مدیریت{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_sub %}اعضای تیم — این کار تا شما تأیید نکنید انجام نمی‌شود{% endblock %}
+{% block content %}
+<div class="form-card">
+  <div class="warning-box">
+    <strong>{{ summary }}</strong>
+    {% if consequence %}<p>{{ consequence }}</p>{% endif %}
+  </div>
+  <form method="post" action="">
+    {% csrf_token %}
+    <input type="hidden" name="confirm_token" value="{{ token }}">
+    {% for key, value in values.items %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    {% if require_phone %}
+    <label class="field-label" for="id_confirm_phone">برای تأیید، شمارهٔ موبایلِ مالکِ جدید را تایپ کنید ({{ membership.user.username }})</label>
+    <input class="inp" id="id_confirm_phone" name="confirm_phone" dir="ltr" inputmode="tel" autocomplete="off" required style="max-width:260px;display:block;margin:6px 0 14px">
+    {% endif %}
+    <div class="btn-row">
+      <button type="submit" class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}">{{ action_label }}</button>
+      <a href="{{ cancel_url }}" class="btn btn-secondary">انصراف</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

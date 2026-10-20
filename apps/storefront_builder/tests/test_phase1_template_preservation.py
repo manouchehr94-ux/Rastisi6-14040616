@@ -99,8 +99,6 @@ class Phase1PreservationBase(TestCase):
         self.assertTrue(self.template_a.is_ready_template, f"{TEMPLATE_A_KEY} must be Ready")
         self.assertTrue(self.template_b.is_ready_template, f"{TEMPLATE_B_KEY} must be Ready")
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         preset_service.apply_preset(self.draft, self.template_a)
         self.draft.refresh_from_db()
@@ -115,6 +113,7 @@ class Phase1PreservationBase(TestCase):
             base_revision=self.draft.edit_revision,
             template_key=self.template_b.key,
             template_version=self.template_b.version,
+            mode="preserve",  # explicit opt-in: these tests cover the preservation-first merge algorithm
         )
         return self._active_draft()
 

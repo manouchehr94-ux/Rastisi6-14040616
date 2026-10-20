@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}صورتحساب | پنل مدیریت{% endblock %}
 {% block page_title %}صورتحساب و پرداخت{% endblock %}
 {% block page_sub %}وضعیتِ اشتراک، فاکتورِ بعدی و حسابِ صورتحساب{% endblock %}
@@ -13,7 +14,7 @@
           <div>{% if summary.access_state == "full" %}<span class="badge b-green">{{ summary.status_display }}</span>
           {% elif summary.access_state == "grace" %}<span class="badge b-amber">{{ summary.status_display }}</span>
           {% else %}<span class="badge b-red">{{ summary.status_display }}</span>{% endif %}</div></div>
-        {% if summary.current_period_end %}<div><div style="color:var(--muted);font-size:12px">پایانِ دوره</div><div>{{ summary.current_period_end|date:"Y-m-d" }}</div></div>{% endif %}
+        {% if summary.current_period_end %}<div><div style="color:var(--muted);font-size:12px">پایانِ دوره</div><div>{{ summary.current_period_end|jalali }}</div></div>{% endif %}
       </div>
       {% if summary.warning %}<div style="margin-top:14px;padding:10px 14px;border-radius:8px;background:#fef3c7;color:#92400e">{{ summary.warning }}</div>{% endif %}
     {% else %}<p style="color:var(--muted)">اشتراکِ جاری وجود ندارد.</p>{% endif %}
@@ -26,7 +27,7 @@
     {% if next_open_invoice %}
       <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:center">
         <div><div style="color:var(--muted);font-size:12px">شماره</div><div>{{ next_open_invoice.number }}</div></div>
-        <div><div style="color:var(--muted);font-size:12px">سررسید</div><div>{{ next_open_invoice.due_at|date:"Y-m-d" }}</div></div>
+        <div><div style="color:var(--muted);font-size:12px">سررسید</div><div>{{ next_open_invoice.due_at|jalali }}</div></div>
         <div><div style="color:var(--muted);font-size:12px">مبلغِ باقی‌مانده</div><div style="font-weight:700">{{ next_open_invoice.amount_due }} {{ next_open_invoice.currency }}</div></div>
         {% if next_open_invoice.status == "past_due" %}<span class="badge b-red">معوق</span>{% endif %}
         <div style="margin-inline-start:auto;display:flex;gap:8px">

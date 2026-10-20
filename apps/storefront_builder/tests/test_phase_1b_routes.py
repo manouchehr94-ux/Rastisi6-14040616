@@ -48,12 +48,12 @@ class LegacyStoreRoutesUnaffectedTests(TestCase):
         cache.clear()
         self.store = _akhlaghi()
 
-    def test_home_still_renders_legacy_template_when_never_published(self):
+    def test_home_renders_the_engine_template_when_never_published(self):
         resp = self.client.get(reverse("catalog:home"))
         self.assertEqual(resp.status_code, 200)
         template_names = [t.name for t in resp.templates if t.name]
-        self.assertIn("catalog/home.html", template_names)
-        self.assertNotIn("catalog/home_visual.html", template_names)
+        self.assertIn("catalog/home_visual.html", template_names)
+        self.assertNotIn("catalog/home.html", template_names)
 
     def test_product_list_renders_normally_without_a_published_layout(self):
         _product(self.store, "legacy-pl-1")

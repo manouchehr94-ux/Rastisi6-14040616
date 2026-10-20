@@ -1,5 +1,7 @@
 from django.urls import reverse
 
+from ._r4_support import r4_mutate
+
 from apps.storefront_builder.models import StorefrontPage, StorefrontSection
 from apps.storefront_builder.services import edit_history_service, layout_service
 
@@ -30,51 +32,56 @@ class Phase275HistoryIdentityTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(rows[0]["id"], section.pk)
         self.assertEqual(str(rows[0]["stable_id"]), str(section.stable_id))
 
+    def _history(self, command):
+        import json
+
+        self.draft.refresh_from_db()
+        return self.client.post(
+            reverse("dashboard:storefront-builder-r4-history"),
+            data=json.dumps({"base_revision": self.draft.edit_revision, "command": command}),
+            content_type="application/json",
+        )
+
     def test_toggle_undo_and_redo_preserve_primary_key(self):
         section = self._section()
         original_pk = section.pk
         stable_id = section.stable_id
 
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-section-toggle", args=[original_pk])
-        )
-        self.assertEqual(response.status_code, 200)
+        response = r4_mutate(self.client, self.draft, {"type": "section.toggle_active", "section_id": original_pk})
+        self.assertEqual(response.status_code, 200, response.content[:200])
 
-        undo = self.client.post(reverse("dashboard:storefront-builder-undo"))
+        undo = self._history("undo")
         self.assertEqual(undo.status_code, 200)
         self.assertTrue(undo.json()["ok"])
         restored = self.page.sections.get(stable_id=stable_id)
         self.assertEqual(restored.pk, original_pk)
         self.assertTrue(restored.is_active)
 
-        redo = self.client.post(reverse("dashboard:storefront-builder-redo"))
+        redo = self._history("redo")
         self.assertEqual(redo.status_code, 200)
         self.assertTrue(redo.json()["ok"])
         redone = self.page.sections.get(stable_id=stable_id)
         self.assertEqual(redone.pk, original_pk)
         self.assertFalse(redone.is_active)
 
-    def test_remove_undo_restores_same_pk_and_old_command_url_is_valid(self):
+    def test_remove_undo_restores_same_pk_and_the_same_command_is_valid_again(self):
         section = self._section()
         original_pk = section.pk
         stable_id = section.stable_id
-        remove_url = reverse(
-            "dashboard:storefront-builder-section-remove",
-            args=[original_pk],
-        )
+        remove = {"type": "section.remove", "section_id": original_pk}
 
-        removed = self.client.post(remove_url)
-        self.assertEqual(removed.status_code, 200)
+        removed = r4_mutate(self.client, self.draft, remove)
+        self.assertEqual(removed.status_code, 200, removed.content[:200])
         self.assertFalse(self.page.sections.filter(stable_id=stable_id).exists())
 
-        undo = self.client.post(reverse("dashboard:storefront-builder-undo"))
+        undo = self._history("undo")
         self.assertEqual(undo.status_code, 200)
         self.assertTrue(undo.json()["ok"])
         restored = self.page.sections.get(stable_id=stable_id)
         self.assertEqual(restored.pk, original_pk)
 
-        second_remove = self.client.post(remove_url)
-        self.assertEqual(second_remove.status_code, 200)
+        second_remove = r4_mutate(self.client, self.draft, remove)
+        self.assertEqual(second_remove.status_code, 200, second_remove.content[:200])
         self.assertFalse(self.page.sections.filter(stable_id=stable_id).exists())
 
     def test_legacy_snapshot_without_id_still_restores(self):

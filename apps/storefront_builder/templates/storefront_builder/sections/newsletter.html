@@ -6,9 +6,9 @@ htmx-target از ``closest div`` استفاده می‌کند (نگاه کنید
 ``content/partials/newsletter_form.html``)، پس نیازی به یکتاییِ سراسریِ
 این id نیست.
 {% endcomment %}
-<section class="section" style="text-align:center">
+<section class="section newsletter-section" style="text-align:center">
   {% if settings.title %}<h2><span class="bar"></span>{{ settings.title }}</h2>{% endif %}
-  {% if settings.subtitle %}<p style="color:var(--muted);font-size:13px;margin:-6px 0 16px">{{ settings.subtitle }}</p>{% endif %}
+  {% if settings.subtitle %}<p class="newsletter-sub">{{ settings.subtitle }}</p>{% endif %}
   <div id="newsletter-form-{{ section.pk }}">
     {% include "content/partials/newsletter_form.html" with button_label=settings.button_label %}
   </div>

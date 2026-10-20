@@ -19,7 +19,7 @@ Phase 5 — قلم‌های سبدِ خرید؛ اگر سبد خالی باشد�
     <div class="card-b">
       {% for item in cart_items %}
       <div class="citem">
-        <div class="thumb" style="background:{{ item.product.tint|default:'#eceef3' }}">{{ item.product.icon|default:"🛍️" }}</div>
+        <div class="thumb{% if item.display_image %} has-img{% endif %}" style="background:{{ item.product.tint|default:'#eceef3' }}">{% if item.display_image %}<img src="{{ item.display_image.url }}" data-img-role="thumb" alt="{{ item.display_image.alt }}" loading="lazy" decoding="async" width="74" height="74">{% else %}<span class="thumb-fallback" aria-hidden="true">{{ item.product.icon|default:"🛍️" }}</span>{% endif %}</div>
         <div class="info">
           <b>{{ item.product.name }}</b>
           {% if item.variant %}
@@ -36,7 +36,7 @@ Phase 5 — قلم‌های سبدِ خرید؛ اگر سبد خالی باشد�
                 <b>{% if item.gift_wrap_price_now %}(+{{ item.gift_wrap_price_now|toman }} {{ gift_wrap.scope_hint }}){% else %}(رایگان){% endif %}</b></span>
             </label>
             {% if gift_wrap.description %}<small id="gw-desc-{{ item.id }}" style="color:var(--muted,#6b7280)">{{ gift_wrap.description }}</small>{% endif %}
-            {% if gift_wrap.image_url %}<img src="{{ gift_wrap.image_url }}" alt="نمونه‌ی {{ gift_wrap.title }}" width="64" height="64" loading="lazy" style="border-radius:8px;object-fit:cover">{% endif %}
+            {% if gift_wrap.image_url %}<img src="{{ gift_wrap.image_url }}" data-img-role="thumb" alt="نمونه‌ی {{ gift_wrap.title }}" width="64" height="64" loading="lazy" style="border-radius:8px">{% endif %}
             {% if item.gift_wrap_selected and gift_wrap.message_enabled %}
             <input type="text" name="gift_message" maxlength="200" value="{{ item.gift_message }}" placeholder="پیام کارت هدیه (اختیاری)" aria-label="پیام کارت هدیه برای {{ item.product.name }}"
                    style="width:100%;padding:8px;border:1px solid var(--line,#d9dce3);border-radius:8px">
@@ -46,8 +46,13 @@ Phase 5 — قلم‌های سبدِ خرید؛ اگر سبد خالی باشد�
         </div>
         <div class="right">
           <div class="lp">
+            {% if item.product.is_price_inquiry %}
+            <span class="price-inquiry-label">استعلام قیمت</span>
+            <small>این کالا دیگر قابل خرید مستقیم نیست؛ لطفاً آن را از سبد حذف کنید.</small>
+            {% else %}
             {{ item.unit_price|toman }}
             {% if item.regular_price > item.unit_price %}<small>{{ item.regular_price|toman }}</small>{% endif %}
+            {% endif %}
           </div>
           <div class="stepper">
             <button type="button" hx-post="{% url 'cart:item-update' item.id %}" hx-vals='{"quantity": {{ item.quantity|add:"-1" }}}' hx-target="#cart-container" hx-swap="innerHTML">−</button>

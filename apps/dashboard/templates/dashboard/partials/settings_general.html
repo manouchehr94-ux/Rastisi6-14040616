@@ -1,3 +1,4 @@
+{% load image_guide %}
 {% load persian %}
 <form method="post" action="{% url 'dashboard:settings-shop-info' %}">
   {% csrf_token %}
@@ -9,7 +10,7 @@
         <div class="form-group">
           <label for="id_name">نام فروشگاه</label>
           {{ shop_form.name }}
-          {% for error in shop_form.name.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in shop_form.name.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <div class="form-group"><label for="id_tagline">شعار فروشگاه</label>{{ shop_form.tagline }}</div>
       </div>
@@ -25,7 +26,7 @@
         <div class="form-group">
           <label for="id_contact_email">ایمیل فروشگاه</label>
           {{ shop_form.contact_email }}
-          {% for error in shop_form.contact_email.errors %}<small style="color:var(--red)">{{ error }}</small>{% endfor %}
+          {% for error in shop_form.contact_email.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
       </div>
       <div class="form-group"><label for="id_contact_address">آدرس</label>{{ shop_form.contact_address }}</div>
@@ -33,4 +34,30 @@
   </div>
 
   <button type="submit" class="btn btn-primary">ذخیره اطلاعات فروشگاه</button>
+</form>
+
+<form method="post" action="{% url 'dashboard:settings-identity-assets' %}" enctype="multipart/form-data" style="margin-top:18px" id="identity-assets">
+  {% csrf_token %}
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-head"><h3>🖼️ لوگو و فاوآیکون</h3><span class="hint">دارایی‌های هویتِ فروشگاه — رنگ و قالب را از «ظاهر و طراحی» (Design Studio) تنظیم کنید</span></div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="id_logo">لوگوی فروشگاه (PNG/JPG/WebP، حداکثر ۲ مگابایت)</label>
+          {% if SHOP_LOGO %}<p><img src="{{ SHOP_LOGO.url }}" alt="لوگوی فعلی" style="height:48px;border-radius:8px"></p>{% endif %}
+          <input type="file" name="logo" id="id_logo" accept="image/png,image/jpeg,image/webp">
+          {% image_guide "shop_logo" "logo" %}
+          {% if SHOP_LOGO %}<label style="display:block;margin-top:6px"><input type="checkbox" name="remove_logo"> حذف لوگوی فعلی</label>{% endif %}
+        </div>
+        <div class="form-group">
+          <label for="id_favicon">فاوآیکون</label>
+          <input type="file" name="favicon" id="id_favicon" accept="image/png,image/x-icon,image/vnd.microsoft.icon">
+          {% image_guide "favicon" "favicon" %}
+          <label style="display:block;margin-top:6px"><input type="checkbox" name="remove_favicon"> حذف فاوآیکون فعلی</label>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:6px 0 12px"><a href="{% url 'dashboard:storefront-builder-r4-editor' %}?panel=appearance">ظاهر و طراحی ←</a></p>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary">ذخیره لوگو و فاوآیکون</button>
 </form>

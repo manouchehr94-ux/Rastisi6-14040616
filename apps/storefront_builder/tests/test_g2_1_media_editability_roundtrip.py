@@ -1,19 +1,14 @@
-"""G2.1 Defect C + required round-trip test — EVERYTHING VISIBLY RENDERED IN
-PREVIEW MUST HAVE A TRUTHFUL EDIT PATH.
+"""G2.1 Defect C (re-based by ARCH-02) — EVERYTHING VISIBLY RENDERED IN PREVIEW MUST HAVE A TRUTHFUL EDIT PATH.
 
-Root cause: the demo seed creates store-global (section=NULL) HeroSlide /
-PromotionalBanner / StoryRailItem rows. The renderer (render_service) falls back
-to those store-global rows when a section has none of its own, so they ARE
-visibly rendered. But the Builder media CRUD filtered strictly
-``model.objects.filter(section=section)``, so the manager showed "0 items" and a
-direct edit URL for a visibly-rendered global row 404'd.
+The demo's images are the store's SHARED default media (``section=NULL``): store-owned,
+template-independent, rendered by every section that has no media of its own
+(``render_service._scoped_*``). The R4 media manager must therefore never report "0 items"
+for a section that visibly renders them, and the truthful edit path is explicit:
 
-Contract asserted here (exercised through the REAL view/route boundary that
-produced the 404):
-  VISIBLE IN PREVIEW  ->  SOURCE IDENTITY RESOLVES  ->  EDIT ENDPOINT OPENS (200)
-plus: opening the media list for a section that renders fallback rows must NOT
-report zero items, and mutating a shared store-global item from one section must
-NOT silently mutate another section's rendered content (copy-on-write / adopt).
+  VISIBLE IN PREVIEW  ->  LISTED AS "DEFAULT MEDIA" IN THE SECTION  ->  ADOPT (copy-on-write)
+  ->  THE COPY OPENS FOR EDITING (200)
+
+while the shared originals and every OTHER section's rendered content stay untouched.
 """
 
 import shutil
@@ -84,66 +79,80 @@ class G2_1MediaEditabilityRoundTripTests(TestCase):
 
     # --------------------------------------------------------------- list not zero
 
-    def test_hero_media_list_is_not_falsely_zero_when_fallback_renders(self):
+    def _host(self):
+        return {"HTTP_HOST": f"{self.store.admin_subdomain}.rastisi.localhost"}
+
+    def test_hero_media_list_is_not_falsely_zero_when_shared_media_renders(self):
+        from apps.storefront_builder.services import media_defaults_service
+
         hero = self._section("hero_banner")
-        # renderer shows fallback slides
         rendered = list(render_service._scoped_hero_slides(self.store, hero))
         self.assertGreater(len(rendered), 0)
+        self.assertTrue(all(r.section_id is None for r in rendered))  # shared, store-owned
+        state = media_defaults_service.default_media_state(hero, HeroSlide)
+        self.assertTrue(state.in_effect)
+        self.assertEqual([r.pk for r in state.items], [r.pk for r in rendered])
         url = reverse("dashboard:storefront-builder-section-media-list", args=[hero.pk, "hero-slides"])
-        resp = self.client.get(url, HTTP_HOST=f"{self.store.admin_subdomain}.rastisi.localhost")
+        resp = self.client.get(url, **self._host())
         self.assertEqual(resp.status_code, 200)
-        # the manager must surface the same rendered items (not "0 items")
-        self.assertEqual(len(resp.context["items"]), len(rendered))
+        self.assertContains(resp, "تصاویر پیش‌فرض فروشگاه")  # the manager surfaces them (not "0 items")
+        self.assertContains(resp, "قابل‌ویرایش کردن تصاویر پیش‌فرض")
 
-    # --------------------------------------------------------------- edit opens (no 404)
+    # --------------------------------------------------------------- adopt -> edit opens (no 404)
 
-    def test_edit_of_a_visibly_rendered_hero_item_opens_not_404(self):
+    def _adopt(self, section, kind):
+        url = reverse("dashboard:storefront-builder-section-media-adopt-defaults", args=[section.pk, kind])
+        # htmx request -> the endpoint returns the refreshed list body (200) instead of a redirect
+        return self.client.post(url, HTTP_HX_REQUEST="true", **self._host())
+
+    def test_adopting_the_shared_hero_slides_gives_each_a_working_edit_path(self):
         hero = self._section("hero_banner")
+        shared_before = list(HeroSlide.objects.filter(store=self.store, section__isnull=True).values_list("pk", "is_active", "title"))
         rendered = list(render_service._scoped_hero_slides(self.store, hero))
-        item = rendered[0]
-        url = reverse(
-            "dashboard:storefront-builder-section-media-edit",
-            args=[hero.pk, "hero-slides", item.pk],
+        self.assertEqual(self._adopt(hero, "hero-slides").status_code, 200)
+        own = list(HeroSlide.objects.filter(section=hero).order_by("display_order", "id"))
+        self.assertEqual([o.title for o in own], [r.title for r in rendered])  # same content, same order
+        url = reverse("dashboard:storefront-builder-section-media-edit", args=[hero.pk, "hero-slides", own[0].pk])
+        self.assertEqual(self.client.get(url, **self._host()).status_code, 200,
+                         "an adopted hero item must have a working edit path")
+        # the shared originals are untouched
+        self.assertEqual(
+            shared_before,
+            list(HeroSlide.objects.filter(store=self.store, section__isnull=True).values_list("pk", "is_active", "title")),
         )
-        resp = self.client.get(url, HTTP_HOST=f"{self.store.admin_subdomain}.rastisi.localhost")
-        self.assertEqual(resp.status_code, 200, "a visibly-rendered hero item must have a working edit path")
 
-    def test_edit_of_a_visibly_rendered_banner_item_opens_not_404(self):
+    def test_a_shared_item_is_not_directly_editable_through_a_section(self):
+        hero = self._section("hero_banner")
+        shared = HeroSlide.objects.filter(store=self.store, section__isnull=True).first()
+        url = reverse("dashboard:storefront-builder-section-media-edit", args=[hero.pk, "hero-slides", shared.pk])
+        self.assertEqual(self.client.get(url, **self._host()).status_code, 404)
+
+    def test_adopting_banners_in_one_section_never_changes_another_section_or_the_shared_media(self):
         banner_sections = [s for s in self.home.sections.order_by("order") if s.section_key == "multi_banner"]
-        self.assertGreaterEqual(len(banner_sections), 1)
-        section = banner_sections[0]
-        rendered = list(render_service._scoped_banners(self.store, section))
-        self.assertGreater(len(rendered), 0)
-        item = rendered[0]
-        url = reverse(
-            "dashboard:storefront-builder-section-media-edit",
-            args=[section.pk, "banners", item.pk],
-        )
-        resp = self.client.get(url, HTTP_HOST=f"{self.store.admin_subdomain}.rastisi.localhost")
-        self.assertEqual(resp.status_code, 200)
-
-    # --------------------------------------------------------------- copy-on-write safety
-
-    def test_editing_a_shared_global_banner_does_not_mutate_another_section(self):
-        banner_sections = [s for s in self.home.sections.order_by("order") if s.section_key == "multi_banner"]
-        if len(banner_sections) < 2:
-            self.skipTest("need two multi_banner sections to prove cross-section safety")
+        self.assertGreaterEqual(len(banner_sections), 2)
         sec_a, sec_b = banner_sections[0], banner_sections[1]
         before_b = [b.pk for b in render_service._scoped_banners(self.store, sec_b)]
-        item = list(render_service._scoped_banners(self.store, sec_a))[0]
-        # toggle the item's active state from section A
-        toggle = reverse(
-            "dashboard:storefront-builder-section-media-toggle",
-            args=[sec_a.pk, "banners", item.pk],
-        )
-        resp = self.client.post(toggle, HTTP_HOST=f"{self.store.admin_subdomain}.rastisi.localhost")
-        self.assertEqual(resp.status_code, 200)
-        # Section B's rendered banners must be unchanged in identity/count.
-        after_b = [b.pk for b in render_service._scoped_banners(self.store, sec_b)]
+        shared_before = list(PromotionalBanner.objects.filter(store=self.store, section__isnull=True).values_list("pk", "is_active"))
+        self.assertEqual(self._adopt(sec_a, "banners").status_code, 200)
+        own_a = list(PromotionalBanner.objects.filter(section=sec_a).order_by("display_order", "id"))
+        self.assertGreater(len(own_a), 0)
+        toggle = reverse("dashboard:storefront-builder-section-media-toggle", args=[sec_a.pk, "banners", own_a[0].pk])
+        self.assertEqual(self.client.post(toggle, **self._host()).status_code, 200)
+        self.assertEqual([b.pk for b in render_service._scoped_banners(self.store, sec_b)], before_b)
         self.assertEqual(
-            len(after_b), len(before_b),
-            "editing a shared global banner from section A must not change section B's rendered banners",
+            shared_before,
+            list(PromotionalBanner.objects.filter(store=self.store, section__isnull=True).values_list("pk", "is_active")),
         )
+
+    def test_the_two_golden_banner_sections_render_distinct_slices_of_the_shared_media(self):
+        banner_sections = [s for s in self.home.sections.order_by("order") if s.section_key == "multi_banner"]
+        self.assertEqual(len(banner_sections), 2)
+        from apps.storefront_builder.services import render_service as rs
+
+        a = [b.pk for b in rs._multi_banner_context(self.store, banner_sections[0])["banners"]]
+        b = [b.pk for b in rs._multi_banner_context(self.store, banner_sections[1])["banners"]]
+        self.assertTrue(a and b)
+        self.assertFalse(set(a) & set(b), "the two banner rows must not show the same shared banners")
 
     # --------------------------------------------------------------- product image round-trip
 

@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}گزارش ارسال پیامک | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead"><div><h1>گزارش ارسال پیامک</h1><p>تاریخچه‌ی تلاش‌هایِ ارسال — متنِ کاملِ پیامک برایِ حفاظت از کدهایِ یک‌بارمصرف نمایش داده نمی‌شود.</p></div></div>
@@ -31,7 +32,7 @@
             {% else %}<span class="pa-badge pa-warn">{{ log.get_status_display }}</span>{% endif %}
           </td>
           <td style="direction:ltr;text-align:left">{{ log.provider_ref_id|default:"—" }}</td>
-          <td>{{ log.created_at|date:"Y/m/d H:i" }}</td>
+          <td>{{ log.created_at|jalali_dt }}</td>
         </tr>
         {% endfor %}
       </tbody>

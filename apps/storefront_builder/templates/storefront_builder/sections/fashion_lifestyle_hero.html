@@ -42,7 +42,7 @@ class names pattern) rather than inventing a second carousel mechanism.
          x-transition:leave="fashion-hero-leave"
          x-transition:leave-start="fashion-hero-leave-start"
          x-transition:leave-end="fashion-hero-leave-end">
-      <img class="fashion-hero-media" src="{% static 'storefront_builder/fashion_promo_catalog/'|add:slide.image %}" alt="" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">
+      <img class="fashion-hero-media" src="{% static 'storefront_builder/fashion_promo_catalog/'|add:slide.image %}" data-img-role="hero" alt="" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">
       <div class="fashion-hero-copy">
         <p class="fashion-hero-eyebrow">{{ slide.eyebrow|default:"کالکشن تازه" }}</p>
         <h1>{{ slide.title|default:"وقت تخفیف ویژه‌ی راستی مد!" }}</h1>
@@ -63,7 +63,7 @@ class names pattern) rather than inventing a second carousel mechanism.
   </div>
   {% else %}
   <div class="fashion-hero-inner">
-    <img class="fashion-hero-media" src="{% static 'storefront_builder/fashion_promo_catalog/campaign_hero.webp' %}" alt="" loading="eager">
+    <img class="fashion-hero-media" src="{% static 'storefront_builder/fashion_promo_catalog/campaign_hero.webp' %}" data-img-role="hero" alt="" loading="eager">
     <div class="fashion-hero-copy">
       <p class="fashion-hero-eyebrow">{{ settings.eyebrow|default:"کالکشن تازه" }}</p>
       <h1>{{ settings.title|default:"وقت تخفیف ویژه‌ی راستی مد!" }}</h1>

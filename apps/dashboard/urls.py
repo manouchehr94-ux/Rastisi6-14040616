@@ -4,7 +4,7 @@ from apps.storefront_builder import media_views as storefront_builder_media_view
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import cod_views, engagement_views, payment_reconciliation_views, views
+from . import cod_views, engagement_views, journal_views, payment_reconciliation_views, views
 
 app_name = "dashboard"
 
@@ -126,6 +126,7 @@ urlpatterns = [
     path("collections/<int:pk>/delete/", views.collection_delete, name="collection-delete"),
     path("collections/<int:pk>/toggle/", views.collection_toggle, name="collection-toggle"),
     path("collections/<int:pk>/products/", views.collection_products, name="collection-products"),
+    path("collections/<int:pk>/campaign/", views.collection_campaign, name="collection-campaign"),
     path("collections/<int:pk>/products/search/", views.collection_products_search, name="collection-products-search"),
     path("collections/<int:pk>/products/add/", views.collection_products_add, name="collection-products-add"),
     path("collections/<int:pk>/products/<int:item_id>/remove/", views.collection_product_remove, name="collection-product-remove"),
@@ -204,6 +205,7 @@ urlpatterns = [
     path("notifications/<str:event_key>/test/", engagement_views.notification_template_test, name="notification-template-test"),
     path("settings/gift-wrap/products/<int:pk>/", engagement_views.gift_wrap_product_update, name="gift-wrap-product-update"),
     path("settings/appearance/", views.settings_appearance, name="settings-appearance"),
+    path("settings/identity-assets/", views.settings_identity_assets, name="settings-identity-assets"),
     path("settings/gateways/<int:pk>/toggle/", views.settings_gateway_toggle, name="settings-gateway-toggle"),
     path("settings/shipping/<int:pk>/toggle/", views.settings_shipping_toggle, name="settings-shipping-toggle"),
 
@@ -231,8 +233,13 @@ urlpatterns = [
     path("settings/integrations/<str:provider_code>/test/", views.settings_integration_test, name="settings-integration-test"),
 
     # --- صفحات محتوایی ---
+    path("journal/", journal_views.journal_list, name="journal-list"),
+    path("journal/new/", journal_views.journal_create, name="journal-create"),
+    path("journal/<int:pk>/edit/", journal_views.journal_edit, name="journal-edit"),
+    path("journal/<int:pk>/publish/", journal_views.journal_publish_toggle, name="journal-publish"),
     path("pages/", views.page_list, name="page-list"),
     path("pages/add/", views.page_form, name="page-add"),
+    path("pages/create-about/", views.page_create_about, name="page-create-about"),
     path("pages/<int:pk>/edit/", views.page_form, name="page-edit"),
     path("pages/<int:pk>/delete/", views.page_delete, name="page-delete"),
     path("pages/<int:pk>/publish/", views.page_publish, name="page-publish"),
@@ -312,47 +319,10 @@ urlpatterns = [
         name="storefront-builder-template-live-preview",
     ),
     path("storefront-builder/preview/", storefront_builder_views.storefront_preview, name="storefront-builder-preview"),
-    path("storefront-builder/sections/", storefront_builder_views.storefront_section_list_partial, name="storefront-builder-section-list"),
-    path("storefront-builder/containers/", storefront_builder_views.storefront_container_state_partial, name="storefront-builder-container-state"),
-    path("storefront-builder/containers/add/", storefront_builder_views.storefront_container_add, name="storefront-builder-container-add"),
-    path("storefront-builder/containers/<int:pk>/settings/", storefront_builder_views.storefront_container_settings, name="storefront-builder-container-settings"),
-    path("storefront-builder/containers/<int:pk>/layout/", storefront_builder_views.storefront_container_layout, name="storefront-builder-container-layout"),
-    path("storefront-builder/containers/<int:pk>/move/", storefront_builder_views.storefront_container_move, name="storefront-builder-container-move"),
-    path("storefront-builder/containers/<int:pk>/remove/", storefront_builder_views.storefront_container_remove, name="storefront-builder-container-remove"),
-    path("storefront-builder/cells/add-section/", storefront_builder_views.storefront_cell_add_section, name="storefront-builder-cell-add-section"),
-    path("storefront-builder/cells/<int:pk>/clear/", storefront_builder_views.storefront_cell_clear, name="storefront-builder-cell-clear"),
-    path("storefront-builder/sections/add/", storefront_builder_views.storefront_section_add, name="storefront-builder-section-add"),
-    path("storefront-builder/sections/reorder/", storefront_builder_views.storefront_section_reorder, name="storefront-builder-section-reorder"),
-    path("storefront-builder/blocks/<int:pk>/move/", storefront_builder_views.storefront_block_move, name="storefront-builder-block-move"),
-    path("storefront-builder/blocks/<int:pk>/remove/", storefront_builder_views.storefront_block_remove, name="storefront-builder-block-remove"),
-    path("storefront-builder/sections/<int:pk>/settings/", storefront_builder_views.storefront_section_settings, name="storefront-builder-section-settings"),
-    path("storefront-builder/sections/<int:pk>/row-layout/", storefront_builder_views.storefront_section_row_layout, name="storefront-builder-section-row-layout"),
     path("storefront-builder/sections/<int:pk>/product-search/", storefront_builder_views.storefront_section_product_search, name="storefront-builder-section-product-search"),
-    path("storefront-builder/sections/<int:pk>/remove/", storefront_builder_views.storefront_section_remove, name="storefront-builder-section-remove"),
-    path("storefront-builder/sections/<int:pk>/toggle/", storefront_builder_views.storefront_section_toggle, name="storefront-builder-section-toggle"),
-    path("storefront-builder/sections/<int:pk>/collapse/", storefront_builder_views.storefront_section_collapse_toggle, name="storefront-builder-section-collapse"),
-    path("storefront-builder/sections/<int:pk>/lock/", storefront_builder_views.storefront_section_lock_toggle, name="storefront-builder-section-lock"),
-    path("storefront-builder/sections/<int:pk>/duplicate/", storefront_builder_views.storefront_section_duplicate, name="storefront-builder-section-duplicate"),
-    path("storefront-builder/sections/<int:pk>/move/", storefront_builder_views.storefront_section_move, name="storefront-builder-section-move"),
-    path("storefront-builder/appearance/", storefront_builder_views.storefront_appearance_editor, name="storefront-builder-appearance"),
+    path("storefront-builder/history/", storefront_builder_views.storefront_history, name="storefront-builder-history"),
     path("storefront-builder/apply-preset/", storefront_builder_views.storefront_apply_layout_preset, name="storefront-builder-apply-preset"),
     # Acceptance Batch 2 (post-U11) — granular reset-to-Ready-Template-baseline.
-    path("storefront-builder/sections/<int:pk>/reset/", storefront_builder_views.storefront_section_reset, name="storefront-builder-section-reset"),
-    path("storefront-builder/sections/<int:pk>/reset-field/", storefront_builder_views.storefront_section_field_reset, name="storefront-builder-section-field-reset"),
-    path("storefront-builder/appearance/reset-field/", storefront_builder_views.storefront_appearance_field_reset, name="storefront-builder-appearance-field-reset"),
-    path("storefront-builder/header/reset/", storefront_builder_views.storefront_header_reset, name="storefront-builder-header-reset"),
-    path("storefront-builder/footer/reset/", storefront_builder_views.storefront_footer_reset, name="storefront-builder-footer-reset"),
-    path("storefront-builder/page/reset/", storefront_builder_views.storefront_page_reset, name="storefront-builder-page-reset"),
-    path("storefront-builder/reset-to-baseline/", storefront_builder_views.storefront_reset_to_baseline, name="storefront-builder-reset-to-baseline"),
-    path("storefront-builder/header/", storefront_builder_views.storefront_header_editor, name="storefront-builder-header"),
-    path("storefront-builder/footer/", storefront_builder_views.storefront_footer_editor, name="storefront-builder-footer"),
-    path("storefront-builder/edit-history/state/", storefront_builder_views.storefront_edit_history_state, name="storefront-builder-edit-history-state"),
-    path("storefront-builder/undo/", storefront_builder_views.storefront_undo, name="storefront-builder-undo"),
-    path("storefront-builder/redo/", storefront_builder_views.storefront_redo, name="storefront-builder-redo"),
-    path("storefront-builder/publish/", storefront_builder_views.storefront_publish, name="storefront-builder-publish"),
-    path("storefront-builder/apply-industry-layout/", storefront_builder_views.storefront_apply_industry_layout, name="storefront-builder-apply-industry-layout"),
-    path("storefront-builder/history/", storefront_builder_views.storefront_history, name="storefront-builder-history"),
-    path("storefront-builder/history/<int:pk>/restore/", storefront_builder_views.storefront_restore, name="storefront-builder-restore"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/", storefront_builder_media_views.storefront_section_media_list, name="storefront-builder-section-media-list"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/add/", storefront_builder_media_views.storefront_section_media_form, name="storefront-builder-section-media-add"),
     path("storefront-builder/sections/<int:pk>/media/<str:kind>/<int:item_pk>/edit/", storefront_builder_media_views.storefront_section_media_form, name="storefront-builder-section-media-edit"),

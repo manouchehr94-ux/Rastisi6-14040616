@@ -1,0 +1,33 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}مقالات مجله | پنل مدیریت{% endblock %}
+{% block page_title %}مقالات مجله{% endblock %}
+{% block page_sub %}مقالاتِ فروشگاه، وضعیت انتشار و تصویر کاور{% endblock %}
+{% block content %}
+{% if without_cover %}
+<p class="field-help" role="status" style="padding:10px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;margin:0 0 14px;line-height:1.9">
+  {{ without_cover|fa_number }} مقاله تصویر کاور قابل‌نمایش ندارد. در صفحهٔ مجله برای آن‌ها فقط یک نوار رنگیِ ساده نشان داده می‌شود؛ تصویرِ خودِ مقاله را با «ویرایش» بارگذاری کنید. هیچ تصویر جایگزینی به‌جای کاور گذاشته نمی‌شود.
+</p>
+{% endif %}
+<div class="card">
+  <div class="card-head"><h3>مقالات ({{ posts|length|fa_number }})</h3><a href="{% url 'dashboard:journal-create' %}" class="btn btn-primary">➕ مقالهٔ جدید</a></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>عنوان</th><th>وضعیت انتشار</th><th>تصویر کاور</th><th>عملیات</th></tr></thead>
+    <tbody>
+    {% for p in posts %}
+    <tr>
+      <td><b>{{ p.title }}</b><div style="font-size:12px;color:var(--muted)" dir="ltr">/journal/{{ p.slug }}/</div></td>
+      <td>{% if p.publication_state == "published" %}<span class="badge b-green">منتشرشده</span>{% elif p.publication_state == "scheduled" %}<span class="badge b-amber">زمان‌بندی‌شده</span>{% else %}<span class="badge">پیش‌نویس</span>{% endif %}</td>
+      <td>{% if p.cover_state == "ok" %}<span class="badge b-green">دارد</span>{% elif p.cover_state == "missing" %}<span class="badge b-amber">فایل تصویر پیدا نشد — دوباره بارگذاری کنید</span>{% else %}<span class="badge b-amber">ندارد</span>{% endif %}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <a class="btn btn-sm" href="{% url 'dashboard:journal-edit' p.pk %}">ویرایش (متن و کاور)</a>
+        <form method="post" action="{% url 'dashboard:journal-publish' p.pk %}" style="display:inline">{% csrf_token %}<button class="btn btn-sm" type="submit">{% if p.publication_state == "draft" %}انتشار{% else %}برگشت به پیش‌نویس{% endif %}</button></form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" style="color:var(--muted)">هنوز مقاله‌ای برای این فروشگاه ثبت نشده است — با «مقالهٔ جدید» شروع کنید.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

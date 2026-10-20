@@ -1,31 +1,63 @@
-<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% endif %}">
+<section class="section product-section{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} product-section--spotlight{% endif %}{% if settings.display_mode == 'campaign_band' %} product-section--campaign-band{% elif settings.display_mode == 'catalog_grid' %} product-section--catalog-grid{% endif %}{% if settings.heading_style == 'plain_outline' %} product-section--hs-plain{% elif settings.heading_style == 'underlined' %} product-section--hs-underlined{% endif %}"{% if settings.carousel_autoplay and settings.display_mode == 'carousel' %} data-sfb-section-surface="ink"{% endif %}>
   {% if settings.display_mode == "campaign_band" %}
+  {% comment %}
+  Campaign band: heading (the section's own title — never invented copy), then the band holding an OPTIONAL promotional
+  panel and the product grid. The panel, its copy, its visual (registered icon key or a Store-scoped media asset) and its
+  colours are all engine configuration (``campaign`` context, see render_service._campaign_panel_view).
+  {% endcomment %}
+  {% if settings.title %}
   <div class="beauty-section-title product-campaign-heading" aria-hidden="true">
-    <span></span><h2>{{ settings.title|default:"پیشنهادهای فروشگاه" }}</h2><span></span>
+    <span></span><h2>{{ settings.title }}</h2><span></span>
   </div>
-  <div class="product-campaign-band">
-    <aside class="product-campaign-copy">
-      <span class="product-campaign-gift" aria-hidden="true">
-        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 27h44v29H10z"/><path d="M7 18h50v11H7z"/><path d="M32 18v38"/>
-          <path d="M32 18c-6 0-14-2-14-8 0-4 3-6 7-6 6 0 7 8 7 14z"/>
-          <path d="M32 18c6 0 14-2 14-8 0-4-3-6-7-6-6 0-7 8-7 14z"/>
-        </svg>
-      </span>
-      <h2>{{ settings.title|default:"پیشنهادهای فروشگاه" }}</h2>
-      {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
-      {% if view_all_url and settings.show_view_all %}<a href="{{ view_all_url }}" class="product-campaign-link">مشاهده همه محصولات</a>{% endif %}
+  {% endif %}
+  <div class="product-campaign-band{% if not campaign.enabled %} product-campaign-band--no-panel{% endif %}"{% if campaign.band_style %} style="{{ campaign.band_style }}"{% endif %}>
+    {% if campaign.enabled %}
+    <aside class="product-campaign-copy" data-align="{{ campaign.align }}"{% if campaign.style %} style="{{ campaign.style }}"{% endif %}>
+      {% if campaign.visual == "icon" %}
+      <span class="product-campaign-gift" aria-hidden="true">{{ campaign.icon_svg }}</span>
+      {% elif campaign.visual == "media" %}
+      <span class="product-campaign-gift product-campaign-media" aria-hidden="true"><img src="{{ campaign.media_url }}" data-img-role="product" alt="" loading="lazy"></span>
+      {% endif %}
+      {% if campaign.title %}<h2>{{ campaign.title }}</h2>{% endif %}
+      {% if campaign.subtitle %}<p>{{ campaign.subtitle }}</p>{% endif %}
+      {% if settings.show_view_all %}
+      {% url 'catalog:product-list' as campaign_all_url %}
+      <a href="{{ view_all_url|default:campaign_all_url }}" class="product-campaign-link">مشاهده همه محصولات</a>
+      {% endif %}
     </aside>
-    <div class="product-campaign-products grid rsec-cols">
+    {% endif %}
+    <div class="product-campaign-products grid rsec-cols"{% if settings.gap is not None %} style="gap:{{ settings.gap }}px"{% endif %}>
       {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
     </div>
   </div>
+  {% elif settings.display_mode == "catalog_grid" %}
+  <div class="catalog-grid-head">
+    <span class="catalog-grid-bar" aria-hidden="true"></span>
+    {% if settings.title %}<h2>{{ settings.title }}</h2>{% endif %}
+    {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
+  </div>
+  <div class="grid rsec-cols catalog-grid-products"{% if settings.gap is not None %} style="gap:{{ settings.gap }}px"{% endif %}>
+    {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
+  </div>
+  {% if settings.show_view_all %}
+  {% url 'catalog:product-list' as catalog_all_url %}
+  <div class="catalog-grid-bar-row">
+    <a href="{{ view_all_url|default:catalog_all_url }}" class="catalog-grid-more">مشاهده همه</a>
+    <span class="catalog-grid-page" aria-hidden="true">صفحه <span class="catalog-grid-page-box">۱</span> از ۱</span>
+    <span class="catalog-grid-next" aria-hidden="true">صفحه قبل</span>
+  </div>
+  {% endif %}
   {% else %}
   {% if settings.header_position != "inside" %}
   <div class="sec-head">
     <h2><span class="bar"></span>{{ settings.title|default:"محصولات" }}</h2>
     {% if view_all_url and settings.show_view_all %}
     <a href="{{ view_all_url }}" class="btn btn-sm">مشاهده همه</a>
+    {% elif settings.show_view_all and settings.heading_style %}
+    {% comment %}Headings with an explicit style always show the outlined "view all" pill; an automatic source has no
+    dedicated destination, so it points at the Store's product listing.{% endcomment %}
+    {% url 'catalog:product-list' as catalog_all_url %}
+    <a href="{{ catalog_all_url }}" class="btn btn-sm">مشاهده همه</a>
     {% endif %}
   </div>
   {% endif %}
@@ -35,7 +67,7 @@
   {% endif %}
 
   {% if settings.display_mode == "carousel" and settings.carousel_autoplay %}
-  <div class="product-spotlight-slider"
+  <div class="product-spotlight-slider" data-sfb-section-surface="ink"
        x-data="{ active: 0, count: {{ products|length }}, timer: null,
                   next() { this.active = (this.active + 1) % this.count },
                   prev() { this.active = (this.active - 1 + this.count) % this.count },
@@ -46,13 +78,13 @@
        @mouseleave="start()">
 
     {% if settings.header_position == "inside" %}
-    <div class="product-spotlight-head">
+    <div class="product-spotlight-head" data-sfb-section-surface="ink">
       <h2><span class="bar"></span>{{ settings.title|default:"محصولات" }}</h2>
       {% if settings.subtitle %}<p>{{ settings.subtitle }}</p>{% endif %}
     </div>
     {% endif %}
 
-    <div class="product-spotlight-track">
+    <div class="product-spotlight-track" data-sfb-section-surface="ink">
       {% if products %}
       {% for product in products %}
       <div class="product-spotlight-slide"
@@ -68,7 +100,7 @@
       </div>
       {% endfor %}
       {% else %}
-      <p class="product-spotlight-empty">فعلاً کالایی برای نمایش وجود ندارد.</p>
+      {% if empty_state %}{% include "storefront_builder/sections/_empty_state_body.html" %}{% else %}<p class="product-spotlight-empty">فعلاً کالایی برای نمایش وجود ندارد.</p>{% endif %}
       {% endif %}
     </div>
 
@@ -86,9 +118,39 @@
     {% endif %}
   </div>
   {% else %}
-  <div class="{% if settings.display_mode == "grid" %}grid{% else %}pcarousel{% endif %} rsec-cols">
+  {% comment %}
+  Item-row presentation contract (all optional, see section_registry): desktop_layout / overflow_mode /
+  show_scrollbar / carousel_navigation / gap are exposed as data attributes consumed by generic CSS;
+  arrows and dots are an Alpine controller that scrolls the row (RTL aware). Without any of these
+  settings the markup is the historical single row.
+  {% endcomment %}
+  {% if settings.carousel_navigation and settings.display_mode != "grid" %}
+  <div class="pcarousel-shell" data-nav="{{ settings.carousel_navigation }}"
+       x-data="{ page: 0, pages: 1,
+                 sign() { return getComputedStyle($refs.track).direction === 'rtl' ? -1 : 1 },
+                 measure() { const t = $refs.track; if (!t.clientWidth) return; this.pages = Math.max(1, Math.round(t.scrollWidth / t.clientWidth)); this.page = Math.min(this.pages - 1, Math.round(Math.abs(t.scrollLeft) / t.clientWidth)) },
+                 go(n) { const t = $refs.track; this.page = Math.max(0, Math.min(this.pages - 1, n)); t.scrollTo({ left: this.sign() * this.page * t.clientWidth, behavior: 'smooth' }) } }"
+       x-init="measure(); if (window.ResizeObserver) new ResizeObserver(() => measure()).observe($refs.track); $refs.track.addEventListener('scroll', () => measure(), { passive: true })">
+  {% endif %}
+  <div class="{% if settings.display_mode == "grid" %}grid{% else %}pcarousel{% endif %} rsec-cols"
+       {% if settings.carousel_navigation and settings.display_mode != "grid" %}x-ref="track"{% endif %}
+       {% if settings.desktop_layout %}data-desktop-layout="{{ settings.desktop_layout }}"{% endif %}
+       {% if settings.overflow_mode %}data-overflow="{{ settings.overflow_mode }}"{% endif %}
+       {% if settings.show_scrollbar is False %}data-scrollbar="off"{% endif %}
+       {% if settings.gap is not None %}style="--pcarousel-gap:{{ settings.gap }}px;gap:{{ settings.gap }}px"{% endif %}>
     {% include "catalog/partials/product_grid.html" with products=products card_settings=settings.card %}
   </div>
+  {% if settings.carousel_navigation and settings.display_mode != "grid" %}
+    {% if settings.carousel_navigation == "arrows" %}
+    <button type="button" class="pcarousel-arrow pcarousel-prev" aria-label="قبلی" :hidden="pages <= 1" @click="go(page - 1)">‹</button>
+    <button type="button" class="pcarousel-arrow pcarousel-next" aria-label="بعدی" :hidden="pages <= 1" @click="go(page + 1)">›</button>
+    {% else %}
+    <div class="pcarousel-dots" :hidden="pages <= 1" aria-label="صفحه‌های کاروسل">
+      <template x-for="n in pages" :key="n"><button type="button" :class="{ 'active': page === n - 1 }" :aria-label="'صفحه ' + n" @click="go(n - 1)"></button></template>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
   {% endif %}
   {% endif %}
 </section>

@@ -1,3 +1,4 @@
+{% load persian %}
 {% load static %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -22,8 +23,8 @@
     </div>
     <div style="text-align:left">
       <div><b>{{ seller_name }}</b></div>
-      <div class="muted">صدور: {{ invoice.issued_at|date:"Y-m-d"|default:"—" }}</div>
-      <div class="muted">سررسید: {{ invoice.due_at|date:"Y-m-d"|default:"—" }}</div>
+      <div class="muted">صدور: {{ invoice.issued_at|jalali|default:"—" }}</div>
+      <div class="muted">سررسید: {{ invoice.due_at|jalali|default:"—" }}</div>
     </div>
   </div>
 
@@ -39,7 +40,7 @@
 
   <div class="muted" style="margin-top:10px">
     پلن: {{ invoice.plan_code_snapshot }} — دوره:
-    {{ invoice.billing_period_start|date:"Y-m-d"|default:"—" }} تا {{ invoice.billing_period_end|date:"Y-m-d"|default:"—" }}
+    {{ invoice.billing_period_start|jalali|default:"—" }} تا {{ invoice.billing_period_end|jalali|default:"—" }}
   </div>
 
   <table>

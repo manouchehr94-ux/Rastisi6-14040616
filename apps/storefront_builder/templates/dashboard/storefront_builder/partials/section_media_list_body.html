@@ -35,6 +35,10 @@ an empty-looking list. Nothing is copied until the merchant asks.
             hx-post="{% url 'dashboard:storefront-builder-section-media-adopt-defaults' pk=section.pk kind=kind %}"
             hx-target="#mediaList" hx-swap="outerHTML"
             hx-confirm="تصاویر پیش‌فرض به‌صورت {{ config.label_plural }} قابل‌ویرایش در همین بخش کپی می‌شوند و فایل‌ها و نسخهٔ منتشرشده تغییری نمی‌کنند. ادامه می‌دهید؟">قابل‌ویرایش کردن تصاویر پیش‌فرض</button>
+    {% if kind == "hero-slides" or kind == "banners" %}
+    <a class="sfb-media-defaults-manage" style="display:inline-block;margin-top:8px;font-size:12px" target="_blank" rel="noopener"
+       href="{% if kind == 'hero-slides' %}{% url 'dashboard:hero-list' %}{% else %}{% url 'dashboard:banner-list' %}{% endif %}">مدیریت رسانه‌های مشترک فروشگاه (برای همهٔ قالب‌ها) ←</a>
+    {% endif %}
   </div>
   {% endif %}
   {% for item in items %}

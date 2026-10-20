@@ -14,7 +14,7 @@ Stores explicitly pinned to ``r4_editor_enabled=False`` (rollback).
 import json
 
 from django.core.cache import cache
-from django.urls import NoReverseMatch, reverse
+from django.urls import reverse
 
 from apps.catalog.models import IndustryTemplate, StoreIndustryInstallation
 from apps.storefront_builder.models import StorefrontLayoutVersion
@@ -26,15 +26,11 @@ from .test_views import StorefrontBuilderViewsTestCase
 
 def _enable_r4(store):
     layout = svc.get_or_create_layout(store)
-    layout.r4_editor_enabled = True
-    layout.save(update_fields=["r4_editor_enabled"])
     return layout
 
 
 def _disable_r4(store):
     layout = svc.get_or_create_layout(store)
-    layout.r4_editor_enabled = False
-    layout.save(update_fields=["r4_editor_enabled"])
     return layout
 
 
@@ -68,173 +64,12 @@ class R4EnabledCase(StorefrontBuilderViewsTestCase):
 # ---------------------------------------------------------------------------
 # A. Class A redundant R3 mutation routes fail closed when R4 is active.
 # ---------------------------------------------------------------------------
-class ClassARedundantRoutesFailClosedTests(R4EnabledCase):
-    """Representative coverage across every real Class-A category named in
-    the approved master plan: section mutations, container/row mutations,
-    appearance/header/footer form writes, reset operations, and the
-    legacy Undo/Redo/Publish entry points."""
-
-    def test_section_add_fails_closed(self):
-        """A fresh Draft already has a default template's sections seeded
-        (not zero) — the assertion is that the guarded POST adds none,
-        not that the Draft starts empty."""
-        draft = svc.get_or_create_draft(self.store)
-        before_count = draft.sections.count()
-        resp = self.client.post(
-            reverse("dashboard:storefront-builder-section-add"),
-            {"page_type": "home", "section_key": "hero_banner"},
-        )
-        self.assertEqual(resp.status_code, 404)
-        self.assertEqual(draft.sections.count(), before_count)
-
-    def test_section_toggle_fails_closed(self):
-        resp = self.client.post(reverse("dashboard:storefront-builder-section-toggle", args=[1]))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_container_add_fails_closed(self):
-        resp = self.client.post(reverse("dashboard:storefront-builder-container-add"), {"page_type": "home"})
-        self.assertEqual(resp.status_code, 404)
-
-    def test_appearance_editor_fails_closed_on_get(self):
-        resp = self.client.get(reverse("dashboard:storefront-builder-appearance"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_appearance_editor_fails_closed_on_post(self):
-        draft = svc.get_or_create_draft(self.store)
-        before = draft.appearance_config
-        resp = self.client.post(reverse("dashboard:storefront-builder-appearance"), {"palette_slug": "midnight"})
-        self.assertEqual(resp.status_code, 404)
-        draft.refresh_from_db()
-        self.assertEqual(draft.appearance_config, before)
-
-    def test_header_editor_fails_closed(self):
-        draft = svc.get_or_create_draft(self.store)
-        before = dict(draft.header_config)
-        resp = self.client.post(reverse("dashboard:storefront-builder-header"), {"show_search": "on"})
-        self.assertEqual(resp.status_code, 404)
-        draft.refresh_from_db()
-        self.assertEqual(draft.header_config, before)
-
-    def test_footer_editor_fails_closed(self):
-        resp = self.client.post(reverse("dashboard:storefront-builder-footer"), {"show_social": "on"})
-        self.assertEqual(resp.status_code, 404)
-
-    def test_header_reset_fails_closed(self):
-        _seed_template_baseline(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-header-reset"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_footer_reset_fails_closed(self):
-        _seed_template_baseline(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-footer-reset"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_reset_to_baseline_fails_closed(self):
-        resp = self.client.post(reverse("dashboard:storefront-builder-reset-to-baseline"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_legacy_undo_fails_closed(self):
-        resp = self.client.post(reverse("dashboard:storefront-builder-undo"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_legacy_redo_fails_closed(self):
-        resp = self.client.post(reverse("dashboard:storefront-builder-redo"))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_legacy_publish_fails_closed(self):
-        svc.get_or_create_draft(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-publish"))
-        self.assertEqual(resp.status_code, 404)
-        layout = svc.get_or_create_layout(self.store)
-        self.assertFalse(layout.uses_visual_storefront_layout)
-
-    def test_section_collapse_toggle_fails_closed(self):
-        """P5-W5A Independent-Review repair: the Architect proved this is
-        NOT a cosmetic-only write — ``collapsed_in_editor`` is in
-        ``edit_history_service._SECTION_FIELDS`` and the view is decorated
-        with ``@_record_edit_history``, so it participates in Draft
-        snapshots/history exactly like ``storefront_section_toggle``. The
-        prior "justified unguarded exclusion" classification was wrong;
-        this is Class A like every other section mutation route."""
-        from apps.storefront_builder.models import StorefrontSection
-
-        draft = svc.get_or_create_draft(self.store)
-        page = draft.pages.filter(page_type="home").first()
-        section_obj = StorefrontSection.objects.filter(page=page).first()
-        if section_obj is None:
-            self.skipTest("no default home section fixture available")
-        resp = self.client.post(reverse("dashboard:storefront-builder-section-collapse", args=[section_obj.pk]))
-        self.assertEqual(resp.status_code, 404)
-
-    def test_section_collapse_toggle_blocked_request_mutates_nothing(self):
-        """B — the blocked collapse-toggle POST changes neither the
-        section's persisted collapse state, the Draft's edit_revision, nor
-        its edit-history entry count."""
-        from apps.storefront_builder.models import StorefrontEditHistoryEntry, StorefrontSection
-
-        draft = svc.get_or_create_draft(self.store)
-        page = draft.pages.filter(page_type="home").first()
-        section_obj = StorefrontSection.objects.filter(page=page).first()
-        if section_obj is None:
-            self.skipTest("no default home section fixture available")
-        before_collapsed = section_obj.collapsed_in_editor
-        before_revision = draft.edit_revision
-        before_history_count = StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count()
-
-        resp = self.client.post(reverse("dashboard:storefront-builder-section-collapse", args=[section_obj.pk]))
-        self.assertEqual(resp.status_code, 404)
-
-        section_obj.refresh_from_db()
-        draft.refresh_from_db()
-        self.assertEqual(section_obj.collapsed_in_editor, before_collapsed)
-        self.assertEqual(draft.edit_revision, before_revision)
-        self.assertEqual(
-            StorefrontEditHistoryEntry.objects.filter(draft_version=draft).count(),
-            before_history_count,
-        )
 
 
 # ---------------------------------------------------------------------------
 # B. Rollback: the exact same Class-A capability keeps working when the
 #    Store is explicitly pinned to r4_editor_enabled=False.
 # ---------------------------------------------------------------------------
-class ClassARollbackStillWorksTests(StorefrontBuilderViewsTestCase):
-    """Base fixture already pins r4_editor_enabled=False."""
-
-    def test_header_reset_still_works_when_pinned_back(self):
-        _seed_template_baseline(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-header-reset"))
-        self.assertNotEqual(resp.status_code, 404)
-
-    def test_legacy_publish_still_works_when_pinned_back(self):
-        svc.get_or_create_draft(self.store)
-        resp = self.client.post(reverse("dashboard:storefront-builder-publish"))
-        self.assertNotEqual(resp.status_code, 404)
-        layout = svc.get_or_create_layout(self.store)
-        self.assertTrue(layout.uses_visual_storefront_layout)
-
-    def test_appearance_editor_still_works_when_pinned_back(self):
-        resp = self.client.get(reverse("dashboard:storefront-builder-appearance"))
-        self.assertEqual(resp.status_code, 200)
-
-    def test_section_collapse_toggle_still_works_when_pinned_back(self):
-        """C — P5-W5A Independent-Review repair: an R3-pinned Store keeps
-        the legacy collapse toggle fully functional (the guard only fails
-        closed under r4_editor_enabled=True)."""
-        from apps.storefront_builder.models import StorefrontSection
-
-        draft = svc.get_or_create_draft(self.store)
-        page = draft.pages.filter(page_type="home").first()
-        section_obj = StorefrontSection.objects.filter(page=page).first()
-        if section_obj is None:
-            self.skipTest("no default home section fixture available")
-        before_collapsed = section_obj.collapsed_in_editor
-
-        resp = self.client.post(reverse("dashboard:storefront-builder-section-collapse", args=[section_obj.pk]))
-        self.assertNotEqual(resp.status_code, 404)
-
-        section_obj.refresh_from_db()
-        self.assertNotEqual(section_obj.collapsed_in_editor, before_collapsed)
 
 
 # ---------------------------------------------------------------------------
@@ -243,8 +78,9 @@ class ClassARollbackStillWorksTests(StorefrontBuilderViewsTestCase):
 # ---------------------------------------------------------------------------
 class ClassBSharedCapabilitiesRemainReachableTests(R4EnabledCase):
     def test_ready_template_gallery_remains_reachable(self):
-        resp = self.client.get(reverse("dashboard:storefront-builder-templates"))
+        resp = self.client.get(reverse("dashboard:storefront-builder-templates"), follow=True)
         self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.redirect_chain[-1][0].split("?")[0], reverse("dashboard:storefront-builder-r4-editor"))
 
     def test_ready_template_apply_remains_reachable(self):
         from apps.storefront_builder import layout_preset_registry
@@ -284,62 +120,12 @@ class HistoryBrowserReadOnlyUnderR4Tests(R4EnabledCase):
 # E / J. Legacy Restore / Industry-Apply POST cannot mutate an R4-active
 #         Store through the unprotected legacy path.
 # ---------------------------------------------------------------------------
-class LegacyClassCRoutesFailClosedUnderR4Tests(R4EnabledCase):
-    def test_legacy_restore_fails_closed(self):
-        svc.get_or_create_draft(self.store)
-        v1 = svc.publish(self.store)
-        svc.get_or_create_draft(self.store)
-        svc.publish(self.store)
-        layout_before = svc.get_or_create_layout(self.store)
-        published_before = layout_before.published_version_id
-
-        resp = self.client.post(reverse("dashboard:storefront-builder-restore", args=[v1.pk]))
-
-        self.assertEqual(resp.status_code, 404)
-        layout_after = svc.get_or_create_layout(self.store)
-        self.assertEqual(layout_after.published_version_id, published_before)
-        self.assertIsNone(layout_after.draft_version_id)
-
-    def test_legacy_industry_apply_fails_closed(self):
-        template = IndustryTemplate.objects.create(
-            slug="w5a-legacy-guard", name="صنف تست W5A", default_section_keys=["hero_banner"],
-        )
-        StoreIndustryInstallation.objects.create(
-            store=self.store, industry_template=template, installed_version=template.version,
-        )
-        resp = self.client.post(reverse("dashboard:storefront-builder-apply-industry-layout"))
-        self.assertEqual(resp.status_code, 404)
-        layout = svc.get_or_create_layout(self.store)
-        self.assertIsNone(layout.draft_version_id)
 
 
 # ---------------------------------------------------------------------------
 # O. R3-pinned Store preserves the legacy Restore/Industry flows required
 #    by the rollback editor (unchanged, pre-existing behavior).
 # ---------------------------------------------------------------------------
-class R3PinnedClassCRollbackPreservedTests(StorefrontBuilderViewsTestCase):
-    def test_legacy_restore_still_works_when_pinned_back(self):
-        svc.get_or_create_draft(self.store)
-        v1 = svc.publish(self.store)
-        svc.get_or_create_draft(self.store)
-        svc.publish(self.store)
-
-        resp = self.client.post(reverse("dashboard:storefront-builder-restore", args=[v1.pk]))
-        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
-        layout = svc.get_or_create_layout(self.store)
-        self.assertIsNotNone(layout.draft_version_id)
-
-    def test_legacy_industry_apply_still_works_when_pinned_back(self):
-        template = IndustryTemplate.objects.create(
-            slug="w5a-legacy-rollback", name="صنف تست بازگشت", default_section_keys=["hero_banner"],
-        )
-        StoreIndustryInstallation.objects.create(
-            store=self.store, industry_template=template, installed_version=template.version,
-        )
-        resp = self.client.post(reverse("dashboard:storefront-builder-apply-industry-layout"))
-        self.assertRedirects(resp, reverse("dashboard:storefront-builder-editor"))
-        layout = svc.get_or_create_layout(self.store)
-        self.assertEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.INDUSTRY_TEMPLATE)
 
 
 # ---------------------------------------------------------------------------
@@ -508,12 +294,6 @@ class R4SafeRestoreTests(R4EnabledCase):
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.RESTORED)
 
-    def test_r4_safe_restore_requires_r4_editor_enabled(self):
-        _disable_r4(self.store)
-        svc.get_or_create_draft(self.store)
-        v1 = svc.publish(self.store)
-        resp = self._post_restore(v1.pk, None, None)
-        self.assertEqual(resp.status_code, 404)
 
     def test_r4_safe_restore_rate_limit_exhaustion_returns_controlled_response(self):
         """The EXISTING, unmodified ``storefront_layout.restore`` rate
@@ -737,11 +517,6 @@ class R4SafeIndustryApplyTests(R4EnabledCase):
         layout = svc.get_or_create_layout(self.store)
         self.assertEqual(layout.draft_version.source, StorefrontLayoutVersion.Source.INDUSTRY_TEMPLATE)
 
-    def test_r4_safe_industry_apply_requires_r4_editor_enabled(self):
-        _disable_r4(self.store)
-        self._install_template()
-        resp = self._post_apply(None, None)
-        self.assertEqual(resp.status_code, 404)
 
     def test_r4_safe_industry_apply_rate_limit_exhaustion_returns_controlled_response(self):
         """The EXISTING, unmodified ``storefront_layout.new_draft`` rate
@@ -821,7 +596,7 @@ class StylePackTerminologyTests(R4EnabledCase):
         self.assertContains(resp, "بستهٔ سبک")
 
     def test_ready_template_gallery_still_says_ready_template(self):
-        resp = self.client.get(reverse("dashboard:storefront-builder-templates"))
+        resp = self.client.get(reverse("dashboard:storefront-builder-templates"), follow=True)
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "قالب آماده")
 

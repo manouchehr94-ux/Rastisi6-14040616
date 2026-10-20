@@ -19,8 +19,10 @@ from django.urls import reverse
 
 from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services import collection_service
+from apps.catalog.services import availability_service
 from apps.catalog.services.collection_service import searchable_products
 from apps.catalog.services.product_publish_service import storefront_listing_products
+from apps.catalog.services.promotion_service import active_discount_q
 from apps.orders.services import best_seller_service
 from apps.storefront_builder import resource_source
 
@@ -143,27 +145,58 @@ def _reorder_by_ids(products_by_id: dict, ordered_ids: list) -> list:
     return [products_by_id[pid] for pid in ordered_ids if pid in products_by_id]
 
 
-def products_in_collection(store, collection, limit: int) -> list:
+#: قاعده‌ی دسترسی‌پذیریِ کالا در ریل‌ها (``catalog.services.availability_service``):
+#: ``"exclude"`` = صفحه‌ی اصلی؛ کالایِ ناموجود هرگز انتخاب نمی‌شود و جایش با
+#: ناموجود پر نمی‌شود. ``"first"`` = سایرِ صفحات؛ موجودها اول. ``None`` = بدونِ تغییر.
+AVAILABILITY_EXCLUDE = "exclude"
+AVAILABILITY_FIRST = "first"
+
+
+def _arrange(queryset, availability, *ordering):
+    """کوئری را بر اساسِ قاعده‌ی دسترسی‌پذیری مرتب/فیلتر می‌کند (پیش از ``limit``)."""
+    if availability == AVAILABILITY_EXCLUDE:
+        return availability_service.available_only(queryset).order_by(*ordering)
+    if availability == AVAILABILITY_FIRST:
+        return availability_service.order_available_first(queryset, *ordering)
+    return queryset.order_by(*ordering)
+
+
+def _arrange_list(products: list, availability) -> list:
+    """همان قاعده برایِ فهرست‌هایی که ترتیبشان از قبل تعیین شده (دستی/پرفروش/کالکشن)."""
+    if availability == AVAILABILITY_EXCLUDE:
+        return availability_service.only_available(products)
+    if availability == AVAILABILITY_FIRST:
+        return availability_service.partition_available_first(products)
+    return products
+
+
+def products_in_collection(store, collection, limit: int, availability=None) -> list:
     """Real products for an already-resolved ``MerchantCollection`` object
     — the ID-free half of ``_resolve_collection`` below, extracted so
     Part 2D's ``catalog_product_wall`` (which resolves the Store's own
     real collections directly, never by a stored ``source_id``) can reuse
     the exact same product query."""
-    items = collection_service.collection_visible_items(collection, store)[:limit]
-    return [item.product for item in items]
+    items = collection_service.collection_visible_items(collection, store)
+    if availability is None:
+        return [item.product for item in items[:limit]]
+    # The availability rule must see more than the first ``limit`` items,
+    # otherwise unavailable items would crowd out available ones behind them.
+    return _arrange_list([item.product for item in items[:500]], availability)[:limit]
 
 
-def products_in_category(store, category, limit: int) -> list:
+def products_in_category(store, category, limit: int, availability=None) -> list:
     """Real products for an already-resolved ``Category`` object — the
     ID-free half of ``_resolve_category`` below, reused by Part 2D's
     ``catalog_product_wall``. Same exact filter as
     ``catalog.views._filtered_products``: a parent category also includes
     its children's products."""
     return list(
-        storefront_listing_products(store)
-        .filter(Q(category=category) | Q(category__parent=category))
-        .select_related("brand").prefetch_related("images")
-        .order_by("-created_at", "id")[:limit]
+        _arrange(
+            storefront_listing_products(store)
+            .filter(Q(category=category) | Q(category__parent=category))
+            .select_related("brand").prefetch_related("images"),
+            availability, "-created_at", "id",
+        )[:limit]
     )
 
 
@@ -200,7 +233,7 @@ def resolve_category_representative_media(category):
     return product.cover_image
 
 
-def _resolve_collection(store, settings: dict):
+def _resolve_collection(store, settings: dict, availability=None):
     source_id = settings.get("source_id")
     if not source_id:
         return [], None
@@ -211,12 +244,12 @@ def _resolve_collection(store, settings: dict):
     if not collection.is_active:
         return [], None
 
-    products = products_in_collection(store, collection, settings["item_limit"])
+    products = products_in_collection(store, collection, settings["item_limit"], availability)
     view_all_url = reverse("catalog:collection-detail", args=[collection.slug])
     return products, view_all_url
 
 
-def _resolve_category(store, settings: dict):
+def _resolve_category(store, settings: dict, availability=None):
     source_id = settings.get("source_id")
     if not source_id:
         return [], None
@@ -225,12 +258,12 @@ def _resolve_category(store, settings: dict):
     except Category.DoesNotExist:
         return [], None
 
-    products = products_in_category(store, category, settings["item_limit"])
+    products = products_in_category(store, category, settings["item_limit"], availability)
     view_all_url = reverse("catalog:product-list") + "?" + urlencode({"category": category.slug})
     return products, view_all_url
 
 
-def _resolve_brand(store, settings: dict):
+def _resolve_brand(store, settings: dict, availability=None):
     source_id = settings.get("source_id")
     if not source_id:
         return [], None
@@ -241,15 +274,17 @@ def _resolve_brand(store, settings: dict):
 
     limit = settings["item_limit"]
     products = list(
-        storefront_listing_products(store).filter(brand=brand)
-        .select_related("brand").prefetch_related("images")
-        .order_by("-created_at", "id")[:limit]
+        _arrange(
+            storefront_listing_products(store).filter(brand=brand)
+            .select_related("brand").prefetch_related("images"),
+            availability, "-created_at", "id",
+        )[:limit]
     )
     view_all_url = reverse("catalog:product-list") + "?" + urlencode({"brand": brand.slug})
     return products, view_all_url
 
 
-def _resolve_manual(store, settings: dict):
+def _resolve_manual(store, settings: dict, availability=None):
     """کالاهایِ دستیِ مرچنت — ``product_ids`` (اعتبارسنجی‌شده در
     section_registry: بدونِ تکرار، حداکثر ۶۰ عدد) به همان ترتیبِ
     انتخابِ مرچنت رندر می‌شود، نه ترتیبِ دلخواهِ دیتابیس. ``pk__in``
@@ -266,35 +301,41 @@ def _resolve_manual(store, settings: dict):
         for p in storefront_listing_products(store).filter(pk__in=product_ids)
         .select_related("brand").prefetch_related("images")
     }
-    products = _reorder_by_ids(products_by_id, product_ids)[:limit]
+    products = _arrange_list(_reorder_by_ids(products_by_id, product_ids), availability)[:limit]
     return products, None
 
 
-def _resolve_newest(store, settings: dict):
+def _resolve_newest(store, settings: dict, availability=None):
     limit = settings["item_limit"]
     products = list(
-        storefront_listing_products(store).select_related("brand").prefetch_related("images")
-        .order_by("-created_at", "id")[:limit]
+        _arrange(
+            storefront_listing_products(store).select_related("brand").prefetch_related("images"),
+            availability, "-created_at", "id",
+        )[:limit]
     )
     return products, None
 
 
-def _resolve_discounted(store, settings: dict):
+def _resolve_discounted(store, settings: dict, availability=None):
     limit = settings["item_limit"]
     products = list(
-        storefront_listing_products(store).filter(discount_percent__gt=0)
-        .select_related("brand").prefetch_related("images")
-        .order_by("-discount_percent", "id")[:limit]
+        _arrange(
+            storefront_listing_products(store).filter(active_discount_q())
+            .select_related("brand").prefetch_related("images"),
+            availability, "-discount_percent", "id",
+        )[:limit]
     )
     return products, None
 
 
-def _resolve_best_sellers(store, settings: dict):
+def _resolve_best_sellers(store, settings: dict, availability=None):
     """پرفروش‌ترین‌هایِ واقعی — از ``best_seller_service`` (محاسبه‌ی زنده
     از OrderItem، تنها الگوریتمِ مجازِ کل کدبیس)، **نه** از
     ``Product.sold_count``."""
     limit = settings["item_limit"]
-    product_ids = best_seller_service.best_selling_product_ids(store, limit=limit)
+    # Over-fetch so excluding unavailable best-sellers can still fill the rail.
+    fetch = limit * 4 if availability else limit
+    product_ids = best_seller_service.best_selling_product_ids(store, limit=fetch)
     if not product_ids:
         return [], None
     products_by_id = {
@@ -302,17 +343,19 @@ def _resolve_best_sellers(store, settings: dict):
         for p in storefront_listing_products(store).filter(pk__in=product_ids)
         .select_related("brand").prefetch_related("images")
     }
-    return _reorder_by_ids(products_by_id, product_ids), None
+    return _arrange_list(_reorder_by_ids(products_by_id, product_ids), availability)[:limit], None
 
 
-def _resolve_most_viewed(store, settings: dict):
+def _resolve_most_viewed(store, settings: dict, availability=None):
     """``Product.views_count`` — بر خلافِ ``sold_count``، این فیلد واقعاً
     نوشته می‌شود (``apps.catalog.views.product_detail``، هر بازدید)، پس
     مستقیماً قابلِ استفاده است (به مستندسازیِ ممیزیِ فازِ C مراجعه شود)."""
     limit = settings["item_limit"]
     products = list(
-        storefront_listing_products(store).select_related("brand").prefetch_related("images")
-        .order_by("-views_count", "id")[:limit]
+        _arrange(
+            storefront_listing_products(store).select_related("brand").prefetch_related("images"),
+            availability, "-views_count", "id",
+        )[:limit]
     )
     return products, None
 
@@ -329,7 +372,7 @@ _RESOLVERS = {
 }
 
 
-def resolve_products(store, settings: dict) -> tuple[list, str | None]:
+def resolve_products(store, settings: dict, *, availability=None) -> tuple[list, str | None]:
     """فهرستِ Product نهایی (به ترتیبِ صحیح، حداکثر ``item_limit`` عدد) و
     آدرسِ اختیاریِ «مشاهده همه» را برایِ ``data_source`` این section
     برمی‌گرداند. برایِ منبعِ نامعتبر/هنوز-پیاده‌سازی‌نشده، فهرستِ خالی
@@ -337,4 +380,4 @@ def resolve_products(store, settings: dict) -> tuple[list, str | None]:
     resolver = _RESOLVERS.get(settings.get("data_source"))
     if resolver is None:
         return [], None
-    return resolver(store, settings)
+    return resolver(store, settings, availability)

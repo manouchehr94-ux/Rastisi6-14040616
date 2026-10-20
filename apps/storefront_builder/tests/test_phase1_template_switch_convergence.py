@@ -78,8 +78,6 @@ class Phase1ConvergenceBase(TestCase):
         self.assertTrue(self.template_a.is_ready_template)
         self.assertTrue(self.template_b.is_ready_template)
         self.layout = svc.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = svc.get_or_create_draft(self.store, user=self.staff)
         preset_service.apply_preset(self.draft, self.template_a)
         self.draft.refresh_from_db()
@@ -96,6 +94,7 @@ class Phase1ConvergenceBase(TestCase):
             base_revision=self.draft.edit_revision if base_revision is None else base_revision,
             template_key=self.template_b.key,
             template_version=self.template_b.version,
+            mode="preserve",  # explicit opt-in: these tests cover the preservation-first merge algorithm
         )
         return self._active_draft()
 
@@ -213,6 +212,7 @@ class SameDraftHistoryRevisionTests(Phase1ConvergenceBase):
             r4_mutation_service.switch_template(
                 store=self.store, actor=self.staff, base_revision=3,
                 template_key=self.template_b.key, template_version=self.template_b.version,
+                mode="preserve",  # explicit opt-in: these tests cover the preservation-first merge algorithm
             )
         except getattr(r4_mutation_service, "R4StaleRevision", Exception):
             raised = True
@@ -473,8 +473,11 @@ class MerchantFacingConvergenceTests(Phase1ConvergenceBase):
             "survives on the active Draft).",
         )
 
-    def test_r4_ready_template_apply_is_preservation_first_after_convergence(self):
-        # Blocker 11: require real success (200 + ok==True) AND invariants.
+    def test_r4_ready_template_apply_preserve_mode_is_explicit_opt_in(self):
+        # Owner contract (exact template composition): preservation-first is no
+        # longer the DEFAULT of explicit selection; it remains available only as
+        # the explicit ``mode: "preserve"`` opt-in exercised here. Blocker 11:
+        # require real success (200 + ok==True) AND invariants.
         merchant = StorefrontSection.objects.create(
             version=self.draft, section_key="rich_text", order=98,
             settings={"content": "keep-through-apply"},
@@ -490,6 +493,7 @@ class MerchantFacingConvergenceTests(Phase1ConvergenceBase):
                 "draft_id": self.draft.pk,
                 "template_key": self.template_b.key,
                 "template_version": self.template_b.version,
+                "mode": "preserve",
             },
         }
         client = self._login()
@@ -520,7 +524,10 @@ class MerchantFacingConvergenceTests(Phase1ConvergenceBase):
             "survives on the active Draft).",
         )
 
-    def test_dashboard_ready_template_apply_is_preservation_first_after_convergence(self):
+    def test_dashboard_ready_template_apply_is_exact_replacement_with_recoverable_previous_design(self):
+        # Owner contract: explicit selection installs the target's EXACT recipe on
+        # the SAME Draft; the merchant-made section is not carried into it, and
+        # the previous design is kept as a restorable archived version.
         merchant = StorefrontSection.objects.create(
             version=self.draft, section_key="rich_text", order=99,
             settings={"content": "keep-through-dashboard"},
@@ -549,9 +556,19 @@ class MerchantFacingConvergenceTests(Phase1ConvergenceBase):
             prov["template"]["key"], self.template_b.key,
             "RED: dashboard apply must set provenance to Template B.",
         )
-        self.assertIsNotNone(
-            StorefrontSection.objects.filter(page__version=active, stable_id=sid).first(),
-            "RED: converged dashboard Ready Template apply must be preservation-first.",
+        self.assertFalse(
+            StorefrontSection.objects.filter(page__version=active, stable_id=sid).exists(),
+            "explicit selection must not carry the previous composition into the new template",
+        )
+        self.assertEqual(
+            active.get_page("home").sections.count(), len(self.template_b.pages["home"]),
+        )
+        archived = StorefrontLayoutVersion.objects.filter(
+            layout=self.layout, status=StorefrontLayoutVersion.Status.ARCHIVED,
+        )
+        self.assertTrue(
+            StorefrontSection.objects.filter(page__version__in=archived, stable_id=sid).exists(),
+            "the previous design (with the merchant section) must stay recoverable",
         )
 
     def test_dashboard_ready_template_change_records_single_history_and_revision(self):

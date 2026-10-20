@@ -123,7 +123,7 @@ class PdpTrustIsMerchantEditableTests(TestCase):
     def test_r4_mutation_edits_pdp_trust_items(self):
         section = self._add_pdp_trust_section()
         self._merchant_edit_trust(section, [
-            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل"},
+            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل", "verified": True},
         ])
         section.refresh_from_db()
         self.assertEqual(
@@ -135,7 +135,7 @@ class PdpTrustIsMerchantEditableTests(TestCase):
     def test_draft_preview_shows_edited_trust_content(self):
         section = self._add_pdp_trust_section()
         self._merchant_edit_trust(section, [
-            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل"},
+            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل", "verified": True},
         ])
         resp = self._preview_pdp()
         self.assertEqual(resp.status_code, 200)
@@ -154,7 +154,7 @@ class PdpTrustIsMerchantEditableTests(TestCase):
         self.draft = svc.get_or_create_draft(self.store)
         section = self._add_pdp_trust_section()
         self._merchant_edit_trust(section, [
-            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل"},
+            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل", "verified": True},
         ])
         before = self._public_pdp()
         self.assertEqual(before.status_code, 200)
@@ -179,7 +179,7 @@ class PdpTrustIsMerchantEditableTests(TestCase):
         )
         section = self._add_pdp_trust_section()
         self._merchant_edit_trust(section, [
-            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل"},
+            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل", "verified": True},
         ])
         svc.publish(self.store)
         resp = self._public_pdp()
@@ -206,7 +206,7 @@ class PdpTrustIsMerchantEditableTests(TestCase):
         self.draft.refresh_from_db()
         pdp_section = self._add_pdp_trust_section()
         self._merchant_edit_trust(pdp_section, [
-            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل"},
+            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل", "verified": True},
         ])
         svc.publish(self.store)
         resp = self._public_pdp()
@@ -217,7 +217,7 @@ class PdpTrustIsMerchantEditableTests(TestCase):
 
     # ---- 7. existing stores keep the hard-coded fallback ---------------
 
-    def test_store_without_pdp_trust_section_keeps_hardcoded_fallback(self):
+    def test_store_without_pdp_trust_section_makes_no_unverified_promise(self):
         # No trust_features on the PDP at all — publish the default layout.
         self.assertFalse(
             self.draft.get_page(StorefrontPage.PageType.PRODUCT_DETAIL)
@@ -226,15 +226,17 @@ class PdpTrustIsMerchantEditableTests(TestCase):
         svc.publish(self.store)
         resp = self._public_pdp()
         self.assertEqual(resp.status_code, 200)
-        # The hard-coded guarantee strip still renders (backward compatible).
-        self.assertIn(_HARDCODED_FALLBACK, resp.content.decode())
+        # FOLLOWUP-10: the fixed fallback strip no longer promises "ضمانت اصالت کالا" (no policy/verification behind it) —
+        # a merchant who stands behind it adds it as a «تأییدشده» item of the trust section instead.
+        self.assertNotIn(_HARDCODED_FALLBACK, resp.content.decode())
+        self.assertNotIn("۷ روز ضمانت بازگشت", resp.content.decode())
 
     # ---- 8. no two competing trust modules on one PDP ------------------
 
     def test_canonical_pdp_trust_section_suppresses_the_hardcoded_strip(self):
         section = self._add_pdp_trust_section()
         self._merchant_edit_trust(section, [
-            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل"},
+            {"icon": "🏅", "title": _EDITED_TRUST, "subtitle": "اصل", "verified": True},
         ])
         svc.publish(self.store)
         resp = self._public_pdp()

@@ -794,8 +794,9 @@ class R4PreviewRefreshJsSourceContractTests(R4MutationApiTestCase):
         # iframe/renderer/mock preview.
         marker = self.editor_js_source.index("R4.refreshPreview = function")
         body = self.editor_js_source[marker:marker + 300]
-        self.assertIn("previewFrame", body)
-        self.assertIn("previewFrame.contentWindow.location.reload()", body)
+        # the single atomic refresh entry point (reloadPreviewFrame) owns the preview frame authority
+        self.assertIn("reloadPreviewFrame()", body)
+        self.assertIn("var old = previewFrame;", self.editor_js_source)
 
     def test_media_changed_listener_calls_refresh_preview(self):
         marker = self.studio_js_source.index("addEventListener('r4:media-changed'")

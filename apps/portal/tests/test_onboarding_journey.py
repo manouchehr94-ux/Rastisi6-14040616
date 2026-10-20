@@ -421,7 +421,9 @@ class IndustryStageTests(JourneyBase):
 class BrandingStageTests(JourneyBase):
     def test_guidance_matches_the_real_validation_and_no_fake_colour_controls(self):
         html = self.get("branding").content.decode()
-        self.assertIn('accept="image/png,image/jpeg,image/webp,image/gif"', html)
+        # R4-14: the shared server check (apps.core.image_validation) accepts only PNG/JPG/WebP up to 2 MB — the input no longer advertises GIF
+        self.assertIn('accept="image/png,image/jpeg,image/webp"', html)
+        self.assertNotIn("image/gif", html)
         self.assertIn("SVG", html)
         self.assertIn("سازنده‌ی ویترین", html)
         self.assertIn("هنوز لوگویی نیست", html)

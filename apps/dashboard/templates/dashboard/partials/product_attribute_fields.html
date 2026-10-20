@@ -66,15 +66,15 @@
   {% endfor %}
 
   {% if quick_attr_error and not category %}
-  <div style="color:var(--red);font-size:11.5px">{{ quick_attr_error }}</div>
+  <div style="color:var(--red-ink);font-size:11.5px">{{ quick_attr_error }}</div>
   {% endif %}
   {% if category %}
   <div x-data="{ quickOpen: {% if quick_attr_errors or quick_attr_error %}true{% else %}false{% endif %} }">
     <button type="button" class="quick-add-toggle" @click="quickOpen = !quickOpen">+ ساخت ویژگی جدید</button>
     <div class="quick-add-panel" x-show="quickOpen" x-cloak>
-      {% if quick_attr_error %}<div style="flex-basis:100%;color:var(--red);font-size:11.5px">{{ quick_attr_error }}</div>{% endif %}
+      {% if quick_attr_error %}<div style="flex-basis:100%;color:var(--red-ink);font-size:11.5px">{{ quick_attr_error }}</div>{% endif %}
       {% if quick_attr_errors %}
-      <div style="flex-basis:100%;color:var(--red);font-size:11.5px">
+      <div style="flex-basis:100%;color:var(--red-ink);font-size:11.5px">
         {% for field, errs in quick_attr_errors.items %}{% for err in errs %}<div>{{ err }}</div>{% endfor %}{% endfor %}
       </div>
       {% endif %}

@@ -82,7 +82,7 @@
           </span>
         </label>
         {% empty %}
-        <p style="color:var(--muted);font-size:13px">فعلاً روش ارسالی تعریف نشده است.</p>
+        <p class="ck-blocker" role="status" style="color:var(--muted);font-size:13px">روش ارسالی برای این فروشگاه تعریف نشده است.</p>
         {% endfor %}
         {% if totals.free_shipping %}
         <div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:4px">🎉 به دلیل خرید بالای {{ SHOP_FREE_SHIPPING_THRESHOLD|toman }}، ارسال برای شما رایگان شد!</div>
@@ -95,7 +95,7 @@
       <div class="card-b" style="padding-top:4px">
         {% for item in cart_items %}
         <div class="citem">
-          <div class="thumb" style="background:{{ item.product.tint|default:'#eceef3' }}">{{ item.product.icon|default:"🛍️" }}</div>
+          <div class="thumb{% if item.display_image %} has-img{% endif %}" style="background:{{ item.product.tint|default:'#eceef3' }}">{% if item.display_image %}<img src="{{ item.display_image.url }}" data-img-role="thumb" alt="{{ item.display_image.alt }}" loading="lazy" decoding="async" width="74" height="74">{% else %}<span class="thumb-fallback" aria-hidden="true">{{ item.product.icon|default:"🛍️" }}</span>{% endif %}</div>
           <div class="info">
             <b>{{ item.product.name }}</b>
             {% if item.variant %}
@@ -140,7 +140,6 @@
           <button type="button" hx-post="{% url 'orders:checkout-coupon-apply' %}" hx-include="#coup-in" hx-target="#checkout-container" hx-swap="innerHTML">اعمال</button>
         </div>
         {% if coupon_error %}<div class="coup-err">⚠️ {{ coupon_error }}</div>{% endif %}
-        <div class="coup-hint">کدهای نمونه: <code>WELCOME10</code> <code>DIGI50</code> <code>FREESHIP</code></div>
         {% endif %}
       </div>
     </div>
@@ -159,7 +158,7 @@
           </span>
         </label>
         {% empty %}
-        <p style="color:var(--muted);font-size:13px">فعلاً درگاه پرداختی فعال نیست.</p>
+        <p class="ck-blocker" role="status" style="color:var(--muted);font-size:13px">پرداخت آنلاین هنوز برای این فروشگاه فعال نشده است.</p>
         {% endfor %}
       </div>
     </div>
@@ -167,33 +166,22 @@
     <div class="card">
       <div class="card-h"><span class="ic">🧾</span>خلاصه سفارش</div>
       <div class="card-b">
-        <div class="totals">
-          <div class="ln"><span>جمع کالاها</span><b>{{ totals.items_total|toman }}</b></div>
-          {% if totals.product_discount > 0 %}
-          <div class="ln disc"><span>تخفیف کالاها</span><b>− {{ totals.product_discount|toman }}</b></div>
-          {% endif %}
-          {% if totals.coupon_discount > 0 %}
-          <div class="ln disc"><span>کد تخفیف ({{ coupon.code }})</span><b>− {{ totals.coupon_discount|toman }}</b></div>
-          {% endif %}
-          {% if totals.gift_wrap_total > 0 %}
-          <div class="ln"><span>🎁 کادوپیچی</span><b>{{ totals.gift_wrap_total|toman }}</b></div>
-          {% endif %}
-          <div class="ln{% if totals.free_shipping %} free{% endif %}"><span>هزینه ارسال</span><b>{% if totals.free_shipping %}رایگان{% else %}{{ totals.shipping_cost|toman }}{% endif %}</b></div>
-          <div class="ln"><span>مالیات بر ارزش افزوده ({{ SHOP_TAX_PERCENT|fa_number }}٪)</span><b>{{ totals.tax|toman }}</b></div>
-          <div class="ln grand"><span>مبلغ قابل پرداخت</span><span class="v">{{ totals.grand_total|toman }}</span></div>
-        </div>
+        {% include "cart/partials/totals_breakdown.html" with breakdown=totals.breakdown grand_label="مبلغ قابل پرداخت" %}
         {% if savings > 0 %}
         <div class="save-note">🎁 شما در این خرید {{ savings|toman }} صرفه‌جویی کردید!</div>
         {% endif %}
+        {% if readiness.can_place_order %}
         <button type="button" class="btn btn-primary btn-block" style="margin-top:14px;height:52px;font-size:15px"
                 hx-post="{% url 'orders:checkout-pay' %}" hx-include="#address-fields" hx-vals='{"expected_total": "{{ totals.grand_total|floatformat:"0u" }}"}' hx-target="#checkout-container" hx-swap="innerHTML">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          ادامه و پرداخت امن
+          ادامه و پرداخت
         </button>
-        <div class="trust">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          پرداخت امن و رمزنگاری‌شده — نماد اعتماد الکترونیک
+        {% else %}
+        <div class="ck-unavailable" role="alert" style="margin-top:14px;padding:12px 14px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:13px;line-height:1.9">
+          {% for message in readiness.blockers %}<div>{{ message }}</div>{% endfor %}
         </div>
+        <button type="button" class="btn btn-primary btn-block" style="margin-top:10px;height:52px;font-size:15px;opacity:.5;cursor:not-allowed" disabled aria-disabled="true">ثبت سفارش در دسترس نیست</button>
+        {% endif %}
       </div>
     </div>
   </div>

@@ -67,7 +67,7 @@ class NewsletterSubscribeViewTests(TestCase):
         cache.clear()
 
     def test_valid_post_subscribes_and_shows_success(self):
-        resp = self.client.post(reverse("content:newsletter-subscribe"), {"email": "view-ok@example.com"})
+        resp = self.client.post(reverse("content:newsletter-subscribe"), {"email": "view-ok@example.com", "consent": "yes"})
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "متشکریم")
         self.assertTrue(NewsletterSubscriber.objects.filter(store=_akhlaghi(), email="view-ok@example.com").exists())
@@ -83,7 +83,32 @@ class NewsletterSubscribeViewTests(TestCase):
 
     def test_rate_limit_blocks_excessive_attempts(self):
         for i in range(8):
-            self.client.post(reverse("content:newsletter-subscribe"), {"email": f"rl{i}@example.com"})
-        resp = self.client.post(reverse("content:newsletter-subscribe"), {"email": "rl-over@example.com"})
+            self.client.post(reverse("content:newsletter-subscribe"), {"email": f"rl{i}@example.com", "consent": "yes"})
+        resp = self.client.post(reverse("content:newsletter-subscribe"), {"email": "rl-over@example.com", "consent": "yes"})
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(NewsletterSubscriber.objects.filter(store=_akhlaghi(), email="rl-over@example.com").exists())
+
+
+class NewsletterConsentContractTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_unchecked_consent_never_registers_email(self):
+        resp = self.client.post(reverse("content:newsletter-subscribe"), {"email": "no-consent@example.com"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "رضایت")
+        self.assertFalse(NewsletterSubscriber.objects.filter(email="no-consent@example.com").exists())
+
+    def test_consent_is_scoped_to_host_resolved_store(self):
+        from django.test import Client
+        from apps.stores.models import Store
+
+        store = _akhlaghi()
+        store.admin_subdomain = "akhlaghi"
+        store.save(update_fields=["admin_subdomain"])
+        client = Client(HTTP_HOST="akhlaghi.rastisi.localhost")
+        resp = client.post(reverse("content:newsletter-subscribe"), {
+            "email": "subscribed@example.com", "consent": "yes",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(NewsletterSubscriber.objects.filter(store=store, email="subscribed@example.com").exists())

@@ -8,5 +8,5 @@ shows a contact heading (marketplace_dense/premium_columns/dark_tech).
 {% endcomment %}
 {% if FOOTER_SETTINGS.phone or SHOP_CONTACT_PHONE or FOOTER_SETTINGS.secondary_phone or FOOTER_SETTINGS.email or SHOP_CONTACT_EMAIL or FOOTER_SETTINGS.working_hours or FOOTER_SETTINGS.address %}
 <h5>ارتباط با ما</h5>
-{% include "storefront_builder/partials/global_footer/_shared/contact_info.html" %}
+{% include "storefront_builder/partials/global_footer/_shared/contact_info.html" with hide_address=hide_address %}
 {% endif %}

@@ -51,7 +51,7 @@ class StorefrontTwoStoreIsolationTests(TestCase):
         self.product_a = Product.objects.create(
             store=self.store_a, vendor=self.vendor_a, category=self.category_a, brand=self.brand_a,
             name="Store A Exclusive Phone", slug="store-a-phone", sku="SKU-ISO-A",
-            price=Decimal("100000"), status=Product.Status.ACTIVE,
+            price=Decimal("100000"), status=Product.Status.ACTIVE, stock=5,
         )
 
         self.category_b = Category.objects.create(
@@ -62,7 +62,7 @@ class StorefrontTwoStoreIsolationTests(TestCase):
         self.product_b = Product.objects.create(
             store=self.store_b, vendor=self.vendor_b, category=self.category_b, brand=self.brand_b,
             name="Store B Exclusive Phone", slug="store-b-phone", sku="SKU-ISO-B",
-            price=Decimal("200000"), status=Product.Status.ACTIVE,
+            price=Decimal("200000"), status=Product.Status.ACTIVE, stock=5,
         )
 
     # ------------------------------------------------------------ home
@@ -89,8 +89,8 @@ class StorefrontTwoStoreIsolationTests(TestCase):
         self.assertContains(response, "Electronics B")
         self.assertNotContains(response, "Electronics A")
 
-    def test_home_best_products_partial_isolated(self):
-        response = self.client.get(reverse("catalog:home-best-products"), HTTP_HOST=HOST_A)
+    def test_engine_default_home_sections_are_isolated(self):
+        response = self.client.get(reverse("catalog:home"), HTTP_HOST=HOST_A)
         self.assertContains(response, "Store A Exclusive Phone")
         self.assertNotContains(response, "Store B Exclusive Phone")
 

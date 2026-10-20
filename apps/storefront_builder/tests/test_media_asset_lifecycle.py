@@ -16,7 +16,6 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
-from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
@@ -25,6 +24,8 @@ from apps.content.services import delete_media_asset_if_unreferenced
 from apps.storefront_builder.models import StorefrontSection
 from apps.storefront_builder.services import layout_service as svc
 from apps.stores.models import Store, StoreMembership
+
+from ._r4_support import r4_mutate
 
 User = get_user_model()
 HOST = "sfb-media-lifecycle-test.rastisi.localhost"
@@ -390,8 +391,6 @@ class SectionDuplicateMediaTests(TestCase):
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(version=self.draft, section_key="hero_banner", order=0)
         asset = MediaAsset.objects.create(store=self.store, image=_img())
         original_slide = HeroSlide.objects.create(
@@ -399,7 +398,7 @@ class SectionDuplicateMediaTests(TestCase):
             desktop_image=_img(), desktop_asset=asset,
         )
 
-        self.client.post(reverse("dashboard:storefront-builder-section-duplicate", args=[section.pk]))
+        r4_mutate(self.client, self.draft, {"type": "section.duplicate", "section_id": section.pk})
 
         duplicate_section = self.draft.sections.filter(section_key="hero_banner").exclude(pk=section.pk).get()
         self.assertNotEqual(duplicate_section.stable_id, section.stable_id)
@@ -420,10 +419,8 @@ class SectionDuplicateMediaTests(TestCase):
         # fails closed under r4_editor_enabled=True (binding policy) --
         # pin explicitly, matching the rollback-editor scenario being tested.
         _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
         section = StorefrontSection.objects.create(version=self.draft, section_key="rich_text", order=0)
-        resp = self.client.post(reverse("dashboard:storefront-builder-section-duplicate", args=[section.pk]))
+        resp = r4_mutate(self.client, self.draft, {"type": "section.duplicate", "section_id": section.pk})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(self.draft.sections.filter(section_key="rich_text").count(), 2)
 

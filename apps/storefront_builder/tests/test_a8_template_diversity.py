@@ -17,8 +17,8 @@ class A8TemplateDiversityTests(SimpleTestCase):
         self.assertIsNotNone(recipe_signature)
         signatures = [recipe_signature(preset) for preset in lpr.list_ready_templates()]
 
-        self.assertEqual(len(signatures), 50)
-        self.assertEqual(len(set(signatures)), 50)
+        self.assertEqual(len(signatures), 53)
+        self.assertEqual(len(set(signatures)), 53)
 
     def test_signature_ignores_palette_and_font_only_changes(self):
         self.assertIsNotNone(recipe_signature)

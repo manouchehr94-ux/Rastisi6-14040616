@@ -142,7 +142,7 @@ def _global_region_components(
                 registry_reference=f"global_region:{region.key}:{variant.key}",
                 capabilities=("mobile", "rtl", "safe_area")
                 if family_key == "bottom_nav"
-                else ("responsive", "rtl"),
+                else frozenset({"responsive", "rtl"}) | variant.capabilities,
             )
         )
     return definitions

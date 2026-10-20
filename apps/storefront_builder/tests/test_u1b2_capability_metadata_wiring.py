@@ -1,63 +1,28 @@
-"""U1B2 — Capability Metadata Wiring.
+"""Capability metadata wiring.
 
-Makes ``SectionDefinition.capabilities`` (introduced additively in U1A,
-derived in ``section_registry._finalize_registry`` from the pre-existing
-``*_AWARE_SECTION_KEYS`` allowlists via ``_derived_capabilities``) the
-authoritative source that editor/server-side gating code queries, through
-the new ``SectionDefinition.supports_capability(name, *, variant=None)``
-helper (``section_registry.py``).
-
-Scope decision recorded here (see also
-``U1ACapabilitiesConsistencyTests.test_capabilities_agree_with_every_pre_existing_allowlist``
-in ``test_section_registry.py``, which already proves Option B — constants
-kept + a consistency test — for the *internal* consumers):
-
-- ``views.py`` (``storefront_section_settings`` and its
-  ``_extract_responsive_raw`` helper) is a *downstream* consumer that always
-  runs after ``SECTION_REGISTRY`` is fully built (via ``get_definition``) —
-  it was migrated (Option A) to call ``definition.supports_capability(...)``
-  instead of importing and checking membership in the raw
-  ``*_AWARE_SECTION_KEYS`` frozensets directly.
-- ``section_registry._finalize_registry``'s own wrapper functions
-  (``_with_card``, ``_with_background``, ...) run *while* ``SECTION_REGISTRY``
-  is being constructed and therefore cannot consult the not-yet-built
-  registry's ``.capabilities`` — Option A is unsafe there, so those raw
-  allowlist constants remain the source those specific functions read from
-  (Option B; already covered by the consistency test referenced above).
+``SectionDefinition.capabilities`` (declared on each registry definition,
+validated against ``section_registry.KNOWN_CAPABILITIES``) is the single source
+editor/server-side gating code queries, through
+``SectionDefinition.supports_capability(name, *, variant=None)``. There is no
+parallel allowlist: ``section_registry._finalize_registry``'s wrappers
+(``_with_card``, ``_with_background``, ...) read the very same declaration.
 
 Nothing here changes ``validate_settings``/``default_settings``/rendered
-HTML/merchant-visible editor controls; every test below only proves the
-*same* answer is now reachable through the metadata contract.
+HTML/merchant-visible editor controls.
 """
 
-from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.test import Client, TestCase
-from django.urls import reverse
-from django.utils import timezone
+from django.test import TestCase
 
-from apps.storefront_builder.models import StorefrontSection
 from apps.storefront_builder.section_registry import (
-    BACKGROUND_AWARE_SECTION_KEYS,
-    CARD_AWARE_SECTION_KEYS,
-    COLUMN_AWARE_SECTION_KEYS,
-    COLUMN_VISUAL_SECTION_KEYS,
-    DESTINATION_AWARE_SECTION_KEYS,
-    LAYOUT_HEIGHT_AWARE_SECTION_KEYS,
-    LAYOUT_WIDTH_AWARE_SECTION_KEYS,
-    MOTION_AWARE_SECTION_KEYS,
-    SPACING_AWARE_SECTION_KEYS,
     SECTION_REGISTRY,
     SectionDefinition,
     get_definition,
     list_definitions,
 )
-from apps.storefront_builder.services import layout_service as svc
-from apps.storefront_builder.views import _extract_responsive_raw
 from apps.storefront_builder.variant_contract import VariantDefinition
-from apps.stores.models import Store, StoreMembership
+from apps.stores.models import Store
 
 User = get_user_model()
 HOST = "sfb-u1b2-test.rastisi.localhost"
@@ -72,36 +37,19 @@ class SupportsCapabilityCorrectnessTests(TestCase):
     membership, for every section and every capability, including the
     "no capability at all" case."""
 
-    _ALLOWLIST_BY_CAPABILITY = {
-        "card": CARD_AWARE_SECTION_KEYS,
-        "background": BACKGROUND_AWARE_SECTION_KEYS,
-        "spacing": SPACING_AWARE_SECTION_KEYS,
-        "motion": MOTION_AWARE_SECTION_KEYS,
-        "destination": DESTINATION_AWARE_SECTION_KEYS,
-        "layout_width": LAYOUT_WIDTH_AWARE_SECTION_KEYS,
-        "layout_height": LAYOUT_HEIGHT_AWARE_SECTION_KEYS,
-        "columns": COLUMN_AWARE_SECTION_KEYS,
-        "columns_visual": COLUMN_VISUAL_SECTION_KEYS,
-    }
+    _CAPABILITIES = (
+        "card", "background", "spacing", "motion", "destination",
+        "layout_width", "layout_height", "columns", "columns_visual",
+    )
 
     def test_supports_capability_matches_raw_capabilities_membership(self):
         for definition in list_definitions():
-            for name in self._ALLOWLIST_BY_CAPABILITY:
+            for name in self._CAPABILITIES:
                 self.assertEqual(
                     definition.supports_capability(name),
                     name in definition.capabilities,
                     f"{definition.key}: supports_capability({name!r}) disagrees "
                     f"with raw .capabilities membership",
-                )
-
-    def test_supports_capability_matches_every_pre_existing_allowlist(self):
-        for capability, allowlist in self._ALLOWLIST_BY_CAPABILITY.items():
-            for definition in list_definitions():
-                expected = definition.key in allowlist
-                self.assertEqual(
-                    definition.supports_capability(capability), expected,
-                    f"{definition.key}: supports_capability({capability!r}) disagrees "
-                    f"with its allowlist",
                 )
 
     def test_supports_capability_false_for_unknown_capability_name(self):
@@ -112,7 +60,7 @@ class SupportsCapabilityCorrectnessTests(TestCase):
         """``blog_posts`` is a representative "no capability" section — only
         the unconditional ``responsive`` capability applies."""
         definition = get_definition("blog_posts")
-        for capability in self._ALLOWLIST_BY_CAPABILITY:
+        for capability in self._CAPABILITIES:
             self.assertFalse(definition.supports_capability(capability), capability)
         self.assertTrue(definition.supports_capability("responsive"))
 
@@ -194,7 +142,7 @@ class NoProductionVariantDeclaresCapabilitiesTests(TestCase):
 class SectionDefinitionIsAuthoritativeSourceTests(TestCase):
     """Test E — ``.capabilities`` (and therefore ``supports_capability``) is
     populated purely from ``_finalize_registry``'s union of the definition's
-    own declared capabilities with ``_derived_capabilities``; no DB access,
+    own declared capabilities; no DB access,
     no per-request computation."""
 
     def test_capabilities_identical_across_repeated_lookups(self):
@@ -210,146 +158,6 @@ class SectionDefinitionIsAuthoritativeSourceTests(TestCase):
                 definition.supports_capability(capability)
 
 
-class ViewsMigrationPreservesEditorGatingTests(TestCase):
-    """Test F/G/H/I — end-to-end proof (through the real HTTP view) that
-    migrating ``views.py`` from raw allowlist membership to
-    ``definition.supports_capability(...)`` changed zero merchant-visible
-    behavior, for one representative section per capability plus the
-    no-capability case. Mirrors the pre-existing behavioral assertions in
-    ``test_views.py`` (e.g. ``test_motion_controls_present_for_motion_aware_type``),
-    which already re-ran unmodified against the migrated code path in the
-    full-suite run and passed unchanged."""
-
-    def setUp(self):
-        cache.clear()
-        self.store = _akhlaghi()
-        self.store.admin_subdomain = HOST.split(".")[0]
-        self.store.save(update_fields=["admin_subdomain"])
-        self.staff = User.objects.create_user(
-            username="sfb_u1b2_owner", password="pass12345", is_staff=True,
-        )
-        StoreMembership.objects.create(
-            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
-            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
-        )
-        self.client = Client(HTTP_HOST=HOST)
-        self.client.login(username="sfb_u1b2_owner", password="pass12345")
-        self.draft = svc.get_or_create_draft(self.store)
-        self.draft.sections.all().delete()
-
-    def _settings_url(self, section):
-        return reverse("dashboard:storefront-builder-section-settings", args=[section.pk])
-
-    def test_motion_aware_section_still_gets_motion_field_and_saves_it(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        section = StorefrontSection.objects.create(
-            version=self.draft, section_key="hero_banner", order=0,
-        )
-        resp = self.client.get(self._settings_url(section))
-        self.assertContains(resp, 'name="motion_style"')
-        resp = self.client.post(self._settings_url(section), {"motion_style": "hover_lift"})
-        self.assertEqual(resp.status_code, 302)
-        section.refresh_from_db()
-        self.assertEqual(section.settings["motion"], {"style": "hover_lift"})
-
-    def test_non_motion_aware_section_gets_no_motion_field_and_ignores_it(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        section = StorefrontSection.objects.create(
-            version=self.draft, section_key="rich_text", order=0,
-        )
-        resp = self.client.get(self._settings_url(section))
-        self.assertNotContains(resp, 'name="motion_style"')
-        resp = self.client.post(
-            self._settings_url(section), {"body_html": "متن", "motion_style": "fade"},
-        )
-        self.assertEqual(resp.status_code, 302)
-        section.refresh_from_db()
-        self.assertNotIn("motion", section.settings)
-
-    def test_card_aware_section_context_flag_unchanged(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        section = StorefrontSection.objects.create(
-            version=self.draft, section_key="product_section", order=0,
-        )
-        resp = self.client.get(self._settings_url(section))
-        self.assertTrue(resp.context["supports_card"])
-
-    def test_column_visual_section_context_flag_unchanged(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        section = StorefrontSection.objects.create(
-            version=self.draft, section_key="product_section", order=0,
-        )
-        resp = self.client.get(self._settings_url(section))
-        self.assertTrue(resp.context["supports_columns"])
-
-    def test_column_aware_but_not_visual_section_context_flag_still_false(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        """``category_grid`` remains in the broader ``COLUMN_AWARE_SECTION_KEYS``
-        storage contract but not the narrower ``COLUMN_VISUAL_SECTION_KEYS`` UI
-        allowlist — the migrated context flag must keep that distinction."""
-        section = StorefrontSection.objects.create(
-            version=self.draft, section_key="category_grid", order=0,
-        )
-        resp = self.client.get(self._settings_url(section))
-        self.assertFalse(resp.context["supports_columns"])
-
-
-class ExtractResponsiveRawSignatureMigrationTests(TestCase):
-    """Test J — ``_extract_responsive_raw`` now takes a ``SectionDefinition``
-    (not a raw ``section_key`` string) and consults ``supports_capability("columns")``;
-    behavior for both a columns-aware and a non-columns-aware definition is
-    unchanged."""
-
-    def test_columns_aware_definition_extracts_column_fields(self):
-        definition = get_definition("product_section")
-        request = mock.Mock()
-        request.POST = {
-            "show_on_desktop": "on", "show_on_tablet": "on", "show_on_mobile": "on",
-            "desktop_columns": "4", "tablet_columns": "2", "mobile_columns": "1",
-        }
-        raw = _extract_responsive_raw(request, definition)
-        self.assertEqual(raw["desktop_columns"], "4")
-        self.assertEqual(raw["tablet_columns"], "2")
-        self.assertEqual(raw["mobile_columns"], "1")
-
-    def test_non_columns_aware_definition_extracts_no_column_fields(self):
-        definition = get_definition("rich_text")
-        request = mock.Mock()
-        request.POST = {
-            "show_on_desktop": "on", "show_on_tablet": "on", "show_on_mobile": "on",
-            "desktop_columns": "4", "tablet_columns": "2", "mobile_columns": "1",
-        }
-        raw = _extract_responsive_raw(request, definition)
-        self.assertNotIn("desktop_columns", raw)
-        self.assertNotIn("tablet_columns", raw)
-        self.assertNotIn("mobile_columns", raw)
-
-
 class RegistryInvariantsUnchangedByU1B2Tests(TestCase):
     """Test K/L/M — the invariants U1B2 must not disturb: registry size,
     hero_banner/image_slider both present and unmerged, multi_banner's
@@ -357,7 +165,7 @@ class RegistryInvariantsUnchangedByU1B2Tests(TestCase):
     conditional was introduced anywhere in ``section_registry.py``."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 36)
+        self.assertEqual(len(SECTION_REGISTRY), 38)
 
     def test_hero_banner_and_image_slider_both_still_present(self):
         self.assertIn("hero_banner", SECTION_REGISTRY)

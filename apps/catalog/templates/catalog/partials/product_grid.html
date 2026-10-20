@@ -1,5 +1,6 @@
 {% for product in products %}
 {% include "catalog/partials/product_card.html" with card_settings=card_settings %}
 {% empty %}
-<p style="color:var(--muted);font-size:13px;padding:20px 0">فعلاً کالایی برای نمایش وجود ندارد.</p>
+{% if empty_state %}<div style="grid-column:1 / -1">{% include "storefront_builder/sections/_empty_state_body.html" %}</div>
+{% else %}<p style="color:var(--muted);font-size:13px;padding:20px 0">فعلاً کالایی برای نمایش وجود ندارد.</p>{% endif %}
 {% endfor %}

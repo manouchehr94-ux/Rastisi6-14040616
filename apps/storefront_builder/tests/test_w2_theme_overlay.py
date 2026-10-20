@@ -25,7 +25,6 @@ from django.core.cache import cache
 from django.test import SimpleTestCase
 
 from apps.storefront_builder.services import layout_service
-from apps.storefront_builder.models import StorefrontPage
 from apps.stores.models import Store
 
 from .test_views import StorefrontBuilderViewsTestCase
@@ -290,7 +289,7 @@ class ThemeReadyTemplateCompatibilityTests(SimpleTestCase):
         )
 
         presets = lpr.list_ready_templates()
-        self.assertEqual(len(presets), 50)
+        self.assertEqual(len(presets), 53)
         required = set(COMPONENT_FAMILIES)
         for preset in presets:
             with self.subTest(preset=preset.key):
@@ -819,8 +818,6 @@ class ThemeR4EndpointTests(StorefrontBuilderViewsTestCase):
         super().setUp()
         cache.clear()
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
 
     def _mutate(self, mutation):
@@ -1030,7 +1027,6 @@ class ThemeSingleResolutionTests(StorefrontBuilderViewsTestCase):
         Draft twice."""
         from unittest.mock import patch
         from django.urls import reverse
-        from apps.storefront_builder.services import render_service
         from apps.storefront_builder.services import appearance_authority_service
 
         # Give the Draft a real occasion so the context processor does real work.
@@ -1046,7 +1042,6 @@ class ThemeSingleResolutionTests(StorefrontBuilderViewsTestCase):
         # of which module-level name each caller imported.
         from apps.storefront_builder.storefront_appearance import rendering as _rendering
         from apps.storefront_builder.services import render_service as _rs
-        from apps.storefront_builder import views as _views
 
         real = _rendering.resolve_store_appearance_render_state
         calls = {"n": 0}
@@ -1056,8 +1051,7 @@ class ThemeSingleResolutionTests(StorefrontBuilderViewsTestCase):
             return real(version)
 
         with patch.object(_rendering, "resolve_store_appearance_render_state", _counting), \
-             patch.object(_rs, "resolve_store_appearance_render_state", _counting), \
-             patch.object(_views, "resolve_store_appearance_render_state", _counting):
+             patch.object(_rs, "resolve_store_appearance_render_state", _counting):
             resp = self.client.get(
                 reverse("dashboard:storefront-builder-preview"), {"page": "listing"}
             )
@@ -1256,11 +1250,8 @@ class ThemeRenderedPreviewPublicParityTests(StorefrontBuilderViewsTestCase):
     def setUp(self):
         super().setUp()
         cache.clear()
-        from django.urls import reverse
 
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
 
     def _extract_occasion(self, html):
@@ -1332,8 +1323,6 @@ class ThemeNoneNormalizationTests(StorefrontBuilderViewsTestCase):
         super().setUp()
         cache.clear()
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
 
     def test_apply_theme_none_normalizes_to_clear_state(self):

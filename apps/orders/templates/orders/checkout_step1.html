@@ -1,8 +1,8 @@
-{% extends "base.html" %}
+{% extends "storefront_shell.html" %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 {% load static persian %}
 
-{% block title %}تسویه‌حساب و پرداخت امن | {{ SHOP_NAME }}{% endblock %}
+{% block title %}تسویه‌حساب | {{ SHOP_NAME }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cart.css' %}">
@@ -13,9 +13,9 @@
 <div class="top"><div class="wrap">
   <a class="logo" href="/">
     <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a2 2 0 00-1 3.73V8L3 14v2h18v-2L13 8V6.73A2 2 0 0012 3z"/></svg></span>
-    <span><b>{{ SHOP_NAME }}</b><small>تسویه‌حساب امن</small></span>
+    <span><b>{{ SHOP_NAME }}</b><small>تسویه‌حساب</small></span>
   </a>
-  <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>اتصال امن (SSL)</span>
+  {% if request.is_secure %}<span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>اتصال امن (SSL)</span>{% endif %}
   <a class="back" href="{% url 'cart:detail' %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg><span class="lbl">بازگشت به فروشگاه</span></a>
 </div></div>
 

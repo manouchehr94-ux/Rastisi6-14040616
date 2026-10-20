@@ -12,7 +12,7 @@
 {% block canonical %}<link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">{% endblock %}
 <link rel="icon" href="{% static 'favicon.ico' %}">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
-<link rel="stylesheet" href="{% static 'portal/css/platform-tokens.css' %}?v=20260819-3">
+<link rel="stylesheet" href="{% static 'portal/css/platform-tokens.css' %}?v=20261009-a11y">
 {% block extra_css %}{% endblock %}
 {% if turnstile_enabled %}
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>

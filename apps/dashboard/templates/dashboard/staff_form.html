@@ -1,29 +1,102 @@
 {% extends "dashboard/base_admin.html" %}
 {% block title %}افزودن عضو تیم | پنل مدیریت{% endblock %}
 {% block page_title %}افزودن عضو تیم{% endblock %}
-{% block page_sub %}شماره موبایل و نقشِ عضوِ تازه را وارد کنید{% endblock %}
+{% block page_sub %}{% if preview %}مرحلهٔ ۲ از ۲ — بررسی و تأیید{% else %}مرحلهٔ ۱ از ۲ — مشخصات و نقش{% endif %}{% endblock %}
+{% block extra_css %}
+<style>
+.staff-steps{display:flex;gap:8px;margin:0 0 16px;font-size:12.5px;font-weight:700}
+.staff-steps span{padding:5px 12px;border-radius:999px;background:var(--bg,#f3f4f6);color:var(--muted,#6b7280)}
+.staff-steps .on{background:var(--brand,#6d28d9);color:#fff}
+.staff-role-list{display:grid;gap:8px}
+.staff-role{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1.5px solid var(--line,#e5e7eb);border-radius:12px;cursor:pointer}
+.staff-role:has(input:checked){border-color:var(--brand,#6d28d9);background:rgba(109,40,217,.05)}
+.staff-role input{margin-top:5px}
+.staff-role b{display:block;font-size:13.5px}
+.staff-role small{color:var(--muted,#6b7280);line-height:1.7}
+.staff-review dl{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:0 0 14px}
+.staff-review dt{color:var(--muted,#6b7280);font-size:12.5px}
+.staff-review dd{margin:0;font-weight:700}
+.staff-note{padding:10px 12px;border-radius:10px;background:#fff7ed;color:#9a3412;font-size:12.5px;line-height:1.8;margin:0 0 14px}
+.staff-note.info{background:#eff6ff;color:#1e3a8a}
+.staff-error-all{padding:10px 12px;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:13px;margin:0 0 14px}
+</style>
+{% endblock %}
 {% block content %}
 <div class="form-card">
-  <form method="post">
+  <div class="staff-steps" aria-hidden="true"><span class="{% if not preview %}on{% endif %}">۱ · مشخصات</span><span class="{% if preview %}on{% endif %}">۲ · بررسی و تأیید</span></div>
+
+  {% if errors.form %}<div class="staff-error-all" role="alert">{{ errors.form }}</div>{% endif %}
+
+  {% if preview %}
+  <div class="staff-review">
+    <dl>
+      <dt>شماره موبایل</dt><dd dir="ltr" style="text-align:right">{{ preview.phone }}</dd>
+      {% if preview.full_name %}<dt>نام</dt><dd>{{ preview.full_name }}</dd>{% endif %}
+      {% if preview.email %}<dt>ایمیل</dt><dd dir="ltr" style="text-align:right">{{ preview.email }}</dd>{% endif %}
+      <dt>نقش</dt><dd>{{ role_label }}<br><small style="font-weight:400;color:var(--muted,#6b7280)">{{ role_description }}</small></dd>
+    </dl>
+    {% if preview.state == "new_account" %}
+      <p class="staff-note info">برای این شماره هنوز حسابی وجود ندارد؛ با تأیید، یک حسابِ تیمی ساخته می‌شود. عضو با <b>شمارهٔ موبایل و کدِ پیامکی</b> وارد می‌شود (رمز عبور لازم نیست و رمزی ساخته نمی‌شود).</p>
+    {% elif preview.state == "existing_account" %}
+      <p class="staff-note info">این شماره از قبل حسابی در راستیسی دارد{% if preview.existing_name %} ({{ preview.existing_name }}){% endif %}؛ همان حساب فقط به این فروشگاه اضافه می‌شود و اطلاعاتِ قبلیِ آن تغییر نمی‌کند.</p>
+    {% elif preview.state == "revoked" %}
+      <p class="staff-note">دسترسیِ این کاربر پیش‌تر لغو شده بود؛ با تأیید، همان عضویت با نقشِ بالا دوباره فعال می‌شود.</p>
+    {% elif preview.state == "invited" %}
+      <p class="staff-note">این کاربر قبلاً دعوت شده بود؛ با تأیید، عضویتش فعال می‌شود.</p>
+    {% endif %}
+    <p class="staff-note">پیامک یا ایمیلِ دعوت به‌صورت خودکار ارسال <b>نمی‌شود</b>. پس از افزودن، نشانیِ ورود را به عضو بدهید: <span dir="ltr">{{ login_url }}</span></p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="step" value="confirm">
+      <input type="hidden" name="review_token" value="{{ review_token }}">
+      <input type="hidden" name="phone" value="{{ preview.phone }}">
+      <input type="hidden" name="full_name" value="{{ preview.full_name }}">
+      <input type="hidden" name="email" value="{{ preview.email }}">
+      <input type="hidden" name="role" value="{{ preview.role }}">
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary">تأیید و افزودن</button>
+        <button type="submit" class="btn btn-secondary" formaction="{% url 'dashboard:staff-add' %}" name="step" value="edit" formnovalidate>ویرایش مشخصات</button>
+        <a href="{% url 'dashboard:staff-list' %}" class="btn btn-secondary">انصراف</a>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <form method="post" novalidate>
     {% csrf_token %}
+    <input type="hidden" name="step" value="review">
     <div class="field-group">
       <label class="field-label required" for="id_phone">شماره موبایل</label>
-      <input type="text" name="phone" id="id_phone" required maxlength="11" dir="ltr" placeholder="09121234567" class="form-input">
-      <span class="field-help">اگر این شماره پیش‌تر در فروشگاه ثبت‌نام نکرده باشد، حسابِ کاربری تازه‌ای برایش ساخته می‌شود.</span>
+      <input type="text" name="phone" id="id_phone" required inputmode="tel" autocomplete="off" dir="ltr" placeholder="09121234567" class="form-input" value="{{ values.phone }}" {% if errors.phone %}aria-invalid="true" aria-describedby="err_phone"{% endif %}>
+      {% if errors.phone %}<span class="field-error" id="err_phone" role="alert">{{ errors.phone }}</span>{% endif %}
+      <span class="field-help">ارقام فارسی و قالب‌هایی مثل ‎+98912…‎ هم پذیرفته می‌شود. اگر شماره حسابی داشته باشد همان حساب به فروشگاه اضافه می‌شود؛ وگرنه حسابِ تیمیِ تازه ساخته می‌شود.</span>
     </div>
     <div class="field-group">
-      <label class="field-label required" for="id_role">نقش</label>
-      <select name="role" id="id_role" class="form-select">
-        {% for value, label in assignable_roles %}
-        <option value="{{ value }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-      <span class="field-help">نقش تعیین می‌کند این عضو به کدام بخش‌های پنل مدیریت دسترسی دارد.</span>
+      <label class="field-label" for="id_full_name">نام (اختیاری)</label>
+      <input type="text" name="full_name" id="id_full_name" maxlength="60" class="form-input" value="{{ values.full_name }}" {% if errors.full_name %}aria-invalid="true" aria-describedby="err_name"{% endif %}>
+      {% if errors.full_name %}<span class="field-error" id="err_name" role="alert">{{ errors.full_name }}</span>{% endif %}
+      <span class="field-help">فقط برای شناسایی در فهرست؛ اگر حساب نامی دارد بازنویسی نمی‌شود.</span>
     </div>
+    <div class="field-group">
+      <label class="field-label" for="id_email">ایمیل (اختیاری)</label>
+      <input type="email" name="email" id="id_email" dir="ltr" class="form-input" value="{{ values.email }}" {% if errors.email %}aria-invalid="true" aria-describedby="err_email"{% endif %}>
+      {% if errors.email %}<span class="field-error" id="err_email" role="alert">{{ errors.email }}</span>{% endif %}
+    </div>
+    <fieldset class="field-group" style="border:0;padding:0;margin:0 0 14px">
+      <legend class="field-label required">نقش</legend>
+      <div class="staff-role-list">
+        {% for r in roles_info %}
+        <label class="staff-role"><input type="radio" name="role" value="{{ r.value }}" {% if values.role == r.value %}checked{% endif %} required>
+          <span><b>{{ r.label }}</b><small>{{ r.description }}</small></span></label>
+        {% endfor %}
+      </div>
+      {% if errors.role %}<span class="field-error" role="alert">{{ errors.role }}</span>{% endif %}
+      <span class="field-help">نقش مالک از این مسیر داده نمی‌شود؛ واگذاری مالکیت فقط با «انتقال مالکیت» انجام می‌شود.</span>
+    </fieldset>
     <div class="btn-row">
-      <button type="submit" class="btn btn-primary">افزودن</button>
+      <button type="submit" class="btn btn-primary">بررسی و ادامه</button>
       <a href="{% url 'dashboard:staff-list' %}" class="btn btn-secondary">انصراف</a>
     </div>
   </form>
+  {% endif %}
 </div>
 {% endblock %}

@@ -25,9 +25,9 @@ import dataclasses
 
 from django.db import transaction
 
-from .. import global_region_registry, layout_preset_registry, section_registry
+from .. import appearance_registry, global_region_registry, layout_preset_registry, section_registry
 from ..layout_preset_registry import LayoutPresetDefinition
-from ..models import StorefrontContainer, StorefrontLayoutVersion, StorefrontSection
+from ..models import StorefrontContainer, StorefrontLayoutVersion, StorefrontPage, StorefrontSection
 from ..storefront_appearance.rendering import (
     ResolvedStoreAppearance,
     resolve_store_appearance_manifest_state,
@@ -91,7 +91,29 @@ class LockedSectionsPresentError(InvalidPresetError):
     از مسیرِ تک‌section از قبل رد می‌کند؛ یک «مسیرِ جایگزین» (Preset) نباید
     بتواند همان محافظت را دور بزند. ``InvalidPresetError`` را ارث‌بری
     می‌کند تا کدِ ویوِ موجود (``except InvalidPresetError``) بدونِ تغییر
-    این خطا را هم درست نشان دهد."""
+    این خطا را هم درست نشان دهد.
+
+    ``locked_sections`` (اختیاری): فهرستِ ``{"id", "page", "section_key"}`` از
+    sectionهای قفل‌شده — تا لایه‌ی UI به‌جایِ پیامِ عمومی، دقیقاً همان‌ها را
+    نشان دهد؛ برایِ ساختنِ خطا بدونِ آن هم سازگار است."""
+
+    def __init__(self, message="", *, locked_sections=None):
+        super().__init__(message)
+        self.locked_sections = list(locked_sections or [])
+
+
+class ReplaceConfirmationRequiredError(InvalidPresetError):
+    """Explicit Ready Template selection REPLACES the page composition with the
+    template's exact recipe. When that would discard merchant-made design work
+    the caller must have shown the merchant a confirmation first; this error is
+    the server-side guarantee (never a client-only check) that nothing is
+    replaced until the merchant explicitly confirmed. ``summary`` is the
+    read-only ``describe_exact_replacement`` dry-run so the UI can say exactly
+    what will be replaced."""
+
+    def __init__(self, message="", *, summary=None):
+        super().__init__(message)
+        self.summary = dict(summary or {})
 
 
 def _validate_appearance_overlay(base_config: dict, overlay: dict) -> dict:
@@ -341,8 +363,13 @@ def _prepare_preset_application(
         # merchant color choice made *after* bootstrap is respected here
         # exactly like the palette itself is afterward, per this
         # function's own established rule.
-        if not current_appearance.get("color_overrides_customized"):
-            overlay["color_overrides"] = {}
+        # Per-property origin (``appearance_registry.override_origins``): the MERCHANT's overrides are kept, bootstrap carry-over and
+        # the previous template's untouched values are dropped, and the new template's own declared overrides are installed (a
+        # template may declare initial colour overrides; a merchant's value for the same key wins).
+        kept = appearance_registry.merchant_overrides(current_appearance, draft.template_baseline_snapshot)
+        for group in appearance_registry.OVERRIDE_GROUPS:
+            overlay[group] = {**(preset.appearance.get(group) or {}), **kept[group]}
+        overlay["color_overrides_customized"] = bool(kept["color_overrides"])
     overlay["layout_preset_key"] = preset.key
     try:
         cleaned_appearance = _validate_appearance_overlay(current_appearance, overlay)
@@ -943,6 +970,143 @@ def switch_ready_template_preserving(
             _preservation_merge_page(page, snapshot_entries)
 
 
+def _draft_is_untouched_baseline(draft: StorefrontLayoutVersion) -> bool:
+    """True only when the Draft provably still IS its recorded Ready Template
+    baseline: appearance/header/footer equal the snapshot and every covered page
+    passes the full canonical-graph proof. Anything else (no baseline, merchant
+    edit, uncertainty) is ``False`` — i.e. "replacing this would discard merchant
+    work". Shares ``_page_is_pristine`` with the switch classifier (one proof)."""
+    snapshot = draft.template_baseline_snapshot
+    if not snapshot or not snapshot.get("pages"):
+        return False
+    if draft.appearance_config != snapshot.get("appearance"):
+        return False
+    if snapshot.get("header_config") is not None and draft.header_config != snapshot["header_config"]:
+        return False
+    if snapshot.get("footer_config") is not None and draft.footer_config != snapshot["footer_config"]:
+        return False
+    return all(
+        _page_is_pristine(draft.get_page(page_type), snapshot) for page_type in snapshot["pages"]
+    )
+
+
+def describe_exact_replacement(
+    draft: StorefrontLayoutVersion, preset: LayoutPresetDefinition,
+) -> dict:
+    """READ-ONLY dry run of ``replace_with_ready_template_exact``: nothing is
+    written, no Section/Container row is touched. Returns what an explicit
+    selection of ``preset`` would do to ``draft`` so the UI can show a precise
+    confirmation and tests/ops can diagnose a Store before any mutation.
+
+    ``needs_confirmation`` is True when the replacement would discard design work
+    the merchant could have made (anything not provably the untouched baseline of
+    the current template). ``locked_sections`` lists the locked sections on the
+    pages that would be replaced — they require an explicit, separate
+    authorisation (``allow_locked``)."""
+    prepared = _prepare_preset_application(draft, preset, check_locked=False)
+    pages = {}
+    locked = []
+    for page, (rows, _settings) in prepared.pages_to_replace.items():
+        existing = list(page.sections.order_by("order", "id"))
+        pages[page.page_type] = {
+            "current_sections": len(existing),
+            "target_sections": len(rows),
+        }
+        locked.extend(
+            {"id": section.pk, "page": page.page_type, "section_key": section.section_key}
+            for section in existing if section.is_locked
+        )
+    already = _draft_already_matches_preset(draft, preset)
+    has_content = layout_service._draft_has_any_content(draft)
+    return {
+        "template_key": preset.key,
+        "template_version": preset.version,
+        "already_applied": already,
+        "pages": pages,
+        "locked_sections": locked,
+        "needs_confirmation": bool(
+            not already and has_content and not _draft_is_untouched_baseline(draft)
+        ),
+    }
+
+
+@transaction.atomic
+def replace_with_ready_template_exact(
+    draft: StorefrontLayoutVersion,
+    preset: LayoutPresetDefinition,
+    *,
+    confirmed: bool = False,
+    allow_locked: bool = False,
+) -> bool:
+    """The Ready Template transition used by EXPLICIT merchant selection: the
+    selected template's complete canonical recipe becomes the composition of
+    every page it covers — exactly its sections, in its Container/Cell shape,
+    with nothing carried over from the previous template and nothing skipped
+    because of ``max_instances``, historical slot identity or missing business
+    data (the recipe is written as authored; data only decides what a section
+    DISPLAYS). Business data is never read or written here.
+
+    Same active Draft (SAME pk), draft-only, atomic, one DNA/baseline write path
+    (shared with the preserving switch). The caller owns lock / base-revision /
+    history / PRE-REPLACEMENT CHECKPOINT (see ``r4_mutation_service``); this
+    function enforces the two safety gates that must never be client-only:
+
+    * ``ReplaceConfirmationRequiredError`` unless ``confirmed`` when the
+      replacement would discard merchant-made design work;
+    * ``LockedSectionsPresentError`` unless ``allow_locked`` when a covered page
+      holds a locked section — a lock is never silently bypassed.
+
+    Idempotent: re-applying the template the Draft provably already is returns
+    ``False`` without a single write (identities, revision and history untouched).
+    Returns ``True`` when the composition was replaced.
+
+    Stable logical identity: a target slot whose cross-template semantic role
+    matches a section already on the page reuses that section's ``stable_id``
+    (same logical section in the new recipe) — the old row itself is replaced, so
+    no obsolete slot ever survives. Section-scoped media of the replaced rows is
+    preserved by the caller's pre-replacement checkpoint (``layout_service``
+    clones it) and is never reassigned to a different section."""
+    if not preset.is_ready_template:
+        raise InvalidPresetError(
+            f"«{preset.label_fa}» یک Ready Template نیست — جایگزینیِ دقیقِ قالب فقط "
+            "برایِ Ready Templateها معنادار است"
+        )
+    if _draft_already_matches_preset(draft, preset):
+        return False
+
+    summary = describe_exact_replacement(draft, preset)
+    if summary["locked_sections"] and not allow_locked:
+        raise LockedSectionsPresentError(
+            "قالب را نمی‌توان جایگزین کرد: بخش‌های قفل‌شده در صفحات زیر وجود دارد — "
+            "قفل آن‌ها را باز کنید یا جایگزینی را صریحاً (با نسخه‌ی پشتیبانِ قابل‌بازگشت) تأیید کنید",
+            locked_sections=summary["locked_sections"],
+        )
+    if summary["needs_confirmation"] and not confirmed:
+        raise ReplaceConfirmationRequiredError(
+            "این قالب چیدمانِ فعلیِ شما را با ساختارِ کاملِ خودش جایگزین می‌کند؛ "
+            "نسخه‌ی قبلی برای بازگشت نگه داشته می‌شود. برای ادامه تأیید صریح لازم است",
+            summary=summary,
+        )
+
+    prepared = _prepare_preset_application(draft, preset, check_locked=False)
+    # Capture role -> stable_id BEFORE any write (the writes below delete rows).
+    page_inputs = []
+    for page, (rows, container_settings) in prepared.pages_to_replace.items():
+        role_to_stable_id: dict[str, object] = {}
+        for section in page.sections.order_by("order", "id"):
+            role = _resolve_section_semantic_role(section)
+            if role and role not in role_to_stable_id:
+                role_to_stable_id[role] = section.stable_id
+        page_inputs.append(
+            (page, rows, container_settings, prepared.snapshot_pages[page.page_type], role_to_stable_id)
+        )
+
+    _write_template_dna_and_baseline(draft, preset, prepared, record_baseline_snapshot=True)
+    for page, rows, container_settings, snapshot_entries, role_to_stable_id in page_inputs:
+        _pristine_replace_page(page, rows, container_settings, snapshot_entries, role_to_stable_id)
+    return True
+
+
 def apply_preset_by_key(draft: StorefrontLayoutVersion, key: str) -> LayoutPresetDefinition:
     """میان‌بُرِ راحت برایِ لایه‌ی ویو — کلیدِ ناشناخته را قبل از هر تغییری
     fail-closed رد می‌کند."""
@@ -981,8 +1145,7 @@ class ResolvedPresetCandidate:
     Never persisted anywhere: ``pages`` maps page_type to a
     ``ResolvedPresetCandidatePage`` holding unsaved (``pk=None``)
     ``StorefrontSection`` instances — exactly the same "unsaved in-memory
-    Section" shape ``render_service.build_default_render_items`` already
-    constructs today for stores that have never published a Storefront V2.
+    Section" shape the shared render pipeline accepts.
     This is not a new in-memory-render pattern; it is the existing one,
     reused, via the new ``render_service.build_candidate_render_items``
     wrapper.
@@ -1021,7 +1184,11 @@ def resolve_preset_candidate(
     real (persisting) path raises for the same bad input, via the same
     ``validate_store_appearance_manifest`` function — before anything is
     written, since this whole function never writes."""
-    prepared = _prepare_preset_application(draft, preset)
+    # A candidate preview writes nothing, so a locked section on the CURRENT
+    # Draft can never be put at risk by it — the lock guard belongs to the
+    # destructive write paths only (owner contract: a read-only preview must not
+    # fail merely because the Store contains locked sections).
+    prepared = _prepare_preset_application(draft, preset, check_locked=False)
 
     resolved_store_appearance = None
     if preset.store_appearance:
@@ -1178,6 +1345,19 @@ def reset_storefront_to_baseline(draft: StorefrontLayoutVersion) -> LayoutPreset
 
 
 @transaction.atomic
+def _locked_sections_payload(draft: StorefrontLayoutVersion, page_types) -> list[dict]:
+    """The locked sections on ``page_types`` of ``draft`` as client-safe dicts —
+    what a refusal reports so the UI can name them instead of failing generically."""
+    out = []
+    for page_type in page_types:
+        page = draft.get_page(page_type)
+        out.extend(
+            {"id": section.pk, "page": page_type, "section_key": section.section_key}
+            for section in page.sections.filter(is_locked=True).order_by("order", "id")
+        )
+    return out
+
+
 def apply_baseline_snapshot(draft: StorefrontLayoutVersion, snapshot: dict) -> None:
     """Acceptance Batch 2 (post-U11) — دقیقاً همان بخشِ «نوشتن» (۳)
     ``apply_preset`` بالا، اما منبعِ حقیقتش عکسِ ذخیره‌شده‌یِ ``snapshot``
@@ -1189,13 +1369,12 @@ def apply_baseline_snapshot(draft: StorefrontLayoutVersion, snapshot: dict) -> N
     فقط صفحاتی که ``snapshot["pages"]`` صریحاً پوشش می‌دهد بازنویسی
     می‌شوند؛ صفحاتِ دیگر دست‌نخورده می‌مانند — همان قراردادِ ``apply_preset``
     («a preset may omit a page deliberately»)."""
-    for page_type in snapshot["pages"]:
-        page = draft.get_page(page_type)
-        if page.sections.filter(is_locked=True).exists():
-            raise LockedSectionsPresentError(
-                f"بازنشانی ممکن نیست — صفحه‌ی «{page.get_page_type_display()}» "
-                f"بخشِ قفل‌شده دارد؛ ابتدا قفل آن را باز کنید"
-            )
+    locked = _locked_sections_payload(draft, list(snapshot["pages"]))
+    if locked:
+        raise LockedSectionsPresentError(
+            "بازنشانی ممکن نیست — بخش‌های قفل‌شده وجود دارد؛ ابتدا قفل آن‌ها را باز کنید",
+            locked_sections=locked,
+        )
 
     draft.appearance_config = snapshot["appearance"]
     draft.template_provenance = build_template_provenance(
@@ -1358,6 +1537,15 @@ def reset_storefront_with_checkpoint(store, *, user=None) -> StorefrontLayoutVer
         raise NoTemplateBaselineError(
             "این Draft هرگز یک Ready Template اعمال‌شده ندارد — چیزی برای بازنشانی وجود ندارد"
         )
+    # Refuse BEFORE the checkpoint, against the real Draft: the refusal then names the Draft's own locked
+    # sections (checkpointing first would report ids of a rolled-back clone) and writes nothing at all.
+    snapshot_pages = (current_draft.template_baseline_snapshot or {}).get("pages") or {}
+    locked = _locked_sections_payload(current_draft, list(snapshot_pages))
+    if locked:
+        raise LockedSectionsPresentError(
+            "بازنشانی ممکن نیست — بخش‌های قفل‌شده وجود دارد؛ ابتدا قفل آن‌ها را باز کنید",
+            locked_sections=locked,
+        )
     draft = layout_service.checkpoint_draft_before_replacement(
         store, reason_label="پیش از بازنشانیِ کل ظاهر فروشگاه به قالب", user=user,
     )
@@ -1370,6 +1558,15 @@ def reset_page_with_checkpoint(store, page_type: str, *, user=None) -> Storefron
     """Acceptance Batch 2 (post-U11) — Issue 3، «RESET PAGE» با یکپارچگیِ
     تاریخچه‌یِ الزامیِ همان بخش — همان الگویِ ``reset_storefront_with_checkpoint``،
     محدود به یک صفحه‌یِ مشخص."""
+    current_draft = layout_service.get_or_create_draft(store, user=user)
+    # An unknown page type falls through to ``reset_page_to_baseline``'s own precise error below.
+    if page_type in StorefrontPage.PageType.values and current_draft.get_page(page_type).sections.filter(
+        is_locked=True
+    ).exists():
+        raise LockedSectionsPresentError(
+            "بازنشانی ممکن نیست — بخش‌های قفل‌شده‌ی این صفحه وجود دارد؛ ابتدا قفل آن‌ها را باز کنید",
+            locked_sections=_locked_sections_payload(current_draft, [page_type]),
+        )
     draft = layout_service.checkpoint_draft_before_replacement(
         store, reason_label=f"پیش از بازنشانیِ صفحه به قالب", user=user,
     )
@@ -1508,7 +1705,8 @@ def reset_page_to_baseline(draft: StorefrontLayoutVersion, page_type: str) -> No
     if page.sections.filter(is_locked=True).exists():
         raise LockedSectionsPresentError(
             f"بازنشانی ممکن نیست — صفحه‌ی «{page.get_page_type_display()}» بخشِ قفل‌شده دارد؛ "
-            f"ابتدا قفل آن را باز کنید"
+            f"ابتدا قفل آن را باز کنید",
+            locked_sections=_locked_sections_payload(draft, [page_type]),
         )
     page.containers.all().delete()
     page.sections.all().delete()

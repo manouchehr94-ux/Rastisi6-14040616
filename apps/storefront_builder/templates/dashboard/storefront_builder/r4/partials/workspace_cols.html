@@ -1,0 +1,36 @@
+{% load storefront_builder_extras %}
+{% comment %}
+The two-column set of titled cards of ONE region of the settings workspace: a whole tab (محتوا / پیشرفته, or a Design tab
+with a single sub-section) or ONE Design sub-section (R4-10). Expects ``region`` (``.columns`` / ``.is_single_column``).
+A design SLICE card carries its own ``design_groups``; ``card.key`` keeps the DOM ids of the repeated compound ``design``
+field unique. Every other card renders exactly as before.
+{% endcomment %}
+<div class="r4-ws-cols{% if region.is_single_column %} r4-ws-cols--single{% endif %}">
+  {% for column_name, cards in region.columns %}
+  {% if cards %}
+  <div class="r4-ws-col r4-ws-col--{{ column_name }}">
+    {% for card in cards %}
+    <section class="r4-ws-card" data-r4-ws-card="{{ card.key }}"{% if card.is_manage %} data-r4-ws-manage{% endif %}>
+      <header class="r4-ws-card-head"><h3>{{ card.label }}</h3>{% if card.hint %}<p>{{ card.hint }}</p>{% endif %}</header>
+      <div class="r4-ws-card-body"{% if not card.is_manage %} data-r4-ws-fields{% endif %}>
+        {% if card.has_media_manager %}
+        {% comment %}
+        R4-NATIVE media editing embedded inline (Phase 5 Task 4 R1a): reuses the canonical media manager body via htmx.
+        hx-headers is inherited by every descendant htmx request so add/edit/toggle/delete/move carry HX-R4-Inline.
+        {% endcomment %}
+        <div class="r4-inspector-media" data-r4-media-manager hx-headers='{"HX-R4-Inline": "1"}'>
+          <div class="r4-inspector-media-heading">مدیریت {{ media_label_plural }}</div>
+          {% include "dashboard/storefront_builder/partials/section_media_manager_body.html" with config=media_config items=media_items kind=media_kind %}
+        </div>
+        {% endif %}
+        {% if card.is_manage %}<div data-rs-section-actions></div>{% endif %}
+        {% for field in card.fields %}
+          {% include "dashboard/storefront_builder/r4/partials/settings_field.html" with field=field current_field_value=field_values|dictget:field.key design_groups=card.design_groups|default:design_groups field_dom_suffix=card.subsection %}
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>

@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.storefront_builder import global_region_registry
-from apps.storefront_builder.models import StorefrontLayoutVersion, StorefrontPage
+from apps.storefront_builder.models import StorefrontLayoutVersion
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.stores.models import Store, StoreDomain, StoreMembership
@@ -318,8 +318,6 @@ class MobileNavPreviewAndPublicTests(TestCase):
             status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
         )
         layout = svc.get_or_create_layout(self.store)
-        layout.r4_editor_enabled = True
-        layout.save(update_fields=["r4_editor_enabled"])
         draft = svc.get_or_create_draft(self.store, user=self.user)
         preset_service.apply_preset_by_key(draft, "dark_digital")
         draft.refresh_from_db()

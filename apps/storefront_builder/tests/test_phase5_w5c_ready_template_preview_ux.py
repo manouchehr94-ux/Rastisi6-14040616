@@ -23,6 +23,8 @@ EXISTING canonical live-preview route (``storefront_template_live_preview``)
   focus/keyboard behavior is proven separately by browser QA).
 """
 
+import re
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.management import call_command
@@ -100,79 +102,34 @@ class GalleryPreviewTriggerTests(TestCase):
         self.url = reverse("dashboard:storefront-builder-templates")
 
     def test_gallery_lists_every_registered_ready_template(self):
-        """Contract A — registry-derived, count == 50, never a second
-        hand-written 50-key list here."""
-        self.assertEqual(len(REGISTERED_READY_TEMPLATE_KEYS), 50)
-        response = self.client.get(self.url)
+        """Contract A — registry-derived, count == 53, never a second hand-written key list here. The ONE gallery
+        is the Design Studio's; the old gallery URL forwards to it."""
+        self.assertEqual(len(REGISTERED_READY_TEMPLATE_KEYS), 53)
+        response = self.client.get(self.url, follow=True)
         self.assertEqual(response.status_code, 200)
-        html = response.content.decode()
-        for preset in lpr.list_ready_templates():
-            self.assertIn(preset.label_fa, html)
+        listed = {t["key"] for t in response.context["studio"]["client"]["templates"]}
+        self.assertEqual(listed, set(REGISTERED_READY_TEMPLATE_KEYS))
 
-    def test_every_card_carries_both_canonical_preview_urls_and_label(self):
-        """Contract B, C — both URLs come from Django's own {% url %}
-        resolution (reverse()), never a client-guessed pattern."""
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        for preset in lpr.list_ready_templates():
-            demo_url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": preset.key})
-            merchant_url = demo_url + "?data=merchant"
-            self.assertIn(f'data-tpl-preview-url-demo="{demo_url}"', html)
-            self.assertIn(f'data-tpl-preview-url-merchant="{merchant_url}"', html)
-            self.assertIn(f'data-tpl-preview-label="{preset.label_fa}"', html)
+    def test_studio_builds_preview_urls_from_the_canonical_route_only(self):
+        """Contracts B, C, D, E — the Studio resolves the preview route with Django's own reverse(); its script
+        adds only ``data=merchant`` and ``page`` (never a store/tenant identifier) and uses no other route."""
+        from pathlib import Path
 
-    def test_merchant_url_has_no_tenant_identifying_query_params(self):
-        """Contract D — merchant mode is a bare ``?data=merchant``, never a
-        store_id/tenant_id/store slug the client could smuggle in."""
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        preset = lpr.list_ready_templates()[0]
-        demo_url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": preset.key})
-        merchant_url = demo_url + "?data=merchant"
-        self.assertIn(f'data-tpl-preview-url-merchant="{merchant_url}"', html)
-        self.assertNotIn("store_id=", html)
-        self.assertNotIn("tenant_id=", html)
+        import apps.storefront_builder as sfb_package
 
-    def test_demo_url_is_the_bare_canonical_route(self):
-        """Contract E — Demo mode is the SAME route with no extra params,
-        so it continues to resolve to the canonical rasti-mode-demo Store."""
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        preset = lpr.list_ready_templates()[0]
-        demo_url = reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": preset.key})
-        self.assertIn(f'data-tpl-preview-url-demo="{demo_url}"', html)
+        response = self.client.get(self.url, follow=True)
+        live = response.context["studio"]["client"]["live_preview_url"]
+        self.assertEqual(live, reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": "__KEY__"}))
+        js = (Path(sfb_package.__file__).parent / "static" / "storefront_builder" / "r4_studio.js").read_text(encoding="utf-8")
+        body = js[js.index("function liveTemplateUrl(key)"):js.index("function previewTemplate(key)")]
+        self.assertEqual(sorted(set(re.findall(r"searchParams\.set\('(\w+)'", body))), ["data", "page"])
+        for forbidden in ("store_id", "tenant", "store="):
+            self.assertNotIn(forbidden, body)
 
-    def test_exactly_one_preview_iframe_in_the_dialog_markup(self):
-        """Contract F — one shared dialog/iframe, not one per card."""
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertEqual(html.count("data-tpl-preview-frame"), 1)
-        self.assertEqual(html.count("<iframe"), 1)
-
-    def test_device_controls_expose_the_1200_768_390_contract(self):
-        """Contract G — same width contract as R4's own device switcher."""
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn('data-desktop-viewport-width="1200"', html)
-        self.assertIn('data-tablet-viewport-width="768"', html)
-        self.assertIn('data-mobile-viewport-width="390"', html)
-        self.assertIn('data-tpl-preview-device="desktop"', html)
-        self.assertIn('data-tpl-preview-device="tablet"', html)
-        self.assertIn('data-tpl-preview-device="mobile"', html)
-
-    def test_data_source_controls_present(self):
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn('data-tpl-preview-datasource="merchant"', html)
-        self.assertIn('data-tpl-preview-datasource="demo"', html)
-
-    def test_screenshot_fallback_thumbnail_still_rendered(self):
-        """Contract O — screenshot/SVG fallback authority untouched; the
-        Gallery card thumbnail still renders (screenshot <img> or the SVG
-        fallback), unrelated to the new preview trigger wiring."""
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn('class="tpl-thumb"', html)
+    def test_screenshot_fallback_thumbnail_still_available_for_every_template(self):
+        response = self.client.get(self.url, follow=True)
+        for t in response.context["studio"]["client"]["templates"]:
+            self.assertTrue(t["thumbnail_svg"].startswith("<svg") or t["thumbnail_url"], t["key"])
 
     def test_invalid_template_key_still_404s(self):
         """Contract Q — unrelated to W5C; regression guard only."""
@@ -180,45 +137,6 @@ class GalleryPreviewTriggerTests(TestCase):
             reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": "not-a-real-key"}),
         )
         self.assertEqual(response.status_code, 404)
-
-
-@override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
-class GalleryDialogAccessibilityMarkupTests(TestCase):
-    """Contract R (static markup half; dynamic focus/keyboard behavior is
-    proven by browser QA)."""
-
-    def setUp(self):
-        cache.clear()
-        self.store = _akhlaghi()
-        self.store.admin_subdomain = ADMIN_HOST.split(".")[0]
-        self.store.save(update_fields=["admin_subdomain"])
-        self.staff = User.objects.create_user(username="w5c_a11y_owner", password="pass12345", is_staff=True)
-        StoreMembership.objects.create(
-            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
-            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
-        )
-        self.client = Client(HTTP_HOST=ADMIN_HOST)
-        self.client.login(username="w5c_a11y_owner", password="pass12345")
-        self.url = reverse("dashboard:storefront-builder-templates")
-
-    def test_dialog_has_role_dialog_aria_modal_and_labelledby(self):
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn('role="dialog"', html)
-        self.assertIn('aria-modal="true"', html)
-        self.assertIn("aria-labelledby=", html)
-
-    def test_dialog_has_an_explicit_close_control(self):
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn("data-tpl-preview-close", html)
-
-    def test_device_and_datasource_buttons_expose_aria_pressed(self):
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn('data-tpl-preview-device="desktop" aria-pressed="true"', html)
-        self.assertIn('data-tpl-preview-device="tablet" aria-pressed="false"', html)
-        self.assertIn('data-tpl-preview-device="mobile" aria-pressed="false"', html)
 
 
 @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
@@ -278,7 +196,7 @@ class GalleryPreviewNonMutationTests(TestCase):
 
     def test_opening_gallery_is_non_mutating(self):
         before = _draft_snapshot(self.draft)
-        response = self.client.get(self.gallery_url)
+        response = self.client.get(self.gallery_url, follow=True)  # forwards to the Studio gallery
         self.assertEqual(response.status_code, 200)
         after = _draft_snapshot(self.draft)
         self.assertEqual(before, after)
@@ -355,16 +273,20 @@ class GalleryApplyPathUnchangedTests(TestCase):
         self.client.login(username="w5c_apply_owner", password="pass12345")
         self.url = reverse("dashboard:storefront-builder-templates")
 
-    def test_apply_form_still_posts_to_the_existing_endpoint(self):
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        apply_url = reverse("dashboard:storefront-builder-apply-preset")
-        self.assertIn(f'action="{apply_url}"', html)
-        self.assertIn('name="preset_key"', html)
-        self.assertIn("csrfmiddlewaretoken", html)
+    def test_apply_endpoint_still_exists_and_applies_a_ready_template_to_the_draft_only(self):
+        draft = svc.get_or_create_draft(self.store)
+        published_before = svc.get_or_create_layout(self.store).published_version_id
+        response = self.client.post(
+            reverse("dashboard:storefront-builder-apply-preset"),
+            {"preset_key": "warm_boutique", "confirm_preset_apply": "1"},
+        )
+        self.assertEqual(response.status_code, 302)
+        draft.refresh_from_db()
+        self.assertEqual(draft.template_provenance["template"]["key"], "warm_boutique")
+        self.assertEqual(svc.get_or_create_layout(self.store).published_version_id, published_before)
 
     def test_no_second_apply_or_preview_mutation_endpoint_introduced(self):
-        response = self.client.get(self.url)
+        response = self.client.get(self.url, follow=True)
         html = response.content.decode()
         for forbidden in ("preview.apply", "modal.apply", "/preview/apply/"):
             self.assertNotIn(forbidden, html)
@@ -372,18 +294,25 @@ class GalleryApplyPathUnchangedTests(TestCase):
     def test_replace_content_confirmation_still_gated_correctly(self):
         draft = svc.get_or_create_draft(self.store)
         preset_service.apply_preset(draft, lpr.get_layout_preset("dense_marketplace"))
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn("confirm(", html)
-        self.assertIn('name="confirm_preset_apply" value="1"', html)
+        from apps.storefront_builder.models import StorefrontSection
+
+        StorefrontSection.objects.create(
+            page=draft.get_page("home"), section_key="rich_text", order=999, settings={"content": "merchant note"},
+        )
+        response = self.client.get(self.url, follow=True)
+        cards = {c["preset"].key: c for c in response.context["studio"]["template_cards"]}
+        self.assertTrue(cards["warm_boutique"]["would_replace_existing_content"])
+        # the server gate: no confirmation -> nothing is replaced
+        self.client.post(reverse("dashboard:storefront-builder-apply-preset"), {"preset_key": "warm_boutique"})
+        draft.refresh_from_db()
+        self.assertEqual(draft.template_provenance["template"]["key"], "dense_marketplace")
 
     def test_current_template_badge_still_renders(self):
         draft = svc.get_or_create_draft(self.store)
         preset_service.apply_preset(draft, lpr.get_layout_preset("warm_boutique"))
-        response = self.client.get(self.url)
-        html = response.content.decode()
-        self.assertIn("قالبِ فعلی", html)
-        self.assertIn("در حال استفاده", html)
+        response = self.client.get(self.url, follow=True)
+        current = [t["key"] for t in response.context["studio"]["client"]["templates"] if t["is_current"]]
+        self.assertEqual(current, ["warm_boutique"])
 
 
 @override_settings(ALLOWED_HOSTS=["sfb-w5c-tenant-a.rastisi.localhost", "sfb-w5c-tenant-b.rastisi.localhost", "testserver"])

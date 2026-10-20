@@ -16,7 +16,6 @@ from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.models import StorefrontPage, StorefrontSection
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
-from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.models import Store, StoreDomain, StoreMembership
 
 User = get_user_model()
@@ -155,28 +154,16 @@ class DraftOnlyAndPublishLifecycleTests(PresetServiceTestCase):
         self.assertContains(preview_resp, 'data-section-key="category_grid"')
 
     def test_publish_activates_preset_publicly(self):
-        """``data-section-key`` فقط در Preview درج می‌شود (نگاه کنید به
-        ``responsive_section_wrapper.html``)، پس در صفحه‌ی عمومی به‌جایِ آن
-        از تعدادِ بلوک‌هایِ رندرشده (``rsec``) استفاده می‌کنیم.
-
-        ``dense_catalog`` هفت section روی صفحه‌ی اصلی دارد، اما Acceptance
-        Batch 1 (post-U11) چهارتایِ آن‌ها (``newest_products``/
-        ``best_sellers``/``discounted_products``/``amazing_offers`` — همگی
-        section‌هایِ داده‌محورِ اختیاری) را، وقتی داده‌شان واقعاً خالی است
-        (این Store تازه هیچ کالایی ندارد)، از صفحه‌ی عمومی/زنده حذف
-        می‌کند — نه Builder/editor. پس فقط سه‌تای باقی‌مانده
-        (``category_grid``/``brand_carousel``/``trust_features``) واقعاً
-        رندر می‌شوند؛ نگاه کنید به
-        ``render_service.hide_empty_public_sections`` و
-        ``test_acceptance_batch1.EmptyDataDrivenSectionsHiddenOnPublicTests``
-        برایِ پوششِ کاملِ این قرارداد."""
+        """``data-section-key`` فقط در Preview درج می‌شود، پس در صفحه‌ی عمومی از تعدادِ بلوک‌هایِ رندرشده
+        (``rsec``) استفاده می‌کنیم. قراردادِ مالک (ترکیبِ دقیقِ قالب): هر هفت sectionِ ``dense_catalog`` روی
+        صفحه‌ی اصلی می‌ماند — بخش‌هایِ داده‌محورِ خالی هم حذف نمی‌شوند و «حالت خالی»ِ عمومی نشان می‌دهند."""
         draft = svc.get_or_create_draft(self.store)
         preset_service.apply_preset(draft, self.preset)
         svc.publish(self.store)
 
         public_resp = self.public_client.get(reverse("catalog:home"))
         self.assertEqual(public_resp.status_code, 200)
-        self.assertEqual(public_resp.content.decode().count('class="rsec"'), 3)
+        self.assertEqual(public_resp.content.decode().count('class="rsec"'), 7)
 
     def test_header_footer_config_land_on_version_not_sections(self):
         draft = svc.get_or_create_draft(self.store)
@@ -522,47 +509,6 @@ class StaleColorOverridesClearedOnApplyTests(PresetServiceTestCase):
         config = bootstrap_service.bootstrap_appearance_config(self.store)
         self.assertFalse(config.get("color_overrides_customized", False))
 
-    def test_dashboard_color_save_view_flags_a_genuine_override_as_customized(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        svc.get_or_create_draft(self.store, user=self.staff)
-        response = self.admin_client.post(
-            reverse("dashboard:storefront-builder-appearance"),
-            {"color_primary": "#112233"},
-        )
-        self.assertIn(response.status_code, (302, 200))
-        draft = svc.get_or_create_draft(self.store)
-        self.assertTrue(draft.appearance_config.get("color_overrides_customized"))
-        self.assertEqual(draft.appearance_config.get("color_overrides", {}).get("primary"), "#112233")
-
-    def test_dashboard_reset_all_overrides_clears_the_customized_flag(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        draft = svc.get_or_create_draft(self.store, user=self.staff)
-        draft.appearance_config = {
-            **draft.effective_appearance_config(),
-            "color_overrides": {"primary": "#112233"},
-            "color_overrides_customized": True,
-        }
-        draft.save(update_fields=["appearance_config"])
-
-        response = self.admin_client.post(
-            reverse("dashboard:storefront-builder-appearance"),
-            {"reset_all_overrides": "1"},
-        )
-        self.assertIn(response.status_code, (302, 200))
-        draft.refresh_from_db()
-        self.assertFalse(draft.appearance_config.get("color_overrides_customized"))
-        self.assertEqual(draft.appearance_config.get("color_overrides"), {})
-
 
 class ViewLevelTests(PresetServiceTestCase):
     """۲۴، ۲۵، ۲۶ — احراز هویت، CSRF، کلیدِ نامعتبر."""
@@ -619,11 +565,16 @@ class ViewLevelTests(PresetServiceTestCase):
         draft.refresh_from_db()
         self.assertNotEqual(draft.appearance_config.get("layout_preset_key"), "dense_catalog")
 
-    def test_apply_via_view_succeeds_with_confirmation(self):
+    def test_apply_via_view_refuses_a_non_ready_structural_preset_without_any_write(self):
+        """ARCH-02 — one Draft-changing path only: the dashboard apply endpoint applies Ready Templates (through
+        the Studio's own switch) and refuses structural presets; nothing is written."""
+        draft_before = svc.get_or_create_draft(self.store)
+        fingerprint = (draft_before.pk, draft_before.edit_revision, dict(draft_before.appearance_config))
         resp = self.admin_client.post(
             reverse("dashboard:storefront-builder-apply-preset"),
             {"preset_key": "dense_catalog", "confirm_preset_apply": "1"},
         )
         self.assertEqual(resp.status_code, 302)
         draft = svc.get_or_create_draft(self.store)
-        self.assertEqual(draft.appearance_config.get("layout_preset_key"), "dense_catalog")
+        self.assertEqual(fingerprint, (draft.pk, draft.edit_revision, dict(draft.appearance_config)))
+        self.assertNotEqual(draft.appearance_config.get("layout_preset_key"), "dense_catalog")

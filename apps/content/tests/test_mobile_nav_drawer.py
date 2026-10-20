@@ -52,9 +52,8 @@ class SharedOverlayPrimitiveTests(SimpleTestCase):
 
 class MobileNavDrawerTests(SimpleTestCase):
     def setUp(self):
-        # The drawer now lives in a shared partial included by base.html; the
-        # burger + body-scope wiring stay in base.html. Assert against both.
-        self.base = _BASE_HTML.read_text(encoding="utf-8")
+        # The drawer lives in a shared partial included by the ONE canonical shell header, which also owns the burger.
+        self.base = _SHELL_HEADER.read_text(encoding="utf-8")
         self.drawer = _DRAWER_PARTIAL.read_text(encoding="utf-8")
         self.src = self.base + "\n" + self.drawer
 
@@ -114,11 +113,12 @@ class DrawerIsSharedBySingleOwnerAcrossHeaderShellsTests(SimpleTestCase):
         self.assertIn("NAV_HEADER", src)
         self.assertNotIn("Menu.objects", src)
 
-    def test_base_html_includes_the_shared_drawer_partial(self):
+    def test_base_html_owns_neither_a_header_nor_a_drawer(self):
         src = _BASE_HTML.read_text(encoding="utf-8")
-        self.assertIn("partials/mobile_nav_drawer.html", src)
-        # The drawer markup is no longer inlined/duplicated in base.html.
+        # base.html is only the document frame: the single header (and its drawer) is the engine shell header.
+        self.assertNotIn("mobile_nav_drawer", src)
         self.assertNotIn('id="mobile-nav-drawer"', src)
+        self.assertNotIn('<nav class="nav"', src)
 
     def test_canonical_storefront_shell_wires_the_drawer(self):
         src = _SHELL_HEADER.read_text(encoding="utf-8")
@@ -220,44 +220,24 @@ class MobileDrawerSearchAffordanceTests(SimpleTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Phase 5 Task 7 — final-review remediation: legacy base.html live-search
-# context. The canonical search partial renders its REAL GET form only when
-# ``is_live_storefront`` is truthy; otherwise it renders the disabled Builder
-# Preview branch. The universal shell passes ``is_live_storefront=True`` when it
-# includes the header variant, but the ``uses_universal_shell == False`` public
-# FALLBACK renders base.html's own header + drawer via ``{{ block.super }}``,
-# and base.html included the drawer WITHOUT that flag — so on the real legacy
-# public path the drawer search silently rendered its disabled preview form
-# (no context processor supplies the flag). This is a RENDERED-template
-# regression test of that exact fallback, not a source-string assertion.
+# Live-search context: the canonical search partial renders its REAL GET form only when ``is_live_storefront`` is
+# truthy; otherwise it renders the disabled Builder Preview branch. The ONE engine shell header includes the drawer only
+# for the live storefront, so the public drawer search is always the live form.
 # ---------------------------------------------------------------------------
 from django.template.loader import render_to_string  # noqa: E402
 from django.test import SimpleTestCase as _SimpleTestCase  # noqa: E402
 
 
-class LegacyBaseHtmlDrawerSearchIsLiveTests(_SimpleTestCase):
-    """The public legacy base.html fallback must render a LIVE (enabled) drawer
-    search form, not the disabled Builder Preview branch.
-
-    Rendered-template proof at two levels:
-      1) the drawer partial's LIVE branch is gated on ``is_live_storefront``
-         (rendering it WITHOUT the flag — exactly what base.html did before this
-         fix — yields the disabled preview form; WITH the flag it is live); and
-      2) base.html's own drawer ``{% include %}`` passes ``is_live_storefront=True``
-         so the ``uses_universal_shell == False`` public fallback path is live.
-    """
+class DrawerSearchIsLiveTests(_SimpleTestCase):
+    """The public drawer renders a LIVE (enabled) search form, not the disabled Builder Preview branch."""
 
     _DRAWER_TEMPLATE = "partials/mobile_nav_drawer.html"
 
-    # The drawer consumes the canonical NAV authority; supply it (empty) so the
-    # partial renders under the test project's strict template settings. The
-    # search branch under test is independent of the nav menu content.
+    # The drawer consumes the canonical NAV authority; supply it (empty) so the partial renders under the test
+    # project's strict template settings. The search branch under test is independent of the nav menu content.
     _DRAWER_CTX = {"NAV_HEADER": None, "NAV_MOBILE": None}
 
     def test_drawer_partial_without_live_flag_renders_the_disabled_preview_branch(self):
-        # This reproduces the pre-fix defect: base.html included the drawer with
-        # NO is_live_storefront, and no context processor supplies it, so the
-        # shared search partial fell through to its disabled preview branch.
         html = render_to_string(self._DRAWER_TEMPLATE, dict(self._DRAWER_CTX))
         self.assertIn('id="mobile-drawer-search-input-preview"', html)
         self.assertIn("disabled", html)
@@ -265,22 +245,13 @@ class LegacyBaseHtmlDrawerSearchIsLiveTests(_SimpleTestCase):
 
     def test_drawer_partial_with_live_flag_renders_a_live_get_form_to_catalog(self):
         html = render_to_string(self._DRAWER_TEMPLATE, {**self._DRAWER_CTX, "is_live_storefront": True})
-        # Live branch: a real role=search GET form to the catalog listing route,
-        # with an ENABLED name=q input and no preview no-op handler.
         self.assertIn('role="search"', html)
         self.assertIn("/products/", html)  # reverse('catalog:product-list')
         self.assertIn('name="q"', html)
         self.assertIn('id="mobile-drawer-search-input"', html)
         self.assertNotIn('onsubmit="return false"', html)
-        # The enabled input must not be the disabled preview input.
         self.assertNotIn('id="mobile-drawer-search-input-preview"', html)
 
-    def test_base_html_include_passes_live_storefront_context_to_the_drawer(self):
-        # The minimal canonical fix: base.html's drawer include must pass the
-        # live-storefront context so the public legacy fallback renders the live
-        # search form (the universal shell already passes it in its own include).
-        base = _BASE_HTML.read_text(encoding="utf-8")
-        include_line = next(
-            (ln for ln in base.splitlines() if "partials/mobile_nav_drawer.html" in ln), "")
-        self.assertIn("is_live_storefront=True", include_line,
-                      "base.html must pass is_live_storefront=True to the shared drawer include")
+    def test_shell_header_includes_the_drawer_only_for_the_live_storefront(self):
+        header = _SHELL_HEADER.read_text(encoding="utf-8")
+        self.assertIn('{% if is_live_storefront %}{% include "partials/mobile_nav_drawer.html" %}', header)

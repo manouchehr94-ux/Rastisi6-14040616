@@ -9,6 +9,7 @@ from apps.catalog.services.product_publish_service import storefront_visible_pro
 from apps.core.services import session_service
 from apps.orders.models import Order
 from apps.sms.services import otp_service
+from apps.storefront_builder.services.storefront_context_service import render_domain_page
 from apps.stores.resolution import resolve_store_for_service, resolve_store_for_storefront
 
 from apps.core.services.client_ip import get_client_ip_bucket
@@ -269,8 +270,8 @@ def _account_context(request, *, profile_form=None, address_form=None):
 
 def account_home(request):
     if not _can_use_wishlist(request):
-        return render(request, "customers/account.html", {"can_view": False})
-    return render(request, "customers/account.html", _account_context(request))
+        return render_domain_page(request, "customers/account.html", {"can_view": False})
+    return render_domain_page(request, "customers/account.html", _account_context(request))
 
 
 @require_POST
@@ -370,11 +371,11 @@ def address_set_default(request, address_id):
 
 def account_order_detail(request, code):
     if not _can_use_wishlist(request):
-        return render(request, "customers/order_detail.html", {"can_view": False})
+        return render_domain_page(request, "customers/order_detail.html", {"can_view": False})
     order = get_object_or_404(
         Order.objects.select_related("shipping_method", "payment_gateway").prefetch_related(
             "items", "status_history", "transactions"
         ),
         code=code, customer=request.user.customer_profile,
     )
-    return render(request, "customers/order_detail.html", {"can_view": True, "order": order})
+    return render_domain_page(request, "customers/order_detail.html", {"can_view": True, "order": order})

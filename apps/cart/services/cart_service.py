@@ -30,6 +30,12 @@ class UnavailableStockError(Exception):
         self.message = message
 
 
+class PriceInquiryOnlyError(UnavailableStockError):
+    """کالا «استعلام قیمت» است و قیمتِ عددیِ قابل‌پرداخت ندارد؛ به سبد اضافه نمی‌شود.
+    زیرکلاسِ ``UnavailableStockError`` است تا همه‌ی ویوهایی که آن را می‌گیرند
+    پیام را بدونِ تغییر به کاربر نشان دهند."""
+
+
 def _customer_or_none(request):
     if request.user.is_authenticated:
         return getattr(request.user, "customer_profile", None)
@@ -94,6 +100,12 @@ def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=Fa
         raise UnavailableStockError("تعداد درخواستی نامعتبر است.")
 
     with transaction.atomic():
+        # «استعلام قیمت»: مرجعِ نهایی همین‌جا (سمتِ سرور) است — هر مسیری که به
+        # سبد اضافه می‌کند (کارت، Quick Add، علاقه‌مندی، خرید مجدد، API) از
+        # همین تابع عبور می‌کند، پس نمایشِ UI هرگز تنها مانع نیست. ردیفِ کالا
+        # قفل می‌شود تا تغییرِ هم‌زمانِ حالتِ قیمت دیده شود.
+        if Product.objects.select_for_update().filter(pk=product.pk, is_price_inquiry=True).exists():
+            raise PriceInquiryOnlyError("قیمت این کالا با استعلام تعیین می‌شود و امکان افزودن به سبد ندارد.")
         # قفلِ ردیفِ کالا/تنوع — از race condition میانِ دو افزودنِ همزمان به
         # سبدهای مختلف جلوگیری می‌کند تا خوانشِ stock هرگز stale نباشد.
         if variant is not None:

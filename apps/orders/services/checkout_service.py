@@ -405,6 +405,23 @@ def finalize_order(request, cart, customer):
     return order
 
 
+NO_GATEWAY_MESSAGE = "پرداخت آنلاین هنوز برای این فروشگاه فعال نشده است؛ فعلاً ثبت سفارش ممکن نیست."
+NO_SHIPPING_MESSAGE = "روش ارسالی برای این فروشگاه تعریف نشده است؛ فعلاً ثبت سفارش ممکن نیست."
+
+
+def order_readiness(*, selected_shipping, selected_payment, is_empty: bool = False) -> dict:
+    """آیا همین الان می‌توان سفارش ثبت کرد؟ همان شرط‌هایی که ``finalize_order`` سخت‌گیرانه اعمال می‌کند، پیش از هر اثرِ جانبی
+    (ساختِ حساب/پیامک) به UI و ``checkout_pay`` داده می‌شود تا دکمهٔ پرداختِ بی‌اثر یا وعدهٔ «پرداخت امن» بدونِ درگاه نمایش
+    داده نشود. نبودِ درگاه/روشِ ارسال یک محدودیتِ پیکربندیِ فروشگاه است، نه خطای کاربر."""
+    blockers = []
+    if not is_empty:
+        if selected_payment is None:
+            blockers.append(NO_GATEWAY_MESSAGE)
+        if selected_shipping is None:
+            blockers.append(NO_SHIPPING_MESSAGE)
+    return {"can_place_order": not blockers and not is_empty, "blockers": blockers, "has_gateway": selected_payment is not None}
+
+
 def build_context(request, cart) -> dict:
     """کانتکست کامل صفحه‌ی تسویه‌حساب مرحله‌ی ۱ را می‌سازد."""
     is_empty = cart is None or not cart.items.exists()
@@ -427,7 +444,10 @@ def build_context(request, cart) -> dict:
             province=address.get("province", ""), city=address.get("city", ""), postal_code=address.get("postal_code", ""),
             customer=_request_customer(request), payment_gateway=selected_payment,
         )
-        cart_items = list(cart.items.select_related("product", "variant").all())
+        from apps.cart.services.item_media import CART_ITEM_PREFETCH, attach_item_images
+
+        cart_items = list(cart.items.select_related("product", "variant").prefetch_related(*CART_ITEM_PREFETCH).all())
+        attach_item_images(cart_items)
         for item in cart_items:
             item.regular_price = resolve_regular_price(item.product, item.variant)
         item_count = sum(item.quantity for item in cart_items)
@@ -445,8 +465,10 @@ def build_context(request, cart) -> dict:
         for gateway in payment_gateways
     ]
 
+    readiness = order_readiness(selected_shipping=selected_shipping, selected_payment=selected_payment, is_empty=is_empty)
     return {
         "cart": cart,
+        "readiness": readiness,
         "cart_items": cart_items,
         "is_empty": is_empty,
         "item_count": item_count,

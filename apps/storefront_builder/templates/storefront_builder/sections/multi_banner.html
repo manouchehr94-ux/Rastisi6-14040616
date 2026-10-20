@@ -7,7 +7,7 @@
     {% if bdest.url %}<a class="promo-card is-clickable"{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ banner.pk }}" data-admin-edit-title="{{ banner.title|default:'بنر'|escape }}" data-admin-media-kind="banners"{% endif %} href="{{ bdest.url }}" aria-label="{{ banner.button_label|default:banner.title|default:'مشاهده پیشنهاد' }}" {% if bdest.open_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{% else %}<div class="promo-card"{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ banner.pk }}" data-admin-edit-title="{{ banner.title|default:'بنر'|escape }}" data-admin-media-kind="banners"{% endif %}>{% endif %}
       <picture class="promo-media">
         {% if banner.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ banner.mobile_image_url }}">{% endif %}
-        {% if banner.desktop_image_url %}<img src="{{ banner.desktop_image_url }}" alt="{{ banner.title|default:'بنر' }}" loading="lazy">{% endif %}
+        {% if banner.desktop_image_url %}<img src="{{ banner.desktop_image_url }}" data-img-role="banner" alt="{{ banner.title|default:'بنر' }}" loading="lazy">{% endif %}
       </picture>
       {% if banner.title or banner.description or banner.button_label %}
       <span class="promo-overlay">

@@ -1,19 +1,14 @@
 {% comment %}
-U2B shared newsletter partial — identical contract to the legacy_default
-footer's own newsletter block: a real, merchant-configured title/
-description (``FOOTER_SETTINGS.newsletter_title``/``newsletter_description``,
-falling back to generic Persian copy exactly like legacy does), but the
-subscribe form itself stays a disabled placeholder ("به‌زودی") since no
-newsletter subscription backend exists yet — never a fake working form.
+Canonical working newsletter form. Shares the same partial, CSRF, rate limiting,
+consent contract and store-scoped service as the standalone newsletter section.
+No duplicate subscription handler and no disabled pseudo form.
 {% endcomment %}
 <div class="gf-newsletter">
   <div>
-    <h3>{% if FOOTER_SETTINGS.newsletter_title %}{{ FOOTER_SETTINGS.newsletter_title }}{% else %}عضویت در خبرنامه{% endif %}</h3>
-    <p>{% if FOOTER_SETTINGS.newsletter_description %}{{ FOOTER_SETTINGS.newsletter_description }}{% else %}از جدیدترین تخفیف‌ها و محصولات باخبر شوید{% endif %}</p>
+    <h3>{{ FOOTER_SETTINGS.newsletter_title|default:"عضویت در خبرنامه" }}</h3>
+    <p>{{ FOOTER_SETTINGS.newsletter_description|default:"از جدیدترین محصولات و پیشنهادهای فروشگاه باخبر شوید" }}</p>
   </div>
-  <form @submit.prevent="$el.reset()">
-    <label class="sr-only" for="gf-newsletter-email">ایمیل</label>
-    <input id="gf-newsletter-email" type="email" placeholder="ایمیل خود را وارد کنید" disabled>
-    <button type="button" disabled>به‌زودی</button>
-  </form>
+  <div class="gf-newsletter-form">
+    {% include "content/partials/newsletter_form.html" with button_label="عضویت" %}
+  </div>
 </div>

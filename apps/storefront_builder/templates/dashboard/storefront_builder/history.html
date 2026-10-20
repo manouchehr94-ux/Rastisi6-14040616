@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}تاریخچه نسخه‌های چیدمان | پنل مدیریت{% endblock %}
 {% block page_title %}تاریخچه نسخه‌های چیدمان{% endblock %}
 {% block page_sub %}نسخه‌های قبلی صفحه اصلی — بازگردانی همیشه یک پیش‌نویس جدید می‌سازد، بلافاصله منتشر نمی‌شود{% endblock %}
@@ -17,24 +18,17 @@
         {% else %}<span class="badge">بایگانی‌شده</span>{% endif %}
       </td>
       <td>{{ version.get_source_display }}</td>
-      <td>{{ version.created_at|date:"Y/m/d H:i" }}</td>
-      <td>{{ version.published_at|date:"Y/m/d H:i"|default:"—" }}</td>
+      <td>{{ version.created_at|jalali_dt }}</td>
+      <td>{{ version.published_at|jalali_dt|default:"—" }}</td>
       <td>
         {% if version.status != "draft" %}
-          {% if layout.r4_editor_enabled %}
-          <button type="button" class="btn btn-sm" data-r4-restore-button
+                    <button type="button" class="btn btn-sm" data-r4-restore-button
                   data-r4-restore-url="{% url 'dashboard:storefront-builder-r4-restore' version.pk %}"
                   data-r4-base-draft-id="{% if current_draft_id is None %}null{% else %}{{ current_draft_id }}{% endif %}"
                   data-r4-base-revision="{% if current_draft_revision is None %}null{% else %}{{ current_draft_revision }}{% endif %}"
                   data-r4-confirm="محتوای نسخه #{{ version.version_number }} در یک پیش‌نویس جدید بازگردانی شود؟">
             بازگردانی به پیش‌نویس جدید
           </button>
-          {% else %}
-          <form method="post" action="{% url 'dashboard:storefront-builder-restore' version.pk %}" onsubmit="return confirm('محتوای نسخه #{{ version.version_number }} در یک پیش‌نویس جدید بازگردانی شود؟')" style="display:inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-sm">بازگردانی به پیش‌نویس جدید</button>
-          </form>
-          {% endif %}
         {% endif %}
       </td>
     </tr>
@@ -45,7 +39,6 @@
   </table></div>
 </div>
 <a href="{% url 'dashboard:storefront-builder-editor' %}" class="btn" style="margin-top:14px;display:inline-block">بازگشت به ادیتور</a>
-{% if layout.r4_editor_enabled %}
 <script>
 document.querySelectorAll('[data-r4-restore-button]').forEach(function (btn) {
   btn.addEventListener('click', function () {
@@ -75,5 +68,4 @@ document.querySelectorAll('[data-r4-restore-button]').forEach(function (btn) {
   });
 });
 </script>
-{% endif %}
 {% endblock %}

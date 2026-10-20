@@ -42,6 +42,7 @@ urlpatterns = [
     path("admin-panel/", admin_panel_compat_redirect, name="admin-panel-compat-redirect"),
     path("admin-panel/<path:rest>", admin_panel_compat_redirect, name="admin-panel-compat-redirect-path"),
     path("pages/", include("apps.content.urls")),
+    path("journal/", include("apps.blog.urls")),
     # SaaS billing webhook endpoint (public, signature-verified, no CSRF).
     path("billing/", include("apps.billing.urls")),
     # SmsRasti Android gateway poll/ack endpoints (public, device-token-authenticated, no CSRF).

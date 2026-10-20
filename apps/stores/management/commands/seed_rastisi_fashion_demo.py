@@ -452,7 +452,7 @@ class Command(BaseCommand):
             menu_item_count = self._seed_navigation(store, categories, collections)
             footer_menu_count = self._seed_footer_menus(store, categories, collections)
             content_page_count = self._seed_content_pages(store)
-            blog_post_count = self._seed_blog_posts()
+            blog_post_count = self._seed_blog_posts(store)
             self._seed_builder(store, owner, preset)
 
         self.stdout.write(self.style.SUCCESS(
@@ -1208,9 +1208,9 @@ class Command(BaseCommand):
         self._log("ContentPage", created_count)
         return created_count
 
-    # ------------------------------------------------------------------ Fashion blog (platform-wide demo records)
+    # ------------------------------------------------------------------ Fashion blog (Store-scoped demo records)
 
-    def _seed_blog_posts(self) -> int:
+    def _seed_blog_posts(self, store: Store) -> int:
         posts = [
             ("راهنمای ساخت کمد کپسولی برای هر فصل", "راهنمای استایل", "چطور با چند تکهٔ کاربردی، استایل‌های متنوع و هماهنگ بسازیم."),
             ("۵ ترکیب رنگی ساده برای استایل روزمره", "مد و رنگ", "ترکیب‌های مطمئن و قابل استفاده برای محیط کار، دانشگاه و آخر هفته."),
@@ -1225,7 +1225,7 @@ class Command(BaseCommand):
             if BlogPost.objects.filter(slug=slug).exists():
                 continue
             post = BlogPost(
-                title=title, slug=slug, category_label=category, excerpt=excerpt,
+                store=store, title=title, slug=slug, category_label=category, excerpt=excerpt,
                 body=excerpt + " این مطلب برای فروشگاه نمایشی راستی استایل تهیه شده است.",
                 tint=colors[index], published_at=now - timedelta(days=index * 4),
             )

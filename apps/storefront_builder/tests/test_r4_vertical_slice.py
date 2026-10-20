@@ -711,14 +711,6 @@ class MoveSectionCrossCellTests(R4VerticalSliceTestCase):
 
 
 class TenantAndScopeSecurityTests(R4VerticalSliceTestCase):
-    def test_gate_off_makes_mutation_endpoint_unavailable(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self._post_json({
-            "base_revision": self.draft.edit_revision,
-            "mutation": {"type": "section.add", "section_key": "rich_text", "page_type": "home"},
-        })
-        self.assertEqual(response.status_code, 404)
 
     def test_foreign_store_section_cannot_be_removed(self):
         other_store = Store.objects.create(
@@ -918,7 +910,8 @@ class AppearanceDomainValidatorReuseTests(R4GlobalDesignTestCase):
                 "mutation": {"type": "appearance.update", "patch": {"font": "Tahoma"}},
             })
         self.assertEqual(response.status_code, 200)
-        mock_validate.assert_called_once()
+        # The mutation service and the shared appearance-authority layer both validate through the ONE validator.
+        self.assertGreaterEqual(mock_validate.call_count, 1)
 
     def test_template_switch_applies_template_structural_defaults(self):
         template = appearance_registry.get_template("boutique")
@@ -948,13 +941,7 @@ class AppearanceDomainValidatorReuseTests(R4GlobalDesignTestCase):
         self.assertEqual(self.draft.appearance_config["font"], template.font)
         self.assertNotEqual(self.draft.appearance_config["font"], "Georgia")
 
-    def test_palette_switch_clears_old_color_and_theme_overrides(self):
-        self.draft.appearance_config = {
-            **self.draft.effective_appearance_config(),
-            "color_overrides": {"primary": "#123456"},
-            "theme_overrides": {"header_bg": "#654321"},
-        }
-        self.draft.save(update_fields=["appearance_config"])
+    def _switch_palette(self):
         response = self._post_json({
             "base_revision": self.draft.edit_revision,
             "mutation": {"type": "appearance.update", "patch": {"palette_slug": "beauty-magenta"}},
@@ -962,8 +949,29 @@ class AppearanceDomainValidatorReuseTests(R4GlobalDesignTestCase):
         self.assertEqual(response.status_code, 200)
         self.draft.refresh_from_db()
         self.assertEqual(self.draft.appearance_config["palette_slug"], "beauty-magenta")
+
+    def test_palette_switch_keeps_the_merchants_explicit_color_and_region_overrides(self):
+        """Owner contract: choosing a palette changes the INHERITED colours only; explicit overrides survive by default."""
+        self.draft.appearance_config = {
+            **self.draft.effective_appearance_config(),
+            "color_overrides": {"primary": "#123456"}, "color_overrides_customized": True,
+            "theme_overrides": {"header_bg": "#654321"},
+        }
+        self.draft.save(update_fields=["appearance_config"])
+        self._switch_palette()
+        self.assertEqual(self.draft.appearance_config["color_overrides"], {"primary": "#123456"})
+        self.assertEqual(self.draft.appearance_config["theme_overrides"], {"header_bg": "#654321"})
+
+    def test_palette_switch_drops_only_carry_over_colours_that_were_never_a_merchant_choice(self):
+        self.draft.appearance_config = {
+            **self.draft.effective_appearance_config(),
+            "color_overrides": {"primary": "#123456"}, "color_overrides_customized": False,
+            "theme_overrides": {"header_bg": "#654321"},
+        }
+        self.draft.save(update_fields=["appearance_config"])
+        self._switch_palette()
         self.assertEqual(self.draft.appearance_config["color_overrides"], {})
-        self.assertEqual(self.draft.appearance_config["theme_overrides"], {})
+        self.assertEqual(self.draft.appearance_config["theme_overrides"], {"header_bg": "#654321"})
 
 
 class HeaderDomainValidatorReuseTests(R4GlobalDesignTestCase):
@@ -1257,11 +1265,6 @@ class PublishSecurityGateTests(R4MutationApiTestCase):
             data=json.dumps(payload), content_type="application/json",
         )
 
-    def test_gate_off_returns_404(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self._post_publish({"base_revision": self.draft.edit_revision})
-        self.assertEqual(response.status_code, 404)
 
     def test_anonymous_cannot_publish(self):
         self.client.logout()
@@ -2308,11 +2311,6 @@ class DraftReplacingEndpointTests(R4MutationApiTestCase):
         self.assertEqual(response.status_code, 409)
         self.assertTrue(StorefrontLayoutVersion.objects.filter(pk=self.draft.pk).exists())
 
-    def test_discard_requires_gate_enabled(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self._post_discard(self.draft.edit_revision)
-        self.assertEqual(response.status_code, 404)
 
     def test_reset_page_creates_a_checkpoint_and_new_draft(self):
         preset = layout_preset_registry.get_layout_preset("dense_marketplace")
@@ -2438,18 +2436,19 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
         self.draft.refresh_from_db()
         self.template_a_header_variant = self.draft.header_config.get("header_variant")
 
-    def _post_switch(self, base_revision, *, template_key=None, template_version=None):
+    def _post_switch(self, base_revision, *, template_key=None, template_version=None, confirm_replace=False):
         return self.client.post(
             reverse("dashboard:storefront-builder-r4-switch-template"),
             data=json.dumps({
                 "base_revision": base_revision,
                 "template_key": self.template_b.key if template_key is None else template_key,
                 "template_version": self.template_b.version if template_version is None else template_version,
+                "confirm_replace": confirm_replace,
             }),
             content_type="application/json",
         )
 
-    def test_switch_preserves_merchant_content_and_applies_new_template_dna(self):
+    def test_switch_replaces_composition_keeps_previous_design_recoverable_and_applies_new_template_dna(self):
         home = self.draft.get_page(StorefrontPage.PageType.HOME)
         merchant_section = StorefrontSection.objects.create(
             page=home, section_key="rich_text", order=home.sections.count(),
@@ -2458,23 +2457,33 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
         merchant_sid = merchant_section.stable_id
         old_draft_id = self.draft.pk
 
-        response = self._post_switch(self.draft.edit_revision)
+        # Owner contract: customised design -> explicit confirmation is required
+        # (server-side), and refusing changes nothing.
+        refused = self._post_switch(self.draft.edit_revision)
+        self.assertEqual(refused.status_code, 400)
+        self.assertEqual(refused.json()["code"], "replace_confirmation_required")
+        response = self._post_switch(self.draft.edit_revision, confirm_replace=True)
         self.assertEqual(response.status_code, 200)
         self.assertIs(response.json()["ok"], True)
 
-        # Architecture Convergence / Phase 1 — preservation-first on the SAME
-        # active Draft (no clone, no checkpoint, no Draft-identity replacement).
+        # EXACT replacement on the SAME active Draft (no Draft-identity replacement).
         self.layout.refresh_from_db()
         self.assertEqual(self.layout.draft_version_id, old_draft_id)
         active = StorefrontLayoutVersion.objects.get(pk=self.layout.draft_version_id)
 
-        # Content preservation — the merchant's own hand-authored section
-        # survives (by stable identity, with identical settings) on the SAME Draft.
-        preserved_section = StorefrontSection.objects.filter(
-            page__version=active, stable_id=merchant_sid,
+        # The merchant section is not carried into the new composition, but the
+        # previous design stays recoverable as an archived version.
+        self.assertFalse(
+            StorefrontSection.objects.filter(page__version=active, stable_id=merchant_sid).exists()
+        )
+        archived = StorefrontLayoutVersion.objects.filter(
+            layout=self.layout, status=StorefrontLayoutVersion.Status.ARCHIVED,
+        )
+        recoverable = StorefrontSection.objects.filter(
+            page__version__in=archived, stable_id=merchant_sid,
         ).first()
-        self.assertIsNotNone(preserved_section)
-        self.assertEqual(preserved_section.settings.get("body_html"), "<p>محتوایِ دست‌ساختِ مرچنت</p>")
+        self.assertIsNotNone(recoverable)
+        self.assertEqual(recoverable.settings.get("body_html"), "<p>محتوایِ دست‌ساختِ مرچنت</p>")
 
         # Template B's DNA actually applied — compare against the header
         # selector a full ``apply_preset`` of the SAME Template B would itself
@@ -2522,11 +2531,6 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
         self.layout.refresh_from_db()
         self.assertEqual(self.layout.draft_version_id, self.draft.pk)
 
-    def test_switch_requires_gate_enabled(self):
-        self.layout.r4_editor_enabled = False
-        self.layout.save(update_fields=["r4_editor_enabled"])
-        response = self._post_switch(self.draft.edit_revision)
-        self.assertEqual(response.status_code, 404)
 
     def test_switch_never_touches_the_published_version(self):
         layout_service.publish(self.store, user=self.staff)
@@ -2574,7 +2578,7 @@ class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
             page=home, section_key="rich_text", order=home.sections.count(),
             settings={"body_html": "<p>محتوای مرچنت</p>"},
         )
-        response = self._post_switch(self.draft.edit_revision)
+        response = self._post_switch(self.draft.edit_revision, confirm_replace=True)
         self.assertEqual(response.status_code, 200)
 
         # Same active Draft; provenance AND baseline are coherently Template B.

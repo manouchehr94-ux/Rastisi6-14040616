@@ -30,7 +30,7 @@
       {% endif %}
       <label><input type="checkbox" name="sms_enabled" {% if templates.sms.enabled %}checked{% endif %} {% if event.legacy_sms_event and not can_edit_legacy_sms %}disabled{% endif %}> فعال</label>
       <textarea class="inp" name="sms_body" id="sms_body" rows="5" {% if event.legacy_sms_event and not can_edit_legacy_sms %}readonly{% endif %} style="margin-top:8px;width:100%" aria-label="متن پیامک">{{ templates.sms.body }}</textarea>
-      {% if errors.sms %}<div class="coup-err" style="color:var(--red)">{{ errors.sms }}</div>{% endif %}
+      {% if errors.sms %}<div class="coup-err" style="color:var(--red-ink)">{{ errors.sms }}</div>{% endif %}
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#sms_body,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"sms"}' hx-target="#preview-sms">پیش‌نمایش</button>
         {% if templates.sms.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='sms'">بازگشت به پیش‌فرض</button>{% endif %}
@@ -43,7 +43,7 @@
       <label><input type="checkbox" name="email_enabled" {% if templates.email.enabled %}checked{% endif %}> فعال</label>
       <input class="inp" name="email_subject" id="email_subject" value="{{ templates.email.subject }}" placeholder="موضوع ایمیل" style="margin-top:8px;width:100%" aria-label="موضوع ایمیل">
       <textarea class="inp" name="email_body" id="email_body" rows="8" style="margin-top:8px;width:100%" aria-label="متن ایمیل">{{ templates.email.body }}</textarea>
-      {% if errors.email %}<div class="coup-err" style="color:var(--red)">{{ errors.email }}</div>{% endif %}
+      {% if errors.email %}<div class="coup-err" style="color:var(--red-ink)">{{ errors.email }}</div>{% endif %}
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#email_subject,#email_body,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"email"}' hx-target="#preview-email">پیش‌نمایش</button>
         {% if templates.email.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='email'">بازگشت به پیش‌فرض</button>{% endif %}

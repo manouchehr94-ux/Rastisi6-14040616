@@ -415,7 +415,7 @@ class U1SectionRegistryUntouchedTests(TestCase):
     """Test Q — U1's SECTION_REGISTRY is completely untouched by U2B."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 36)
+        self.assertEqual(len(SECTION_REGISTRY), 38)
 
 
 class U2AHeaderBehaviorIntactTests(TestCase):
@@ -457,78 +457,6 @@ class RendererNamespaceProtectionActiveTests(TestCase):
     def test_all_registered_footer_renderers_are_within_the_namespace(self):
         for variant in g.GLOBAL_FOOTER_REGION.variants:
             self.assertTrue(variant.renderer.startswith(g.GLOBAL_RENDERER_NAMESPACE), variant.key)
-
-
-class FooterEditorRegressionTests(TestCase):
-    """Regression coverage for the editor wiring — mirrors the U2A header
-    editor tests exactly."""
-
-    def setUp(self):
-        cache.clear()
-        self.store = _akhlaghi()
-        self.store.admin_subdomain = ADMIN_HOST.split(".")[0]
-        self.store.save(update_fields=["admin_subdomain"])
-        self.staff = User.objects.create_user(username="u2b_footer_owner", password="pass12345", is_staff=True)
-        StoreMembership.objects.create(
-            store=self.store, user=self.staff, role=StoreMembership.Role.OWNER,
-            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
-        )
-        self.client = Client(HTTP_HOST=ADMIN_HOST)
-        self.client.login(username="u2b_footer_owner", password="pass12345")
-
-    @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
-    def test_post_with_unknown_footer_variant_key_is_rejected(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self.client.post(reverse("dashboard:storefront-builder-footer"), {
-            "show_copyright": "on", "footer_variant": "totally_made_up_variant",
-        })
-        self.assertEqual(resp.status_code, 200)
-        draft = svc.get_or_create_draft(self.store)
-        self.assertEqual(draft.effective_footer_config()["footer_variant"], "legacy_default")
-
-    @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
-    def test_post_with_valid_footer_variant_round_trips(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        resp = self.client.post(reverse("dashboard:storefront-builder-footer"), {
-            "show_copyright": "on", "footer_variant": "premium_columns",
-        })
-        self.assertEqual(resp.status_code, 302)
-        draft = svc.get_or_create_draft(self.store)
-        self.assertEqual(draft.footer_config["footer_variant"], "premium_columns")
-
-        get_resp = self.client.get(reverse("dashboard:storefront-builder-footer"))
-        self.assertContains(get_resp, 'value="premium_columns" selected')
-
-    @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, "testserver"])
-    def test_switching_footer_variant_does_not_erase_footer_content_settings(self):
-        # P5-W5A: this test exercises a legacy Class-A route, which now
-        # fails closed under r4_editor_enabled=True (binding policy) --
-        # pin explicitly, matching the rollback-editor scenario being tested.
-        _w5a_layout = svc.get_or_create_layout(self.store)
-        _w5a_layout.r4_editor_enabled = False
-        _w5a_layout.save(update_fields=["r4_editor_enabled"])
-        """Changing the visual variant must be independent from footer
-        content — an unrelated content toggle (show_about) must survive a
-        footer_variant change made in a separate request."""
-        self.client.post(reverse("dashboard:storefront-builder-footer"), {
-            "show_about": "on", "show_copyright": "on", "footer_variant": "legacy_default",
-        })
-        self.client.post(reverse("dashboard:storefront-builder-footer"), {
-            "show_about": "on", "show_copyright": "on", "footer_variant": "dark_tech",
-        })
-        draft = svc.get_or_create_draft(self.store)
-        self.assertTrue(draft.footer_config["show_about"])
-        self.assertEqual(draft.footer_config["footer_variant"], "dark_tech")
 
 
 class NoFakeContentRegressionTests(TestCase):
@@ -768,23 +696,27 @@ class FooterContactAccessibilityRegressionTests(TestCase):
 
 
 class BuilderPreviewCacheBustingTests(TestCase):
-    """Browser-QA cache hardening (post-review passes) — the Builder
-    Preview must reference the CURRENT U2B-specific cache-busting query
-    token for storefront_builder.css, distinct from every prior token, so
-    stale cached CSS from an earlier pass can never be mistaken for the
-    latest corrected U2B footer styles during local browser QA."""
+    """Preview and Published must run the SAME stylesheet. A hand-pinned ``?v=`` token in preview.html (the old
+    contract of this test) let the Studio keep an older ``storefront_builder.css`` than the published page; both
+    surfaces now reference it through ``sfb_static`` (content-derived ``?v=<mtime>``), so one file change busts
+    both caches together."""
 
-    def test_preview_css_cache_token_is_the_current_u2b_v2_token(self):
-        preview_path = (
-            _STOREFRONT_BUILDER_APP / "templates" / "storefront_builder" / "preview.html"
-        )
-        source = preview_path.read_text(encoding="utf-8")
-        match = re.search(r"storefront_builder\.css['\"]\s*%\}\?v=([\w.-]+)", source)
-        self.assertIsNotNone(match, "no storefront_builder.css cache-busting token found in preview.html")
-        token = match.group(1)
-        self.assertEqual(token, "u2b-footer-v3-20260823")
-        self.assertNotEqual(token, "u2a-v5-mobile-20260823")
-        self.assertNotEqual(token, "u2b-footer-v1-20260823")
+    _PAGES = (
+        _STOREFRONT_BUILDER_APP / "templates" / "storefront_builder" / "preview.html",
+        _STOREFRONT_BUILDER_APP.parent / "catalog" / "templates" / "catalog" / "home_visual.html",
+    )
+
+    def test_preview_and_published_load_the_stylesheet_through_the_same_versioned_tag(self):
+        for path in self._PAGES:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("{% sfb_static 'css/storefront_builder.css' %}", source, path.name)
+            self.assertNotRegex(source, r"storefront_builder\.css['\"]\s*%\}\?v=", path.name)
+
+    def test_sfb_static_url_is_versioned_by_file_content_time(self):
+        from apps.storefront_builder.templatetags.storefront_builder_extras import sfb_static
+
+        url = sfb_static("css/storefront_builder.css")
+        self.assertRegex(url, r"storefront_builder\.css\?v=\d+$")
 
 
 class FooterEmptyStructuralShellRegressionTests(TestCase):

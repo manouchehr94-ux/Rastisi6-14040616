@@ -30,7 +30,6 @@ def _akhlaghi():
 class _FakeRequest:
     """Minimal request stand-in — build_universal_storefront_context only
     ever sets one attribute on it (storefront_appearance_version)."""
-    pass
 
 
 class BuildRenderItemsBackwardCompatibilityTests(TestCase):
@@ -139,17 +138,20 @@ class BuildUniversalStorefrontContextTests(TestCase):
         cache.clear()
         self.store = _akhlaghi()
 
-    def test_unresolved_store_gets_a_fully_shaped_but_disabled_context(self):
+    def test_a_store_that_never_published_gets_the_engine_native_default_context(self):
+        """There is no "unresolved" shape any more: the first public request provisions the deterministic engine default."""
         request = _FakeRequest()
         context = build_universal_storefront_context(request, self.store, StorefrontPage.PageType.HOME)
-        self.assertFalse(context["uses_universal_shell"])
-        self.assertIsNone(context["storefront_version"])
-        self.assertIsNone(context["storefront_page"])
+        self.assertNotIn("uses_universal_shell", context)
+        version = context["storefront_version"]
+        self.assertIsNotNone(version)
+        self.assertEqual(version.status, "published")
+        self.assertIsNotNone(context["storefront_page"])
         self.assertEqual(context["page_type"], StorefrontPage.PageType.HOME)
-        self.assertIsNone(context["layout_header_config"])
-        self.assertIsNone(context["layout_footer_config"])
-        self.assertEqual(context["render_items"], [])
-        self.assertFalse(hasattr(request, "storefront_appearance_version"))
+        self.assertIsNotNone(context["layout_header_config"])
+        self.assertIsNotNone(context["layout_footer_config"])
+        self.assertTrue(context["render_items"])
+        self.assertEqual(request.storefront_appearance_version.pk, version.pk)
 
     def test_all_six_page_types_share_the_same_header_footer_appearance_source(self):
         draft = svc.get_or_create_draft(self.store)
@@ -165,7 +167,6 @@ class BuildUniversalStorefrontContextTests(TestCase):
         for page_type in page_types:
             request = _FakeRequest()
             context = build_universal_storefront_context(request, self.store, page_type)
-            self.assertTrue(context["uses_universal_shell"])
             self.assertEqual(context["storefront_version"].pk, published.pk)
             self.assertEqual(context["layout_header_config"]["announcement_text"], "SHARED-MARKER")
             self.assertEqual(request.storefront_appearance_version.pk, published.pk)

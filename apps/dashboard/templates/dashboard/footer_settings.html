@@ -70,6 +70,13 @@
         <input type="text" name="address" id="id_address" value="{{ fs.address }}" maxlength="500" class="form-input" aria-describedby="help_address{% if field_errors.address %} error_address{% endif %}" {% if field_errors.address %}aria-invalid="true"{% endif %}>
         <span class="field-help" id="help_address">آدرس فیزیکی فروشگاه یا دفتر.</span>
         {% if field_errors.address %}<span class="field-error" id="error_address">{{ field_errors.address }}</span>{% endif %}
+        <label class="toggle-field" style="margin-top:8px">
+          <input type="checkbox" name="show_map_link" {% if fs.show_map_link %}checked{% endif %}>
+          <div class="toggle-content">
+            <span class="toggle-title">نمایش لینک نقشه</span>
+            <span class="toggle-desc">فقط اگر این نشانی واقعی و قابل‌مسیریابی است روشن کنید؛ نشانیِ نمایشی یا ناقص لینکِ نقشهٔ گمراه‌کننده می‌سازد. تا روشن نکنید فقط متنِ نشانی نمایش داده می‌شود.</span>
+          </div>
+        </label>
       </div>
       <div class="field-group">
         <label class="field-label" for="id_phone">تلفن</label>
@@ -128,6 +135,17 @@
           <span class="toggle-desc">فرم عضویت در خبرنامه در فوتر نمایش داده شود.</span>
         </div>
       </label>
+      <p class="field-help" id="newsletter-status" role="status" style="margin:6px 0 12px;line-height:1.9">
+        {% if not fs.show_newsletter %}
+          وضعیت فعلی: <b>خاموش</b>. برای نمایش، این گزینه را روشن کنید و ذخیره کنید{% if studio_newsletter is False %}؛ سپس «خبرنامه» را در بخش فوتر سازندهٔ فروشگاه هم روشن کنید{% endif %}.
+        {% elif studio_newsletter is False %}
+          وضعیت فعلی: این گزینه روشن است، اما <b>«خبرنامه» در بخش فوتر سازندهٔ فروشگاه خاموش است</b>؛ نمایش در فوتر نیاز به هر دو دارد. آن را در سازنده (فوتر ← خبرنامه) روشن و منتشر کنید.
+        {% elif studio_newsletter is None %}
+          وضعیت فعلی: این گزینه روشن است؛ هنوز نسخهٔ منتشرشده‌ای از سازنده وجود ندارد.
+        {% else %}
+          وضعیت فعلی: <b>روشن</b> — فرم خبرنامه در فوتر نمایش داده می‌شود (فقط ایمیل‌هایی که صراحتاً رضایت داده‌اند ثبت می‌شوند؛ ارسال خودکار پیام انجام نمی‌شود).
+        {% endif %}
+      </p>
       <div class="field-group">
         <label class="field-label" for="id_newsletter_title">عنوان خبرنامه</label>
         <input type="text" name="newsletter_title" id="id_newsletter_title" value="{{ fs.newsletter_title }}" maxlength="150" class="form-input" aria-describedby="help_newsletter_title{% if field_errors.newsletter_title %} error_newsletter_title{% endif %}" {% if field_errors.newsletter_title %}aria-invalid="true"{% endif %}>

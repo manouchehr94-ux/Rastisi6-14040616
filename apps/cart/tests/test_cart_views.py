@@ -829,16 +829,18 @@ class CombinedPilotCartFragmentContractTests(TestCase):
         self.assertEqual(trigger["toast"]["type"], "err")
         self.assertIn("موجود نیست", trigger["toast"]["message"])
 
-    def test_absent_published_composition_uses_safe_fallback_for_update_and_remove(self):
+    def test_store_without_an_explicit_composition_gets_the_engine_default_for_update_and_remove(self):
+        """A Store that never published anything is provisioned the ONE engine-native default composition, so cart
+        fragments render the same container layout as any other store (there is no second, flat fallback renderer)."""
         update = self.fallback_client.post(
             reverse("cart:item-update", args=[self.fallback_item.pk]), {"quantity": 3},
         )
         self.assertEqual(update.status_code, 200)
-        self.assertIs(update.context["use_container_layout"], False)
-        self.assertEqual(update.context["render_containers"], [])
-        self.assertIsNone(update.context["storefront_page"])
+        self.assertIs(update.context["use_container_layout"], True)
+        self.assertTrue(update.context["render_containers"])
+        self.assertIsNotNone(update.context["storefront_page"])
         self.assertEqual(
-            [item["section"].section_key for item in update.context["render_items"]],
+            sorted(update.context["storefront_page"].sections.values_list("section_key", flat=True)),
             ["cart_items", "cart_summary"],
         )
         self.fallback_item.refresh_from_db()
@@ -848,17 +850,13 @@ class CombinedPilotCartFragmentContractTests(TestCase):
         self.assertNotIn("errors", update.context)
         self.assertNotIn("sfb-rsec-drag-handle", update.content.decode())
         fallback_detail = self.fallback_client.get(reverse("cart:detail"))
-        self.assertEqual(
-            [item["section"].section_key for item in update.context["render_items"]],
-            [item["section"].section_key for item in fallback_detail.context["render_items"]],
-        )
+        self.assertIs(fallback_detail.context["use_container_layout"], True)
 
         remove = self.fallback_client.post(
             reverse("cart:item-remove", args=[self.fallback_item.pk]),
         )
         self.assertEqual(remove.status_code, 200)
-        self.assertIs(remove.context["use_container_layout"], False)
-        self.assertEqual(remove.context["render_containers"], [])
+        self.assertIs(remove.context["use_container_layout"], True)
         self.assertFalse(CartItem.objects.filter(pk=self.fallback_item.pk).exists())
         self.assertEqual(remove.context["item_count"], 0)
         self.assertEqual(remove.context["totals"]["items_total"], 0)

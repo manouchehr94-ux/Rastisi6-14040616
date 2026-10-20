@@ -27,7 +27,7 @@
 }
 .p-btn:active{transform:scale(.97)}
 .p-btn-primary{background:linear-gradient(90deg,var(--p-primary),#0d8f6c);color:#08130f;box-shadow:0 4px 14px rgba(24,185,138,.28)}
-.p-btn-primary:hover{background:linear-gradient(90deg,var(--p-primary-hover),#0a7a58)}
+.p-btn-primary:hover{background:linear-gradient(90deg,var(--p-primary-hover),#0f9a74)}
 .p-btn-ghost{background:transparent;color:var(--p-ink);border-color:var(--p-line)}
 .p-btn-ghost:hover{background:var(--p-primary-soft)}
 .p-header{
@@ -70,6 +70,8 @@
 .p-field label{display:block;font-size:13px;font-weight:600;color:var(--p-ink);margin-bottom:6px}
 .p-field input{width:100%;padding:10px 14px;border:1px solid var(--p-line);border-radius:10px;font-family:inherit;font-size:14px;background:#0c1310;color:var(--p-ink)}
 .p-field input:focus{outline:2px solid var(--p-primary);outline-offset:1px;border-color:var(--p-primary)}
+/* two-tone default ring for every control on the dark platform pages: bright ring + dark halo in the gap */
+:where(body) :focus-visible{outline:2px solid var(--p-ink);outline-offset:3px;box-shadow:0 0 0 3px var(--p-bg)}
 .p-error{color:#f28b82;font-size:13px;margin-top:6px}
 .p-alert{padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:16px}
 .p-alert-error{background:#2b1616;color:#f28b82;border:1px solid #4a2323}

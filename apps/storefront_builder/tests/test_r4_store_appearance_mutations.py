@@ -9,7 +9,6 @@ from apps.storefront_builder.models import (
     APPEARANCE_CONFIG_DEFAULTS,
     FOOTER_TOGGLE_FIELDS,
     StorefrontEditHistoryEntry,
-    StorefrontLayoutVersion,
 )
 from apps.storefront_builder.services import layout_service
 from apps.storefront_builder.storefront_appearance.families import (
@@ -33,8 +32,6 @@ class R4StoreAppearanceMutationTestCase(StorefrontBuilderViewsTestCase):
         super().setUp()
         cache.clear()
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
 
     def _post_mutation(self, mutation, *, base_revision=None):
@@ -70,6 +67,9 @@ class R4StoreAppearanceMutationTestCase(StorefrontBuilderViewsTestCase):
             "draft_id": self.draft.pk if draft_id is None else draft_id,
             "template_key": key,
             "template_version": version,
+            # Explicit selection replaces the composition; over the bootstrap/customised Draft these tests start
+            # from it requires the merchant's confirmation (server-enforced), which is not what they are about.
+            "confirm_replace": True,
         }
 
 
@@ -661,6 +661,29 @@ class FieldParityUpdateTests(R4StoreAppearanceMutationTestCase):
             "patch": {"not_a_real_field": "x"},
         })
         self.assertEqual(response.status_code, 400)
+
+    def test_footer_update_rejects_an_unknown_variant_and_changes_nothing(self):
+        before = self.draft.effective_footer_config()
+        response = self._post_mutation({
+            "type": "footer.update",
+            "patch": {"footer_variant": "totally_made_up_variant"},
+        })
+        self.assertEqual(response.status_code, 400)
+        self.draft.refresh_from_db()
+        self.assertEqual(self.draft.effective_footer_config(), before)
+
+    def test_switching_the_footer_variant_does_not_erase_footer_content_settings(self):
+        """The visual variant is independent of footer content: an unrelated toggle survives a variant change."""
+        first = self._post_mutation({
+            "type": "footer.update", "patch": {"show_about": False, "footer_variant": "legacy_default"},
+        })
+        self.assertEqual(first.status_code, 200)
+        second = self._post_mutation({"type": "footer.update", "patch": {"footer_variant": "dark_tech"}})
+        self.assertEqual(second.status_code, 200)
+        self.draft.refresh_from_db()
+        config = self.draft.effective_footer_config()
+        self.assertEqual(config["footer_variant"], "dark_tech")
+        self.assertFalse(config["show_about"])
 
     def test_footer_update_sets_extra_blocks(self):
         response = self._post_mutation({

@@ -24,7 +24,7 @@ from django.test.utils import CaptureQueriesContext
 from django.db import connection
 from django.urls import reverse
 
-from apps.catalog.models import Brand, Category, Product, Vendor
+from apps.catalog.models import Category, Product, Vendor
 from apps.catalog.services import collection_service
 from apps.catalog.views import _filtered_products
 from apps.stores.models import Store
@@ -71,6 +71,7 @@ class InStockFilterTests(TestCase):
     def test_in_stock_combines_with_existing_filters_without_extra_queries(self):
         """The new facet is one additional ``.filter()`` clause on the same
         queryset — must not introduce any new query."""
+        self.client.get(reverse("catalog:product-list"))  # first request provisions the default composition once
         with CaptureQueriesContext(connection) as baseline:
             self.client.get(reverse("catalog:product-list"), {"category": "u5-cat"})
         with CaptureQueriesContext(connection) as with_facet:
@@ -149,7 +150,7 @@ class HtmxFragmentCardSettingsPropagationTests(TestCase):
     the exact same ``build_universal_storefront_context`` call)."""
 
     def setUp(self):
-        from apps.storefront_builder.models import StorefrontPage, StorefrontSection
+        from apps.storefront_builder.models import StorefrontPage
         from apps.storefront_builder.services import layout_service
 
         self.store = _akhlaghi()

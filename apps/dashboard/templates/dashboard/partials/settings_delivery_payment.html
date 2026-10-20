@@ -1,6 +1,6 @@
 {% load persian %}
 <div class="card" style="margin-bottom:18px">
-  <div class="card-head"><h3>🚚 روش‌های ارسال</h3><span class="hint">مدیریت روش‌ها و هزینه‌های ارسال</span></div>
+  <div class="card-head"><h3>🚚 روش‌های ارسال</h3><a class="btn btn-sm btn-primary" href="{% url 'dashboard:shipping-setup' %}">مدیریتِ روش‌های ارسال ←</a></div>
   <div class="card-body">
     {% for method in shipping_methods %}
     <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;{% if not forloop.last %}border-bottom:1px solid var(--border){% endif %}">
@@ -8,22 +8,19 @@
         <b style="font-size:13px">{{ method.name }}</b>
         <div style="font-size:11.5px;color:var(--muted)">{{ method.description }} — {{ method.cost|toman }}</div>
       </div>
-      <label class="switch">
-        <input type="checkbox" {% if method.is_active %}checked{% endif %}
-               hx-post="{% url 'dashboard:settings-shipping-toggle' method.pk %}" hx-trigger="change" hx-swap="none">
-        <span></span>
-      </label>
+      <span class="badge {% if method.is_active %}b-green{% else %}b-gray{% endif %}">{% if method.is_active %}فعال{% else %}غیرفعال{% endif %}</span>
     </div>
     {% empty %}
     <p style="font-size:12.5px;color:var(--muted)">روش ارسالی ثبت نشده است.</p>
     {% endfor %}
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px;line-height:1.9">این فهرست فقط خلاصهٔ وضعیت است. فعال/غیرفعال‌کردن، هزینه، پرداخت در محل و تحویل حضوری فقط در صفحهٔ «مدیریتِ روش‌های ارسال» (یک مرجع) ویرایش می‌شود؛ منطقه‌ها و جدولِ نرخ در «تنظیمات پیشرفته» همان صفحه.</p>
       <div style="display:flex;align-items:center;gap:10px;background:var(--bg);padding:12px 14px;border-radius:11px">
         <span style="font-size:17px">🎁</span>
         <div>
-          <b style="font-size:12.5px">ارسال رایگان برای خرید بالای {{ shop.free_shipping_threshold|toman }}</b>
-          <div style="font-size:11px;color:var(--muted)">این مقدار از بخش «مالی و مالیات» قابل ویرایش است.</div>
+          <b style="font-size:12.5px">آستانهٔ ارسال رایگانِ کلِ فروشگاه: خرید بالای {{ shop.free_shipping_threshold|toman }}</b>
+          <div style="font-size:11px;color:var(--muted)">این مقدار از «مالی و مالیات» ویرایش می‌شود. هر روشِ ارسال می‌تواند آستانهٔ رایگانِ خودش را هم داشته باشد؛ هر کدام زودتر برقرار شود ارسال رایگان است.</div>
         </div>
       </div>
     </div>

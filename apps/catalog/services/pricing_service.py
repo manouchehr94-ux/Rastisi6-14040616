@@ -38,7 +38,9 @@ def resolve_effective_price(product: Product, variant: ProductVariant | None = N
         return variant.price
 
     base = product.price + (variant.extra_price if variant is not None else Decimal("0"))
-    factor = (Decimal(100) - product.discount_percent) / Decimal(100)
+    # تخفیف فقط داخلِ بازه‌ی اعتبارش اعمال می‌شود؛ سبد/سفارش از همین تابع قیمتِ زنده می‌گیرند،
+    # پس تخفیفِ منقضی هرگز در پرداخت پذیرفته نمی‌شود (LivePriceChangedError / تازه‌سازی سبد).
+    factor = (Decimal(100) - product.active_discount_percent()) / Decimal(100)
     return (base * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 

@@ -1,9 +1,10 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}گزارش رخدادها | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead"><div><h1>گزارش رخدادهایِ پلتفرم</h1><p>رخدادهایِ سراسری (تنظیمات/پلن/دسترسیِ خودِ این پنل). رخدادهایِ مختصِ یک فروشگاه در برگه‌ی «حسابرسی»ِ همان فروشگاه است.</p></div></div>
 
-<div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue)">
+<div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue-ink)">
   به‌دلیلِ سیاستِ حریمِ خصوصیِ مصوبِ این کدبیس (بدونِ تصمیمِ ثبتِ IP/User-Agent)، این رخدادها ستونِ آدرسِ IP ندارند — نگاه کنید به یادداشت‌هایِ گزارشِ نهایی.
 </div>
 
@@ -31,7 +32,7 @@
           <td>{{ entry.object_label }}</td>
           <td>{{ entry.actor.get_username|default:"—" }}</td>
           <td>{% if entry.result == "success" %}<span class="pa-badge pa-ok">موفق</span>{% else %}<span class="pa-badge pa-off">ناموفق</span>{% endif %}</td>
-          <td>{{ entry.created_at|date:"Y/m/d H:i" }}</td>
+          <td>{{ entry.created_at|jalali_dt }}</td>
         </tr>
         {% endfor %}
       </tbody>

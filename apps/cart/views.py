@@ -12,6 +12,7 @@ from apps.stores.resolution import resolve_store_for_service
 from .models import CartItem
 from .services import gift_wrap_service
 from .services.cart_service import UnavailableStockError, add_item_to_cart, get_cart, set_item_gift_wrap
+from .services.item_media import CART_ITEM_PREFETCH, attach_item_images
 from .services.pricing import cart_totals
 
 
@@ -27,7 +28,8 @@ def _cart_context(request, cart):
     else:
         store = resolve_store_for_service(request)
         totals = cart_totals(cart, store=store)
-        items = list(cart.items.select_related("product", "variant").all())
+        items = list(cart.items.select_related("product", "variant").prefetch_related(*CART_ITEM_PREFETCH).all())
+        attach_item_images(items)
         for item in items:
             # برای نمایشِ «قیمتِ پیش از تخفیف» در قالب — item.unit_price خودش
             # همان قیمتِ نهایی (اسنپ‌شات) است، نه product.final_price ساده.
@@ -46,10 +48,8 @@ def _render_cart_container(request, cart):
     پیکربندی‌شده) دوباره رندر می‌شوند، نه partialِ سخت‌کدشده‌ی قدیمی — تا
     شخصی‌سازیِ مرچنت هرگز بعد از یک اکشنِ htmx «ریست» نشود. منطقِ تجاریِ
     خودِ سبد (بالا) کاملاً دست‌نخورده و جدا می‌ماند؛ این فقط تصمیمِ
-    presentation است. Storeهایی که هنوز هیچ Storefront V2ای منتشر
-    نکرده‌اند هم همین مسیر را می‌گیرند — ``build_default_render_items``
-    همان دو section پیش‌فرض را بدونِ ردیفِ واقعی در دیتابیس می‌سازد،
-    دقیقاً همان الگویِ ``storefront_context_service.build_universal_storefront_context``."""
+    presentation است. هر Store (حتی بدونِ انتشارِ قبلی) از همان مسیرِ
+    ``storefront_context_service.build_universal_storefront_context`` عبور می‌کند."""
     from apps.storefront_builder.models import StorefrontPage
     from apps.storefront_builder.services.storefront_context_service import (
         build_universal_storefront_context,

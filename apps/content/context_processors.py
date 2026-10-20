@@ -103,6 +103,25 @@ def navigation_menus(request):
 
 
 
+def _with_available_files(queryset):
+    """RS-03: a badge/logo whose stored image file is not actually available is skipped (never drawn as a blank tile).
+    Lazy (evaluated only if a footer renders them) and iterable/truthy like the queryset it wraps."""
+    from django.utils.functional import SimpleLazyObject
+
+    def available():
+        rows = []
+        for row in queryset:
+            field = row.image
+            try:
+                if field and field.name and field.storage.exists(field.name):
+                    rows.append(row)
+            except (OSError, ValueError, NotImplementedError):
+                continue
+        return rows
+
+    return SimpleLazyObject(available)
+
+
 def footer_settings(request):
     """تنظیمات فوتر Store جاری + نمادها و لوگوهای پرداخت همان Store.
 
@@ -125,15 +144,15 @@ def footer_settings(request):
     # extra, unnecessary query to fetch the related Store instance just to
     # read its pk back out.
     if settings_obj.show_trust_badges:
-        context["FOOTER_TRUST_BADGES"] = FooterTrustBadge.objects.filter(
-            store_id=settings_obj.store_id, is_active=True
+        context["FOOTER_TRUST_BADGES"] = _with_available_files(
+            FooterTrustBadge.objects.filter(store_id=settings_obj.store_id, is_active=True)
         )
     else:
         context["FOOTER_TRUST_BADGES"] = FooterTrustBadge.objects.none()
 
     if settings_obj.show_payment_logos:
-        context["FOOTER_PAYMENT_LOGOS"] = FooterPaymentLogo.objects.filter(
-            store_id=settings_obj.store_id, is_active=True
+        context["FOOTER_PAYMENT_LOGOS"] = _with_available_files(
+            FooterPaymentLogo.objects.filter(store_id=settings_obj.store_id, is_active=True)
         )
     else:
         context["FOOTER_PAYMENT_LOGOS"] = FooterPaymentLogo.objects.none()

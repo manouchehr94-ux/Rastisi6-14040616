@@ -71,8 +71,6 @@ class DesignLabBaseTestCase(StorefrontBuilderViewsTestCase):
         super().setUp()
         cache.clear()
         self.layout = layout_service.get_or_create_layout(self.store)
-        self.layout.r4_editor_enabled = True
-        self.layout.save(update_fields=["r4_editor_enabled"])
         self.draft = layout_service.get_or_create_draft(self.store, user=self.staff)
         # Apply a real Ready Template so we have a non-default, diverse manifest.
         from apps.storefront_builder.services import preset_service
@@ -946,8 +944,8 @@ class DesignLabR4UITests(DesignLabBaseTestCase):
 
 
 class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
-    def test_exactly_50_ready_templates_remain(self):
-        self.assertEqual(len(layout_preset_registry.list_ready_templates()), 50)
+    def test_exactly_53_ready_templates_remain(self):
+        self.assertEqual(len(layout_preset_registry.list_ready_templates()), 53)
 
     def test_design_lab_never_registers_a_ready_template(self):
         from apps.storefront_builder.services import design_lab_service
@@ -963,7 +961,7 @@ class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
         design_lab_service.resolve_candidate_appearance(self.draft, candidate)
         after = len(layout_preset_registry.list_ready_templates())
         self.assertEqual(after, before)
-        self.assertEqual(after, 50)
+        self.assertEqual(after, 53)
 
 
 

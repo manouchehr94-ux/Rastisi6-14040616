@@ -20,6 +20,8 @@ from apps.stores.resolution import resolve_store_for_service
 from .forms import CheckoutAddressForm
 from .models import Order
 from .services import checkout_service
+from apps.storefront_builder.services.storefront_context_service import render_domain_page
+
 from .services.payment_service import simulate_payment
 
 logger = logging.getLogger(__name__)
@@ -57,7 +59,7 @@ def checkout_step1(request):
     context = checkout_service.build_context(request, cart)
     context["address_form"] = CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = ""
-    return render(request, "orders/checkout_step1.html", context)
+    return render_domain_page(request, "orders/checkout_step1.html", context, page_type="checkout")
 
 
 def _finalize_and_redirect(request, cart, customer):
@@ -93,6 +95,13 @@ def checkout_pay(request):
       قبلی ثبت می‌شود.
     """
     cart = get_cart(request, create=True)
+    # RS-12: بدونِ درگاه/روشِ ارسال هیچ اثرِ جانبی (ساختِ حساب مهمان، پیامک تأیید) رخ نمی‌دهد.
+    readiness = checkout_service.build_context(request, cart)["readiness"]
+    if not readiness["can_place_order"] and cart is not None and cart.items.exists():
+        return _dynamic_response(
+            request, cart, toast_message=" ".join(readiness["blockers"]), toast_type="err",
+            address_form=CheckoutAddressForm(request.POST),
+        )
     form = CheckoutAddressForm(request.POST)
     if not form.is_valid():
         return _dynamic_response(
@@ -244,7 +253,7 @@ def payment_result(request, code):
             "items", "transactions"
         ),
     )
-    return render(request, "orders/payment_result.html", {"order": order})
+    return render_domain_page(request, "orders/payment_result.html", {"order": order})
 
 
 @require_POST
@@ -362,7 +371,7 @@ def payment_initiate(request, code):
         return redirect("orders:payment-result", code=order.code)
     # Canceled orders can never be paid (payment safety guard)
     if order.status == Order.Status.CANCELED:
-        return render(request, "orders/payment_result.html", {
+        return render_domain_page(request, "orders/payment_result.html", {
             "order": order, "error": "این سفارش لغو شده و قابل پرداخت نیست.",
         })
 
@@ -387,7 +396,7 @@ def payment_initiate(request, code):
     if gateway_config is None:
         if settings.PAYMENTS_SIMULATION_ENABLED:
             return redirect("orders:payment-start", code=order.code)
-        return render(request, "orders/payment_result.html", {
+        return render_domain_page(request, "orders/payment_result.html", {
             "order": order,
             "error": "هیچ درگاه پرداخت فعالی پیکربندی نشده است",
         })
@@ -439,10 +448,10 @@ def payment_initiate(request, code):
     except PaymentAlreadyPaidError:
         return redirect("orders:payment-result", code=order.code)
     except OrderNotPayableError as exc:
-        return render(request, "orders/payment_result.html", {"order": order, "error": str(exc)})
+        return render_domain_page(request, "orders/payment_result.html", {"order": order, "error": str(exc)})
     except (PaymentConfigError, PaymentInitiationError) as exc:
         logger.warning("Payment initiation failed for order %s: %s", order.code, exc)
-        return render(request, "orders/payment_result.html", {
+        return render_domain_page(request, "orders/payment_result.html", {
             "order": order,
             "error": str(exc),
         })

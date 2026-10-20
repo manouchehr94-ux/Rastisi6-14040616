@@ -9,9 +9,9 @@
     {% for collection in collections %}
     <tr>
       <td>
-        <div class="thumb" style="width:36px;height:36px;background:var(--primary-soft)">
+        <div class="thumb thumb-fit" style="width:36px;height:36px;background:var(--primary-soft)">
           {% if collection.image %}
-          <img src="{{ collection.image.url }}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">
+          <img src="{{ collection.image.url }}" alt="" style="object-fit:contain;border-radius:inherit">
           {% else %}
           🗂️
           {% endif %}
@@ -29,6 +29,7 @@
       <td><span class="badge {% if collection.is_active %}b-green{% else %}b-gray{% endif %}">{% if collection.is_active %}فعال{% else %}غیرفعال{% endif %}</span></td>
       <td style="white-space:nowrap">
         <a class="btn btn-sm" href="{% url 'dashboard:collection-products' collection.pk %}">📦 کالاها</a>
+        <a class="btn btn-sm" href="{% url 'dashboard:collection-campaign' collection.pk %}">⏱️ کمپین</a>
         <a class="btn btn-sm" href="{% url 'dashboard:collection-edit' collection.pk %}">✏️ ویرایش</a>
         {% if collection.is_active %}
         {% if public_collection_url_name %}

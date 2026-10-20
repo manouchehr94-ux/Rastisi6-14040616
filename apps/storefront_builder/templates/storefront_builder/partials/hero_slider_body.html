@@ -19,7 +19,7 @@ banners without introducing a preset-specific template.
   collapses fade/slide to an instant cut at the CSS layer (see home.css) without
   changing slide state. No new slider, no new renderer, no animation library.
   {% endcomment %}
-  <div class="hero-inner" data-text-position="{{ slider_settings.text_position|default:'end' }}"
+  <div class="hero-inner" data-sfb-section-surface data-text-position="{{ slider_settings.text_position|default:'end' }}"
        data-hero-transition="{{ slider_settings.transition|default:'cut' }}"
        {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}
        x-data="{ slide: 0, count: {{ hero_slides|length }}, autoplay: {{ slider_settings.autoplay|yesno:'true,false' }}, interval: {{ slider_settings.interval_ms|default:4500 }}, loop: {{ slider_settings.loop|yesno:'true,false' }}, transition: '{{ slider_settings.transition|default:'cut' }}', _timer: null,
@@ -32,7 +32,7 @@ banners without introducing a preset-specific template.
     <article class="hero-slide" :class="{ 'is-active': slide === {{ forloop.counter0 }} }" x-show="transition === 'cut' ? slide === {{ forloop.counter0 }} : true" x-cloak{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ s.pk }}" data-admin-edit-title="{{ s.title|default:'اسلاید'|escape }}" data-admin-media-kind="hero-slides"{% endif %}>
       <picture class="hero-media">
         {% if s.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ s.mobile_image_url }}">{% endif %}
-        {% if s.desktop_image_url %}<img src="{{ s.desktop_image_url }}" alt="{{ s.title|default:'اسلاید' }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">{% endif %}
+        {% if s.desktop_image_url %}<img src="{{ s.desktop_image_url }}" data-img-role="hero" alt="{{ s.title|default:'اسلاید' }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">{% endif %}
       </picture>
       {% if s.title or s.subtitle or s.show_button %}
       <div class="hero-text">
@@ -64,12 +64,12 @@ banners without introducing a preset-specific template.
   </div>
   {% else %}
   {% with slide=hero_slides.0 %}
-  <div class="hero-inner" data-text-position="{{ slider_settings.text_position|default:'end' }}"
+  <div class="hero-inner" data-sfb-section-surface data-text-position="{{ slider_settings.text_position|default:'end' }}"
        {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}>
     <article class="hero-slide single"{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ slide.pk }}" data-admin-edit-title="{{ slide.title|default:'اسلاید'|escape }}" data-admin-media-kind="hero-slides"{% endif %}>
       <picture class="hero-media">
         {% if slide.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ slide.mobile_image_url }}">{% endif %}
-        {% if slide.desktop_image_url %}<img src="{{ slide.desktop_image_url }}" alt="{{ slide.title|default:'اسلاید' }}" loading="eager">{% endif %}
+        {% if slide.desktop_image_url %}<img src="{{ slide.desktop_image_url }}" data-img-role="hero" alt="{{ slide.title|default:'اسلاید' }}" loading="eager">{% endif %}
       </picture>
       {% if slide.title or slide.subtitle or slide.show_button %}
       <div class="hero-text">

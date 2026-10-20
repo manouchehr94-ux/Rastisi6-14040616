@@ -1089,3 +1089,49 @@ class ImageContentSecurityTests(TestCase):
         # Reload from DB - original should remain
         badge.refresh_from_db()
         self.assertEqual(badge.image.name, original_name)
+
+
+class NewsletterTwoSwitchStatusTests(TestCase):
+    """RS-03 — the dashboard states which of the two newsletter switches is the blocker."""
+
+    HOST = "newsletterflag.rastisi.localhost"
+
+    def setUp(self):
+        from django.test import Client
+        from django.utils import timezone as tz
+
+        from apps.stores.models import StoreMembership
+
+        self.store = Store.objects.get(slug="akhlaghi")
+        self.store.admin_subdomain = self.HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        user = User.objects.create_user(username="09123500001", password="pass12345")
+        StoreMembership.objects.create(
+            store=self.store, user=user, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=tz.now(),
+        )
+        self.client = Client(HTTP_HOST=self.HOST)
+        self.client.login(username="09123500001", password="pass12345")
+
+    def _page(self):
+        with self.settings(ALLOWED_HOSTS=[self.HOST, "testserver"]):
+            return self.client.get(reverse("dashboard:footer-settings")).content.decode()
+
+    def test_off_on_but_studio_off_and_fully_on(self):
+        from apps.storefront_builder.services import layout_service
+
+        fs = FooterSettings.load(store=self.store)
+        fs.show_newsletter = False
+        fs.save()
+        self.assertIn("وضعیت فعلی: <b>خاموش</b>", self._page())
+        fs.show_newsletter = True
+        fs.save()
+        layout_service.get_or_create_draft(self.store, user=None)
+        layout_service.publish(self.store)
+        self.assertIn("خاموش است", self._page())  # studio footer switch off
+        version = layout_service.get_or_create_layout(self.store).published_version
+        cfg = dict(version.footer_config)
+        cfg["show_newsletter"] = True
+        version.footer_config = cfg
+        version.save(update_fields=["footer_config"])
+        self.assertIn("فرم خبرنامه در فوتر نمایش داده می‌شود", self._page())

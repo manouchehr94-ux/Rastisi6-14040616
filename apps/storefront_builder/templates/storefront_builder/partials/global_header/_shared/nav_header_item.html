@@ -1,0 +1,16 @@
+{% comment %}One NAV_HEADER menu item (see nav_header_items.html). ``chip_class`` adds the chip classes to its link.{% endcomment %}
+{% if item.children %}
+<div class="gh-nav-dropdown" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="if(open){open=false;$nextTick(()=>$refs.ghTrigger{{ item_index }}.focus())}">
+  {% if item.url %}
+  <a class="gh-nl{% if chip_class %} {{ chip_class }}{% endif %}" href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>
+  {% endif %}
+  <button x-ref="ghTrigger{{ item_index }}" type="button" class="gh-nav-submenu-trigger" @click="open = !open" :aria-expanded="open.toString()" aria-haspopup="true" aria-label="{% if item.url %}باز کردن زیرمنوی {{ item.title }}{% else %}{{ item.title }}{% endif %}">{% if not item.url %}{{ item.title }} {% endif %}{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="chevron" %}</button>
+  <ul class="gh-nav-submenu" x-show="open" x-cloak>
+    {% for child in item.children %}
+    <li><a href="{{ child.url }}" {% if child.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ child.title }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% elif item.url %}
+<a class="gh-nl{% if chip_class %} {{ chip_class }}{% endif %}" href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>
+{% endif %}

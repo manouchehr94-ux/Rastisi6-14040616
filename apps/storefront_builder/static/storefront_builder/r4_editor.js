@@ -16,7 +16,6 @@ window.RastiSiR4 = {
   var saveStateEl = document.getElementById('r4SaveState');
   var sidebarToggle = document.getElementById('r4SidebarToggle');
   var structurePanel = document.getElementById('r4Structure');
-  var structureToggle = document.getElementById('r4StructureToggle');
   // R4 Task 10 — the shared Resource Picker overlay root is created here
   // (never added to editor.html's own markup, which Task 10 leaves
   // untouched) so it always exists as a direct child of the R4 shell.
@@ -49,17 +48,6 @@ window.RastiSiR4 = {
       r4SidebarExpanded = !r4SidebarExpanded;
       shell.dataset.r4SidebarExpanded = r4SidebarExpanded ? 'true' : 'false';
       sidebarToggle.setAttribute('aria-expanded', r4SidebarExpanded ? 'true' : 'false');
-    });
-  }
-
-  // ---- Structure panel: R4 Task 8, CLOSED by default on every fresh load
-  // (nothing persisted), same toggle pattern as the admin sidebar above.
-  if (structureToggle && shell) {
-    structureToggle.addEventListener('click', function () {
-      var open = shell.dataset.r4StructureOpen === 'true';
-      open = !open;
-      shell.dataset.r4StructureOpen = open ? 'true' : 'false';
-      structureToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
   }
 
@@ -107,18 +95,173 @@ window.RastiSiR4 = {
     shell.prepend(banner);
   }
 
+  // Mutation types whose result is visible in the Preview and that have no dedicated read-side refresh of their own.
+  var PREVIEW_REFRESH_MUTATIONS = {
+    'section.update_settings': true,
+    'container.update_settings': true,
+    'section.reset_setting_to_baseline': true,
+  };
+
+  // Partial refresh: these mutation types return the canonical server-rendered fragment of the affected section /
+  // container (``fragment: true`` in the request); the Studio swaps ONLY that region inside the Preview iframe. The
+  // server renderer stays the single authority — no storefront rendering lives in JavaScript. Anything that cannot be
+  // applied faithfully falls back to the atomic full-frame refresh below.
+  var FRAGMENT_MUTATIONS = { 'section.update_settings': 'section_id', 'container.update_settings': 'container_id' };
+  R4.metrics = [];
+
+  function canPartialRefresh() {
+    if (!previewFrame || !previewFrame.contentWindow || previewRefresh.busy) return false;
+    var state = previewFrame.getAttribute('data-rastisi-state');
+    var src = previewFrame.getAttribute('src') || '';
+    return (!state || state === 'draft') && src.indexOf('design_lab=') === -1 && src.indexOf('preview_template=') === -1;
+  }
+
+  // Replace one section/container inside a Preview document with its canonical HTML, re-initialising Alpine on the
+  // swapped subtree (the old subtree is destroyed first so timers/observers of a replaced carousel never leak).
+  function swapFragmentIn(frame, fragment) {
+    var doc = frame.contentDocument;
+    var win = frame.contentWindow;
+    if (!doc || !win) return false;
+    var selector = fragment.kind === 'container'
+      ? '.rcontainer[data-container-id="' + fragment.id + '"]'
+      : '.rsec[data-section-id="' + fragment.id + '"]';
+    var current = doc.querySelector(selector);
+    if (!current) return false;
+    var holder = doc.createElement('template');
+    holder.innerHTML = fragment.html;
+    var next = holder.content.firstElementChild;
+    if (!next) return false;
+    var alpine = win.Alpine;
+    if (alpine && alpine.destroyTree) alpine.destroyTree(current);
+    current.replaceWith(next);
+    if (alpine && alpine.initTree) alpine.initTree(next);
+    return true;
+  }
+
+  function applyPreviewFragment(fragment) {
+    try {
+      if (!fragment || !fragment.html || !canPartialRefresh()) return false;
+      if (/<script[\s>]/i.test(fragment.html)) return false; // scripts do not run when inserted: use the full refresh
+      if (!swapFragmentIn(previewFrame, fragment)) return false;
+      try { syncPreviewSelection(); } catch (err) { /* selection sync is best effort */ }
+      mirrorFragmentToLive(fragment);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // ---- Settings-workspace live view of the SAME section ---------------------------------------------------------
+  // Not a second renderer: a second frame of the very same server-rendered draft page, isolated (CSS, in that frame
+  // only) to the open section, scaled to fit, and swapped with the exact fragment the main Preview just received. A full
+  // refresh of the main Preview reloads it too. The main Preview behind the overlay is never touched by any of this.
+  var live = { frame: null, sizer: null, stage: null, aside: null, sectionId: null, ro: null, timers: [] };
+  var LIVE_MIN_WIDTH = 1101; // below this the workspace is full-screen and has no room for a second column
+
+  function liveRoot() { return document.querySelector('[data-r4-ws-live]'); }
+
+  function fitLive() {
+    if (!live.frame || !live.stage) return;
+    try {
+      var doc = live.frame.contentDocument;
+      if (!doc || !doc.body) return;
+      var logicalWidth = parseInt(previewFrame && previewFrame.style.width, 10) || 1440;
+      var avail = live.stage.clientWidth;
+      if (!avail) return;
+      var scale = Math.min(1, avail / logicalWidth);
+      var mainEl = doc.querySelector('main');
+      var contentHeight = Math.max(80, Math.ceil(mainEl ? mainEl.getBoundingClientRect().bottom + (doc.defaultView.scrollY || 0) : doc.documentElement.scrollHeight));
+      live.frame.style.width = logicalWidth + 'px';
+      live.frame.style.height = contentHeight + 'px';
+      live.frame.style.transform = 'scale(' + scale + ')';
+      live.sizer.style.height = Math.ceil(contentHeight * scale) + 'px';
+    } catch (err) { /* same-origin frame still loading */ }
+  }
+
+  function focusLive() {
+    try {
+      var doc = live.frame.contentDocument;
+      if (!doc || !doc.head || !doc.querySelector('.rsec[data-section-id="' + live.sectionId + '"]')) return;
+      var style = doc.getElementById('r4-ws-focus');
+      if (!style) { style = doc.createElement('style'); style.id = 'r4-ws-focus'; doc.head.appendChild(style); }
+      style.textContent =
+        'html,body{overflow:hidden!important}' +
+        'body>:not(main):not(script):not(style):not(link){display:none!important}' +
+        '.sfb-preview-sections>.rcontainer:not(:has(.rsec[data-section-id="' + live.sectionId + '"])){display:none!important}' +
+        '.sfb-storefront-canvas{margin:0!important;padding-top:0!important}' +
+        // a display-only copy: no edit chrome of any kind, never interactive; the open section is only subtly ringed
+        '.sfb-rsec-toolbar,.sfb-rsec-drag-handle,.sfb-rcontainer-toolbar,.sfb-rcontainer-select,.sfb-rcontainer-remove,.sfb-cell-add-more,.sfb-empty-cell-add{display:none!important}' +
+        'body{pointer-events:none!important}' +
+        '.rsec[data-section-id="' + live.sectionId + '"]{outline:2px solid rgba(44,98,81,.34)!important;outline-offset:3px!important;border-radius:10px}';
+      var loading = live.aside.querySelector('[data-r4-ws-live-loading]');
+      if (loading) loading.hidden = true;
+    } catch (err) { /* best effort: the live view is an aid, never a dependency */ }
+    fitLive();
+    live.timers.push(setTimeout(fitLive, 450), setTimeout(fitLive, 1600));
+  }
+
+  function closeLive() {
+    live.timers.forEach(clearTimeout);
+    live.timers = [];
+    if (live.ro) { live.ro.disconnect(); live.ro = null; }
+    if (live.frame) { try { live.frame.removeAttribute('src'); live.frame.src = 'about:blank'; } catch (err) { /* ignore */ } }
+    if (live.aside) live.aside.hidden = true;
+    live = { frame: null, sizer: null, stage: null, aside: null, sectionId: null, ro: null, timers: [] };
+  }
+
+  function openLive(sectionId) {
+    var aside = liveRoot();
+    if (!aside || !previewFrame) return;
+    if (live.frame && live.sectionId === sectionId) { live.aside.hidden = false; return; } // Inspector re-render: keep the frame
+    closeLive();
+    var draft = previewFrame.getAttribute('data-rastisi-state');
+    if ((draft && draft !== 'draft') || !window.matchMedia('(min-width:' + LIVE_MIN_WIDTH + 'px)').matches) return;
+    var src = previewFrame.getAttribute('data-rs-draft-src') || previewFrame.getAttribute('src');
+    var stage = aside.querySelector('[data-r4-ws-live-stage]');
+    var sizer = aside.querySelector('[data-r4-ws-live-sizer]');
+    var frame = aside.querySelector('[data-r4-ws-live-frame]');
+    if (!src || !stage || !sizer || !frame) return;
+    var loading = aside.querySelector('[data-r4-ws-live-loading]');
+    if (loading) loading.hidden = false;
+    sizer.style.height = '';
+    frame.style.transform = '';
+    frame.onload = function () { if (live.frame === frame && frame.getAttribute('src') && frame.getAttribute('src') !== 'about:blank') focusLive(); };
+    aside.hidden = false;
+    live = { frame: frame, sizer: sizer, stage: stage, aside: aside, sectionId: sectionId, ro: null, timers: [] };
+    if (window.ResizeObserver) { live.ro = new ResizeObserver(fitLive); live.ro.observe(stage); }
+    // The same canonical draft preview page the main Preview shows. Started a beat after the Inspector fetch/hydration
+    // so the second page render never competes with the controls becoming interactive.
+    live.timers.push(setTimeout(function () { if (live.frame === frame) frame.setAttribute('src', src); }, 300));
+  }
+
+  function mirrorFragmentToLive(fragment) {
+    if (!live.frame) return;
+    try {
+      if (swapFragmentIn(live.frame, fragment)) { fitLive(); live.timers.push(setTimeout(fitLive, 350)); }
+      else if (live.frame.contentWindow) live.frame.contentWindow.location.reload();
+    } catch (err) { /* ignore */ }
+  }
+
+  function reloadLive() {
+    if (!live.frame || !live.frame.contentWindow) return;
+    try { live.frame.contentWindow.location.reload(); } catch (err) { /* ignore */ }
+  }
+  R4.liveFrame = function () { return live.frame; };
+
   // ---- Task 5's single mutate endpoint: one serialized queue, one sender.
   R4.sendMutation = function (mutation) {
     if (R4.conflict) return Promise.resolve();
     setSaveState('saving');
     var url = new URL('mutate/', window.location.href);
+    var wantFragment = !!FRAGMENT_MUTATIONS[mutation.type] && canPartialRefresh();
+    var startedAt = performance.now();
     return fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCookie('csrftoken'),
       },
-      body: JSON.stringify({ base_revision: R4.revision, mutation: mutation }),
+      body: JSON.stringify({ base_revision: R4.revision, mutation: mutation, fragment: wantFragment }),
     })
       .then(function (response) {
         return response.json().then(function (body) {
@@ -130,6 +273,19 @@ window.RastiSiR4 = {
           R4.revision = result.body.new_revision;
           if (shell) shell.dataset.editRevision = String(R4.revision);
           setSaveState('saved');
+          // Every accepted Inspector write is shown in the Preview straight away: first as a canonical fragment swap
+          // of just the affected region; otherwise the atomic twin-iframe refresh (no blank/half-built document).
+          var path = 'none';
+          if (PREVIEW_REFRESH_MUTATIONS[mutation.type]) {
+            if (wantFragment && applyPreviewFragment(result.body.fragment)) {
+              path = 'fragment';
+            } else {
+              reloadPreviewFrame();
+              path = 'full';
+            }
+          }
+          R4.metrics.push({ type: mutation.type, path: path, roundTripMs: Math.round(performance.now() - startedAt) });
+          if (R4.metrics.length > 200) R4.metrics.shift();
           return result.body;
         }
         if (result.status === 409) {
@@ -141,22 +297,234 @@ window.RastiSiR4 = {
           return result.body;
         }
         // Controlled non-409 rejection — surfaced, revision untouched,
-        // never treated as success, never silently retried.
+        // never treated as success, never silently retried. A refusal that
+        // names its cause gets the precise Persian reason, not the generic one.
+        if (result.status === 400 && result.body && result.body.code && result.body.message) {
+          reportKnownRefusal(result.body);
+          lastSent = {};
+          return result.body;
+        }
         setSaveState('error');
+        lastSent = {};
         return result.body;
       })
       .catch(function () {
         setSaveState('error');
+        lastSent = {};
       });
   };
 
-  R4.enqueueMutation = function (mutation) {
-    if (R4.conflict) return Promise.resolve();
+  // ---- Coalescing. Section/container settings writes for the same target merge into ONE mutation whose patch holds
+  // the LATEST value of every key; continuous controls (colour drag, range, typing) pass ``debounce`` so a burst of
+  // input events becomes a single persisted write + a single canonical server render. A key whose value was already
+  // sent is not sent again. Anything else flushes pending edits first, so the order of writes is preserved.
+  var COALESCE_DELAY_MS = 110;
+  var pendingMutations = {};
+  var lastSent = {};
+
+  R4.pendingWrites = 0;
+
+  function enqueueNow(mutation) {
+    R4.pendingWrites += 1;
     R4.queue = (R4.queue || Promise.resolve()).then(function () {
       return R4.sendMutation(mutation);
+    }).then(function (result) {
+      R4.pendingWrites -= 1;
+      return result;
+    }, function (err) {
+      R4.pendingWrites -= 1;
+      throw err;
     });
     return R4.queue;
+  }
+
+  function flushPendingSlot(slotKey) {
+    var slot = pendingMutations[slotKey];
+    if (!slot) return Promise.resolve();
+    delete pendingMutations[slotKey];
+    clearTimeout(slot.timer);
+    var patch = slot.mutation.patch;
+    Object.keys(patch).forEach(function (key) {
+      if (lastSent[slotKey + '|' + key] === JSON.stringify(patch[key])) delete patch[key];
+    });
+    if (!Object.keys(patch).length) {
+      slot.waiters.forEach(function (resolve) { resolve({ ok: true, skipped: true }); });
+      return Promise.resolve();
+    }
+    Object.keys(patch).forEach(function (key) { lastSent[slotKey + '|' + key] = JSON.stringify(patch[key]); });
+    var sent = enqueueNow(slot.mutation);
+    sent.then(function (result) { slot.waiters.forEach(function (resolve) { resolve(result); }); });
+    return sent;
+  }
+
+  R4.flushPending = function () {
+    return Promise.all(Object.keys(pendingMutations).map(flushPendingSlot));
   };
+
+  R4.enqueueMutation = function (mutation, options) {
+    if (R4.conflict) return Promise.resolve();
+    var idKey = FRAGMENT_MUTATIONS[mutation.type];
+    if (!idKey || !mutation.patch) {
+      R4.flushPending();
+      lastSent = {};
+      return enqueueNow(mutation);
+    }
+    var slotKey = mutation.type + ':' + mutation[idKey];
+    var slot = pendingMutations[slotKey];
+    if (!slot) {
+      var base = { type: mutation.type };
+      base[idKey] = mutation[idKey];
+      base.patch = {};
+      slot = pendingMutations[slotKey] = { mutation: base, waiters: [], timer: null };
+    }
+    Object.keys(mutation.patch).forEach(function (key) { slot.mutation.patch[key] = mutation.patch[key]; });
+    var promise = new Promise(function (resolve) { slot.waiters.push(resolve); });
+    clearTimeout(slot.timer);
+    if ((options && options.debounce) || R4.inputPhase) {
+      slot.timer = setTimeout(function () { flushPendingSlot(slotKey); }, COALESCE_DELAY_MS);
+    } else {
+      flushPendingSlot(slotKey);
+    }
+    return promise;
+  };
+
+  // ---- Atomic preview refresh. A mutation used to call iframe.contentWindow.location.reload(), which tears
+  // the visible document down and shows the half-parsed new one (sections streaming in, height growing from
+  // ~5.6k to ~8.6k px) — the "jump". The refresh now builds the next canonical preview in a hidden twin
+  // iframe, waits until it is complete (load + fonts + images near the viewport), restores the scroll position
+  // by STABLE SECTION ID + the section's own viewport offset (never an absolute pixel position, because section
+  // geometry may have changed), and only then swaps it in. The visible iframe is never blank or half-built.
+  var previewRefresh = { busy: false, again: false, promise: null };
+  var PREVIEW_READY_TIMEOUT_MS = 2500;
+  var PREVIEW_HARD_TIMEOUT_MS = 20000;
+
+  function capturePreviewAnchor(win) {
+    try {
+      var doc = win.document;
+      var scrollY = win.scrollY || 0;
+      if (!scrollY) return null;
+      var sections = doc.querySelectorAll('[data-section-id]');
+      for (var i = 0; i < sections.length; i += 1) {
+        var rect = sections[i].getBoundingClientRect();
+        if (rect.bottom > 1) {
+          return { id: sections[i].getAttribute('data-section-id'), top: rect.top, scrollY: scrollY };
+        }
+      }
+      return { id: null, top: 0, scrollY: scrollY };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function restorePreviewAnchor(win, anchor) {
+    if (!anchor) return;
+    try {
+      var el = anchor.id ? win.document.querySelector('[data-section-id="' + anchor.id + '"]') : null;
+      if (el) {
+        win.scrollTo(0, el.getBoundingClientRect().top + win.scrollY - anchor.top);
+      } else {
+        win.scrollTo(0, anchor.scrollY);
+      }
+    } catch (err) { /* cross-document access failed: leave the new document at the top */ }
+  }
+
+  // Resolves when fonts are ready and every image in (or within one screen of) the restored viewport has
+  // loaded or failed. Far-away lazy images are deliberately not awaited (they would never complete before
+  // being scrolled to). Bounded by PREVIEW_READY_TIMEOUT_MS so a slow asset can never block the swap forever.
+  function waitForPreviewReady(win, anchor) {
+    return new Promise(function (resolve) {
+      var finished = false;
+      function done() { if (!finished) { finished = true; resolve(); } }
+      setTimeout(done, PREVIEW_READY_TIMEOUT_MS);
+      try {
+        var doc = win.document;
+        var fontsReady = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
+        fontsReady.then(function () {
+          restorePreviewAnchor(win, anchor);
+          win.requestAnimationFrame(function () {
+            var viewport = win.innerHeight || 900;
+            var tasks = [];
+            Array.prototype.forEach.call(doc.images || [], function (img) {
+              if (img.complete) return;
+              var rect = img.getBoundingClientRect();
+              if (!rect.width && !rect.height) return; // not laid out (e.g. inside a closed dialog)
+              if (rect.bottom < -viewport || rect.top > viewport * 2) return;
+              tasks.push(new Promise(function (ok) {
+                img.addEventListener('load', ok, { once: true });
+                img.addEventListener('error', ok, { once: true });
+              }));
+            });
+            Promise.all(tasks).then(done, done);
+          });
+        }, done);
+      } catch (err) { done(); }
+    });
+  }
+
+  function runPreviewRefresh(nextSrc) {
+    var old = previewFrame;
+    var anchor = capturePreviewAnchor(old.contentWindow);
+    var twin = old.cloneNode(false);
+    twin.removeAttribute('id');
+    twin.setAttribute('aria-hidden', 'true');
+    twin.setAttribute('tabindex', '-1');
+    // opacity (not visibility:hidden): a transparent frame is still "rendered", so its lazy images load.
+    twin.style.opacity = '0';
+    twin.style.pointerEvents = 'none';
+    if (nextSrc) twin.setAttribute('src', nextSrc);
+    return new Promise(function (resolve) {
+      var settled = false;
+      function abandon() {
+        if (settled) return;
+        settled = true;
+        if (twin.parentNode) twin.parentNode.removeChild(twin);
+        resolve(false);
+      }
+      var hardTimer = setTimeout(abandon, PREVIEW_HARD_TIMEOUT_MS);
+      twin.addEventListener('load', function () {
+        if (settled) return;
+        waitForPreviewReady(twin.contentWindow, anchor).then(function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(hardTimer);
+          restorePreviewAnchor(twin.contentWindow, anchor);
+          twin.style.opacity = '';
+          twin.style.pointerEvents = '';
+          twin.removeAttribute('aria-hidden');
+          twin.removeAttribute('tabindex');
+          twin.id = old.id;
+          old.removeAttribute('id');
+          previewFrame = twin;
+          if (old.parentNode) old.parentNode.removeChild(old);
+          try { syncPreviewSelection(); } catch (err) { /* selection sync is best effort */ }
+          reloadLive();
+          resolve(true);
+        });
+      }, { once: true });
+      old.parentNode.insertBefore(twin, old.nextSibling);
+    });
+  }
+
+  // The ONE preview-refresh entry point. Calls made while a refresh is running coalesce into exactly one
+  // follow-up refresh, so a burst of mutations never stacks twin iframes.
+  function reloadPreviewFrame(nextSrc) {
+    if (!previewFrame || !previewFrame.contentWindow || !previewFrame.parentNode) return Promise.resolve(false);
+    if (previewRefresh.busy) {
+      previewRefresh.again = true;
+      return previewRefresh.promise;
+    }
+    previewRefresh.busy = true;
+    previewRefresh.promise = runPreviewRefresh(nextSrc).then(function (ok) {
+      previewRefresh.busy = false;
+      if (previewRefresh.again) {
+        previewRefresh.again = false;
+        return reloadPreviewFrame();
+      }
+      return ok;
+    });
+    return previewRefresh.promise;
+  }
+  R4.reloadPreview = reloadPreviewFrame;
 
   // ---- R4 Task 8 — structural mutations (add/remove/duplicate/move) go
   // through the SAME single queue/endpoint as every other mutation; this
@@ -164,17 +532,17 @@ window.RastiSiR4 = {
   // needs (existing Preview iframe reload + Structure panel re-fetch), per
   // instruction Section 31. No new write endpoint, no fake client DOM
   // renderer, no second renderer.
-  function refreshStructureAndPreview() {
-    if (previewFrame && previewFrame.contentWindow) {
-      previewFrame.contentWindow.location.reload();
-    }
+  function refreshStructureAndPreview(options) {
+    // ``skipPreview``: the write already refreshed the Preview itself (fragment swap or full refresh in sendMutation).
+    if (!(options && options.skipPreview)) reloadPreviewFrame();
     if (!structurePanel) return Promise.resolve();
     return fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) { return response.text(); })
       .then(function (html) {
         var freshDoc = new DOMParser().parseFromString(html, 'text/html');
         var freshStructure = freshDoc.getElementById('r4Structure');
-        if (freshStructure) structurePanel.innerHTML = freshStructure.innerHTML;
+        // never swap in an empty / error shell: the structure list must stay available for the drawer
+        if (freshStructure && freshStructure.querySelector('[data-rs-structure-scroll]')) structurePanel.innerHTML = freshStructure.innerHTML;
         R4.emit('r4:structure-refreshed');
       })
       .catch(function () {
@@ -183,6 +551,9 @@ window.RastiSiR4 = {
         // the merchant sees the stale list until their next action.
       });
   }
+
+  // Re-read the structure list (the drawer's content) without any write: used by the Studio/QA to prove the list survives a refresh.
+  R4.refreshStructure = function () { return refreshStructureAndPreview({ skipPreview: true }); };
 
   R4.enqueueStructuralMutation = function (mutation) {
     return R4.enqueueMutation(mutation).then(function (result) {
@@ -194,7 +565,7 @@ window.RastiSiR4 = {
         // trust that once this promise resolves, the Structure panel/
         // Preview iframe reflect the just-applied mutation — not just that
         // the server accepted it.
-        return refreshStructureAndPreview().then(function () {
+        return refreshStructureAndPreview({ skipPreview: !!PREVIEW_REFRESH_MUTATIONS[mutation.type] }).then(function () {
           return result;
         });
       }
@@ -235,9 +606,52 @@ window.RastiSiR4 = {
     });
   };
 
+  // FOLLOWUP-12 — guided "two-column row": the owner picks a 2-cell layout and one
+  // section per column; this only CHAINS the three existing canonical mutations
+  // (section.add -> container.change_layout -> cell.add_section) through the same
+  // structural queue. No new mutation type, no second sender, no publish.
+  function allStructureIds(selector, attr) {
+    var out = [];
+    if (!structurePanel) return out;
+    structurePanel.querySelectorAll(selector).forEach(function (node) { out.push(Number(node.getAttribute(attr))); });
+    return out;
+  }
+  R4.addTwoColumnRow = function (layoutKey, firstKey, secondKey) {
+    if (!layoutKey || !firstKey) return Promise.resolve({ ok: false, error: 'missing_choice' });
+    var fail = function (result) { return result || { ok: false }; };
+    return R4.enqueueStructuralMutation({
+      type: 'section.add',
+      section_key: firstKey,
+      page_type: shell ? shell.dataset.r4PageType : 'home',
+    }).then(function (added) {
+      if (!added || !added.ok) return fail(added);
+      var containerIds = allStructureIds('[data-r4-structure-container-id]', 'data-r4-structure-container-id');
+      var containerId = containerIds[containerIds.length - 1];
+      var emptyBefore = allStructureIds('[data-r4-structure-empty-cell]', 'data-r4-structure-cell-id');
+      if (!containerId) return { ok: false, error: 'container_not_found', partial: true };
+      return R4.enqueueStructuralMutation({ type: 'container.change_layout', container_id: containerId, layout_key: layoutKey }).then(function (changed) {
+        if (!changed || !changed.ok) { changed = fail(changed); changed.partial = true; return changed; }
+        if (!secondKey) return changed;
+        var emptyAfter = allStructureIds('[data-r4-structure-empty-cell]', 'data-r4-structure-cell-id');
+        var fresh = emptyAfter.filter(function (id) { return emptyBefore.indexOf(id) === -1; });
+        if (!fresh.length) return { ok: false, error: 'cell_not_found', partial: true };
+        return R4.enqueueStructuralMutation({ type: 'cell.add_section', section_key: secondKey, cell_id: fresh[0] }).then(function (filled) {
+          if (!filled || !filled.ok) { filled = fail(filled); filled.partial = true; }
+          return filled;
+        });
+      });
+    });
+  };
+
   // ---- Inspector: schema-driven, two tabs, current-value hydration.
+  // The primary workspace tab (content | design | advanced) the owner last used: opening another section lands on the
+  // same tab, so editing "design" across several sections does not restart at "content" every time.
+  var lastWorkspaceTab = 'content';
+
   function activateTab(name) {
     if (!inspector) return;
+    if (!inspector.querySelector('[data-r4-tab="' + name + '"]')) name = 'content';
+    lastWorkspaceTab = name;
     inspector.querySelectorAll('[data-r4-tab]').forEach(function (tabButton) {
       var isActive = tabButton.getAttribute('data-r4-tab') === name;
       tabButton.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -248,6 +662,62 @@ window.RastiSiR4 = {
       else panel.setAttribute('hidden', '');
     });
   }
+
+  // R4-10 — the Design tab's sub-sections (پس‌زمینه / رنگ‌ها و دکمه‌ها / کارت‌ها و جلوه‌ها / چیدمان و فاصله‌ها / تصاویر و
+  // نمایش در دستگاه‌ها). Pure display state: hidden panels keep every control (and its value) in the DOM, so switching
+  // sub-sections can never lose an edit, and the mutation patches are built from ALL controls exactly as before.
+  var lastDesignSub = '';
+  var subSearching = false;
+
+  function subnav() { return inspector ? inspector.querySelector('[data-r4-subnav]') : null; }
+
+  function activateSub(name, remember) {
+    var nav = subnav();
+    if (!nav) return;
+    var buttons = Array.prototype.slice.call(nav.querySelectorAll('[data-r4-sub]'));
+    var target = buttons.filter(function (b) { return b.getAttribute('data-r4-sub') === name && !b.hidden; })[0]
+      || buttons.filter(function (b) { return !b.hidden; })[0];
+    if (!target) return;
+    name = target.getAttribute('data-r4-sub');
+    if (remember) lastDesignSub = name;
+    buttons.forEach(function (b) {
+      var active = b === target;
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+      b.tabIndex = active ? 0 : -1;
+    });
+    inspector.querySelectorAll('[data-r4-sub-panel]').forEach(function (panel) {
+      // while the merchant is searching, every panel that has a hit stays on screen (the sub bar is hidden then)
+      panel.hidden = subSearching ? false : panel.getAttribute('data-r4-sub-panel') !== name;
+    });
+    if (target.scrollIntoView && remember) {
+      try { target.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (err) { /* older engines */ }
+    }
+  }
+
+  // Which sub-sections have something to show right now (a card whose every control is dormant disappears, and so does a
+  // sub-section left empty); the bar itself is only worth showing when there are at least two.
+  function syncSubsections() {
+    var nav = subnav();
+    if (!nav) return;
+    var visibleKeys = [];
+    nav.querySelectorAll('[data-r4-sub]').forEach(function (button) {
+      var panel = inspector.querySelector('[data-r4-sub-panel="' + button.getAttribute('data-r4-sub') + '"]');
+      var any = false;
+      if (panel) panel.querySelectorAll('[data-r4-ws-card]').forEach(function (card) { if (!card.hidden) any = true; });
+      button.hidden = !any;
+      if (any) visibleKeys.push(button.getAttribute('data-r4-sub'));
+    });
+    nav.hidden = subSearching || visibleKeys.length < 2;
+    var current = nav.querySelector('[data-r4-sub][aria-selected="true"]');
+    var currentKey = current && !current.hidden ? current.getAttribute('data-r4-sub') : '';
+    var wanted = lastDesignSub && visibleKeys.indexOf(lastDesignSub) !== -1 ? lastDesignSub : (currentKey || visibleKeys[0] || '');
+    activateSub(wanted, false);
+  }
+
+  R4.setSubsectionSearch = function (active) {
+    subSearching = !!active;
+    syncSubsections();
+  };
 
   // ---- appearance_override: a compound field (one schema key, an object
   // value) — hydrated from BOTH the persisted/current value and the
@@ -288,6 +758,146 @@ window.RastiSiR4 = {
     });
   }
 
+  // Semantic colour control (palette role | custom hex | automatic) — shared by the Inspector and the
+  // Global Design panel. "" = automatic, "token:<role>" = palette role, "#RRGGBB" = custom.
+  function readSemanticColorControl(control) {
+    var tokenSelect = control.querySelector('[data-r4-color-token]');
+    var customInput = control.querySelector('[data-r4-color-custom]');
+    var token = tokenSelect ? tokenSelect.value : '';
+    if (customInput) customInput.hidden = token !== 'custom';
+    if (token === 'custom') return customInput ? customInput.value.toUpperCase() : '';
+    return token;
+  }
+
+  // The whole background widget as ONE compound value (mode / colour / palette / pattern / media / bleed / image look).
+  function readBackgroundWidget(wrapper) {
+    function el(name) { return wrapper.querySelector('[data-r4-background-' + name + ']'); }
+    var mode = el('mode'), color = el('color'), palette = el('palette-role'), pattern = el('pattern'), media = el('media');
+    var background = { mode: mode ? mode.value : 'theme' };
+    if (color) background.color = color.value;
+    if (palette) background.palette_role = palette.value;
+    if (pattern) background.pattern_slug = pattern.value;
+    background.media_asset_id = media && media.value ? Number(media.value) : null;
+    if (el('bleed') && el('bleed').checked) background.bleed = true;
+    if (el('image-fit')) background.image_fit = el('image-fit').value;
+    if (el('position-x')) background.image_position_x = el('position-x').value;
+    if (el('position-y')) background.image_position_y = el('position-y').value;
+    var overlay = wrapper.querySelector('[data-r4-background-overlay-color] [data-r4-color-control]');
+    if (overlay) background.overlay_color = readSemanticColorControl(overlay);
+    if (el('overlay-opacity')) background.overlay_opacity = Number(el('overlay-opacity').value) || 0;
+    return background;
+  }
+
+  // Box styling (radius / border / shadow) only makes sense when the section's fill is its own box, i.e. not an
+  // edge-to-edge (bleed) background; mirrors the server-rendered ``hidden`` of ``data-r4-design-box`` rows.
+  function applyDesignBoxVisibility(bleed) {
+    if (!inspector) return;
+    inspector.querySelectorAll('[data-r4-design-box]').forEach(function (row) { row.hidden = !!bleed; });
+    inspector.querySelectorAll('[data-r4-design-group]').forEach(function (group) {
+      var rows = group.querySelectorAll('[data-r4-design-prop]');
+      var anyVisible = false;
+      rows.forEach(function (row) { if (!row.hidden) anyVisible = true; });
+      group.hidden = !anyVisible;
+    });
+    syncWorkspaceCards();
+  }
+
+  function applyBackgroundGroupVisibility(wrapper, mode) {
+    wrapper.querySelectorAll('[data-r4-bg-modes]').forEach(function (group) {
+      group.hidden = group.getAttribute('data-r4-bg-modes').split(' ').indexOf(mode) === -1;
+    });
+  }
+
+  // Context-sensitive Inspector: ``data-r4-visible-when`` ({controlKey: [allowed values]}, AND across keys) is
+  // re-evaluated live from the controls' CURRENT values, in document order; a hidden controlling field is dormant.
+  // Mirrors settings_schema.compute_field_visibility (the server renders the initial ``hidden``).
+  function fieldControlValue(row) {
+    var control = row.querySelector('select[data-r4-field-key],input[data-r4-field-key],textarea[data-r4-field-key]');
+    if (!control) return '';
+    if (control.getAttribute('data-r4-field-type') === 'boolean') return control.checked ? 'true' : 'false';
+    return String(control.value);
+  }
+
+  function applyFieldVisibility() {
+    if (!inspector) return;
+    var rows = {};
+    inspector.querySelectorAll('[data-r4-field-row]').forEach(function (row) { rows[row.getAttribute('data-r4-field-key')] = row; });
+    var effective = {};
+    var done = {};
+    function resolve(key, trail) {
+      if (done[key]) return;
+      var row = rows[key];
+      if (!row || trail.indexOf(key) !== -1) { effective[key] = ''; return; }
+      var parsed = {};
+      var rule = row.getAttribute('data-r4-visible-when');
+      if (rule) { try { parsed = JSON.parse(rule) || {}; } catch (err) { parsed = {}; } }
+      Object.keys(parsed).forEach(function (controlKey) { resolve(controlKey, trail.concat([key])); });
+      var visible = true;
+      Object.keys(parsed).forEach(function (controlKey) {
+        var current = Object.prototype.hasOwnProperty.call(effective, controlKey) ? effective[controlKey] : '';
+        if (parsed[controlKey].indexOf(current) === -1) visible = false;
+      });
+      row.hidden = !visible;
+      effective[key] = visible ? fieldControlValue(row) : '';
+      done[key] = true;
+    }
+    Object.keys(rows).forEach(function (key) { resolve(key, []); });
+    // design properties that only exist for certain display types (e.g. carousel item width)
+    var displayRow = rows['display_mode'];
+    var displayMode = displayRow ? fieldControlValue(displayRow) : '';
+    inspector.querySelectorAll('[data-r4-design-modes]').forEach(function (row) {
+      row.hidden = displayRow ? row.getAttribute('data-r4-design-modes').split(' ').indexOf(displayMode) === -1 : false;
+    });
+    syncWorkspaceCards();
+  }
+
+  // A workspace card whose every control is currently dormant (visible_when) is hidden, so the owner never sees an
+  // empty titled box; a tab left with no card says so instead of showing a blank page. Cards that hold more than
+  // schema rows (the inline media manager, section management) always stay.
+  function syncWorkspaceCards() {
+    if (!inspector) return;
+    // the compound design block: a group with no visible property hides itself, and a design slice with no visible group is
+    // a dormant row (e.g. the box properties while the background bleeds to the page edge)
+    inspector.querySelectorAll('[data-r4-design-group]').forEach(function (group) {
+      var anyProp = false;
+      group.querySelectorAll('[data-r4-design-prop]').forEach(function (propRow) { if (!propRow.hidden) anyProp = true; });
+      group.hidden = !anyProp;
+    });
+    inspector.querySelectorAll('[data-r4-ws-card]').forEach(function (card) {
+      if (card.hasAttribute('data-r4-ws-manage') || card.querySelector('[data-r4-media-manager]')) return;
+      var rows = card.querySelectorAll('[data-r4-field-row]');
+      var anyVisible = false;
+      rows.forEach(function (row) {
+        if (row.hidden) return;
+        if (row.getAttribute('data-r4-field-type') === 'design') {
+          var anyGroup = false;
+          row.querySelectorAll('[data-r4-design-group]').forEach(function (group) { if (!group.hidden) anyGroup = true; });
+          if (!anyGroup) return;
+        }
+        anyVisible = true;
+      });
+      card.hidden = !anyVisible;
+    });
+    inspector.querySelectorAll('.r4-ws-cols').forEach(function (cols) {
+      var shown = 0;
+      cols.querySelectorAll('.r4-ws-col').forEach(function (col) {
+        var any = false;
+        col.querySelectorAll('[data-r4-ws-card]').forEach(function (card) { if (!card.hidden) any = true; });
+        col.hidden = !any;
+        if (any) shown += 1;
+      });
+      cols.classList.toggle('r4-ws-cols--single', shown <= 1);
+    });
+    inspector.querySelectorAll('[data-r4-tab-panel]').forEach(function (panel) {
+      var empty = panel.querySelector('[data-r4-ws-tab-empty]');
+      if (!empty) return;
+      var anyCard = false;
+      panel.querySelectorAll('[data-r4-ws-card]').forEach(function (card) { if (!card.hidden) anyCard = true; });
+      empty.hidden = anyCard;
+    });
+    syncSubsections();
+  }
+
   function hydrateFieldValues() {
     if (!inspector) return;
     var script = document.getElementById('r4InspectorFieldValues');
@@ -312,7 +922,7 @@ window.RastiSiR4 = {
       // server-rendered from the current value (its nested controls carry
       // their own selected/value already), so it is excluded from this
       // scalar loop exactly like the other compound field types.
-      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater' || fieldType === 'background') return;
+      if (fieldType === 'appearance_override' || fieldType === 'resource_source' || fieldType === 'repeater' || fieldType === 'background' || fieldType === 'design' || fieldType === 'color') return;
       var key = control.getAttribute('data-r4-field-key');
       if (!Object.prototype.hasOwnProperty.call(values, key)) return;
       var value = values[key];
@@ -320,6 +930,7 @@ window.RastiSiR4 = {
         control.checked = Boolean(value);
       } else {
         control.value = value == null ? '' : value;
+        control.setAttribute('data-r4-last', control.value);
       }
     });
     hydrateAppearanceOverrideFields(values);
@@ -402,16 +1013,40 @@ window.RastiSiR4 = {
   // message shape/type mirror the legacy editor's own outbound selection
   // sync exactly; origin-targeted, never "*".
   function syncPreviewSelection() {
-    // A null selection clears the preview highlight (Inspector closed).
+    // The highlight follows the open section, else the last selected one (it stays after the workspace closes).
     if (!previewFrame || !previewFrame.contentWindow) return;
     previewFrame.contentWindow.postMessage({
       type: 'sfb:setSelection',
-      sectionId: R4.selected,
+      sectionId: R4.selected != null ? R4.selected : (R4.previewSelected || null),
     }, window.location.origin);
   }
 
+  // Selection WITHOUT settings (single click / tap in the Preview). One selection id, announced to the Studio chrome.
+  function selectPreviewSection(sectionId) {
+    R4.previewSelected = sectionId;
+    R4.emit('r4:section-selected', { sectionId: sectionId });
+  }
+
+  // Highlight one section in the Preview (and bring it into view) WITHOUT opening its settings — the structure drawer's
+  // "select". Presentation only: it never touches R4.selected (the settings workspace's authority).
+  R4.previewSelect = function (sectionId) {
+    R4.previewSelected = sectionId;
+    if (!previewFrame || !previewFrame.contentWindow) return;
+    previewFrame.contentWindow.postMessage({ type: 'sfb:setSelection', sectionId: sectionId }, window.location.origin);
+    try {
+      var target = previewFrame.contentDocument.querySelector('[data-section-id="' + sectionId + '"]');
+      if (target) {
+        // scroll the PREVIEW document only (scrollIntoView could also scroll the Studio shell around the frame)
+        var win = previewFrame.contentWindow;
+        var box = target.getBoundingClientRect();
+        win.scrollTo({ top: Math.max(0, box.top + win.scrollY - (win.innerHeight - box.height) / 2) });
+      }
+    } catch (err) { /* cross-document access is best effort */ }
+  };
+
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
+    lastSent = {}; // the control values are re-read from the server below: nothing "already sent" survives
     // Opening a Section Inspector always closes Global Design — the two
     // never show at once (Task 11 Section 22).
     closeGlobalDesign();
@@ -437,6 +1072,7 @@ window.RastiSiR4 = {
         }
         if (shell) shell.dataset.r4InspectorOpen = 'true';
         R4.selected = sectionId;
+        R4.previewSelected = sectionId;
         R4.inspectorOpen = true;
         // Phase 5 Task 4D — sidebar/structure -> preview selection sync.
         // openSection is the single selection entry point (a sidebar row
@@ -448,12 +1084,15 @@ window.RastiSiR4 = {
         // reimplements that logic. Uses the existing section identity;
         // targeted to this window's origin.
         syncPreviewSelection();
-        activateTab('basic');
+        activateTab(lastWorkspaceTab);
         R4.emit('r4:inspector-opened', { sectionId: sectionId });
+        openLive(sectionId);
         // Hydrate the raw backing values (incl. the rich_text textarea)
         // BEFORE Alpine mounts CKEditor, so it initializes from the real
         // current body_html rather than an empty source element.
         hydrateFieldValues();
+        applyFieldVisibility();
+        (function () { var bleedBox = inspector.querySelector('[data-r4-background-bleed]'); if (bleedBox) applyDesignBoxVisibility(bleedBox.checked && !bleedBox.closest('[hidden]')); })();
         // Alpine 3's own MutationObserver auto-initializes x-data elements
         // added anywhere in the document (verified against this build) —
         // it already mounts storefrontRichTextEditor()'s CKEditor here.
@@ -472,17 +1111,58 @@ window.RastiSiR4 = {
     if (shell) shell.dataset.r4InspectorOpen = 'false';
     R4.selected = null;
     R4.inspectorOpen = false;
+    closeLive();
     syncPreviewSelection();
     R4.emit('r4:inspector-closed');
   }
   R4.closeInspector = closeInspector;
 
   if (inspector) {
+    // Context-sensitive controls follow the values the merchant just changed (display type, autoplay, overflow...).
+    inspector.addEventListener('change', function () { applyFieldVisibility(); });
+    // Continuous controls (colour drag, range, typing) give immediate Preview feedback without queueing a write per
+    // event: each ``input`` runs the control's normal change path in "input phase", which debounces/coalesces the
+    // mutation (the latest value always wins) — one persisted write and one canonical server render for the burst.
+    inspector.addEventListener('input', function (evt) {
+      var control = evt.target;
+      if (!control || !control.matches || !control.closest('[data-r4-field-row]')) return;
+      if (control.getAttribute('data-r4-field-type') === 'integer') return; // numbers commit on change (no half-typed values)
+      if (!control.matches('input[type="color"], input[type="range"], input[type="text"]')) return;
+      R4.inputPhase = true;
+      try { control.dispatchEvent(new Event('change', { bubbles: true })); } finally { R4.inputPhase = false; }
+    });
+    // R4-10 — keyboard on the Design sub-section bar (roving tabindex; arrows follow the visual order, which is
+    // mirrored in RTL; Home/End jump to the ends). Selecting is automatic on focus move.
+    inspector.addEventListener('keydown', function (evt) {
+      var current = evt.target.closest && evt.target.closest('[data-r4-sub]');
+      if (!current) return;
+      var nav = current.closest('[data-r4-subnav]');
+      var buttons = Array.prototype.slice.call(nav.querySelectorAll('[data-r4-sub]')).filter(function (b) { return !b.hidden; });
+      var index = buttons.indexOf(current);
+      var rtl = window.getComputedStyle(nav).direction === 'rtl';
+      var next = -1;
+      if (evt.key === 'ArrowLeft') next = index + (rtl ? 1 : -1);
+      else if (evt.key === 'ArrowRight') next = index + (rtl ? -1 : 1);
+      else if (evt.key === 'Home') next = 0;
+      else if (evt.key === 'End') next = buttons.length - 1;
+      else return;
+      evt.preventDefault();
+      if (next < 0 || next >= buttons.length) return;
+      activateSub(buttons[next].getAttribute('data-r4-sub'), true);
+      buttons[next].focus();
+    });
     // One delegated field-change path — no per-section save handler.
     inspector.addEventListener('click', function (evt) {
       var tabButton = evt.target.closest('[data-r4-tab]');
       if (tabButton) {
         activateTab(tabButton.getAttribute('data-r4-tab'));
+        return;
+      }
+      var subButton = evt.target.closest('[data-r4-sub]');
+      if (subButton) {
+        activateSub(subButton.getAttribute('data-r4-sub'), true);
+        var body = inspector.querySelector('.r4-ws-body');
+        if (body) body.scrollTop = 0;
         return;
       }
       var closeButton = evt.target.closest('[data-r4-inspector-close]');
@@ -557,9 +1237,31 @@ window.RastiSiR4 = {
       // appearance_override is a compound field with its own dedicated
       // listener below too.
       // 'background' (Task 4B) is compound too — handled by its own listener.
-      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater' || fieldType === 'background') return;
+      if (fieldType === 'rich_text' || fieldType === 'appearance_override' || fieldType === 'repeater' || fieldType === 'background' || fieldType === 'design' || fieldType === 'color') return;
       var key = control.getAttribute('data-r4-field-key');
       var value = fieldType === 'boolean' ? control.checked : control.value;
+      if (fieldType === 'integer') {
+        // R4-08 — numbers: Persian digits are read, a value outside the declared limits is brought INTO them (and the
+        // control shows what is saved), an empty control means "back to the default" and unreadable text restores the
+        // last saved value; the server enforces the very same rule.
+        var normalized = String(control.value).replace(/[\u06F0-\u06F9]/g, function (d) { return d.charCodeAt(0) - 0x06F0; })
+          .replace(/[\u0660-\u0669]/g, function (d) { return d.charCodeAt(0) - 0x0660; }).trim();
+        var lo = control.getAttribute('data-r4-min'), hi = control.getAttribute('data-r4-max'), dflt = control.getAttribute('data-r4-default');
+        if (normalized === '') {
+          value = dflt === null ? '' : dflt;
+        } else if (!/^-?\d+$/.test(normalized)) {
+          control.value = control.getAttribute('data-r4-last') || '';
+          if (typeof R4.notify === 'function') R4.notify('این مقدار باید یک عدد باشد.');
+          return;
+        } else {
+          var n = parseInt(normalized, 10);
+          if (lo !== null && n < parseInt(lo, 10)) n = parseInt(lo, 10);
+          if (hi !== null && n > parseInt(hi, 10)) n = parseInt(hi, 10);
+          value = String(n);
+        }
+        control.value = value;
+        control.setAttribute('data-r4-last', value);
+      }
       var patch = {};
       patch[key] = value;
       var sectionId = R4.selected;
@@ -575,7 +1277,12 @@ window.RastiSiR4 = {
       // dormant stored values stay untouched (read-side refresh only).
       if (isVariantChange) {
         promise.then(function (result) {
-          if (result && result.ok) R4.openSection(sectionId);
+          // Only the LAST of a quick series of display-type changes re-reads the Inspector: an older response must
+          // never overwrite the controls of a newer choice (the control still holds what this write sent, and no
+          // further write is pending or pending-to-flush).
+          var stillCurrent = control.isConnected && control.value === value
+            && R4.pendingWrites === 0 && Object.keys(pendingMutations).length === 0;
+          if (result && result.ok && stillCurrent) R4.openSection(sectionId);
         });
       }
     });
@@ -652,20 +1359,13 @@ window.RastiSiR4 = {
     inspector.addEventListener('change', function (evt) {
       var wrapper = evt.target.closest('[data-r4-field-type="background"]');
       if (!wrapper || R4.selected == null) return;
-      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media]')) return;
+      if (!evt.target.closest('[data-r4-background-mode],[data-r4-background-color],[data-r4-background-palette-role],[data-r4-background-pattern],[data-r4-background-media],[data-r4-background-bleed],[data-r4-background-image-fit],[data-r4-background-position-x],[data-r4-background-position-y],[data-r4-background-overlay-color],[data-r4-background-overlay-opacity]')) return;
       var key = wrapper.getAttribute('data-r4-field-key');
-      var modeSelect = wrapper.querySelector('[data-r4-background-mode]');
-      var colorInput = wrapper.querySelector('[data-r4-background-color]');
-      var paletteSelect = wrapper.querySelector('[data-r4-background-palette-role]');
-      var patternSelect = wrapper.querySelector('[data-r4-background-pattern]');
-      var mediaSelect = wrapper.querySelector('[data-r4-background-media]');
-
-      var background = { mode: modeSelect ? modeSelect.value : 'theme' };
-      if (colorInput) background.color = colorInput.value;
-      if (paletteSelect) background.palette_role = paletteSelect.value;
-      if (patternSelect) background.pattern_slug = patternSelect.value;
-      var mediaValue = mediaSelect ? mediaSelect.value : '';
-      background.media_asset_id = mediaValue ? Number(mediaValue) : null;
+      var background = readBackgroundWidget(wrapper);
+      applyBackgroundGroupVisibility(wrapper, background.mode);
+      applyDesignBoxVisibility(!!background.bleed);
+      // "Image" without a chosen asset is not storable (falls back to theme): wait for the Media Library pick.
+      if (background.mode === 'image' && !background.media_asset_id) return;
 
       var patch = {};
       patch[key] = background;
@@ -674,6 +1374,50 @@ window.RastiSiR4 = {
         section_id: R4.selected,
         patch: patch,
       });
+    });
+
+    // Semantic colour (standalone ``color`` field and every colour property of the
+    // ``design`` block): "" = automatic, "token:<role>" = palette role, "#RRGGBB" = custom.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="color"]');
+      if (!wrapper || R4.selected == null) return;
+      var control = evt.target.closest('[data-r4-color-control]');
+      if (!control) return;
+      var patch = {};
+      patch[wrapper.getAttribute('data-r4-field-key')] = readSemanticColorControl(control);
+      R4.enqueueMutation({ type: 'section.update_settings', section_id: R4.selected, patch: patch });
+    });
+
+    // design block: ONE compound {design:{...}} patch built from every property control;
+    // empty controls are omitted so the server resets them to the engine default.
+    inspector.addEventListener('change', function (evt) {
+      var wrapper = evt.target.closest('[data-r4-field-type="design"]');
+      if (!wrapper || R4.selected == null) return;
+      var design = {};
+      // R4-10: the Design tab shows this ONE field as several slices (one wrapper per sub-section, same field key).
+      // The patch is still the WHOLE block, so every slice is read — values of a sub-section the merchant is not
+      // looking at are sent unchanged and never reset.
+      var blockKey = wrapper.getAttribute('data-r4-field-key');
+      var slices = inspector.querySelectorAll('.r4-design-block[data-r4-field-key="' + blockKey + '"]');
+      if (!slices.length) slices = [wrapper];
+      Array.prototype.forEach.call(slices, function (slice) {
+      slice.querySelectorAll('[data-r4-design-prop]').forEach(function (row) {
+        var key = row.getAttribute('data-r4-design-prop');
+        var kind = row.getAttribute('data-r4-design-kind');
+        var value = '';
+        if (kind === 'color') {
+          var control = row.querySelector('[data-r4-color-control]');
+          value = control ? readSemanticColorControl(control) : '';
+        } else {
+          var input = row.querySelector('[data-r4-design-input]');
+          value = input ? String(input.value).trim() : '';
+        }
+        if (value !== '') design[key] = kind === 'int' ? Number(value) : value;
+      });
+      });
+      var patch = {};
+      patch[blockKey] = design;
+      R4.enqueueMutation({ type: 'section.update_settings', section_id: R4.selected, patch: patch });
     });
   }
 
@@ -945,6 +1689,7 @@ window.RastiSiR4 = {
     var state = R4.resourcePicker;
     if (!state) return false;
     if (state.mode === 'manual') return state.selectedIds.length > 0;
+    if (state.mode === 'collection') return !!state.collectionId;
     if (state.mode === 'auto') return pickerAllowedAutoRules().indexOf(state.autoRule) !== -1;
     return false;
   }
@@ -999,12 +1744,19 @@ window.RastiSiR4 = {
     });
     pickerRoot.querySelectorAll('[data-r4-picker-panel]').forEach(function (panel) {
       var name = panel.getAttribute('data-r4-picker-panel');
-      var show = state.mode === 'manual' ? name === 'manual' : name === 'auto';
+      var show = name === state.mode;
       if (show) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+    });
+    pickerRoot.querySelectorAll('[data-r4-picker-collection]').forEach(function (collectionButton) {
+      var isChosen = Number(collectionButton.getAttribute('data-r4-picker-collection')) === state.collectionId;
+      collectionButton.classList.toggle('r4-picker-auto-rule--active', isChosen);
+      collectionButton.setAttribute('aria-pressed', isChosen ? 'true' : 'false');
+      collectionButton.setAttribute('aria-checked', isChosen ? 'true' : 'false');
+      collectionButton.tabIndex = isChosen || (!state.collectionId && collectionButton === pickerRoot.querySelector('[data-r4-picker-collection]')) ? 0 : -1;
     });
     var allowedRules = pickerAllowedAutoRules();
     pickerRoot.querySelectorAll('[data-r4-picker-auto-rule]').forEach(function (ruleButton) {
-      var isActive = ruleButton.getAttribute('data-r4-picker-auto-rule') === state.autoRule;
+      var isActive = state.mode === 'auto' && ruleButton.getAttribute('data-r4-picker-auto-rule') === state.autoRule;
       ruleButton.classList.toggle('r4-picker-auto-rule--active', isActive);
       ruleButton.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
@@ -1013,7 +1765,7 @@ window.RastiSiR4 = {
     // as read-only info, never silently replaced by opening/closing.
     var currentNote = pickerRoot.querySelector('[data-r4-picker-auto-current]');
     if (currentNote) {
-      if (state.mode === 'auto' && state.autoRule && allowedRules.indexOf(state.autoRule) === -1) {
+      if (state.mode === 'auto' && state.autoRule && allowedRules.indexOf(state.autoRule) === -1 && state.autoRule !== 'by_collection') {
         currentNote.hidden = false;
         currentNote.textContent = 'این بخش هم‌اکنون از یک قانون خودکار دیگر استفاده می‌کند که در این پنجره قابل تغییر مستقیم نیست. برای تغییر، حالت دستی یا یکی از گزینه‌های بالا را انتخاب کنید.';
       } else {
@@ -1068,6 +1820,14 @@ window.RastiSiR4 = {
         manual_ids: state.selectedIds.slice(),
       };
     }
+    if (state.mode === 'collection' && state.collectionId) {
+      // RS-01: a REFERENCE to an existing collection (by_collection + source_id) — the server resolves its members at
+      // render time; no membership list is ever copied into the section.
+      return {
+        kind: state.kind, mode: 'auto', auto_rule: 'by_collection',
+        auto_parameters: { source_id: state.collectionId }, manual_ids: [],
+      };
+    }
     if (state.mode === 'auto' && pickerAllowedAutoRules().indexOf(state.autoRule) !== -1) {
       return { kind: state.kind, mode: 'auto', auto_rule: state.autoRule, auto_parameters: {}, manual_ids: [] };
     }
@@ -1090,9 +1850,6 @@ window.RastiSiR4 = {
     }).then(function (result) {
       if (result && result.ok) {
         closeResourcePicker();
-        if (previewFrame && previewFrame.contentWindow) {
-          previewFrame.contentWindow.location.reload();
-        }
         // Re-open the Inspector so its summary comes back from the
         // server-authoritative legacy -> ResourceSource projection —
         // never reconstructed client-side.
@@ -1122,7 +1879,8 @@ window.RastiSiR4 = {
     R4.resourcePicker = {
       fieldKey: fieldKey,
       kind: current.kind,
-      mode: current.mode === 'manual' ? 'manual' : 'auto',
+      mode: current.mode === 'manual' ? 'manual' : (current.auto_rule === 'by_collection' ? 'collection' : 'auto'),
+      collectionId: current.auto_rule === 'by_collection' && current.auto_parameters ? Number(current.auto_parameters.source_id) || null : null,
       autoRule: current.auto_rule || null,
       autoParameters: current.auto_parameters || {},
       selectedIds: (current.manual_ids || []).slice(),
@@ -1166,6 +1924,26 @@ window.RastiSiR4 = {
       pickerSearchTimer = setTimeout(refreshPickerResults, 300);
     });
 
+    // FOLLOWUP-07 — the collection list is a radio group: arrows move + select, Home/End jump (roving tabindex).
+    pickerRoot.addEventListener('keydown', function (evt) {
+      var current = evt.target.closest ? evt.target.closest('[data-r4-picker-collection]') : null;
+      if (!current || !R4.resourcePicker) return;
+      var keyName = evt.key;
+      if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(keyName) === -1) return;
+      var choices = Array.prototype.slice.call(pickerRoot.querySelectorAll('[data-r4-picker-collection]'));
+      var index = choices.indexOf(current);
+      var next = index;
+      if (keyName === 'Home') next = 0;
+      else if (keyName === 'End') next = choices.length - 1;
+      else if (keyName === 'ArrowDown' || keyName === 'ArrowRight') next = (index + 1) % choices.length;
+      else next = (index - 1 + choices.length) % choices.length;
+      evt.preventDefault();
+      R4.resourcePicker.mode = 'collection';
+      R4.resourcePicker.collectionId = Number(choices[next].getAttribute('data-r4-picker-collection'));
+      syncPickerModeUI();
+      choices[next].focus();
+    });
+
     pickerRoot.addEventListener('click', function (evt) {
       if (evt.target.closest('[data-r4-picker-close]') || evt.target.closest('[data-r4-picker-cancel]')) {
         closeResourcePicker();
@@ -1174,6 +1952,13 @@ window.RastiSiR4 = {
       var modeTab = evt.target.closest('[data-r4-picker-mode]');
       if (modeTab && R4.resourcePicker) {
         R4.resourcePicker.mode = modeTab.getAttribute('data-r4-picker-mode');
+        syncPickerModeUI();
+        return;
+      }
+      var collectionButton = evt.target.closest('[data-r4-picker-collection]');
+      if (collectionButton && R4.resourcePicker) {
+        R4.resourcePicker.mode = 'collection';
+        R4.resourcePicker.collectionId = Number(collectionButton.getAttribute('data-r4-picker-collection'));
         syncPickerModeUI();
         return;
       }
@@ -1259,10 +2044,21 @@ window.RastiSiR4 = {
     // or a Ready Template live preview) its sections are not the Draft's
     // editable targets, so edit commands from it are ignored.
     if (R4.previewInteractive === false) return;
-    if (type === 'sfb:selectSection' || type === 'sfb:openSectionSettings') {
-      var sectionId = evt.data.sectionId;
+    // Direct editing of the Preview (gestures live in the Preview document, see preview.html): a single click / tap SELECTS
+    // (sfb:selectSection); a double-click / press-and-hold OPENS settings (sfb:openSectionSettings). Both carry the section id
+    // from [data-section-id]; opening goes through the same canonical R4.openSection() the structure drawer's gear uses.
+    if (type === 'sfb:selectSection') {
+      var selectedId = Number(evt.data.sectionId);
+      if (!selectedId) return;
+      selectPreviewSection(selectedId);
+      return;
+    }
+    if (type === 'sfb:openSectionSettings') {
+      var sectionId = Number(evt.data.sectionId);
       if (!sectionId) return;
-      R4.openSection(Number(sectionId));
+      selectPreviewSection(sectionId);
+      R4.emit('r4:direct-edit', { sectionId: sectionId });   // the Studio closes any open drawer first
+      R4.openSection(sectionId);
       return;
     }
     if (type === 'sfb:sectionCommand') {
@@ -1373,6 +2169,26 @@ window.RastiSiR4 = {
       // off the SAME ``data-r4-global-reset-field`` attribute value as the
       // field's own patch key (``appearance.reset_setting_to_baseline``'s
       // ``key`` param) — never a second per-field mapping to maintain.
+      // One colour / region-colour override back to the selected palette's resolved value (``null`` clears just that
+      // override server-side — see ``_apply_appearance_update``); every other override is left as the merchant set it.
+      var resetColorBtn = evt.target.closest('[data-r4-global-color-reset]');
+      if (resetColorBtn) {
+        var resetParts = resetColorBtn.getAttribute('data-r4-global-color-reset').split(':');
+        var resetPatch = {};
+        resetPatch[resetParts[0]] = {};
+        resetPatch[resetParts[0]][resetParts[1]] = null;
+        R4.enqueueMutation({ type: 'appearance.update', patch: resetPatch }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
+      // The explicit "clear all custom colours" action (never triggered by choosing a palette).
+      if (evt.target.closest('[data-r4-global-colors-clear]')) {
+        R4.enqueueMutation({ type: 'appearance.update', patch: { clear_global_color_overrides: true } }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
       var resetFieldBtn = evt.target.closest('[data-r4-global-reset-field]');
       if (resetFieldBtn) {
         R4.enqueueMutation({
@@ -1430,6 +2246,18 @@ window.RastiSiR4 = {
     // (section_registry/appearance_registry/global_region_registry), so
     // Product/appearance/header/footer never need their own JS branch.
     globalDesignPanel.addEventListener('change', function (evt) {
+      // Header/footer geometry colour (palette role | custom hex | automatic): one partial geometry patch.
+      var geometryColor = evt.target.closest('[data-r4-color-control][data-r4-global-geometry-key]');
+      if (geometryColor) {
+        var colorGroup = geometryColor.closest('[data-r4-global-mutation]');
+        if (!colorGroup) return;
+        var colorPatch = { geometry: {} };
+        colorPatch.geometry[geometryColor.getAttribute('data-r4-global-geometry-key')] = readSemanticColorControl(geometryColor);
+        R4.enqueueMutation({ type: colorGroup.getAttribute('data-r4-global-mutation'), patch: colorPatch }).then(function (result) {
+          if (result && result.ok) refreshGlobalDesignAndPreview();
+        });
+        return;
+      }
       var field = evt.target.closest('[data-r4-global-field]');
       if (!field) return;
       var group = field.closest('[data-r4-global-mutation]');
@@ -1450,7 +2278,13 @@ window.RastiSiR4 = {
       // ONE-KEY PARTIAL patch of the dict (never the whole 8-key set),
       // matching ``_apply_appearance_update``'s merge-onto-current
       // semantics server-side.
-      if (key === 'color_overrides' || key === 'theme_overrides') {
+      if (key === 'geometry') {
+        var geometryKey = field.getAttribute('data-r4-global-geometry-key');
+        if (!geometryKey) return;
+        var geometryNested = {};
+        geometryNested[geometryKey] = value;
+        patch.geometry = geometryNested;
+      } else if (key === 'color_overrides' || key === 'theme_overrides') {
         var subKeyAttr = key === 'color_overrides' ? 'data-r4-global-color-key' : 'data-r4-global-theme-key';
         var subKey = field.getAttribute(subKeyAttr);
         if (!subKey) return;
@@ -1557,9 +2391,7 @@ window.RastiSiR4 = {
   // reused here for the Global Design panel's own server-authoritative
   // read projection (e.g. a Template switch resetting font/type_scale).
   function refreshGlobalDesignAndPreview() {
-    if (previewFrame && previewFrame.contentWindow) {
-      previewFrame.contentWindow.location.reload();
-    }
+    reloadPreviewFrame();
     if (!globalDesignPanel) return Promise.resolve();
     return fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) { return response.text(); })
@@ -1586,9 +2418,7 @@ window.RastiSiR4 = {
   // write (see r4_studio.js's r4:media-changed listener) don't have to
   // reach for a heavier function or stand up a second preview authority.
   R4.refreshPreview = function () {
-    if (previewFrame && previewFrame.contentWindow) {
-      previewFrame.contentWindow.location.reload();
-    }
+    reloadPreviewFrame();
   };
 
   // ---- Final-QA Defect 1 fix — resync R4's own outer optimistic-concurrency
@@ -1685,7 +2515,8 @@ window.RastiSiR4 = {
         // above was).
         if (structurePanel) {
           var freshStructure = freshDoc.getElementById('r4Structure');
-          if (freshStructure) structurePanel.innerHTML = freshStructure.innerHTML;
+          // never swap in an empty / error shell: the structure list must stay available for the drawer
+        if (freshStructure && freshStructure.querySelector('[data-rs-structure-scroll]')) structurePanel.innerHTML = freshStructure.innerHTML;
         }
         if (globalDesignPanel) {
           var freshGlobal = freshDoc.getElementById('r4GlobalDesign');
@@ -1693,9 +2524,7 @@ window.RastiSiR4 = {
         }
         R4.revision = serverRevision;
         if (shell) shell.dataset.editRevision = String(R4.revision);
-        if (previewFrame && previewFrame.contentWindow) {
-          previewFrame.contentWindow.location.reload();
-        }
+        reloadPreviewFrame();
         R4.emit('r4:structure-refreshed');
         R4.emit('r4:global-refreshed', { doc: freshDoc });
       })
@@ -1776,7 +2605,22 @@ window.RastiSiR4 = {
   // current R4.revision, same conflict/error handling), and the caller
   // reloads the whole page on success, exactly like Undo/Redo already do
   // for the same reason (Section 21).
-  function sendReplaceDraftAction(pathSegment, extraBody) {
+  // A server refusal that names its cause (stable ``code`` + Persian ``message``,
+  // e.g. locked sections / confirmation required) is NOT a failed save: the
+  // server mutated nothing. Show the precise reason and keep the saved state,
+  // instead of the generic "save incomplete" failure.
+  function reportKnownRefusal(body, options) {
+    R4.lastRefusal = body;
+    setSaveState('saved');
+    if (options && options.silent) return;
+    var text = body.message || '';
+    if (body.locked_sections && body.locked_sections.length) {
+      text += ' (' + Number(body.locked_sections.length).toLocaleString('fa-IR') + ' بخش قفل‌شده)';
+    }
+    if (typeof R4.notify === 'function') R4.notify(text);
+  }
+
+  function sendReplaceDraftAction(pathSegment, extraBody, options) {
     if (R4.conflict) return Promise.resolve();
     setSaveState('saving');
     var url = new URL(pathSegment, window.location.href);
@@ -1800,6 +2644,10 @@ window.RastiSiR4 = {
           R4.conflict = true;
           setSaveState('conflict');
           showConflictBanner();
+          return result.body;
+        }
+        if (result.status === 400 && result.body && result.body.code && result.body.message) {
+          reportKnownRefusal(result.body, options);
           return result.body;
         }
         setSaveState('error');
@@ -1855,13 +2703,20 @@ window.RastiSiR4 = {
   // uses the same replace-draft request + reload, never an in-place
   // R4.enqueueMutation. The exact key + version come from the server-rendered
   // template catalog the merchant picked from.
-  R4.switchTemplate = function (templateKey, templateVersion) {
+  R4.switchTemplate = function (templateKey, templateVersion, flags) {
     if (!templateKey || !templateVersion) return Promise.resolve();
+    flags = flags || {};
     R4.queue = (R4.queue || Promise.resolve()).then(function () {
+      // Explicit selection = EXACT replacement of the covered pages. The server
+      // refuses (with a precise code) unless the merchant confirmed, and unless
+      // locked sections were separately authorised; the previous design is kept
+      // as a restorable version before anything is replaced.
       return sendReplaceDraftAction('switch-template/', {
         template_key: templateKey,
         template_version: String(templateVersion),
-      });
+        confirm_replace: flags.confirm_replace === true,
+        allow_locked: flags.allow_locked === true,
+      }, { silent: true });
     });
     return R4.queue.then(function (result) {
       if (result && result.ok) reloadWithNotice('template');
@@ -1895,8 +2750,8 @@ window.RastiSiR4 = {
     var next = url || draftSrc;
     R4.previewInteractive = !url;
     previewFrame.setAttribute('data-rastisi-state', (options && options.state) || (url ? 'preview' : 'draft'));
-    if (previewFrame.getAttribute('src') !== next) previewFrame.setAttribute('src', next);
-    else if (options && options.reload && previewFrame.contentWindow) previewFrame.contentWindow.location.reload();
+    if (previewFrame.getAttribute('src') !== next) reloadPreviewFrame(next);
+    else if (options && options.reload && previewFrame.contentWindow) reloadPreviewFrame();
   };
 
   // ---- Phase 5 Task 4C — device preview (Desktop / Tablet / Mobile) + zoom.

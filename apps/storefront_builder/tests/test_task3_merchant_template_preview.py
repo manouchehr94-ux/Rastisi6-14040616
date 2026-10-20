@@ -372,10 +372,21 @@ class MerchantDataReadyTemplatePreviewREDTests(TestCase):
             version_count_before,
         )
 
-    def test_gallery_exposes_separate_demo_and_my_store_preview_choices(self):
-        response = self.client.get(reverse("dashboard:storefront-builder-templates"))
+    def test_studio_gallery_preview_always_uses_the_merchants_own_store_data(self):
+        """The Studio gallery previews a template with the MERCHANT's data (``?data=merchant``, the store is
+        resolved server-side, never from the query); the demo-data variant of the same route stays reachable
+        for the staff-only demo comparison."""
+        from apps.storefront_builder.tests._gallery_support import studio_gallery_response
+
+        response = studio_gallery_response(self.client)
         self.assertEqual(response.status_code, 200)
-        html = response.content.decode()
-        self.assertIn("مشاهده با اطلاعات نمایشی", html)
-        self.assertIn("مشاهده با اطلاعات فروشگاه من", html)
-        self.assertIn("data=merchant", html)
+        live = response.context["studio"]["client"]["live_preview_url"]
+        self.assertEqual(live, reverse("dashboard:storefront-builder-template-live-preview", kwargs={"key": "__KEY__"}))
+        from pathlib import Path
+
+        import apps.storefront_builder as sfb_package
+
+        studio_js = (Path(sfb_package.__file__).parent / "static" / "storefront_builder" / "r4_studio.js").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("searchParams.set('data', 'merchant')", studio_js)

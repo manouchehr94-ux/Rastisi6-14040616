@@ -11,7 +11,7 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="category-fashion-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-fashion-media">
-          {% if cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">{% else %}<span class="category-fashion-fallback">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
+          {% if cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">{% else %}<span class="category-fashion-fallback">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
         </span>
         <span class="category-fashion-label">{{ cat.name }}</span>
       </a>
@@ -28,8 +28,8 @@ renderer never needs tenant ids inside a global preset.
       <a class="category-mosaic-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-mosaic-heading">{{ cat.name }}<span class="category-mosaic-chevron" aria-hidden="true">‹</span></span>
         <span class="category-mosaic-media">
-          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
-          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
           {% else %}<span class="category-mosaic-fallback">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
         </span>
       </a>
@@ -47,8 +47,8 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="category-beauty-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-beauty-media">
-          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
-          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
           {% else %}<span class="category-beauty-fallback">{{ cat.icon|default:"✦" }}</span>{% endif %}
         </span>
         <span class="category-beauty-label">{{ cat.name }}</span>
@@ -65,8 +65,8 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="category-chocolate-story-item" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-chocolate-story-media">
-          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
-          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
           {% else %}<span class="category-chocolate-story-fallback">{{ cat.icon|default:"✦" }}</span>{% endif %}
         </span>
         <span class="category-chocolate-story-label">{{ cat.name }}</span>
@@ -83,8 +83,8 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="category-chocolate-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-chocolate-media">
-          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
-          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
           {% else %}<span class="category-chocolate-fallback">{{ cat.icon|default:"✦" }}</span>{% endif %}
         </span>
         <span class="category-chocolate-label">{{ cat.name }}</span>
@@ -101,8 +101,8 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="category-atelier-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-atelier-media">
-          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" alt="{{ cat.name }}" loading="lazy">
-          {% elif cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
           {% else %}<span class="category-atelier-fallback" aria-hidden="true">{{ cat.name|slice:":1" }}</span>{% endif %}
         </span>
         <span class="category-atelier-shade" aria-hidden="true"></span>
@@ -120,7 +120,7 @@ renderer never needs tenant ids inside a global preset.
       {% for c in top_categories %}
       <a class="category-luxury-item" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ c.pk }}" data-admin-edit-title="{{ c.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ c.slug }}">
         <span class="category-luxury-media">
-          {% if c.representative_media %}<img src="{{ c.representative_media.image.url }}" alt="{{ c.name }}" loading="lazy">{% elif c.image %}<img src="{{ c.image.url }}" alt="{{ c.name }}" loading="lazy">{% else %}<span aria-hidden="true">{{ c.name|slice:":1" }}</span>{% endif %}
+          {% if c.representative_media %}<img src="{{ c.representative_media.image.url }}" data-img-role="category" alt="{{ c.name }}" loading="lazy">{% elif c.image %}<img src="{{ c.image.url }}" data-img-role="category" alt="{{ c.name }}" loading="lazy">{% else %}<span aria-hidden="true">{{ c.name|slice:":1" }}</span>{% endif %}
         </span>
         <strong>{{ c.name }}</strong>
       </a>
@@ -141,9 +141,80 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="category-image-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="category-image-media">
-          {% if cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">{% else %}<span class="category-image-fallback">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
+          {% if cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">{% else %}<span class="category-image-fallback">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
         </span>
         <span class="category-image-label">{{ cat.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif category_grid_settings.display_mode == 'pastel_tiles' %}
+  {% if top_categories %}
+  <section class="section category-pastel-section">
+    {% if category_grid_settings.title %}<div class="pastel-section-title"><h2>{{ category_grid_settings.title }}</h2></div>{% endif %}
+    <div class="category-pastel-grid">
+      {% for cat in top_categories %}
+      <a class="category-pastel-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <span class="category-pastel-media">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% else %}<span class="category-pastel-fallback" aria-hidden="true">{{ cat.icon|default:"✦" }}</span>{% endif %}
+        </span>
+        <span class="category-pastel-label">{{ cat.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif category_grid_settings.display_mode == 'grey_circles' %}
+  {% if top_categories or category_empty_slots %}
+  <section class="section category-grey-section">
+    {% if category_grid_settings.title %}<div class="sec-head"><h2><span class="bar"></span>{{ category_grid_settings.title }}</h2></div>{% endif %}
+    <div class="category-grey-circles">
+      {% for cat in top_categories %}
+      <a class="category-grey-item" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <span class="category-grey-media">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% else %}<span class="category-grey-fallback" aria-hidden="true">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
+        </span>
+        <strong class="category-grey-label">{{ cat.name }}</strong>
+      </a>
+      {% endfor %}
+      {% for _ in category_empty_slots %}
+      <span class="category-grey-item category-grey-item--empty" aria-hidden="true"><span class="category-grey-media"></span></span>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif category_grid_settings.display_mode == 'icon_tiles' %}
+  {% if top_categories %}
+  <section class="section category-icontile-section">
+    {% if category_grid_settings.title %}
+    <div class="beauty-section-title"><span></span><h2>{{ category_grid_settings.title }}</h2><span></span></div>
+    {% endif %}
+    <div class="category-icontile-row">
+      {% for cat in top_categories %}
+      <a class="category-icontile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <span class="category-icontile-glyph" aria-hidden="true"><span>{{ cat.icon|default:"✦" }}</span></span>
+        <span class="category-icontile-label">{{ cat.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif category_grid_settings.display_mode == 'gradient_tiles' %}
+  {% if top_categories %}
+  <section class="section category-gradient-section">
+    <div class="category-gradient-grid">
+      {% for cat in top_categories %}
+      <a class="category-gradient-tile" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
+        <strong class="category-gradient-title">{{ cat.name }}</strong>
+        <span class="category-gradient-media">
+          {% if cat.representative_media %}<img src="{{ cat.representative_media.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
+          {% elif cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">{% endif %}
+        </span>
       </a>
       {% endfor %}
     </div>
@@ -157,7 +228,7 @@ renderer never needs tenant ids inside a global preset.
       {% for cat in top_categories %}
       <a class="tile-circle" {% if is_builder_preview %}data-admin-edit-kind="category" data-admin-edit-id="{{ cat.pk }}" data-admin-edit-title="{{ cat.name|escape }}" {% endif %}href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
         <span class="tile-circle-img">
-          {% if cat.image %}<img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">{% else %}<span class="tile-circle-wm">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
+          {% if cat.image %}<img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">{% else %}<span class="tile-circle-wm">{{ cat.icon|default:"🏷️" }}</span>{% endif %}
         </span>
         <span class="tile-circle-label">{{ cat.name }}</span>
       </a>

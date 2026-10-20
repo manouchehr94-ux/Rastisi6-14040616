@@ -254,8 +254,15 @@ from apps.sms.services.sms_service import (
 from apps.stores.integrations.registry import get_provider as get_integration_provider
 from apps.stores.models import StoreMembership
 from apps.stores.services import integration_service
+from apps.dashboard.staff_confirm import check_token as check_staff_token, make_token as make_staff_token
 from apps.stores.services.membership_service import (
     ASSIGNABLE_ROLES,
+    ROLE_DESCRIPTIONS,
+    StaffInputError,
+    display_name as staff_display_name,
+    preview_add,
+    recent_staff_events,
+    summarize as summarize_staff,
     MembershipError,
     add_staff_member,
     change_role,
@@ -321,6 +328,7 @@ from apps.stores.authorization import (
     membership_has_permission,
 )
 from .forms import (
+    IdentityAssetsForm,
     AttributeForm,
     AttributeValueForm,
     BrandForm,
@@ -846,6 +854,9 @@ def _save_product(form, product, *, store):
     product.seo_description = data.get("seo_description") or ""
     product.visibility = data.get("visibility") or Product.Visibility.PUBLIC
     product.publish_at = data.get("publish_at")
+    product.price_mode_override = data.get("price_mode_override") or ""
+    product.discount_starts_at = data.get("discount_starts_at")
+    product.discount_ends_at = data.get("discount_ends_at")
     if data.get("slug"):
         product.slug = data["slug"]
     product.full_clean(exclude=["slug"] if not data.get("slug") else [])
@@ -882,7 +893,7 @@ _PRODUCT_WIZARD_FIELD_STEPS = {
     # تبِ ۲ — دسته‌بندی: دسته‌بندی، گروهِ دوم، کشورِ سازنده
     "category": "category", "second_group": "category", "country_of_origin": "category",
     # تبِ ۳ — قیمت و تنوع: نوعِ کالا، قیمت، تخفیف، مالیات، لجستیک، موجودی
-    "price": "price", "discount_percent": "price", "tax_class": "price",
+    "price": "price", "discount_percent": "price", "price_mode_override": "price", "discount_starts_at": "price", "discount_ends_at": "price", "tax_class": "price",
     "barcode": "price", "weight_grams": "price", "requires_shipping": "price",
     "product_type": "price", "stock": "price",
     # تبِ ۵ — سئو و انتشار
@@ -899,6 +910,8 @@ def _product_form_initial(product) -> dict:
     بسازند — یک نسخه‌ی جدا برایِ keep_open، همین باگِ دقیقاً همین‌جا
     (ریست‌شدنِ خاموشِ نوعِ کالا/نمایش/... به‌خاطرِ initialِ ناقص) را دوباره
     ممکن می‌کرد."""
+    from django.utils import timezone
+
     return {
         "name": product.name, "sku": product.sku, "category": product.category_id,
         "unit": product.unit, "model_code": product.model_code,
@@ -915,6 +928,15 @@ def _product_form_initial(product) -> dict:
         "seo_title": product.seo_title, "seo_description": product.seo_description,
         "visibility": product.visibility,
         "publish_at": product.publish_at.strftime("%Y-%m-%dT%H:%M") if product.publish_at else "",
+        "price_mode_override": product.price_mode_override,
+        "discount_starts_at": (
+            timezone.localtime(product.discount_starts_at).strftime("%Y-%m-%dT%H:%M")
+            if product.discount_starts_at else ""
+        ),
+        "discount_ends_at": (
+            timezone.localtime(product.discount_ends_at).strftime("%Y-%m-%dT%H:%M")
+            if product.discount_ends_at else ""
+        ),
     }
 
 
@@ -2359,6 +2381,7 @@ def collection_add(request):
                     store, name=form.cleaned_data["name"], description=form.cleaned_data["description"],
                     image=form.cleaned_data.get("image"), seo_title=form.cleaned_data["seo_title"],
                     seo_description=form.cleaned_data["seo_description"], user=request.user,
+                    price_mode=form.cleaned_data.get("price_mode") or "standard",
                 )
             except CollectionError as exc:
                 form.add_error(None, str(exc))
@@ -2391,6 +2414,7 @@ def collection_edit(request, pk):
                     seo_title=form.cleaned_data["seo_title"], seo_description=form.cleaned_data["seo_description"],
                     image=form.cleaned_data.get("image"),
                     remove_image=(request.POST.get("remove_image") == "1"), user=request.user,
+                    price_mode=form.cleaned_data.get("price_mode") or collection.price_mode,
                 )
             except CollectionError as exc:
                 form.add_error(None, str(exc))
@@ -2401,6 +2425,7 @@ def collection_edit(request, pk):
         form = CollectionForm(initial={
             "name": collection.name, "description": collection.description,
             "seo_title": collection.seo_title, "seo_description": collection.seo_description,
+            "price_mode": collection.price_mode,
         })
 
     return render(request, "dashboard/collection_form.html", {
@@ -2446,6 +2471,102 @@ def _get_scoped_collection_or_404(request, pk):
         return collection_service.get_scoped_collection(store, pk)
     except CollectionNotFoundError:
         raise Http404
+
+
+def _parse_local_datetime(raw):
+    """``datetime-local`` (بدونِ منطقه) را در منطقه‌ی زمانیِ جاری (Asia/Tehran) به زمانِ aware تبدیل می‌کند."""
+    from datetime import datetime
+
+    from django.utils import timezone
+
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+
+    try:
+        naive = datetime.strptime(raw, "%Y-%m-%dT%H:%M")
+    except ValueError:
+        raise ValueError("قالب تاریخ/ساعت معتبر نیست.") from None
+    return timezone.make_aware(naive, timezone.get_current_timezone())
+
+
+@staff_required
+@permission_required(COLLECTION_MANAGE)
+def collection_campaign(request, pk):
+    """RS-01 / FOLLOWUP-06 — زمان‌بندیِ کمپینِ تخفیفِ یک کالکشنِ موجود.
+
+    هر عملیاتِ نوشتنی دو مرحله است: «پیش‌نمایش» (فقط‌خواندنی، با فهرستِ SKU و قیمتِ قبل/بعد) و «تأیید» با توکنِ امضاشدهٔ همان پیش‌نمایش.
+    «کمپین» فقط تخفیفِ دارایِ پایان است؛ تخفیفِ ثابتِ کالاها (بدونِ پایان) از کمپین جداست و «پایان فوری» هرگز به آن‌ها دست نمی‌زند.
+    منبعِ واحدِ قیمت/Deadline همان فیلدهایِ تخفیفِ کالاست."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.catalog.services import promotion_service
+
+    collection = _get_scoped_collection_or_404(request, pk)
+    now = timezone.now()
+    form = {"percent": "", "start_mode": "now", "starts_at": "", "ends_at": "", "hours": ""}
+    errors = []
+    preview = None
+    end_plan = None
+    end_mode = "end"
+    action = request.POST.get("action", "preview") if request.method == "POST" else ""
+
+    if request.method == "POST" and action in ("end_preview", "end_confirm"):
+        end_mode = "restore" if request.POST.get("mode") == "restore" else "end"
+        end_plan = promotion_service.preview_end_collection_promotion(collection, mode=end_mode, now=now)
+        if action == "end_confirm":
+            if not end_plan["available"] or not end_plan["rows"]:
+                errors.append(end_plan["reason"] or "موردی برای تغییر پیدا نشد.")
+            elif not check_staff_token(request, request.POST.get("confirm_token", ""), "campaign_end", collection.pk, mode=end_mode) \
+                    or request.POST.get("acknowledge") != "1":
+                errors.append("برای اجرا باید ابتدا پیش‌نمایش را ببینید و تأیید را علامت بزنید.")
+            else:
+                result = promotion_service.end_collection_promotion(collection, actor=request.user, now=now, mode=end_mode)
+                verb = "تخفیفِ قبل از کمپین بازگردانده شد" if end_mode == "restore" else "کمپین پایان یافت"
+                messages.success(request, f"برای {result['updated']} کالا {verb}؛ تخفیف‌های ثابتِ کالاها دست‌نخورده ماند.")
+                return redirect("dashboard:collection-campaign", pk=collection.pk)
+    elif request.method == "POST":
+        for key in form:
+            form[key] = (request.POST.get(key) or "").strip()
+        try:
+            starts_at = now if form["start_mode"] == "now" else _parse_local_datetime(form["starts_at"])
+            if form["start_mode"] != "now" and starts_at is None:
+                raise promotion_service.PromotionError("زمان شروع را مشخص کنید.")
+            ends_at = _parse_local_datetime(form["ends_at"])
+            if ends_at is None and form["hours"]:
+                try:
+                    ends_at = (starts_at or now) + timedelta(hours=int(form["hours"]))
+                except ValueError:
+                    raise promotion_service.PromotionError("مدت باید عدد ساعت باشد.") from None
+            preview = promotion_service.preview_collection_promotion(
+                collection, discount_percent=form["percent"], starts_at=starts_at, ends_at=ends_at, now=now,
+            )
+            token_values = {k: form[k] for k in ("percent", "start_mode", "starts_at", "ends_at", "hours")}
+            if action == "confirm":
+                if request.POST.get("acknowledge") != "1" \
+                        or not check_staff_token(request, request.POST.get("confirm_token", ""), "campaign_schedule", collection.pk, **token_values):
+                    raise promotion_service.PromotionError("برای اعمال، ابتدا پیش‌نمایش را ببینید و جایگزینیِ تخفیفِ فعلی را تأیید کنید.")
+                result = promotion_service.schedule_collection_promotion(
+                    collection, discount_percent=form["percent"], starts_at=starts_at, ends_at=ends_at,
+                    actor=request.user, now=now,
+                )
+                messages.success(request, f"کمپین برای {result['updated']} کالا ثبت شد.")
+                return redirect("dashboard:collection-campaign", pk=collection.pk)
+            preview["token"] = make_staff_token(request, "campaign_schedule", collection.pk, **token_values)
+        except ValueError as exc:  # PromotionError is a ValueError
+            errors.append(str(exc))
+            preview = None
+
+    context = {
+        "active_page": "collections", "collection": collection, "summary": promotion_service.collection_promotion_summary(collection, now),
+        "form": form, "errors": errors, "preview": preview, "end_plan": end_plan, "end_mode": end_mode,
+        "has_snapshot": promotion_service.last_campaign_snapshot(collection) is not None,
+    }
+    if end_plan is not None:
+        context["end_token"] = make_staff_token(request, "campaign_end", collection.pk, mode=end_mode)
+    return render(request, "dashboard/collection_campaign.html", context)
 
 
 def _collection_items_response(request, collection, *, toast=None):
@@ -3269,12 +3390,13 @@ def category_list(request):
 @permission_required(CATEGORY_MANAGE)
 def category_add_main(request):
     store = _resolve_dashboard_store(request)
-    form = MainCategoryForm(request.POST)
+    form = MainCategoryForm(request.POST, request.FILES)
     if form.is_valid():
         name = form.cleaned_data["name"]
         Category.objects.create(
             store=store, name=name, icon=form.cleaned_data["icon"] or "📁",
             slug=generate_unique_slug(Category, name, store=store),
+            image=form.cleaned_data.get("image") or "",
         )
         response = render(request, "dashboard/partials/categories_body.html", _categories_context(request))
         response["HX-Trigger"] = json.dumps({"toast": {"message": f"گروه «{name}» اضافه شد", "type": "ok"}})
@@ -3352,11 +3474,17 @@ def category_edit(request, pk):
     category = get_object_or_404(Category, pk=pk, store=store)
 
     if request.method == "POST":
-        form = CategoryEditForm(request.POST)
+        form = CategoryEditForm(request.POST, request.FILES)
         if form.is_valid():
             category.name = form.cleaned_data["name"]
             category.icon = form.cleaned_data["icon"]
-            category.save(update_fields=["name", "icon", "updated_at"])
+            category.price_mode = form.cleaned_data.get("price_mode") or category.price_mode
+            # a new picture replaces the reference; «حذف تصویر» only detaches it (the stored file is never deleted here)
+            if form.cleaned_data.get("image"):
+                category.image = form.cleaned_data["image"]
+            elif form.cleaned_data.get("clear_image"):
+                category.image = ""
+            category.save(update_fields=["name", "icon", "price_mode", "image", "updated_at"])
             context = _categories_context(request)
             context["oob"] = True
             response = render(request, "dashboard/partials/categories_body.html", context)
@@ -3365,7 +3493,7 @@ def category_edit(request, pk):
             })
             return response
     else:
-        form = CategoryEditForm(initial={"name": category.name, "icon": category.icon})
+        form = CategoryEditForm(initial={"name": category.name, "icon": category.icon, "price_mode": category.price_mode})
 
     return render(request, "dashboard/partials/category_edit_form.html", {"form": form, "category": category})
 
@@ -4222,18 +4350,23 @@ SETTINGS_SECTIONS = [
     ("delivery-payment", "ارسال و درگاه", "🚚", "روش‌های ارسال و درگاه‌های پرداخت"),
     ("payment-config", "پیکربندی درگاه", "🔐", "تنظیمات اعتبارنامه و فعال‌سازی درگاه‌های پرداخت"),
     ("sms", "پیامک", "📲", "اتصال و قالب‌های پیامک"),
-    ("appearance", "تم رنگی", "🎨", "پیش‌فرض‌ها و رنگ‌بندی سفارشی فروشگاه"),
     ("industry", "صنف فروشگاه", "🏭", "نصب الگوی کاتالوگ آماده بر اساس صنف فعالیت"),
     ("integrations", "یکپارچه‌سازی‌ها", "🔗", "اینماد، ترب، گوگل آنالیتیکس و سایرِ اتصال‌های بیرونی"),
 ]
 
 VALID_SECTION_KEYS = {s[0] for s in SETTINGS_SECTIONS}
 
+#: RS-13 — مسیرِ قدیمیِ «تم رنگی» (و POSTِ آن) دیگر مرجعِ طراحی نیست؛ طراحی فقط در Design Studio (R4) انجام می‌شود.
+LEGACY_APPEARANCE_SECTION = "appearance"
+
 
 @staff_required
 @permission_required(SETTINGS_MANAGE)
 def settings_home(request):
     section = request.GET.get("section", "general")
+    if section == LEGACY_APPEARANCE_SECTION:
+        # GET امن و بدونِ اثرِ جانبی؛ مقصد همان panel=appearance که ورودیِ «ظاهر و طراحی» است (Studio خودش tenant/مجوز را می‌سنجد).
+        return redirect(f"{reverse('dashboard:storefront-builder-r4-editor')}?panel=appearance")
     if section not in VALID_SECTION_KEYS:
         section = "general"
     context = _settings_context(request)
@@ -4455,7 +4588,13 @@ def settings_gateway_toggle(request, pk):
 @staff_required
 @permission_required(PAYMENT_SETTINGS_MANAGE)
 def settings_shipping_toggle(request, pk):
-    method = settings_admin_service.toggle_shipping_method(pk, store=_resolve_dashboard_store(request))
+    try:
+        method = settings_admin_service.toggle_shipping_method(pk, store=_resolve_dashboard_store(request))
+    except settings_admin_service.ShippingMethodIncomplete as exc:
+        response = HttpResponse(status=422)
+        response["HX-Trigger"] = json.dumps({"toast": {"message": f"روشِ ارسال فعال نشد: {exc}", "type": "err"}})
+        response["HX-Refresh"] = "true"
+        return response
     state = "فعال" if method.is_active else "غیرفعال"
     response = HttpResponse(status=204)
     response["HX-Trigger"] = json.dumps({
@@ -4467,13 +4606,59 @@ def settings_shipping_toggle(request, pk):
 # --------------------------------------------------------------- هویت بصری
 
 
+def _apply_identity_assets(shop, cleaned):
+    """لوگو/فاوآیکون را روی ``shop`` اعمال می‌کند (جایگزینی بر حذف مقدم است) — بدونِ ذخیره."""
+    if cleaned.get("logo"):
+        shop.logo = cleaned["logo"]
+    elif cleaned.get("remove_logo") and shop.logo:
+        shop.logo = ""
+    if cleaned.get("favicon"):
+        shop.favicon = cleaned["favicon"]
+    elif cleaned.get("remove_favicon") and shop.favicon:
+        shop.favicon = ""
+
+
+def _cleanup_replaced_identity_files(shop, old_logo_name, old_favicon_name):
+    """پاکسازیِ فایل‌هایِ قبلی فقط پس از ذخیره‌ی موفق (Storage-safe)."""
+    from django.db import transaction as db_transaction
+
+    if old_logo_name and old_logo_name != (shop.logo.name if shop.logo else ""):
+        storage = shop.logo.storage
+        db_transaction.on_commit(lambda n=old_logo_name, s=storage: (s.delete(n) if s.exists(n) else None))
+    if old_favicon_name and old_favicon_name != (shop.favicon.name if shop.favicon else ""):
+        storage = shop.favicon.storage
+        db_transaction.on_commit(lambda n=old_favicon_name, s=storage: (s.delete(n) if s.exists(n) else None))
+
+
+@require_POST
+@staff_required
+@permission_required(SETTINGS_MANAGE)
+def settings_identity_assets(request):
+    """RS-13: لوگو و فاوآیکون در بخش «اطلاعات فروشگاه» (مالکِ درستِ آن‌ها)؛ طراحی/رنگ فقط در Design Studio."""
+    shop = ShopSettings.load(store=request.store)
+    form = IdentityAssetsForm(request.POST, request.FILES)
+    if form.is_valid():
+        old_logo = shop.logo.name if shop.logo else None
+        old_favicon = shop.favicon.name if shop.favicon else None
+        _apply_identity_assets(shop, form.cleaned_data)
+        shop.save()
+        _cleanup_replaced_identity_files(shop, old_logo, old_favicon)
+        messages.success(request, "لوگو و فاوآیکون ذخیره شد")
+        return redirect("/admin-portal/settings/?section=general")
+    for errors in form.errors.values():
+        for error in errors:
+            messages.error(request, error)
+    return redirect("/admin-portal/settings/?section=general")
+
+
 @require_POST
 @staff_required
 @permission_required(SETTINGS_MANAGE)
 def settings_appearance(request):
-    """ذخیره تنظیمات هویت بصری: لوگو، فاوآیکون، توکن‌های رنگی تم؛ یا بازگردانی به پیش‌فرض."""
-    from django.db import transaction as db_transaction
+    """ذخیره تنظیمات هویت بصری: لوگو، فاوآیکون، توکن‌های رنگی تم؛ یا بازگردانی به پیش‌فرض.
 
+    RS-13: صفحهٔ GET این بخش بازنشسته و به Design Studio هدایت می‌شود؛ رنگ‌های ShopSettings دیگر مرجعِ ظاهرِ ویترین نیستند
+    (فقط پیش‌فرضِ اولیهٔ قالب و رنگِ سربرگِ ایمیل‌ها). این POST برایِ سازگاری و اسکریپت‌ها باقی مانده است."""
     if request.POST.get("action") == "reset":
         shop = ShopSettings.load(store=request.store)
         for field, default in THEME_TOKEN_DEFAULTS.items():
@@ -4496,31 +4681,9 @@ def settings_appearance(request):
             if form.cleaned_data.get(field):
                 setattr(shop, field, form.cleaned_data[field])
 
-        # لوگو — replacement wins over removal
-        if form.cleaned_data.get("logo"):
-            shop.logo = form.cleaned_data["logo"]
-        elif form.cleaned_data.get("remove_logo") and shop.logo:
-            shop.logo = ""
-
-        # فاوآیکون — replacement wins over removal
-        if form.cleaned_data.get("favicon"):
-            shop.favicon = form.cleaned_data["favicon"]
-        elif form.cleaned_data.get("remove_favicon") and shop.favicon:
-            shop.favicon = ""
-
+        _apply_identity_assets(shop, form.cleaned_data)
         shop.save()
-
-        # پاکسازی فایل‌های قبلی فقط پس از ذخیره‌ی موفق (Storage-safe)
-        if old_logo_name and old_logo_name != (shop.logo.name if shop.logo else ""):
-            storage = shop.logo.storage
-            db_transaction.on_commit(lambda n=old_logo_name, s=storage: (
-                s.delete(n) if s.exists(n) else None
-            ))
-        if old_favicon_name and old_favicon_name != (shop.favicon.name if shop.favicon else ""):
-            storage = shop.favicon.storage
-            db_transaction.on_commit(lambda n=old_favicon_name, s=storage: (
-                s.delete(n) if s.exists(n) else None
-            ))
+        _cleanup_replaced_identity_files(shop, old_logo_name, old_favicon_name)
 
         messages.success(request, "هویت بصری فروشگاه ذخیره شد")
         return redirect("/admin-portal/settings/?section=appearance")
@@ -4786,9 +4949,27 @@ from apps.content.models import ContentPage
 @permission_required(CONTENT_MANAGE)
 def page_list(request):
     store = _resolve_dashboard_store(request)
+    from apps.content import about_page
+
     pages = ContentPage.objects.filter(store=store).order_by("-created_at")
-    context = {"pages": pages, "active_page": "pages"}
+    context = {"pages": pages, "active_page": "pages", "about": about_page.about_page_state(store)}
     return render(request, "dashboard/pages.html", context)
+
+
+@require_POST
+@staff_required
+@permission_required(CONTENT_MANAGE)
+def page_create_about(request):
+    """یک‌کلیک: پیش‌نویسِ «درباره ما» (بدون انتشار) — مقصدِ دکمه‌های «استعلام قیمت». انتشار فقط با اقدامِ جداگانهٔ مالک."""
+    from apps.content import about_page
+
+    store = _resolve_dashboard_store(request)
+    page, created, _ = about_page.ensure_about_page(store)
+    if created:
+        messages.success(request, "پیش‌نویسِ «درباره ما» ساخته شد؛ متن را ویرایش کنید و سپس منتشر کنید.")
+    else:
+        messages.info(request, "صفحهٔ «درباره ما» از قبل وجود دارد.")
+    return redirect("dashboard:page-edit", pk=page.pk)
 
 
 @staff_required
@@ -4888,29 +5069,24 @@ def page_publish(request, pk):
 from apps.content.models import HeroSlide, PromotionalBanner
 
 
-def _uses_visual_storefront_layout(store) -> bool:
-    """آیا سازنده بصری برای این فروشگاه منتشر شده — دقیقاً همان شرطی که
-    ``apps.catalog.views.home`` برایِ انتخابِ بینِ مسیرِ Builder و مسیرِ
-    قدیمیِ سخت‌کدشده چک می‌کند. اگر True باشد، صفحاتِ قدیمیِ اسلایدر/بنر
-    (``hero_list``/``banner_list``) دیگر هیچ اثری روی صفحه‌ی عمومیِ این
-    فروشگاه ندارند — چون بخشِ ``hero_banner``ی سازنده جای‌گزینِ آن‌هاست."""
-    from apps.storefront_builder.models import StorefrontLayout
-
-    return StorefrontLayout.objects.filter(
-        store=store, uses_visual_storefront_layout=True, published_version__isnull=False,
-    ).exists()
+# ARCH-02: the dashboard hero/banner screens manage the store's SHARED default media
+# (``section IS NULL``) — the template-independent pool every Design Studio section
+# without its own scoped media renders. They are NOT a second editor of the
+# storefront design (Design Studio is the only one); they stay editable because the
+# pool genuinely drives the storefront (``render_service._scoped_*``). The former
+# read-only "Studio owns the homepage" guard claimed these rows had no effect on the
+# public page, which was false whenever a section fell back to them.
 
 
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def hero_list(request):
     store = _resolve_dashboard_store(request)
-    # Legacy screen: store-wide slides only. Section-scoped rows belong to a
+    # Shared default media only (``section IS NULL``). Section-scoped rows belong to a
     # Draft/Published layout version and are managed through the R4 media manager.
     slides = HeroSlide.objects.filter(store=store, section__isnull=True).order_by("display_order", "id")
     return render(request, "dashboard/hero_list.html", {
         "slides": slides, "active_page": "homepage",
-        "storefront_builder_active": _uses_visual_storefront_layout(store),
     })
 
 
@@ -5039,11 +5215,10 @@ def hero_toggle(request, pk):
 @permission_required(CONTENT_MANAGE)
 def banner_list(request):
     store = _resolve_dashboard_store(request)
-    # Legacy screen: store-wide banners only (section-scoped rows are R4-managed).
+    # Shared default media: store-wide banners only (section-scoped rows are R4-managed).
     banners = PromotionalBanner.objects.filter(store=store, section__isnull=True).order_by("display_order", "id")
     return render(request, "dashboard/banner_list.html", {
         "banners": banners, "active_page": "homepage",
-        "storefront_builder_active": _uses_visual_storefront_layout(store),
     })
 
 
@@ -5486,10 +5661,21 @@ def _resolve_dashboard_store(request):
     return resolve_store_for_service(request)
 
 
+def _studio_footer_newsletter_flag(store):
+    """RS-03: خبرنامه دو کلید دارد — این صفحه و «خبرنامه» در بخش فوتر سازندهٔ فروشگاه. مقدارِ دومی (منتشرشده) را می‌خواند تا
+    صفحه بگوید کدام مانع است. ``None`` = هنوز نسخهٔ منتشرشده‌ای نیست."""
+    from apps.storefront_builder.models import StorefrontLayout
+
+    layout = StorefrontLayout.objects.filter(store=store).select_related("published_version").first()
+    version = layout.published_version if layout is not None else None
+    return None if version is None else bool((version.footer_config or {}).get("show_newsletter"))
+
+
 @staff_required
 @permission_required(CONTENT_MANAGE)
 def footer_settings_page(request):
     fs = FooterSettings.load(store=request.store)
+    studio_newsletter = _studio_footer_newsletter_flag(request.store)
     field_errors = {}
 
     if request.method == "POST":
@@ -5503,6 +5689,7 @@ def footer_settings_page(request):
         fs.secondary_phone = request.POST.get("secondary_phone", "").strip()
         fs.email = request.POST.get("email", "").strip()
         fs.working_hours = request.POST.get("working_hours", "").strip()
+        fs.show_map_link = request.POST.get("show_map_link") == "on"
         fs.show_navigation = request.POST.get("show_navigation") == "on"
         fs.show_social_links = request.POST.get("show_social_links") == "on"
         fs.show_newsletter = request.POST.get("show_newsletter") == "on"
@@ -5537,12 +5724,12 @@ def footer_settings_page(request):
                         open_sections.add(field_section_map[field])
             return render(request, "dashboard/footer_settings.html", {
                 "fs": fs, "active_page": "footer", "open_sections": open_sections,
-                "field_errors": field_errors,
+                "field_errors": field_errors, "studio_newsletter": studio_newsletter,
             })
 
     return render(request, "dashboard/footer_settings.html", {
         "fs": fs, "active_page": "footer",
-        "field_errors": field_errors,
+        "field_errors": field_errors, "studio_newsletter": studio_newsletter,
     })
 
 
@@ -5892,34 +6079,129 @@ def _dashboard_membership_or_404(store, pk):
     return get_object_or_404(StoreMembership, pk=pk, store=store)
 
 
+def _staff_roles_info():
+    return [
+        {"value": value, "label": label, "description": ROLE_DESCRIPTIONS.get(value, "")}
+        for value, label in ASSIGNABLE_ROLES
+    ]
+
+
+def _staff_login_url(request) -> str:
+    """نشانیِ ورودِ راستیسی که عضو با آن (موبایل + کدِ پیامکی) وارد می‌شود؛ به مالک نشان داده می‌شود تا به عضو بدهد.
+    هیچ پیامک/ایمیلی به‌صورت خودکار فرستاده نمی‌شود."""
+    from django.conf import settings
+
+    from apps.stores.hostnames import build_cross_host_url
+
+    return build_cross_host_url(request, hostname=settings.RASTISI_PLATFORM_PRIMARY_HOST, path="/login/")
+
+
 @staff_required
 @permission_required(STAFF_MANAGE)
 def staff_list(request):
-    memberships = list_memberships(request.store)
+    q = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    role = request.GET.get("role", "").strip()
+    memberships = list_memberships(request.store, q=q, status=status, role=role)
+    for membership in memberships:
+        membership.role_description = ROLE_DESCRIPTIONS.get(membership.role, "")
+        membership.person_name = staff_display_name(membership.user)
     return render(request, "dashboard/staff_list.html", {
         "memberships": memberships,
         "active_page": "staff",
         "assignable_roles": ASSIGNABLE_ROLES,
         "role_choices": StoreMembership.Role.choices,
+        "role_descriptions": ROLE_DESCRIPTIONS,
+        "status_choices": StoreMembership.MembershipStatus.choices,
+        "summary": summarize_staff(request.store),
+        "recent_events": recent_staff_events(request.store),
+        "login_url": _staff_login_url(request),
+        "filters": {"q": q, "status": status, "role": role},
+        "has_filters": bool(q or status or role),
+        "current_user_id": request.user.pk,
     })
 
 
 @staff_required
 @permission_required(STAFF_MANAGE)
 def staff_add(request):
-    if request.method == "POST":
-        phone = request.POST.get("phone", "")
-        role = request.POST.get("role", "")
-        try:
-            add_staff_member(request.store, phone=phone, role=role, invited_by=request.user)
-            messages.success(request, f"عضو تیم با موفقیت اضافه شد ({phone})")
-        except MembershipError as exc:
-            messages.error(request, str(exc))
-        return redirect("dashboard:staff-list")
+    """افزودنِ عضو تیم — فرمِ گام‌به‌گام: ورود ← بررسی/تأیید ← ثبت.
 
-    return render(request, "dashboard/staff_form.html", {
+    ``step=review`` (دکمهٔ فرم) فقط اعتبارسنجی و پیش‌نمایش می‌دهد؛ هر POST دیگر (از جمله فراخوانِ قدیمیِ بدونِ ``step``)
+    مستقیم ثبت می‌کند. در هر خطا، فرم با همان ورودی و خطای کنارِ فیلد دوباره نمایش داده می‌شود (ورودی گم نمی‌شود)."""
+    context = {
         "active_page": "staff",
         "assignable_roles": ASSIGNABLE_ROLES,
+        "roles_info": _staff_roles_info(),
+        "values": {"phone": "", "full_name": "", "email": "", "role": ""},
+        "errors": {},
+        "login_url": _staff_login_url(request),
+    }
+    if request.method != "POST":
+        return render(request, "dashboard/staff_form.html", context)
+
+    values = {key: request.POST.get(key, "").strip() for key in ("phone", "full_name", "email", "role")}
+    context["values"] = values
+    step = request.POST.get("step", "confirm")
+    if step == "edit":  # «ویرایش مشخصات» از صفحهٔ بررسی: همان ورودی، بدونِ اعتبارسنجی/ثبت
+        return render(request, "dashboard/staff_form.html", context)
+    try:
+        if step == "review":
+            preview = preview_add(request.store, **values)
+            if not preview.can_add:
+                raise StaffInputError({"phone": "این کاربر از قبل عضو فعال این فروشگاه است."})
+            norm = {"phone": preview.phone, "role": preview.role, "full_name": preview.full_name, "email": preview.email}
+            context.update(preview=preview, role_label=dict(ASSIGNABLE_ROLES).get(preview.role, ""),
+                           role_description=ROLE_DESCRIPTIONS.get(preview.role, ""),
+                           review_token=make_staff_token(request, "add", None, **norm))
+            return render(request, "dashboard/staff_form.html", context)
+        # FOLLOWUP-05: ثبت فقط با توکنِ صادرشده از صفحهٔ بازبینیِ *همین* مقادیر؛ POST مستقیم/دستکاری‌شده به بازبینی برمی‌گردد.
+        preview = preview_add(request.store, **values)
+        if not preview.can_add:
+            raise StaffInputError({"phone": "این کاربر از قبل عضو فعال این فروشگاه است."})
+        norm = {"phone": preview.phone, "role": preview.role, "full_name": preview.full_name, "email": preview.email}
+        if not check_staff_token(request, request.POST.get("review_token", ""), "add", None, **norm):
+            messages.warning(request, "برای افزودنِ عضو باید ابتدا مرحلهٔ «بررسی و تأیید» را بگذرانید.")
+            context.update(
+                preview=preview, role_label=dict(ASSIGNABLE_ROLES).get(preview.role, ""),
+                role_description=ROLE_DESCRIPTIONS.get(preview.role, ""),
+                review_token=make_staff_token(request, "add", None, **norm),
+            )
+            return render(request, "dashboard/staff_form.html", context)
+        membership = add_staff_member(request.store, invited_by=request.user, **values)
+    except StaffInputError as exc:
+        context["errors"] = exc.field_errors
+        return render(request, "dashboard/staff_form.html", context)
+    except (MembershipError, EntitlementError) as exc:
+        context["errors"] = {"form": str(exc)}
+        return render(request, "dashboard/staff_form.html", context)
+
+    messages.success(
+        request,
+        f"«{membership.user.username}» به‌عنوان «{membership.get_role_display()}» اضافه شد. "
+        "برای ورود، با همین شماره و کدِ پیامکی از صفحهٔ ورودِ راستیسی وارد شود.",
+    )
+    return redirect("dashboard:staff-list")
+
+
+def normalize_phone_input(raw: str) -> str:
+    """نرمال‌سازیِ شمارهٔ تایپ‌شده برایِ تأییدِ انتقال مالکیت؛ نامعتبر ⇒ رشتهٔ خالی (تأیید رد می‌شود)."""
+    from apps.stores.services.membership_service import _normalize_phone
+
+    try:
+        return _normalize_phone(raw)
+    except StaffInputError:
+        return ""
+
+
+def _staff_confirm_page(request, *, op, membership, title, summary, consequence, action_label, danger=True,
+                        values=None, require_phone=False):
+    values = values or {}
+    return render(request, "dashboard/staff_confirm.html", {
+        "active_page": "staff", "title": title, "summary": summary, "consequence": consequence,
+        "action_label": action_label, "danger": danger, "membership": membership,
+        "token": make_staff_token(request, op, membership.pk, **values), "values": values,
+        "require_phone": require_phone, "cancel_url": reverse("dashboard:staff-list"),
     })
 
 
@@ -5929,10 +6211,22 @@ def staff_add(request):
 def staff_change_role(request, pk):
     membership = _dashboard_membership_or_404(request.store, pk)
     new_role = request.POST.get("role", "")
+    token = request.POST.get("confirm_token", "")
+    if not check_staff_token(request, token, "change_role", membership.pk, role=new_role):
+        # مرحلهٔ تأیید: فقط نمایش (هیچ تغییری ثبت نمی‌شود).
+        if new_role not in dict(ASSIGNABLE_ROLES) or new_role == membership.role:
+            messages.error(request, "نقشِ انتخاب‌شده نامعتبر است یا با نقشِ فعلی یکسان است.")
+            return redirect("dashboard:staff-list")
+        return _staff_confirm_page(
+            request, op="change_role", membership=membership, title="تأیید تغییر نقش",
+            summary=f"نقشِ «{membership.user.username}» از «{membership.get_role_display()}» به «{dict(ASSIGNABLE_ROLES)[new_role]}» تغییر کند؟",
+            consequence="دسترسی‌های این عضو بلافاصله بر اساس نقشِ جدید تغییر می‌کند.",
+            action_label="تأیید و تغییر نقش", danger=False, values={"role": new_role},
+        )
     try:
         change_role(membership, new_role=new_role, actor=request.user)
         messages.success(request, f"نقشِ «{membership.user.username}» به‌روزرسانی شد")
-    except MembershipError as exc:
+    except (MembershipError, EntitlementError) as exc:
         messages.error(request, str(exc))
     return redirect("dashboard:staff-list")
 
@@ -5941,15 +6235,13 @@ def staff_change_role(request, pk):
 @permission_required(STAFF_MANAGE)
 def staff_revoke(request, pk):
     membership = _dashboard_membership_or_404(request.store, pk)
-    if request.method != "POST":
-        return render(request, "dashboard/confirm_delete.html", {
-            "object_type": "عضویتِ",
-            "object_name": membership.user.username,
-            "consequence": "این کاربر دیگر به پنل مدیریتِ این فروشگاه دسترسی نخواهد داشت.",
-            "action_label": "لغو عضویت",
-            "cancel_url": reverse("dashboard:staff-list"),
-            "active_page": "staff",
-        })
+    if request.method != "POST" or not check_staff_token(request, request.POST.get("confirm_token", ""), "revoke", membership.pk):
+        return _staff_confirm_page(
+            request, op="revoke", membership=membership, title="تأیید لغو عضویت",
+            summary=f"عضویتِ «{membership.user.username}» لغو شود؟",
+            consequence="این کاربر بلافاصله به پنل مدیریتِ این فروشگاه دسترسی نخواهد داشت (حسابِ او در راستیسی و فروشگاه‌های دیگر دست‌نخورده می‌ماند). در صورت نیاز می‌توانید بعداً دوباره فعالش کنید.",
+            action_label="لغو عضویت",
+        )
     try:
         revoke_membership(membership, actor=request.user)
         messages.success(request, f"عضویتِ «{membership.user.username}» لغو شد")
@@ -5963,10 +6255,17 @@ def staff_revoke(request, pk):
 @permission_required(STAFF_MANAGE)
 def staff_reactivate(request, pk):
     membership = _dashboard_membership_or_404(request.store, pk)
+    if not check_staff_token(request, request.POST.get("confirm_token", ""), "reactivate", membership.pk):
+        return _staff_confirm_page(
+            request, op="reactivate", membership=membership, title="تأیید فعال‌سازی مجدد",
+            summary=f"عضویتِ «{membership.user.username}» دوباره فعال شود؟",
+            consequence="این کار یک صندلیِ تازه از سقفِ پلنِ شما مصرف می‌کند.",
+            action_label="فعال‌سازی مجدد", danger=False,
+        )
     try:
         reactivate_membership(membership, actor=request.user)
         messages.success(request, f"عضویتِ «{membership.user.username}» دوباره فعال شد")
-    except MembershipError as exc:
+    except (MembershipError, EntitlementError) as exc:
         messages.error(request, str(exc))
     return redirect("dashboard:staff-list")
 
@@ -5976,16 +6275,21 @@ def staff_reactivate(request, pk):
 def staff_transfer_ownership(request, pk):
     new_owner = _dashboard_membership_or_404(request.store, pk)
     current_owner = request.store_membership
-
-    if request.method != "POST":
-        return render(request, "dashboard/confirm_delete.html", {
-            "object_type": "انتقال مالکیتِ فروشگاه به",
-            "object_name": new_owner.user.username,
-            "consequence": "پس از این کار، شما دیگر مالکِ این فروشگاه نخواهید بود (نقشِ شما «مدیر» می‌شود) و امکانِ لغوِ خودکارِ این عملیات وجود ندارد.",
-            "action_label": "انتقال مالکیت",
-            "cancel_url": reverse("dashboard:staff-list"),
-            "active_page": "staff",
-        })
+    typed = normalize_phone_input(request.POST.get("confirm_phone", "")) if request.method == "POST" else ""
+    confirmed = (
+        request.method == "POST"
+        and check_staff_token(request, request.POST.get("confirm_token", ""), "transfer", new_owner.pk)
+        and typed == new_owner.user.username
+    )
+    if not confirmed:
+        if request.method == "POST":
+            messages.error(request, "برای انتقال مالکیت، شمارهٔ موبایلِ مالکِ جدید را دقیقاً وارد و تأیید کنید.")
+        return _staff_confirm_page(
+            request, op="transfer", membership=new_owner, title="تأیید انتقال مالکیت",
+            summary=f"مالکیتِ فروشگاه به «{new_owner.user.username}» منتقل شود؟",
+            consequence="پس از این کار، شما دیگر مالکِ این فروشگاه نخواهید بود (نقشِ شما «مدیر» می‌شود) و فقط مالکِ جدید می‌تواند آن را برگرداند.",
+            action_label="انتقال مالکیت", require_phone=True,
+        )
     try:
         transfer_ownership(request.store, current_owner=current_owner, new_owner=new_owner, actor=request.user)
         messages.success(request, f"مالکیتِ فروشگاه به «{new_owner.user.username}» منتقل شد")

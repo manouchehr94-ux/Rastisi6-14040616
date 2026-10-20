@@ -1,7 +1,51 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}اعضای تیم | پنل مدیریت{% endblock %}
 {% block page_title %}اعضای تیم{% endblock %}
 {% block page_sub %}مدیریت دسترسیِ اعضای تیم به پنل مدیریتِ فروشگاه{% endblock %}
+{% block extra_css %}
+<style>
+.team-summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.team-summary a{display:flex;flex-direction:column;min-width:110px;padding:10px 14px;border:1.5px solid var(--line,#e5e7eb);border-radius:12px;color:inherit;text-decoration:none;background:var(--card,#fff)}
+.team-summary a.on{border-color:var(--brand,#6d28d9)}
+.team-summary b{font-size:20px}
+.team-summary span{font-size:12px;color:var(--muted,#6b7280)}
+.team-filter{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.team-filter .form-input,.team-filter .form-select{height:38px;width:auto;min-width:150px;margin:0}
+.team-filter .form-input{flex:1 1 240px}
+.team-help{padding:10px 14px;border-radius:12px;background:#eff6ff;color:#1e3a8a;font-size:12.5px;line-height:1.9;margin:0 0 14px}
+.team-member b{display:block}
+.team-member small,.team-sub{color:var(--muted,#6b7280);font-size:12px}
+.team-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.team-actions form{display:flex;gap:4px;margin:0}
+.team-events{margin:12px 0 0;padding:0;list-style:none;font-size:13px}
+.team-event{display:grid;grid-template-columns:minmax(9.5rem,11rem) minmax(0,1fr) minmax(8rem,auto);gap:6px 16px;align-items:start;padding:12px 4px;border-bottom:1px solid var(--line,#e5e7eb)}
+.team-event:last-child{border-bottom:0}
+.team-event .te-when{display:flex;flex-direction:column;gap:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.team-event .te-when b{font-weight:600}
+.team-event .te-what{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0}
+.team-event .te-target{overflow-wrap:anywhere;unicode-bidi:isolate}
+.team-event .te-detail{color:var(--muted,#6b7280);font-size:12px;overflow-wrap:anywhere}
+.team-event .te-who{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.te-badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#eef0f4;color:#475066;white-space:nowrap}
+.te-badge.good{background:#e7f6ec;color:#17653a}.te-badge.info{background:#e8f0fe;color:#1d4ed8}.te-badge.warn{background:#fff3e0;color:#9a4d00}
+.te-status-bad{color:#b42318;font-weight:600}
+@media(max-width:760px){
+  .admin-body .team-table{min-width:0;width:100%}
+  .team-table thead{display:none}
+  .team-table,.team-table tbody,.team-table tr,.team-table td{display:block;width:100%;min-width:0}
+  .team-table tr{border:1.5px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 12px;margin:0 0 10px}
+  .team-table td{border:0;padding:4px 0}
+  .team-table td[data-label]::before{content:attr(data-label) ": ";color:var(--muted,#6b7280);font-size:12px}
+  .team-table td.team-member::before{content:none}
+  .team-actions form{width:100%}
+  .team-actions form .form-select{flex:1 1 auto;min-width:0}
+  .team-event{grid-template-columns:minmax(0,1fr);gap:4px;padding:12px 2px}
+  .team-event .te-when{flex-direction:row;gap:8px;white-space:normal;flex-wrap:wrap}
+  .team-table-wrap,.table-wrap{overflow-x:visible}
+}
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
@@ -11,57 +55,89 @@
   <a href="{% url 'dashboard:staff-add' %}" class="btn btn-primary">افزودن عضو تیم</a>
 </div>
 
+<div class="team-summary" role="navigation" aria-label="فیلتر وضعیت">
+  <a href="{% url 'dashboard:staff-list' %}" class="{% if not filters.status %}on{% endif %}"><b>{{ memberships|length }}</b><span>{% if has_filters %}نتیجه{% else %}همهٔ اعضا{% endif %}</span></a>
+  <a href="?status=active" class="{% if filters.status == 'active' %}on{% endif %}"><b>{{ summary.active }}</b><span>فعال</span></a>
+  <a href="?status=invited" class="{% if filters.status == 'invited' %}on{% endif %}"><b>{{ summary.invited }}</b><span>دعوت‌شده</span></a>
+  <a href="?status=revoked" class="{% if filters.status == 'revoked' %}on{% endif %}"><b>{{ summary.revoked }}</b><span>لغوشده</span></a>
+</div>
+
+<p class="team-help">عضوِ جدید با <b>شمارهٔ موبایل و کدِ پیامکی</b> از صفحهٔ ورودِ راستیسی وارد می‌شود: <span dir="ltr">{{ login_url }}</span> — بدونِ ساختنِ فروشگاهِ تازه و بدونِ رمز عبور. پیامکِ دعوت به‌صورت خودکار ارسال نمی‌شود.</p>
+
+<form method="get" class="team-filter" role="search">
+  <input type="search" name="q" value="{{ filters.q }}" class="form-input" placeholder="جست‌وجوی شماره، نام یا ایمیل" aria-label="جست‌وجوی اعضا">
+  <select name="role" class="form-select" aria-label="نقش">
+    <option value="">همهٔ نقش‌ها</option>
+    {% for value, label in role_choices %}<option value="{{ value }}" {% if filters.role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <select name="status" class="form-select" aria-label="وضعیت">
+    <option value="">همهٔ وضعیت‌ها</option>
+    {% for value, label in status_choices %}<option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-secondary" type="submit">اعمال</button>
+  {% if has_filters %}<a class="btn btn-sm" href="{% url 'dashboard:staff-list' %}">پاک‌کردن فیلتر</a>{% endif %}
+</form>
+
 {% if memberships %}
 <div class="card">
-  <div class="card-head">
-    <h3>اعضا ({{ memberships|length }})</h3>
-  </div>
-  <div class="table-wrap"><table>
-    <thead><tr><th>شماره موبایل</th><th>نقش</th><th>وضعیت</th><th>دعوت‌کننده</th><th>تاریخ عضویت</th><th>عملیات</th></tr></thead>
+  <div class="card-head"><h3>اعضا ({{ memberships|length }})</h3></div>
+  <div class="table-wrap"><table class="team-table">
+    <thead><tr><th>عضو</th><th>نقش</th><th>وضعیت</th><th>افزوده‌شده</th><th>عملیات</th></tr></thead>
     <tbody>
     {% for membership in memberships %}
     <tr>
-      <td dir="ltr" style="text-align:right"><b>{{ membership.user.username }}</b></td>
-      <td>
-        {% if membership.role == "owner" %}
-          <span class="badge b-amber">{{ membership.get_role_display }}</span>
-        {% else %}
-          {{ membership.get_role_display }}
-        {% endif %}
+      <td class="team-member">
+        <b>{% if membership.person_name %}{{ membership.person_name }}{% else %}<span dir="ltr">{{ membership.user.username }}</span>{% endif %}</b>
+        {% if membership.person_name or membership.user.email %}<small dir="ltr" style="display:block;text-align:right">{% if membership.person_name %}{{ membership.user.username }}{% endif %}{% if membership.user.email %}{% if membership.person_name %} · {% endif %}{{ membership.user.email }}{% endif %}</small>{% endif %}
+        {% if membership.user_id == current_user_id %}<small>(شما)</small>{% endif %}
       </td>
-      <td>
+      <td data-label="نقش">
+        {% if membership.role == "owner" %}<span class="badge b-amber">{{ membership.get_role_display }}</span>{% else %}{{ membership.get_role_display }}{% endif %}
+        <div class="team-sub">{{ membership.role_description }}</div>
+      </td>
+      <td data-label="وضعیت">
         {% if membership.status == "active" %}<span class="badge b-green">فعال</span>
+          <div class="team-sub">{% if membership.user.last_login %}آخرین ورود: {{ membership.user.last_login|jalali }}{% else %}هنوز وارد نشده{% endif %}</div>
         {% elif membership.status == "invited" %}<span class="badge b-amber">دعوت‌شده</span>
-        {% else %}<span class="badge">لغوشده</span>{% endif %}
+        {% else %}<span class="badge">لغوشده</span><div class="team-sub">{% if membership.revoked_at %}{{ membership.revoked_at|jalali }}{% endif %}</div>{% endif %}
       </td>
-      <td>{{ membership.invited_by.username|default:"—" }}</td>
-      <td>{{ membership.invited_at|date:"Y-m-d" }}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">
-        {% if membership.role != "owner" and membership.status == "active" %}
-          <form method="post" action="{% url 'dashboard:staff-change-role' membership.pk %}" style="display:flex;gap:4px">
+      <td data-label="افزوده‌شده">
+        {{ membership.invited_at|jalali }}
+        <div class="team-sub">{% if membership.invited_by %}توسط {% firstof membership.invited_by.get_full_name membership.invited_by.username %}{% else %}—{% endif %}</div>
+      </td>
+      <td>
+        <div class="team-actions">
+        {% if membership.role != "owner" and membership.status == "active" and membership.user_id != current_user_id %}
+          <form method="post" action="{% url 'dashboard:staff-change-role' membership.pk %}">
             {% csrf_token %}
-            <select name="role" class="form-select" style="height:32px;padding:2px 6px">
-              {% for value, label in assignable_roles %}
-              <option value="{{ value }}" {% if membership.role == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
+            <select name="role" class="form-select" style="height:32px;padding:2px 6px" aria-label="نقش {{ membership.user.username }}">
+              {% for value, label in assignable_roles %}<option value="{{ value }}" {% if membership.role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
             <button class="btn btn-sm" type="submit">تغییر نقش</button>
           </form>
           <a class="btn btn-sm" href="{% url 'dashboard:staff-transfer-ownership' membership.pk %}">انتقال مالکیت</a>
           <a class="btn btn-sm btn-danger" href="{% url 'dashboard:staff-revoke' membership.pk %}">لغو عضویت</a>
         {% elif membership.status != "active" and membership.role != "owner" %}
-          <form method="post" action="{% url 'dashboard:staff-reactivate' membership.pk %}" style="display:inline">
+          <form method="post" action="{% url 'dashboard:staff-reactivate' membership.pk %}">
             {% csrf_token %}<button class="btn btn-sm">فعال‌سازی مجدد</button>
           </form>
-        {% else %}
-          <span style="color:var(--muted,#9ca3af);font-size:12.5px">مالکِ فروشگاه</span>
+        {% elif membership.role == "owner" %}
+          <span class="team-sub">مالکِ فروشگاه</span>
         {% endif %}
+        </div>
       </td>
     </tr>
     {% endfor %}
     </tbody>
   </table></div>
 </div>
+{% elif has_filters %}
+<div class="card"><div class="empty-state">
+  <span class="empty-icon">🔎</span>
+  <div class="empty-title">عضوی با این فیلتر پیدا نشد</div>
+  <p class="empty-desc">جست‌وجو یا فیلتر را تغییر دهید.</p>
+  <a href="{% url 'dashboard:staff-list' %}" class="btn btn-primary">پاک‌کردن فیلتر</a>
+</div></div>
 {% else %}
 <div class="card">
   <div class="empty-state">
@@ -70,6 +146,25 @@
     <p class="empty-desc">با افزودنِ اعضای تیم، می‌توانید دسترسیِ کارکنانِ خود را به بخش‌های مختلفِ پنل مدیریت با نقش‌های متفاوت مدیریت کنید.</p>
     <a href="{% url 'dashboard:staff-add' %}" class="btn btn-primary">افزودن اولین عضو</a>
   </div>
+</div>
+{% endif %}
+
+{% if recent_events %}
+<div class="card" style="margin-top:16px">
+  <div class="card-head"><h3>آخرین تغییرات تیم</h3></div>
+  <ul class="team-events" aria-label="آخرین رخدادهای تیم (جدیدترین بالا)">
+    {% for e in recent_events %}
+    <li class="team-event" data-event="{{ e.action_code }}">
+      <div class="te-when"><b>{{ e.created_at|jalali }}</b><time datetime="{{ e.created_at|date:'c' }}" class="team-sub" dir="ltr">ساعت {{ e.created_at|jalali_dt:"%H:%M" }}</time></div>
+      <div class="te-what">
+        <span class="te-badge {{ e.tone }}">{{ e.label }}</span>
+        <span class="te-target" dir="ltr">{{ e.object_label|default:"—" }}</span>
+        {% if e.detail %}<span class="te-detail">{{ e.detail }}</span>{% endif %}
+      </div>
+      <div class="te-who"><span>توسط {% firstof e.actor.get_full_name e.actor.username "سیستم" %}</span>{% if not e.succeeded %}<span class="te-status-bad">{{ e.result_label }}</span>{% else %}<span class="team-sub">{{ e.result_label }}</span>{% endif %}</div>
+    </li>
+    {% endfor %}
+  </ul>
 </div>
 {% endif %}
 {% endblock %}

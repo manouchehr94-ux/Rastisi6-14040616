@@ -11,18 +11,21 @@ toggle or responsive setting ever controls the other. Renders nothing at
 all when neither is enabled-with-real-data — never a fabricated trust
 badge or payment logo.
 {% endcomment %}
-{% if fc.show_trust_badges and FOOTER_TRUST_BADGES or fc.show_payment_logos and FOOTER_PAYMENT_LOGOS %}
+{% if fc.show_trust_badges and FOOTER_TRUST_BADGES or fc.show_payment_logos and FOOTER_PAYMENT_LOGOS or fc.show_trust_badges and SHOP_ENAMAD_BADGE_PROFILE_URL and SHOP_ENAMAD_BADGE_LOGO_URL %}
 <div class="gf-credibility">
   {% if fc.show_trust_badges and FOOTER_TRUST_BADGES %}
   <div class="gf-trust-badges" {% if rc.show_trust_badges.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_trust_badges.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
     {% for badge in FOOTER_TRUST_BADGES %}
-    <div class="gf-trust-badge-item">{% if badge.destination_url %}<a href="{{ badge.destination_url }}" target="_blank" rel="noopener noreferrer"><img src="{{ badge.image.url }}" alt="{{ badge.title }}"></a>{% else %}<img src="{{ badge.image.url }}" alt="{{ badge.title }}">{% endif %}</div>
+    <div class="gf-trust-badge-item">{% if badge.destination_url %}<a href="{{ badge.destination_url }}" target="_blank" rel="noopener noreferrer"><img src="{{ badge.image.url }}" data-img-role="logo" alt="{{ badge.title }}"></a>{% else %}<img src="{{ badge.image.url }}" data-img-role="logo" alt="{{ badge.title }}">{% endif %}</div>
     {% endfor %}
   </div>
   {% endif %}
+  {% if fc.show_trust_badges and SHOP_ENAMAD_BADGE_PROFILE_URL and SHOP_ENAMAD_BADGE_LOGO_URL %}
+  <div class="gf-trust-badges"><div class="gf-trust-badge-item"><a referrerpolicy="origin" target="_blank" rel="noopener noreferrer" href="{{ SHOP_ENAMAD_BADGE_PROFILE_URL }}"><img referrerpolicy="origin" src="{{ SHOP_ENAMAD_BADGE_LOGO_URL }}" data-img-role="logo" alt="نمادِ اعتمادِ الکترونیکیِ اینماد" style="cursor:pointer"></a></div></div>
+  {% endif %}
   {% if fc.show_payment_logos and FOOTER_PAYMENT_LOGOS %}
   <div class="gf-payment-logos" {% if rc.show_payment_logos.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_payment_logos.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
-    {% for logo in FOOTER_PAYMENT_LOGOS %}<span><img src="{{ logo.image.url }}" alt="{{ logo.title }}"></span>{% endfor %}
+    {% for logo in FOOTER_PAYMENT_LOGOS %}<span><img src="{{ logo.image.url }}" data-img-role="logo" alt="{{ logo.title }}"></span>{% endfor %}
   </div>
   {% endif %}
 </div>

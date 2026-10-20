@@ -481,6 +481,23 @@ def _is_dev_resolvable_hostname(hostname: str) -> bool:
     return stripped.endswith(suffix)
 
 
+def _dev_port_suffix(request) -> str:
+    """Development only: the port of the server that is actually answering (never a hard-coded ``8000``), so the
+    Studio "public view" / "back to store" links work on whatever port ``runserver`` was started with. Without a
+    request (management commands, tests) the historical default ``:8000`` is kept; the default HTTP ports add no suffix."""
+    if request is None:
+        return ":8000"
+    try:
+        from django.http.request import split_domain_port
+
+        port = split_domain_port(request.get_host())[1] or str(request.get_port())
+    except Exception:  # defensive: a malformed Host must never break a page that only renders a link
+        return ":8000"
+    if not port.isdigit() or port in ("80", "443"):
+        return ""
+    return f":{port}"
+
+
 def resolve_storefront_url_for_store(store: Store, request=None):
     """The Store's current best public storefront URL, or ``None``.
 
@@ -509,8 +526,8 @@ def resolve_storefront_url_for_store(store: Store, request=None):
     Portal's own host and is never a public storefront domain (see
     ``Store.admin_subdomain``'s docstring).
 
-    In development (``settings.DEBUG``), preserves the ``:8000`` dev server
-    port — mirroring the same pattern ``apps.portal.views.enter_admin`` uses
+    In development (``settings.DEBUG``), preserves the dev server port of the
+    CURRENT request (``:8000`` only when there is no request) — mirroring the same pattern ``apps.portal.views.enter_admin`` uses
     for the admin-host equivalent of this link. Otherwise uses ``request``'s
     scheme when given, defaulting to ``https``.
     """
@@ -527,7 +544,7 @@ def resolve_storefront_url_for_store(store: Store, request=None):
             if django_settings.DEBUG and not _is_dev_resolvable_hostname(domain.hostname):
                 continue
             if django_settings.DEBUG:
-                return f"http://{domain.hostname}:8000/"
+                return f"http://{domain.hostname}{_dev_port_suffix(request)}/"
             scheme = request.scheme if request is not None else "https"
             return f"{scheme}://{domain.hostname}/"
     return None

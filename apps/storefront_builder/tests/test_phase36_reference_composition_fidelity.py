@@ -8,6 +8,7 @@ from apps.storefront_builder import layout_preset_registry
 from apps.storefront_builder.models import StorefrontPage
 from apps.storefront_builder.services import container_service, layout_service, preset_service
 
+from ._r4_support import r4_mutate
 from .test_views import StorefrontBuilderViewsTestCase
 
 
@@ -65,31 +66,16 @@ class Phase36ContainerHeightModeTests(StorefrontBuilderViewsTestCase):
 
     def test_container_settings_persist_equal_height(self):
         container = container_service.create_empty_container(self.page, "half")
-        response = self.client.post(
-            reverse("dashboard:storefront-builder-container-settings", args=[container.pk]),
-            {
-                "gap": "14",
-                "mobile_mode": "stack",
-                "vertical_align": "start",
-                "height_mode": "equal",
-            },
-        )
-        self.assertEqual(response.status_code, 200)
+        response = r4_mutate(self.client, self.draft, {
+            "type": "container.update_settings", "container_id": container.pk,
+            "patch": {"gap": 14, "mobile_mode": "stack", "vertical_align": "start", "height_mode": "equal"},
+        })
+        self.assertEqual(response.status_code, 200, response.content[:200])
         container.refresh_from_db()
         self.assertEqual(
             container_service.effective_container_settings(container.settings)["height_mode"],
             "equal",
         )
-
-    def test_container_settings_ui_explains_natural_vs_equal(self):
-        container = container_service.create_empty_container(self.page, "half")
-        response = self.client.get(
-            reverse("dashboard:storefront-builder-container-settings", args=[container.pk])
-        )
-        self.assertContains(response, "رفتار ارتفاع خانه‌ها")
-        self.assertContains(response, "ارتفاع طبیعی")
-        self.assertContains(response, "ارتفاع برابر")
-        self.assertContains(response, "فقط برای بخش‌هایی که برای کنار هم بودن طراحی شده‌اند")
 
     def test_preview_emits_height_mode(self):
         container_service.create_empty_container(

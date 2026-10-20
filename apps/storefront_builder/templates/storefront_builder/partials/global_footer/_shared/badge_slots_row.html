@@ -1,0 +1,11 @@
+{% comment %}
+RS-03 — credential row of a footer that carries a ``badge_slots`` block (Template 51 declares one).
+
+Root cause of the «five blank white squares»: this row used to render NEUTRAL EMPTY SQUARES up to the block's count even
+when the store had no real badge (and even with the trust-badge toggle off). Nothing is invented any more: the row is
+exactly the shared trust/payment region — the store's real uploaded trust badges, its verified e-namad badge and its payment
+logos, each only when its own toggle is on AND real data exists. With no real credential the region renders NOTHING. The
+``badge_slots`` block stays valid configuration (it states how many credentials the reference design has room for) but it never
+fabricates an element. A real badge whose file is missing is skipped by the context processor, not drawn as an empty tile.
+{% endcomment %}
+{% include "storefront_builder/partials/global_footer/_shared/trust_payment.html" %}

@@ -38,6 +38,8 @@ from decimal import Decimal
 
 from django.urls import reverse
 
+from . import availability_service
+
 
 @dataclasses.dataclass(frozen=True)
 class ProductCardBadge:
@@ -73,6 +75,10 @@ class ProductCardData:
     brand_name: str
     rating: Decimal
     reviews_count: int
+    #: «استعلام قیمت»: قیمت/تخفیف/خریدِ مستقیم نمایش داده نمی‌شود؛ ``inquiry_url``
+    #: صفحه‌ی «درباره ما»ی همین فروشگاه است (``None`` اگر نباشد).
+    is_price_inquiry: bool = False
+    inquiry_url: str | None = None
 
 
 #: ``Product.Tag`` (marketing label) → badge key (== the existing
@@ -102,12 +108,15 @@ def build_product_card_data(product) -> ProductCardData:
     (``cover_image``/``secondary_image`` properties already read from the
     ``images`` prefetch cache, see ``Product.cover_image``)."""
     badges: list[ProductCardBadge] = []
-    is_on_sale = product.discount_percent > 0
+    is_inquiry = bool(product.is_price_inquiry)
+    active_discount = 0 if is_inquiry else product.active_discount_percent()
+    is_on_sale = active_discount > 0
     tag_key = _TAG_BADGE_KEYS.get(product.tag)
     if tag_key is not None:
         badges.append(ProductCardBadge(key=tag_key, label_fa=product.get_tag_display()))
 
-    is_out_of_stock = product.stock <= 0
+    # Same availability contract as the home rails / listing order (variants + reservations), never a second rule.
+    is_out_of_stock = not availability_service.is_available(product)
     cover_image = product.cover_image
     secondary_image = product.secondary_image
 
@@ -121,13 +130,21 @@ def build_product_card_data(product) -> ProductCardData:
         price=product.final_price,
         compare_at_price=product.price if is_on_sale else None,
         is_on_sale=is_on_sale,
-        discount_percent=product.discount_percent,
+        discount_percent=active_discount,
         badges=tuple(badges),
         is_out_of_stock=is_out_of_stock,
         is_low_stock=False,
-        is_quick_add_eligible=(not product.is_variable) and not is_out_of_stock,
+        is_quick_add_eligible=(not product.is_variable) and not is_out_of_stock and not is_inquiry,
         is_wishlist_eligible=True,
         brand_name=product.brand.name if product.brand_id else "",
         rating=product.rating,
         reviews_count=product.reviews_count,
+        is_price_inquiry=is_inquiry,
+        inquiry_url=_inquiry_url(product) if is_inquiry else None,
     )
+
+
+def _inquiry_url(product):
+    from apps.catalog.services import pricing_mode_service
+
+    return pricing_mode_service.inquiry_destination_url(product.store)

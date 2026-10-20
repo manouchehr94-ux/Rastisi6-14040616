@@ -21,7 +21,7 @@
       <td>{{ movement.stock_before|fa_number }}</td>
       <td>{{ movement.stock_after|fa_number }}</td>
       <td>{% if movement.order %}<a href="{% url 'dashboard:order-detail' movement.order.code %}">{{ movement.order.code }}</a>{% else %}—{% endif %}</td>
-      <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ movement.created_at|date:"Y-m-d H:i" }}</td>
+      <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ movement.created_at|jalali_dt }}</td>
     </tr>
   {% empty %}
     <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">هنوز هیچ تغییرِ موجودی‌ای ثبت نشده است</td></tr>

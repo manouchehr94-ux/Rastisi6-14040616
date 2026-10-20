@@ -1,0 +1,55 @@
+/* R4-09 — the shared colour picker (r4_color_picker.js).
+   Its OWN stylesheet, loaded with a content-hash URL (``static_v``): the picker never depends on a copy of r4_studio.css that
+   a browser may have cached before the patch (Firefox applies heuristic freshness to Last-Modified-only static files).
+   Selectors are anchored on ``:is(.rs-studio,html)`` — same specificity as the Studio layer they must beat, but they also
+   hold if the Inspector is ever mounted outside the ``.rs-studio`` root. ``.r4-cp-probe`` is the sentinel the script reads to
+   know this file is really applied (it loads it itself when it is not). */
+.r4-cp-probe{--r4-cp-css:1;position:absolute;width:0;height:0;overflow:hidden;visibility:hidden}
+:is(.rs-studio,html) .r4-cp-ready>select,:is(.rs-studio,html) .r4-cp-ready>input[type="color"],:is(.rs-studio,html) .r4-cp-native{display:none!important}
+:is(.rs-studio,html) .r4-color-control.r4-cp-ready{display:block}
+:is(.rs-studio,html) .r4-cp-trigger{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:6px 10px;border:1px solid var(--line,#e7e7ee);border-radius:10px;background:#fff;color:var(--ink,#252635);text-align:start;font-weight:600}
+:is(.rs-studio,html) .r4-cp-trigger:hover{background:#f8f8fc;border-color:#cfcfe0}
+:is(.rs-studio,html) .r4-cp-trigger[aria-expanded="true"]{border-color:var(--primary,#5853e8);box-shadow:0 0 0 3px var(--primary-soft,#eeedff)}
+:is(.rs-studio,html) .r4-cp-trigger:disabled{opacity:.6}
+:is(.rs-studio,html) .r4-cp-text{display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1 1 auto;line-height:1.35}
+:is(.rs-studio,html) .r4-cp-name{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+:is(.rs-studio,html) .r4-cp-hex{font-size:11px;font-weight:600;color:var(--muted,#6b6b76);direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+:is(.rs-studio,html) .r4-cp-caret{color:var(--muted,#6b6b76);font-size:12px}
+:is(.rs-studio,html) .r4-cp-swatch{flex:0 0 auto;display:inline-block;width:26px;height:26px;border-radius:7px;border:1px solid rgba(15,23,42,.18);background:#fff}
+:is(.rs-studio,html) .r4-cp-swatch.is-auto{background:repeating-linear-gradient(135deg,#fff 0 5px,#e6e8ee 5px 10px)}
+:is(.rs-studio,html) .r4-cp-swatch.is-unknown{background:repeating-conic-gradient(#e6e8ee 0 25%,#fff 0 50%) 0 0/10px 10px}
+:is(.rs-studio,html) .r4-cp{position:fixed;z-index:80;width:304px;max-height:calc(100dvh - 16px);overflow:auto;padding:10px;border:1px solid var(--line,#e7e7ee);border-radius:14px;background:#fff;color:var(--ink,#252635);box-shadow:0 18px 48px rgba(24,24,40,.22),0 2px 6px rgba(24,24,40,.08);display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+:is(.rs-studio,html) .r4-cp.is-sheet{inset:auto 8px 8px 8px;width:auto;max-height:82dvh;border-radius:16px}
+:is(.rs-studio,html) .r4-cp-compare{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+:is(.rs-studio,html) .r4-cp-chip{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line,#e7e7ee);border-radius:10px;background:#fafafd;min-width:0}
+:is(.rs-studio,html) .r4-cp-chip-text{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+:is(.rs-studio,html) .r4-cp-chip-text small{color:var(--muted,#6b6b76);font-size:10.5px}
+:is(.rs-studio,html) .r4-cp-chip-text strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:is(.rs-studio,html) .r4-cp-auto{justify-content:flex-start;width:100%;padding:8px 10px;border:1px solid var(--line,#e7e7ee);border-radius:10px;background:#fff;font-weight:600}
+:is(.rs-studio,html) .r4-cp-auto.is-current{border-color:var(--primary,#5853e8);background:var(--primary-soft,#eeedff)}
+:is(.rs-studio,html) .r4-cp-sec{display:flex;flex-direction:column;gap:6px}
+:is(.rs-studio,html) .r4-cp-sec h4{margin:0;font-size:11.5px;font-weight:800;color:var(--muted,#6b6b76)}
+:is(.rs-studio,html) .r4-cp-note{margin:0;font-size:10.5px;color:var(--muted,#6b6b76)}
+:is(.rs-studio,html) .r4-cp-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
+:is(.rs-studio,html) .r4-cp-grid--palette{grid-template-columns:repeat(8,1fr)}
+:is(.rs-studio,html) .r4-cp-sw{width:100%;aspect-ratio:1;min-height:24px;padding:0;border:1px solid rgba(15,23,42,.18);border-radius:8px}
+:is(.rs-studio,html) .r4-cp-sw:hover{transform:scale(1.08);background:inherit;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+:is(.rs-studio,html) .r4-cp-sw[aria-pressed="true"]{outline:2px solid var(--ink,#252635);outline-offset:1px}
+:is(.rs-studio,html) .r4-cp-sw[aria-pressed="true"]::after{content:"✓";font-size:13px;font-weight:800}
+:is(.rs-studio,html) .r4-cp-sv{position:relative;height:104px;border-radius:10px;border:1px solid rgba(15,23,42,.18);touch-action:none;cursor:crosshair}
+:is(.rs-studio,html) .r4-cp-sv-thumb{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.55),0 2px 5px rgba(0,0,0,.35);pointer-events:none}
+:is(.rs-studio,html) .r4-cp-hue{-webkit-appearance:none;appearance:none;width:100%;height:14px;margin:4px 0 0;border-radius:8px;background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);border:1px solid rgba(15,23,42,.18)}
+:is(.rs-studio,html) .r4-cp-hue::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;border:3px solid #fff;background:transparent;box-shadow:0 0 0 1.5px rgba(0,0,0,.55),0 2px 5px rgba(0,0,0,.35);cursor:pointer}
+:is(.rs-studio,html) .r4-cp-hue::-moz-range-thumb{width:16px;height:16px;border-radius:50%;border:3px solid #fff;background:transparent;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);cursor:pointer}
+:is(.rs-studio,html) .r4-cp-hexrow{display:flex;flex-direction:column;gap:4px}
+:is(.rs-studio,html) .r4-cp-hexlabel{font-size:11.5px;font-weight:700;color:var(--muted,#6b6b76)}
+:is(.rs-studio,html) .r4-cp-hexinput{width:100%;min-height:40px;padding:6px 10px;border:1px solid var(--line,#e7e7ee);border-radius:9px;background:#fff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.04em;text-align:left;direction:ltr}
+:is(.rs-studio,html) .r4-cp-hexinput[aria-invalid="true"]{border-color:var(--danger,#b7494c);box-shadow:0 0 0 3px #b7494c22}
+:is(.rs-studio,html) .r4-cp-error{margin:0;color:var(--danger,#b7494c);font-size:11.5px;font-weight:600}
+:is(.rs-studio,html) .r4-cp-actions{display:flex;gap:8px;position:sticky;bottom:-10px;margin:0 -10px -10px;padding:8px 10px 10px;background:#fff;border-top:1px solid var(--line,#e7e7ee);border-radius:0 0 14px 14px}
+:is(.rs-studio,html) .r4-cp-apply{flex:1 1 auto;min-height:40px;border-radius:10px;background:var(--primary,#5853e8);color:#fff;font-weight:800}
+:is(.rs-studio,html) .r4-cp-apply:hover:not(:disabled){background:var(--primary,#5853e8);filter:brightness(1.08)}
+:is(.rs-studio,html) .r4-cp-apply:disabled{background:var(--disabled-bg,#e8e9ef);color:var(--disabled-ink,#656a77)}
+:is(.rs-studio,html) .r4-cp-cancel{flex:0 0 auto;min-height:40px;padding:0 16px;border:1px solid var(--line,#e7e7ee);border-radius:10px;background:#fff;font-weight:700}
+:is(.rs-studio,html) .r4-cp .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){:is(.rs-studio,html) .r4-cp-sw:hover{transform:none}}

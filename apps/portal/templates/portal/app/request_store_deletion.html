@@ -1,4 +1,5 @@
 {% extends "portal/base_platform.html" %}
+{% load persian %}
 {% block title %}حذفِ فروشگاه | راستیسی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block content %}
@@ -12,7 +13,7 @@
 
   {% if store.deletion_requested_at %}
   <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:16px">
-    درخواستِ حذفِ این فروشگاه ثبت شده و تا <b>{{ store.deletion_scheduled_purge_at|date:"Y-m-d" }}</b> برایِ همیشه پاک می‌شود.
+    درخواستِ حذفِ این فروشگاه ثبت شده و تا <b>{{ store.deletion_scheduled_purge_at|jalali }}</b> برایِ همیشه پاک می‌شود.
     داده‌های شما تا آن زمان دست‌نخورده می‌ماند و می‌توانید این درخواست را لغو کنید.
   </p>
   <form method="post" action="{% url 'portal:cancel-store-deletion' store.public_id %}">

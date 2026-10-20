@@ -1,23 +1,20 @@
-{% extends "base.html" %}
-{% load static persian %}
+{% extends "storefront_shell.html" %}
+{% load static persian storefront_builder_extras %}
 
-{% block header %}
-{% include header_variant_template with header_config=layout_header_config is_live_storefront=True is_builder_preview=False %}
+{% block meta_description %}<meta name="description" content="{{ SHOP_NAME }} — {{ SHOP_TAGLINE }}">{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"{{ SHOP_NAME|escapejs }}","url":"{{ request.scheme }}://{{ request.get_host }}/"{% if SHOP_LOGO %},"logo":"{{ request.scheme }}://{{ request.get_host }}{{ SHOP_LOGO.url }}"{% endif %}}</script>
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
-<link rel="stylesheet" href="{% static 'css/home.css' %}">
-<link rel="stylesheet" href="{% static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/home.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 {% endblock %}
 
 {% block content %}
 <div class="wrap sfb-preview-sections">
   {% include "storefront_builder/partials/render_rows.html" %}
 </div>
-{% endblock %}
-
-{% block footer %}
-{% include footer_variant_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}
-{% if mobile_bottom_nav_template %}{% include mobile_bottom_nav_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}{% endif %}
 {% endblock %}

@@ -1,17 +1,43 @@
 {% comment %}
-U2B shared footer "quick links" column — real merchant menu data
+Shared footer link columns — real merchant menu data
 (``NAV_FOOTER_1``), never hardcoded. Renders nothing if the Store hasn't
 configured this menu (same fallback contract as ``NAV_HEADER`` in U2A).
 Optional ``max_items`` (default 7, matching the legacy_default footer's
 own ``|slice:":7"`` limit).
 {% endcomment %}
+{% comment %}Group 1: the merchant's footer menu 1, else the published content pages flagged "quick access".
+Group 2: footer menu 2, else the content pages flagged "customer service". Child items render nested.{% endcomment %}
 {% if NAV_FOOTER_1 %}
 <div class="gf-col gf-col-links">
   <h5>{{ NAV_FOOTER_1.title }}</h5>
   <ul>
     {% for item in NAV_FOOTER_1.items|slice:":7" %}
-    <li>{% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}</li>
+    <li>{% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+      {% if item.children %}<ul>{% for child in item.children %}<li><a href="{{ child.url }}" {% if child.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ child.title }}</a></li>{% endfor %}</ul>{% endif %}</li>
     {% endfor %}
+    {% for page in footer_pages_quick_access %}<li><a href="{{ page.get_absolute_url }}">{{ page.title }}</a></li>{% endfor %}
   </ul>
+</div>
+{% elif footer_pages_quick_access %}
+<div class="gf-col gf-col-links">
+  <h5>دسترسی سریع</h5>
+  <ul>{% for page in footer_pages_quick_access %}<li><a href="{{ page.get_absolute_url }}">{{ page.title }}</a></li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if NAV_FOOTER_2 %}
+<div class="gf-col gf-col-links">
+  <h5>{{ NAV_FOOTER_2.title }}</h5>
+  <ul>
+    {% for item in NAV_FOOTER_2.items|slice:":7" %}
+    <li>{% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+      {% if item.children %}<ul>{% for child in item.children %}<li><a href="{{ child.url }}" {% if child.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ child.title }}</a></li>{% endfor %}</ul>{% endif %}</li>
+    {% endfor %}
+    {% for page in footer_pages_customer_service %}<li><a href="{{ page.get_absolute_url }}">{{ page.title }}</a></li>{% endfor %}
+  </ul>
+</div>
+{% elif footer_pages_customer_service %}
+<div class="gf-col gf-col-links">
+  <h5>خدمات مشتریان</h5>
+  <ul>{% for page in footer_pages_customer_service %}<li><a href="{{ page.get_absolute_url }}">{{ page.title }}</a></li>{% endfor %}</ul>
 </div>
 {% endif %}

@@ -31,6 +31,11 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.storefront_builder.tests._gallery_support import (
+    gallery_cards,
+    gallery_client_templates,
+    studio_gallery_response,
+)
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.services import template_preview_service as tps
 from apps.stores.models import Store, StoreDomain, StoreMembership
@@ -53,7 +58,7 @@ class RealScreenshotResolverTests(TestCase):
 
     def test_original_eight_remain_a_subset_of_the_official_catalog(self):
         official_keys = {p.key for p in lpr.list_ready_templates()}
-        self.assertEqual(len(official_keys), 50)
+        self.assertEqual(len(official_keys), 53)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset(official_keys))
 
     def test_missing_screenshot_falls_back_to_none(self):
@@ -390,13 +395,13 @@ class GalleryRealScreenshotIntegrationTests(TestCase):
         """The whole request path (view + both preview-resolution
         branches) must be structurally incapable of launching a browser."""
         with mock.patch.dict("sys.modules", {"playwright": None, "playwright.sync_api": None}):
-            response = self.client.get(self.url)
+            response = studio_gallery_response(self.client)
         self.assertEqual(response.status_code, 200)
 
     def test_every_card_renders_either_a_real_screenshot_or_the_svg_fallback(self):
-        response = self.client.get(self.url)
+        response = studio_gallery_response(self.client)
         self.assertEqual(response.status_code, 200)
-        for card in response.context["template_cards"]:
+        for card in gallery_cards(response):
             self.assertIn(card["thumbnail_kind"], ("screenshot", "svg"))
             if card["thumbnail_kind"] == "screenshot":
                 self.assertTrue(card["thumbnail_url"])
@@ -425,40 +430,23 @@ class GalleryRealScreenshotIntegrationTests(TestCase):
         svc.get_or_create_draft(self.store)
         with mock.patch.object(preset_service, "apply_preset") as mocked_apply, \
              mock.patch.object(preset_service, "apply_preset_with_checkpoint") as mocked_checkpoint:
-            response = self.client.get(self.url)
+            response = studio_gallery_response(self.client)
         self.assertEqual(response.status_code, 200)
         mocked_apply.assert_not_called()
         mocked_checkpoint.assert_not_called()
 
-    def test_screenshot_click_opens_the_non_mutating_in_page_live_preview(self):
-        """Mission Step 30: 'preview may open larger non-mutating view' —
-        was originally a plain <a href> to the static image itself; P5-W5C
-        (Ready Template Preview UX) supersedes that with the SAME
-        non-mutating guarantee but a materially better merchant outcome —
-        the screenshot now opens the real in-page live preview (large,
-        Desktop/Tablet/Mobile, Demo/Merchant data) instead of the raw
-        static image, per that phase's explicit product requirement
-        ("clicking the screenshot ... should open the IN-PAGE preview
-        experience"). The href still targets a plain, real, non-mutating
-        GET URL (now the canonical live-preview route, still no view
-        logic beyond what that already-non-mutating view does) — so this
-        is a structural upgrade of Step 30's contract, not a relaxation of
-        it: a no-JS browser still gets a working direct link, and a
-        JS-enabled one gets the strictly richer in-page dialog
-        (template_gallery_preview.js)."""
-        response = self.client.get(self.url)
-        content = response.content.decode()
-        for card in response.context["template_cards"]:
+    def test_screenshot_tile_opens_the_non_mutating_live_preview_inside_the_studio(self):
+        """The Studio gallery tile's "preview" opens the canonical, non-mutating live-preview route inside the
+        Studio (``live_preview_url`` + ``?data=merchant``, a plain GET) — no apply happens on preview."""
+        response = studio_gallery_response(self.client)
+        client = response.context["studio"]["client"]
+        self.assertIn("__KEY__", client["live_preview_url"])
+        for card in gallery_cards(response):
             if card["thumbnail_kind"] == "screenshot":
-                preview_url = reverse(
-                    "dashboard:storefront-builder-template-live-preview",
-                    kwargs={"key": card["preset"].key},
+                expected = reverse(
+                    "dashboard:storefront-builder-template-live-preview", kwargs={"key": card["preset"].key},
                 )
-                self.assertIn(f'data-tpl-preview-trigger', content)
-                self.assertIn(f'data-tpl-preview-url-demo="{preview_url}"', content)
-                self.assertIn(f'data-tpl-preview-url-merchant="{preview_url}?data=merchant"', content)
-
-
+                self.assertEqual(client["live_preview_url"].replace("__KEY__", card["preset"].key), expected)
 class CaptureCommandSafetyTests(TestCase):
     """The capture tool itself is dev/build-only and cannot be exercised
     end-to-end here (needs a real server + real browser), but its safety

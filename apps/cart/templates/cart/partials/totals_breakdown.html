@@ -1,0 +1,15 @@
+{% load persian %}{% comment %}
+RS-11 — one reconciling order-summary list for cart and checkout. ``breakdown`` comes from
+apps.cart.services.pricing.build_totals_breakdown (display only; all money is computed in cart_totals).
+Rows add up to the payable total: gross − discounts + gift wrap + shipping + tax.
+{% endcomment %}
+<div class="totals">
+  {% for row in breakdown.rows %}
+    {% if row.kind == "minus" %}<div class="ln disc"><span>{{ row.label }}</span><b>− {{ row.amount|toman }}</b></div>
+    {% elif row.kind == "free" %}<div class="ln free"><span>{{ row.label }}</span><b>رایگان</b></div>
+    {% elif row.kind == "subtotal" %}<div class="ln sub"><span>{{ row.label }}</span><b>{{ row.amount|toman }}</b></div>
+    {% elif row.kind == "info" %}<div class="ln info"><span>{{ row.label }}</span><b>{{ row.amount|toman }}</b></div>
+    {% else %}<div class="ln"><span>{{ row.label }}</span><b>{{ row.amount|toman }}</b></div>{% endif %}
+  {% endfor %}
+  <div class="ln grand"><span>{{ grand_label|default:"مبلغ قابل پرداخت" }}</span><span class="v">{{ breakdown.grand_total|toman }}</span></div>
+</div>

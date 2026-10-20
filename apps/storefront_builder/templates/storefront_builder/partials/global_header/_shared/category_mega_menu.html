@@ -4,7 +4,7 @@ Store-scoped, prefetched children — never hardcoded), reused by any Global
 Header Variant that wants a marketplace-style category trigger + panel.
 Optional ``trigger_label`` (defaults to "دسته‌بندی کالاها").
 {% endcomment %}
-<div class="gh-cat-mega" @click.outside="catMenuOpen = false" x-data="{ activeCat: null }">
+<div class="gh-cat-mega" @click.outside="catMenuOpen = false" @keydown.escape.window="catMenuOpen = false" x-data="{ activeCat: null }">
   <button type="button" class="gh-cat-btn" @click="catMenuOpen = !catMenuOpen" :aria-expanded="catMenuOpen.toString()" aria-haspopup="true">
     {% include "storefront_builder/partials/global_header/_shared/icon.html" with name="grid" %}
     {{ trigger_label|default:"دسته‌بندی کالاها" }}
@@ -38,7 +38,7 @@ Optional ``trigger_label`` (defaults to "دسته‌بندی کالاها").
         {% endif %}
         {% if cat.image %}
         <a class="gh-cat-mega-promo" href="{% url 'catalog:product-list' %}?category={{ cat.slug }}">
-          <img src="{{ cat.image.url }}" alt="{{ cat.name }}" loading="lazy">
+          <img src="{{ cat.image.url }}" data-img-role="category" alt="{{ cat.name }}" loading="lazy">
           <span>{{ cat.name }}</span>
         </a>
         {% endif %}

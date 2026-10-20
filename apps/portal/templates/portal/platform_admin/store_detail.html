@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load persian %}
 {% block title %}{{ store.name }} | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div x-data="{modal:null}">
@@ -74,7 +75,7 @@
   <div class="pa-cardbody">
     {% if current_subscription %}
     <p><b>{{ current_subscription.plan_version.plan.name }}</b> — <span class="pa-badge pa-info">{{ current_subscription.get_status_display }}</span></p>
-    <p class="pa-help">دوره‌ی جاری: {{ current_subscription.current_period_start|date:"Y/m/d"|default:"—" }} تا {{ current_subscription.current_period_end|date:"Y/m/d"|default:"—" }}{% if current_subscription.trial_end_at %} · پایانِ آزمایشی: {{ current_subscription.trial_end_at|date:"Y/m/d" }}{% endif %}</p>
+    <p class="pa-help">دوره‌ی جاری: {{ current_subscription.current_period_start|jalali|default:"—" }} تا {{ current_subscription.current_period_end|jalali|default:"—" }}{% if current_subscription.trial_end_at %} · پایانِ آزمایشی: {{ current_subscription.trial_end_at|jalali }}{% endif %}</p>
     {% else %}
     <p class="pa-help">این فروشگاه اشتراکِ جاری ندارد.</p>
     {% endif %}
@@ -87,7 +88,7 @@
       <thead><tr><th>پلن</th><th>وضعیت</th><th>ایجاد</th></tr></thead>
       <tbody>
         {% for sub in subscription_history %}
-        <tr><td>{{ sub.plan_version.plan.name }}</td><td>{{ sub.get_status_display }}</td><td>{{ sub.created_at|date:"Y/m/d" }}</td></tr>
+        <tr><td>{{ sub.plan_version.plan.name }}</td><td>{{ sub.get_status_display }}</td><td>{{ sub.created_at|jalali }}</td></tr>
         {% empty %}<tr><td colspan="3" class="pa-help">تاریخچه‌ای ثبت نشده.</td></tr>{% endfor %}
       </tbody>
     </table>
@@ -103,7 +104,7 @@
         <tr>
           <td><a href="{% url 'portal_platform_admin:payment-invoice-detail' invoice.pk %}">{{ invoice.number }}</a></td>
           <td>{{ invoice.plan_version.plan.name }}</td><td>{{ invoice.grand_total }}</td>
-          <td>{{ invoice.get_status_display }}</td><td>{{ invoice.created_at|date:"Y/m/d" }}</td>
+          <td>{{ invoice.get_status_display }}</td><td>{{ invoice.created_at|jalali }}</td>
         </tr>
         {% empty %}<tr><td colspan="5" class="pa-help">فاکتوری ثبت نشده.</td></tr>{% endfor %}
       </tbody>
@@ -144,7 +145,7 @@
           <td>{{ domain.get_domain_type_display }}</td>
           <td>{% if domain.verification_status == "verified" %}<span class="pa-badge pa-ok">تأییدشده</span>{% elif domain.verification_status == "failed" %}<span class="pa-badge pa-off">ناموفق</span>{% else %}<span class="pa-badge pa-warn">{{ domain.get_verification_status_display }}</span>{% endif %}</td>
           <td>{% if domain.is_primary %}بله{% else %}—{% endif %}</td>
-          <td>{% if domain.retired_at %}{{ domain.retired_at|date:"Y/m/d" }}{% else %}—{% endif %}</td>
+          <td>{% if domain.retired_at %}{{ domain.retired_at|jalali }}{% else %}—{% endif %}</td>
         </tr>
         {% empty %}<tr><td colspan="5" class="pa-help">دامنه‌ای ثبت نشده.</td></tr>{% endfor %}
       </tbody>
@@ -173,7 +174,7 @@
 {% for note in notes %}
 <div class="pa-card"><div class="pa-cardbody">
   <p>{{ note.body }}</p>
-  <p class="pa-help">{{ note.author.get_username|default:"—" }} · {{ note.created_at|date:"Y/m/d H:i" }}</p>
+  <p class="pa-help">{{ note.author.get_username|default:"—" }} · {{ note.created_at|jalali_dt }}</p>
 </div></div>
 {% empty %}
 <div class="pa-empty"><p>یادداشتی ثبت نشده.</p></div>
@@ -190,7 +191,7 @@
           <td>{{ entry.action_code }}</td>
           <td>{{ entry.actor.get_username|default:"—" }}</td>
           <td>{% if entry.result == "success" %}<span class="pa-badge pa-ok">موفق</span>{% else %}<span class="pa-badge pa-off">{{ entry.get_result_display }}</span>{% endif %}</td>
-          <td>{{ entry.created_at|date:"Y/m/d H:i" }}</td>
+          <td>{{ entry.created_at|jalali_dt }}</td>
         </tr>
         {% empty %}<tr><td colspan="4" class="pa-help">رخدادی ثبت نشده.</td></tr>{% endfor %}
       </tbody>
