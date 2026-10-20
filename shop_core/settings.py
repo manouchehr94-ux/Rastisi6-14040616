@@ -256,6 +256,12 @@ del _proxy_problems
 CACHES = build_cache_config(DEBUG)
 RASTISI_RATE_LIMIT_CACHE_ALIAS = RATE_LIMIT_CACHE_ALIAS
 
+# Public marketing website design. The Platform Admin switch (پنل مالک پلتفرم ← سایت عمومی ← بازگشت به طراحی قبلی)
+# chooses between the new "v2" design and the previous "legacy" one. RASTISI_PUBLIC_SITE_DESIGN=legacy|v2
+# forces a design regardless of the switch — the emergency rollback that needs no database or panel.
+PUBLIC_SITE_DEFAULT_DESIGN = "v2"
+PUBLIC_SITE_FORCE_DESIGN = env_str("RASTISI_PUBLIC_SITE_DESIGN", "")
+
 # "Remember me" session duration (unified login â€” every interactive login
 # form). Applied via apps.portal.services.session_service.apply_remember_me,
 # never hand-rolled per view. Unchecked = 0 (expire when the browser

@@ -522,6 +522,7 @@ class PublicSitePhoto(models.Model):
         ("beauty", "گالری محصولات زیبایی"),
         ("skincare", "محصولات مراقبت پوست"),
         ("bag", "عکس کیف و اکسسوری"),
+        ("logo", "لوگوی سایت عمومی (سربرگ و پاورقی)"),
     )
 
     slot = models.CharField("جایگاه تصویر", max_length=24, primary_key=True, choices=SLOT_CHOICES)
@@ -543,3 +544,30 @@ class PublicSitePhoto(models.Model):
 
     def __str__(self):
         return self.get_slot_display()
+
+
+class PublicSiteSetting(models.Model):
+    """Platform-owned *overrides* for the public marketing website (texts,
+    colours, fonts, the design switch).
+
+    Only values the platform owner has changed are stored; every field has its
+    default in ``apps.portal.public_site.registry``, so an empty table renders
+    the shipped design. Deleting a row therefore always means "back to the
+    default". Never read by storefront/tenant code.
+    """
+
+    key = models.CharField("کلید", max_length=120, primary_key=True)
+    value = models.TextField("مقدار", blank=True, default="")
+    updated_at = models.DateTimeField("آخرین تغییر", auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="ویرایشگر",
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="public_site_setting_updates",
+    )
+
+    class Meta:
+        verbose_name = "تنظیم سایت عمومی"
+        verbose_name_plural = "تنظیمات سایت عمومی"
+
+    def __str__(self):
+        return self.key

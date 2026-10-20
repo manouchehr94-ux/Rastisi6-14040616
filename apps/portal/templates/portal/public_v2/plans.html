@@ -1,0 +1,15 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}{% ps 'plans.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'plans.meta_description' %}">{% endblock %}
+{% block content %}
+{% ps 'plans.crumb' as crumb %}{% ps 'plans.title' as title %}{% ps 'plans.lead' as lead %}
+{% include "portal/public_v2/_pghead.html" %}
+<div class="sec"><div class="wrap">
+  {% include "portal/public_v2/_plans.html" %}
+  <div class="promises">{% ps_items 'promises' as promises %}{% for p in promises %}<div><b>{{ p.b }}</b><span>{{ p.s }}</span></div>{% endfor %}</div>
+</div></div>
+<div class="sec sec-band"><div class="wrap faq-grid"><div><h2 class="h2-sm h2">{% ps 'plans.faq_title' %}</h2></div>
+  <div class="faq">{% ps_items 'faq' as faqs %}{% for f in faqs %}{% if f.billing %}{% include "portal/public_v2/_faq_item.html" %}{% endif %}{% endfor %}</div>
+</div></div>
+{% endblock %}

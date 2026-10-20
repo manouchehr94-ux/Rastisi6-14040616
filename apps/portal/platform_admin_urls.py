@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import platform_admin_views as views
 from . import platform_admin_photo_views as photo_views
+from . import platform_admin_site_views as site_views
 
 app_name = "portal_platform_admin"
 
@@ -34,6 +35,12 @@ urlpatterns = [
     path("public-photos/", photo_views.public_photos, name="public-photos"),
     path("public-photos/<slug:slot>/", photo_views.public_photo_edit, name="public-photo-edit"),
     path("public-photos/<slug:slot>/reset/", photo_views.public_photo_reset, name="public-photo-reset"),
+
+    # --- متن‌ها، رنگ‌ها و فونت‌های سایت عمومی (فقط مدیر پلتفرم) ---
+    path("public-site/", site_views.public_site_home, name="public-site"),
+    path("public-site/switch/", site_views.public_site_switch, name="public-site-switch"),
+    path("public-site/<slug:slug>/", site_views.public_site_edit, name="public-site-edit"),
+    path("public-site/<slug:slug>/reset/", site_views.public_site_reset, name="public-site-reset"),
 
     # --- پلن‌های اشتراک ---
     path("plans/", views.plans, name="plans"),

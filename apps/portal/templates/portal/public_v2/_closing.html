@@ -1,0 +1,13 @@
+{% load public_site %}
+<section class="closing" aria-labelledby="closing-title">
+  <div class="wrap closing-in">
+    <div><h2 id="closing-title">{% ps 'closing.title' %}</h2><p>{% ps 'closing.text' %}</p></div>
+    {# Hands the number to the real registration form (prefill only; nothing is stored here). #}
+    <form method="get" action="{% url 'portal:register' %}">
+      <label for="closing-phone">{% ps 'closing.label' %}</label>
+      <input id="closing-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09xxxxxxxxx" maxlength="20">
+      <button class="btn btn-saffron" type="submit">{% ps 'closing.button' %}</button>
+      <small>{% ps 'closing.small' %}</small>
+    </form>
+  </div>
+</section>

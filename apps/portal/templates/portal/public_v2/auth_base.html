@@ -1,0 +1,14 @@
+{% extends "portal/public_v2/base.html" %}
+{% load static %}
+{% load public_site %}
+{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block messages %}{% endblock %}
+{% block closing %}{% endblock %}
+{% block mobile_bar %}{% endblock %}
+{% block content %}
+<div class="auth{% block auth_mods %}{% endblock %}">
+  <div class="auth-main"><div class="auth-box">{% block auth_form %}{% endblock %}</div></div>
+  <div class="auth-sign">{% block auth_sign %}{% endblock %}</div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'portal/js/auth-forms.js' %}?v=20261009-1" defer></script>{% endblock %}

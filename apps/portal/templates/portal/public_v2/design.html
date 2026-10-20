@@ -1,0 +1,20 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}{% ps 'design.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'design.meta_description' %}">{% endblock %}
+{% block content %}
+{% ps 'design.crumb' as crumb %}{% ps 'design.title' as title %}{% ps 'design.lead' as lead %}
+{% include "portal/public_v2/_pghead.html" %}
+{% ps_items 'tpl' as tpls %}{% ps_unique tpls 'cat' as categories %}
+<div class="sec"><div class="wrap">
+  <div class="filters" id="tplFilters" role="group" aria-label="{% ps 'design.filter_aria' %}">
+    <button type="button" aria-pressed="true" data-cat="*">{% ps 'design.filter_all' %}</button>
+    {% for cat in categories %}<button type="button" aria-pressed="false" data-cat="{{ cat }}">{{ cat }}</button>{% endfor %}
+  </div>
+  <div class="shelf wide" id="tplAll">{% for t in tpls %}{% include "portal/public_v2/_tpl_card.html" %}{% endfor %}</div>
+</div></div>
+<div class="sec sec-band"><div class="wrap">
+  <div class="intro"><h2 class="h2-sm h2">{% ps 'design.editor_title' %}</h2></div>
+  <div class="flist">{% ps_items 'flist' as flist %}{% for f in flist %}<div><b>{{ f.b }}</b><span>{{ f.s }}</span></div>{% endfor %}</div>
+</div></div>
+{% endblock %}

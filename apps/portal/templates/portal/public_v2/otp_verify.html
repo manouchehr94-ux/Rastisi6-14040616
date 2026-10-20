@@ -1,0 +1,32 @@
+{% extends "portal/public_v2/auth_base.html" %}
+{% load public_site persian %}
+{% block title %}{% if is_registration %}تأیید شماره موبایل{% elif is_reset %}تأیید برای تعیین رمز{% else %}کد ورود{% endif %} | {% ps 'layout.brand' %}{% endblock %}
+{% block auth_form %}
+{% if is_registration %}<div class="prog" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></div>{% endif %}
+<h1>{% if is_registration %}تأیید شماره موبایل{% elif is_reset %}تأیید برای تعیین رمز{% else %}کد ورود{% endif %}</h1>
+<p>کد ۶ رقمی ارسال‌شده به <span class="phone-inline">{{ phone }}</span> را وارد کنید. <a class="lnk" href="{{ change_phone_url }}">تغییر شماره</a></p>
+{% if flash %}<div class="p-alert alert {% if flash.kind == 'ok' %}alert-ok{% else %}alert-err{% endif %}" role="{% if flash.kind == 'ok' %}status{% else %}alert{% endif %}">{{ flash.text }}</div>{% endif %}
+<form method="post" novalidate data-auth-form data-loading-text="در حال بررسی کد…">
+  {% csrf_token %}
+  {{ form.phone }}
+  {% if form.non_field_errors %}<div class="p-alert alert alert-err" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+  <div class="in">
+    <label for="id_code">کد ۶ رقمی</label>
+    {{ form.code }}
+    {% if form.code.errors %}<div class="p-error err" id="id_code_error">{{ form.code.errors.0 }}</div>{% endif %}
+    {% if timing.expires_in or not form.code.errors %}<div class="hint" id="id_code_hint" data-otp-expires="{{ timing.expires_in }}" aria-live="polite">{% if timing.expires_in %}کد تا {{ otp_ttl_minutes|fa_number }} دقیقه پس از ارسال معتبر است.{% else %}این کد منقضی شده است؛ کد جدید دریافت کنید.{% endif %}</div>{% endif %}
+  </div>
+  <button type="submit" class="btn btn-leaf btn-block">{% if is_registration %}تأیید شماره و ادامه{% elif is_reset %}تأیید و ادامه{% else %}تأیید و ورود{% endif %}</button>
+</form>
+<form method="post" action="{{ resend_url }}" class="otp-resend" data-resend-form data-resend-in="{{ timing.resend_in }}">
+  {% csrf_token %}
+  <button type="submit" class="link-btn" data-resend-button>ارسال دوباره کد</button>
+  <span class="hint" id="id_resend_hint" role="status" data-resend-hint data-cooldown="{{ timing.cooldown_seconds }}">{% if timing.resend_in %}کد نرسید؟ ارسال دوباره‌ی کد پس از {{ timing.resend_in|fa_number }} ثانیه ممکن می‌شود (پس از هر ارسال {{ timing.cooldown_seconds|fa_number }} ثانیه صبر لازم است).{% else %}کد نرسید؟ پیامک را بررسی کنید و اگر لازم بود کد جدید بگیرید؛ کد قبلی باطل می‌شود.{% endif %}</span>
+</form>
+{% endblock %}
+{% block auth_sign %}
+{% if is_registration %}<h2>{% ps 'auth.register.sign' %}</h2><ol><li>{% ps 'auth.register.step1' %}</li><li>{% ps 'auth.register.step2' %}</li><li>{% ps 'auth.register.step3' %}</li></ol>
+{% elif is_reset %}<h2>{% ps 'auth.reset.sign' %}</h2>
+{% else %}<h2>{% ps 'auth.verify.sign' %}</h2>{% endif %}
+<ul class="auth-points"><li>کد ۶ رقمی، فقط {{ otp_ttl_minutes|fa_number }} دقیقه معتبر است</li><li>اگر کد نرسید، می‌توانید دوباره درخواست دهید</li><li>هر کد فقط یک بار قابل استفاده است</li></ul>
+{% endblock %}

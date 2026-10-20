@@ -1,0 +1,25 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}حریم خصوصی | {% ps 'layout.brand' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="سیاست حریم خصوصی راستی‌سی و اطلاعاتی که برای ارائه خدمات پلتفرم نگهداری می‌شود.">{% endblock %}
+{% block robots_meta %}<meta name="robots" content="index, follow">{% endblock %}
+{% block content %}
+{% ps 'privacy.crumb' as crumb %}
+<div class="pg-sign"><div class="wrap">
+  <div class="crumbs"><a href="{% url 'portal:home' %}">خانه</a> / {{ crumb }}</div>
+  <h1>حریم خصوصی</h1>
+  <p>این صفحه ساختار توضیح نحوه نگهداری و استفاده از اطلاعات در راستی‌سی را نشان می‌دهد.</p>
+</div></div>
+<div class="sec"><div class="wrap legal">
+  <div class="note" role="note">این متن در وضعیت فعلی یک نمونهٔ ساختاری پروژه است و پیش از انتشار رسمی باید با رفتار واقعی سامانه و الزامات حقوقی تطبیق و تأیید شود.</div>
+  <div class="legal-doc">
+    <p>برای ارائه خدمات پلتفرم، دسته‌هایی از اطلاعات مرتبط با حساب، فروشگاه و عملیات آن نگهداری می‌شود، از جمله:</p>
+    <ol>
+      <li>اطلاعات حساب مالک فروشگاه برای احراز هویت و ارتباط عملیاتی.</li>
+      <li>اطلاعات فروشگاه، محصولات و سفارش‌ها که به همان فروشگاه تعلق دارند.</li>
+      <li>اطلاعات صورتحساب و اشتراک برای محاسبه و پیگیری پلن انتخابی.</li>
+      <li>جزئیات دقیق جمع‌آوری، نگهداری، سرویس‌های ثالث و حقوق کاربران باید در نسخه رسمی این سند بر اساس رفتار واقعی سامانه تکمیل شود.</li>
+    </ol>
+  </div>
+</div></div>
+{% endblock %}

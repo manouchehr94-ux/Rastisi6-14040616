@@ -1,0 +1,2 @@
+{% load public_site %}
+<div class="tpl" data-cat="{{ t.cat }}"><div class="im"><img src="{{ t.img_url }}" alt="{% if t.img_alt %}{{ t.img_alt }}{% else %}{% ps 'design.card_prefix' %} {{ t.name }}{% endif %}" loading="lazy" decoding="async">{% if t.cat %}<span class="cat">{{ t.cat }}</span>{% endif %}</div><div class="board"></div><div class="bd"><h3>{% ps 'design.card_prefix' %} {{ t.name }}</h3><p>{{ t.d }}</p><div class="row"><a href="{% url 'portal:register' %}" class="lnk">{% ps 'design.card_link' %}</a></div></div></div>

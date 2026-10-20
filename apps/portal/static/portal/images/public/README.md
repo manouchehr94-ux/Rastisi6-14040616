@@ -13,3 +13,9 @@ Keep replacement photos in this folder, preserve descriptive alt text in templat
 The Platform Admin's **تصاویر سایت عمومی** page stores image overrides in the `PublicSitePhoto` database table and under `MEDIA_ROOT/portal/public-photos/`. Deploy `apps.portal` migration `0010` before using the new editor. Configure persistent `DJANGO_MEDIA_ROOT` and ensure public `MEDIA_URL` is served on the marketing host in production. Git pulls synchronize the code and nine bundled fallback WebPs, **not** uploaded photos or database content. Back up the media directory and database separately.
 
 The tariff page is also backed by the Platform Admin's published Plan/PlanVersion records, not by this image directory.
+
+## Logo (`logo.webp`)
+
+`logo.webp` is the RastiSi mark from the same visual reference (155×160 WebP). It is the bundled fallback of the
+`logo` slot in the new public design's header/footer; the platform's uploaded logo (Platform Configuration) or a
+`logo` override in *تصاویر سایت عمومی* takes precedence.

@@ -1,0 +1,217 @@
+{% extends "portal/public_v2/base.html" %}
+{% load static public_site persian %}
+{% block title %}{% ps 'home.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'home.meta_description' %}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:title" content="{% ps 'home.meta_title' %}">
+<meta property="og:description" content="{% ps 'home.meta_description' %}">{% endblock %}
+{% block content %}
+{% ps_items 'demo' as demos %}
+{% ps_items 'tpl' as tpls %}
+{% ps_items 'faq' as faqs %}
+{% ps_photo 'bag' as p_bag %}{% ps_photo 'fashion' as p_fashion %}{% ps_photo 'skincare' as p_skin %}
+
+{# ───────── Hero: the shop sign + the shop window ───────── #}
+<div class="sign">
+  <div class="wrap sign-grid">
+    <div>
+      <p class="sign-kicker">{% ps 'home.hero.kicker' %}</p>
+      <h1>{% ps 'home.hero.title' %}</h1>
+      <p class="lead">{% ps 'home.hero.lead' %}</p>
+      <div class="sign-cta">
+        <a href="{% url 'portal:register' %}" class="btn btn-saffron">{% ps 'home.hero.cta_primary' %}</a>
+        <a href="{% url 'portal:plans' %}" class="btn btn-line">{% ps 'home.hero.cta_secondary' %}</a>
+      </div>
+      <div class="sign-facts">
+        <span><svg aria-hidden="true"><use href="#i-check"/></svg>{% ps 'home.hero.fact1' %}</span>
+        <span><svg aria-hidden="true"><use href="#i-check"/></svg>{% ps 'home.hero.fact2' %}</span>
+        <span><svg aria-hidden="true"><use href="#i-check"/></svg>{% ps 'home.hero.fact3' %}</span>
+      </div>
+    </div>
+
+    <div class="vitrine">
+      <div class="tags" id="demoTags" role="group" aria-label="{% ps 'home.hero.tags_label' %}">
+        {% for d in demos %}<button class="tag" type="button" data-t="{{ forloop.counter0 }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ d.tag }}</button>{% endfor %}
+        <span class="tags-label">{% ps 'home.hero.tags_label' %}</span>
+      </div>
+      <div class="window">
+        <div class="window-top"><span id="demoUrl">{{ demos.0.url }}</span><span>{% ps 'home.hero.window_label' %}</span></div>
+        <div class="store" id="store">
+          <div class="s-nav"><span class="s-logo" id="sLogo">{{ demos.0.name }}</span><span class="s-links"><span>محصولات</span><span>دسته‌ها</span><span>درباره ما</span><span>تماس</span></span><span class="s-cart"><svg aria-hidden="true"><use href="#i-cart"/></svg></span></div>
+          <div class="s-hero"><div><h4 id="sTitle">{{ demos.0.title }}</h4><p id="sSub">{{ demos.0.sub }}</p><span class="s-btn">{% ps 'home.hero.store_cta' %}</span></div><div class="s-hero-img"><img id="sHeroImg" alt="" src="{{ demos.0.hero_url }}"></div></div>
+          <div class="s-grid" id="sGrid"></div>
+        </div>
+        <div class="shutter" aria-hidden="true"></div>
+      </div>
+      <div class="sill"></div>
+    </div>
+  </div>
+</div>
+<div class="after-sign"></div>
+{% ps_demo_data %}
+
+{# ───────── What it is + three steps ───────── #}
+<div class="sec sec-top">
+  <div class="wrap">
+    <div class="what">
+      <p class="big">{% ps 'home.what.big' %}</p>
+      <dl>
+        {% ps_items 'what' as what_rows %}
+        {% for w in what_rows %}<div><dt>{{ w.dt }}</dt><dd>{{ w.dd }}</dd></div>{% endfor %}
+      </dl>
+    </div>
+    <div class="steps">
+      {% ps_items 'steps' as step_rows %}
+      {% for s in step_rows %}<div class="step"><div class="n">{{ forloop.counter|fa_number }}</div><h3>{{ s.title }}</h3><p>{{ s.desc }}</p>{% if s.time %}<span class="t">{{ s.time }}</span>{% endif %}</div>{% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ───────── Three reasons ───────── #}
+<div class="sec sec-band">
+  <div class="wrap">
+    <div class="intro"><h2 class="h2">{% ps 'home.reasons.title' %}</h2></div>
+    <div class="reasons">
+      {% ps_items 'reasons' as reason_rows %}
+      {% for r in reason_rows %}
+      <div class="reason"><svg class="glyph" aria-hidden="true"><use href="#{% if forloop.counter == 1 %}g-engine{% elif forloop.counter == 2 %}g-price{% else %}g-support{% endif %}"/></svg><h3>{{ r.title }}</h3><p>{{ r.desc }}</p><ul>{% if r.l1 %}<li>{{ r.l1 }}</li>{% endif %}{% if r.l2 %}<li>{{ r.l2 }}</li>{% endif %}{% if r.l3 %}<li>{{ r.l3 }}</li>{% endif %}</ul></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ───────── Workbench (try the look) ───────── #}
+<div class="sec">
+  <div class="wrap">
+    <div class="intro">
+      <h2 class="h2">{% ps 'home.bench.title' %}</h2>
+      <p class="sub">{% ps 'home.bench.sub' %}</p>
+    </div>
+    <div class="bench">
+      <div class="bench-side">
+        <h4>{% ps 'home.bench.h_blocks' %}</h4>
+        <label class="blk"><span class="grip" aria-hidden="true">⋮⋮</span>{% ps 'home.bench.blk1' %}<input type="checkbox" checked data-b="c-hdr"></label>
+        <label class="blk"><span class="grip" aria-hidden="true">⋮⋮</span>{% ps 'home.bench.blk2' %}<input type="checkbox" checked data-b="c-hero"></label>
+        <label class="blk"><span class="grip" aria-hidden="true">⋮⋮</span>{% ps 'home.bench.blk3' %}<input type="checkbox" checked data-b="c-prod"></label>
+        <label class="blk"><span class="grip" aria-hidden="true">⋮⋮</span>{% ps 'home.bench.blk4' %}<input type="checkbox" checked data-b="c-banner"></label>
+        <label class="blk"><span class="grip" aria-hidden="true">⋮⋮</span>{% ps 'home.bench.blk5' %}<input type="checkbox" checked data-b="c-rev"></label>
+        <label class="blk"><span class="grip" aria-hidden="true">⋮⋮</span>{% ps 'home.bench.blk6' %}<input type="checkbox" checked data-b="c-foot"></label>
+      </div>
+      <div class="bench-canvas">
+        <div class="cv" id="cv">
+          <div class="c-hdr">{% ps 'home.bench.c_name' %}<i><span>محصولات</span><span>تخفیف‌ها</span><span>سبد خرید</span></i></div>
+          <div class="c-hero"><b>{% ps 'home.bench.c_hero_title' %}</b>{% ps 'home.bench.c_hero_sub' %}<br><span>{% ps 'home.bench.c_hero_btn' %}</span></div>
+          <div class="c-prod"><div><img src="{{ p_bag.url }}" alt="" width="560" height="420" decoding="async"><p>کیف چرمی</p></div><div><img src="{{ p_fashion.url }}" alt="" width="560" height="420" decoding="async"><p>پیراهن کتان</p></div><div><img src="{{ p_skin.url }}" alt="" width="560" height="420" decoding="async"><p>ست مراقبت پوست</p></div></div>
+          <div class="c-banner">{% ps 'home.bench.c_banner' %}</div>
+          <div class="c-rev"><div>«بسته‌بندی عالی بود و زود رسید.» مریم</div><div>«کیفیت دقیقاً مثل عکس‌ها.» رضا</div></div>
+          <div class="c-foot">{% ps 'home.bench.c_foot' %}</div>
+        </div>
+      </div>
+      <div class="bench-side">
+        <h4>{% ps 'home.bench.h_look' %}</h4>
+        <div class="fld"><label>{% ps 'home.bench.l_color' %}</label>
+          <div class="sw" id="sw">
+            <button type="button" data-c="green" aria-pressed="true" aria-label="سبز"></button>
+            <button type="button" data-c="blue" aria-pressed="false" aria-label="آبی"></button>
+            <button type="button" data-c="brick" aria-pressed="false" aria-label="آجری"></button>
+            <button type="button" data-c="plum" aria-pressed="false" aria-label="زرشکی"></button>
+            <button type="button" data-c="black" aria-pressed="false" aria-label="مشکی"></button>
+          </div>
+        </div>
+        <div class="fld"><label for="rad">{% ps 'home.bench.l_radius' %}</label><input type="range" id="rad" min="0" max="24" value="10"></div>
+        <div class="fld"><label>{% ps 'home.bench.l_font' %}</label>
+          <div class="seg" id="fontSeg"><button type="button" aria-pressed="true" data-f="text">وزیر</button><button type="button" aria-pressed="false" data-f="display">لاله‌زار</button><button type="button" aria-pressed="false" data-f="tahoma">تاهوما</button></div>
+        </div>
+        <p class="bench-note">{% ps 'home.bench.note' %}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ───────── Receipt ───────── #}
+<div class="sec sec-band">
+  <div class="wrap receipt-wrap">
+    <div class="receipt-side">
+      <h2 class="h2">{% ps 'home.receipt.title' %}</h2>
+      <p class="sub">{% ps 'home.receipt.sub' %}</p>
+      <a href="{% url 'portal:features' %}" class="lnk">{% ps 'home.receipt.link' %}</a>
+    </div>
+    <div class="receipt" role="group" aria-label="{% ps 'home.receipt.head' %}">
+      <div class="receipt-head"><b>{% ps 'home.receipt.head' %}</b><span>{% ps 'home.receipt.head_sub' %}</span></div>
+      {% ps_items 'receipt' as receipt_rows %}
+      {% for r in receipt_rows %}{% if r.group %}<div class="r-group">{{ r.group }}</div>{% endif %}<div class="r-line"><span>{{ r.text }}</span><i class="dots"></i><em>{{ r.tag }}</em></div>{% endfor %}
+      <div class="r-total"><span>{% ps 'home.receipt.total_label' %}</span><b>{% ps 'home.receipt.total_value' %}</b></div>
+    </div>
+  </div>
+</div>
+
+{# ───────── Admin panel ───────── #}
+<div class="sec">
+  <div class="wrap split">
+    <div>
+      <h2 class="h2-sm h2">{% ps 'home.panel.title' %}</h2>
+      <ul class="plain-list">
+        {% ps_items 'panel' as panel_rows %}
+        {% for p in panel_rows %}<li><b>{{ p.b }}</b><span>{{ p.s }}</span></li>{% endfor %}
+      </ul>
+    </div>
+    <div class="panel" role="img" aria-label="{% ps 'home.panel.aria' %}">
+      <div class="p-side"><span class="brand"><img src="{{ logo.url }}" alt=""><b>{% ps 'layout.brand' %}</b></span><a>پیشخوان</a><a class="on">سفارش‌ها <em>۳</em></a><a>محصولات</a><a>مشتری‌ها</a><a>طراحی فروشگاه</a><a>تخفیف‌ها</a><a>گزارش‌ها</a><a>تنظیمات</a></div>
+      <div class="p-main">
+        <div class="kpis"><div class="kpi"><span>فروش امروز (تومان)</span><b class="num">۱۸٬۴۰۰٬۰۰۰</b></div><div class="kpi"><span>سفارش امروز</span><b class="num">۲۷</b></div><div class="kpi"><span>بازدید</span><b class="num">۱٬۹۴۰</b></div></div>
+        <table class="otable">
+          <thead><tr><th>سفارش</th><th>مشتری</th><th class="hide-sm">مبلغ (تومان)</th><th>وضعیت</th></tr></thead>
+          <tbody>
+            <tr><td class="num">۱۰۴۸</td><td>سارا محمدی</td><td class="num hide-sm">۱٬۲۸۰٬۰۰۰</td><td><span class="st new">جدید</span></td></tr>
+            <tr><td class="num">۱۰۴۷</td><td>علی رضایی</td><td class="num hide-sm">۶۹۰٬۰۰۰</td><td><span class="st new">جدید</span></td></tr>
+            <tr><td class="num">۱۰۴۶</td><td>نگار کریمی</td><td class="num hide-sm">۲٬۴۵۰٬۰۰۰</td><td><span class="st ship">ارسال شد</span></td></tr>
+            <tr><td class="num">۱۰۴۵</td><td>حامد نوری</td><td class="num hide-sm">۹۸۰٬۰۰۰</td><td><span class="st ship">ارسال شد</span></td></tr>
+            <tr><td class="num">۱۰۴۴</td><td>مینا احمدی</td><td class="num hide-sm">۱٬۶۴۰٬۰۰۰</td><td><span class="st done">تحویل شد</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ───────── Template shelf ───────── #}
+<div class="sec sec-band">
+  <div class="wrap">
+    <div class="intro"><h2 class="h2">{% ps 'home.shelf.title' %}</h2><p class="sub">{% ps 'home.shelf.sub' %} <a href="{% url 'portal:design' %}" class="lnk">{% ps 'home.shelf.link' %}</a></p></div>
+    <div class="shelf">{% for t in tpls|slice:":4" %}{% include "portal/public_v2/_tpl_card.html" %}{% endfor %}</div>
+  </div>
+</div>
+
+{# ───────── Ledger ───────── #}
+<div class="sec">
+  <div class="wrap">
+    <div class="intro"><h2 class="h2-sm h2">{% ps 'home.ledger.title' %}</h2><p class="sub">{% ps 'home.ledger.sub' %}</p></div>
+    <div class="scroll-x">
+      <table class="ledger">
+        <thead><tr><th><span class="sr-only">{% ps 'home.ledger.title' %}</span></th><th class="us">{% ps 'home.ledger.h2' %}</th><th>{% ps 'home.ledger.h3' %}</th><th>{% ps 'home.ledger.h4' %}</th></tr></thead>
+        <tbody>
+          {% ps_items 'ledger' as ledger_rows %}
+          {% for r in ledger_rows %}<tr><td>{{ r.c1 }}</td><td class="us">{{ r.c2 }}</td><td{% if r.m3 %} class="no"{% endif %}>{{ r.c3 }}</td><td{% if r.m4 %} class="no"{% endif %}>{{ r.c4 }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ───────── Pricing teaser (real plans) ───────── #}
+<div class="sec sec-band">
+  <div class="wrap">
+    <div class="intro"><h2 class="h2">{% ps 'home.pricing.title' %}</h2><p class="sub">{% ps 'home.pricing.sub' %} <a href="{% url 'portal:plans' %}" class="lnk">{% ps 'home.pricing.link' %}</a></p></div>
+    {% include "portal/public_v2/_plans.html" %}
+  </div>
+</div>
+
+{# ───────── FAQ ───────── #}
+<div class="sec">
+  <div class="wrap faq-grid">
+    <div><h2 class="h2-sm h2">{% ps 'home.faq.title' %}</h2><p class="sub sub-sm">{% ps 'home.faq.sub' %} <a href="{% url 'portal:contact' %}" class="lnk">{% ps 'home.faq.link' %}</a></p></div>
+    <div class="faq">{% for f in faqs %}{% if f.home %}{% include "portal/public_v2/_faq_item.html" %}{% endif %}{% endfor %}</div>
+  </div>
+</div>
+{% endblock %}

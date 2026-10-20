@@ -1,0 +1,25 @@
+{% load public_site persian %}
+{% if plan_rows %}
+<div class="ptags{% if plan_rows|length == 1 %} n1{% elif plan_rows|length == 2 %} n2{% endif %}">
+  {% for row in plan_rows %}
+  <div class="ptag{% if row.plan.is_recommended %} pop{% endif %}">
+    {% if row.plan.is_recommended %}<span class="ribbon">{% ps 'plans.ribbon' %}</span>{% endif %}
+    <h3>{{ row.plan.public_title|default:row.plan.name }}</h3>
+    <p class="muted">{{ row.plan.description|truncatechars:110 }}</p>
+    <div class="price">
+      {% if row.version.display_price %}<b class="num">{{ row.version.display_price|toman_raw }}</b><small>تومان{% if row.version.billing_interval != 'none' %} · {{ row.version.get_billing_interval_display }}{% endif %}</small>
+      {% else %}<b>رایگان</b>{% endif %}
+    </div>
+    <div class="price-sub">{% if row.version.trial_days %}{% ps 'plans.trial' days=row.version.trial_days %}{% endif %}</div>
+    {% if row.features %}<ul>{% for feature in row.features %}<li><svg aria-hidden="true"><use href="#i-check"/></svg>{{ feature }}</li>{% endfor %}</ul>{% endif %}
+    <a href="{% url 'portal:register' %}" class="btn btn-leaf btn-block">{% ps 'plans.cta' %}</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-plans">
+  <h3>{% ps 'plans.empty_title' %}</h3>
+  <p>{% ps 'plans.empty_text' %}</p>
+  <a class="btn btn-leaf" href="{% url 'portal:contact' %}">{% ps 'layout.nav.contact' %}</a>
+</div>
+{% endif %}

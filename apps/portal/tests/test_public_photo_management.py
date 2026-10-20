@@ -57,7 +57,10 @@ class PublicSitePhotoManagementTests(TestCase):
         self.assertTrue(photo.image.name.startswith("portal/public-photos/"))
         response = self.client.get("/", HTTP_HOST=PUBLIC_HOST)
         self.assertContains(response, "/media/" + photo.image.name)
-        self.assertContains(response, "محصولات سرامیکی جدید")
+        # the descriptive alt text is rendered wherever the photo is shown (home in the previous
+        # design, the templates shelf in the new one)
+        pages = response.content.decode() + self.client.get("/design/", HTTP_HOST=PUBLIC_HOST).content.decode()
+        self.assertIn("محصولات سرامیکی جدید", pages)
         self.assertTrue(
             PlatformAuditLogEntry.objects.filter(
                 action_code="platform_admin.public_photo_saved", object_id="stilllife",

@@ -1,0 +1,38 @@
+{% extends "portal/public_v2/auth_base.html" %}
+{% load public_site %}
+{% block title %}تکمیل ثبت‌نام | {% ps 'layout.brand' %}{% endblock %}
+{% block auth_mods %} r-auth-shell--form-first{% if not registration_open %} r-auth-shell--closed{% endif %}{% endblock %}
+{% block auth_form %}
+{% if registration_open %}
+<div class="prog" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+<h1>اطلاعات حساب</h1>
+<p>شماره موبایل شما تأیید شد. برای ساخت حساب، ایمیل و رمز عبور خود را تعیین کنید.</p>
+<p class="verified">شماره تأییدشده: <span class="phone-inline">{{ phone }}</span>{% if full_name %} · <span>{{ full_name }}</span>{% endif %}</p>
+<form method="post" novalidate data-auth-form data-loading-text="در حال ساخت حساب و فروشگاه…">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="p-alert alert alert-err" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+  {% if form.full_name %}<div class="in"><label for="id_full_name">نام و نام خانوادگی <span aria-hidden="true">*</span></label>{{ form.full_name }}{% if form.full_name.errors %}<div class="p-error err" id="id_full_name_error">{{ form.full_name.errors.0 }}</div>{% endif %}</div>{% endif %}
+  {% if form.email %}<div class="in"><label for="id_email">ایمیل <span aria-hidden="true">*</span></label>{{ form.email }}{% if form.email.errors %}<div class="p-error err" id="id_email_error">{{ form.email.errors.0 }}</div>{% else %}<div class="hint" id="id_email_hint">برای ورود و بازیابی حساب استفاده می‌شود.</div>{% endif %}</div>{% endif %}
+  {% if form.password %}
+  <div class="in">
+    <label for="id_password">رمز عبور <span aria-hidden="true">*</span></label>
+    <div class="r-password-field" data-password-field>{{ form.password }}</div>
+    <ul class="hint-list" id="id_password_hint">{% for text in password_help %}<li>{{ text }}</li>{% endfor %}</ul>
+    {% if form.password.errors %}<ul class="p-error err err-list" id="id_password_error">{% for error in form.password.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  <div class="in"><label for="id_password_confirm">تکرار رمز عبور <span aria-hidden="true">*</span></label><div class="r-password-field" data-password-field>{{ form.password_confirm }}</div>{% if form.password_confirm.errors %}<div class="p-error err" id="id_password_confirm_error">{{ form.password_confirm.errors.0 }}</div>{% endif %}</div>
+  {% endif %}
+  {% if form.accept_terms %}{% include "portal/public_v2/_terms_acceptance.html" %}{% endif %}
+  <button type="submit" class="btn btn-saffron btn-block">ساخت حساب و فروشگاه</button>
+</form>
+{% else %}
+<div class="auth-closed" role="status">
+  <h2>ساخت فروشگاه تازه موقتاً در دسترس نیست</h2>
+  <p>در حال حاضر ثبت‌نام فروشگاه‌های جدید متوقف شده است؛ لطفاً بعداً دوباره سر بزنید.</p>
+  <p>اگر قبلاً حساب مالک دارید، ورود شما و دسترسی به فروشگاه‌های موجودتان تغییری نکرده است.</p>
+  <a class="btn btn-leaf btn-block" href="{% url 'portal:login' %}">بازگشت به ورود</a>
+  <p class="auth-alt"><a href="{% url 'portal:contact' %}" class="lnk">تماس با ما</a></p>
+</div>
+{% endif %}
+{% endblock %}
+{% block auth_sign %}<h2>{% ps 'auth.register.sign' %}</h2><ol><li>{% ps 'auth.register.step1' %}</li><li>{% ps 'auth.register.step2' %}</li><li>{% ps 'auth.register.step3' %}</li></ol>{% endblock %}

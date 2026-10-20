@@ -870,6 +870,7 @@ class LoginPageMarkupTests(_Base, TestCase):
         password = _post_login(self.client, "x@example.com", "bad")
         self.assertNotRegex(password.content.decode(), r'id="login-panel-password"[^>]*\bhidden\b')
 
+    @override_settings(PUBLIC_SITE_FORCE_DESIGN="legacy")  # asserts the previous design's markup (rs-btn, base csrf)
     def test_field_attributes_for_password_managers_keyboards_and_direction(self):
         html = self.client.get("/login/", HTTP_HOST=_HOST).content.decode()
         self.assertRegex(html, r'name="identifier"[^>]*autocomplete="username"[^>]*dir="ltr"')
@@ -891,6 +892,7 @@ class LoginPageMarkupTests(_Base, TestCase):
         page = self.client.get("/login/", HTTP_HOST=_HOST)
         self.assertNotContains(page, "position:fixed;bottom:16px")
 
+    @override_settings(PUBLIC_SITE_FORCE_DESIGN="legacy")  # asserts the previous design's markup (rs-btn, base csrf)
     def test_reset_pages_share_the_auth_design_system(self):
         for url in ("/reset-password/",):
             html = self.client.get(url, HTTP_HOST=_HOST).content.decode()

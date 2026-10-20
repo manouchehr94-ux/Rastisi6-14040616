@@ -78,8 +78,7 @@ class TermsPageTests(TestCase):
 
     def test_rtl_document_with_the_shared_public_layout(self):
         self.assertIn('dir="rtl"', self.html)
-        self.assertIn('class="r-legal"', self.html)
-        self.assertIn('class="r-legal-toc"', self.html)
+        self.assertIn("legal-toc", self.html)
         self.assertEqual(self.html.count("<h1"), 1)
         self.assertIn('aria-label="فهرست مطالب"', self.html)
 
@@ -107,7 +106,7 @@ class TermsPageTests(TestCase):
             self.assertNotIn(banned, self.html)
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], PUBLIC_SITE_FORCE_DESIGN="legacy")
 class TermsLayoutContractTests(TestCase):
     """Layout contract: full-width head, TOC column + document column, anchors clear the sticky header."""
 
@@ -145,3 +144,15 @@ class TermsLayoutContractTests(TestCase):
 
     def test_stylesheet_is_cache_busted_for_this_change(self):
         self.assertIn("public-site-v2.css?v=20261009-a11y", self.html)
+
+
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], PUBLIC_SITE_FORCE_DESIGN="legacy")
+class TermsPageLegacyDesignTests(TermsPageTests):
+    """The same legal-content guarantees hold in the previous design (rollback path)."""
+
+    def test_rtl_document_with_the_shared_public_layout(self):
+        self.assertIn('dir="rtl"', self.html)
+        self.assertIn('class="r-legal"', self.html)
+        self.assertIn('class="r-legal-toc"', self.html)
+        self.assertEqual(self.html.count("<h1"), 1)
+        self.assertIn('aria-label="فهرست مطالب"', self.html)

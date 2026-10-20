@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.password_validation import password_validators_help_texts
 from django.core.exceptions import ValidationError
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -63,6 +63,8 @@ from .forms import (
 )
 from apps.core.services.client_ip import get_client_ip_bucket
 
+from .public_site.plans import public_plan_rows
+from .public_site.rendering import render  # serves portal/public_v2/* when the new design is active
 from .models import ContactMessage, OwnerOtpChallenge, OwnerTermsAcceptance
 from .phone import InvalidPhoneError, normalize_iranian_phone
 from .terms import CURRENT_TERMS_VERSION, TERMS_ACCEPTANCE_REQUIRED_MESSAGE
@@ -128,7 +130,8 @@ def _turnstile_form_is_valid(request, form, *, action: str) -> bool:
 
 
 def home(request):
-    return render(request, "portal/public/home.html")
+    # plan_rows feeds the price tags of the new landing design; the previous design ignores it.
+    return render(request, "portal/public/home.html", {"plan_rows": public_plan_rows()})
 
 
 def features(request):
@@ -156,12 +159,7 @@ def supported_industries(request):
 
 
 def plans(request):
-    plan_rows = []
-    for plan in Plan.objects.filter(is_active=True, is_publicly_selectable=True).order_by("display_order", "code"):
-        version = plan.versions.filter(status=PlanVersion.Status.PUBLISHED).order_by("-version_number").first()
-        if version is not None:
-            plan_rows.append({"plan": plan, "version": version})
-    return render(request, "portal/public/plans.html", {"plan_rows": plan_rows})
+    return render(request, "portal/public/plans.html", {"plan_rows": public_plan_rows()})
 
 
 def help_center(request):
@@ -354,7 +352,11 @@ def register(request):
             else:
                 return redirect("portal:otp-verify")
     else:
-        form = OwnerRegistrationRequestForm()
+        # The landing page's closing form hands the visitor's number over (?phone=…); it is only
+        # an initial value of the real form — nothing is stored or sent until they submit it.
+        form = OwnerRegistrationRequestForm(
+            initial={"phone": (request.GET.get("phone") or "").strip()[:20]} if request.GET.get("phone") else None,
+        )
     return render(
         request, "portal/public/register.html",
         {"form": form, "registration_open": True, "terms_version": CURRENT_TERMS_VERSION},

@@ -1,0 +1,14 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}{% ps 'features.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'features.meta_description' %}">{% endblock %}
+{% block content %}
+{% ps 'features.crumb' as crumb %}{% ps 'features.title' as title %}{% ps 'features.lead' as lead %}{% ps 'features.cta' as cta %}
+{% include "portal/public_v2/_pghead.html" %}
+<div class="sec"><div class="wrap">
+  {% ps_items 'feat' as sections %}
+  {% for s in sections %}
+  <div class="fsec"><div><h2>{{ s.title }}</h2><p class="sub">{{ s.desc }}</p></div><div class="flist">{% for it in s.items %}<div><b>{{ it.b }}</b><span>{{ it.d }}</span></div>{% endfor %}</div></div>
+  {% endfor %}
+</div></div>
+{% endblock %}

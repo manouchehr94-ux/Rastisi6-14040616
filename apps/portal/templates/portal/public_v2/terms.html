@@ -1,0 +1,23 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}قوانین و مقررات | {% ps 'layout.brand' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="پیش‌نویس قوانین و مقررات استفاده از پلتفرم راستی‌سی: حساب، فروشگاه، مسئولیت‌ها، اشتراک، استفاده مجاز و تعلیق.">{% endblock %}
+{% block robots_meta %}<meta name="robots" content="index, follow">{% endblock %}
+{% block content %}
+{% ps 'terms.crumb' as crumb %}
+<div class="pg-sign"><div class="wrap">
+  <div class="crumbs"><a href="{% url 'portal:home' %}">خانه</a> / {{ crumb }}</div>
+  <h1>قوانین و مقررات استفاده</h1>
+  <p>چارچوب استفاده از خدمات راستی‌سی، نقش پلتفرم و مسئولیت‌های مالک فروشگاه.</p>
+  <p class="legal-version" data-terms-version>نسخه‌ی قوانین: <bdi dir="ltr">{{ terms_version }}</bdi></p>
+</div></div>
+<div class="sec"><div class="wrap">
+  <div class="legal-layout">
+    <aside><details class="legal-toc" data-legal-toc open><summary>فهرست مطالب</summary><nav aria-label="فهرست مطالب">{% include "portal/public/_terms_toc.html" %}</nav></details></aside>
+    <div class="legal">
+      <div class="note" role="note" data-legal-draft-notice>{% include "portal/public/_terms_notice_text.html" %}</div>
+      <div class="legal-doc">{% include "portal/public/_terms_body.html" %}</div>
+    </div>
+  </div>
+</div></div>
+{% endblock %}
