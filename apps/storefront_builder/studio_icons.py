@@ -44,6 +44,8 @@ STUDIO_ICON_PATHS = {
     "external": "M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7",
     "globe": "M22 12A10 10 0 1 1 2 12a10 10 0 0 1 20 0M2 12h20M12 2c-6 6-6 14 0 20 6-6 6-14 0-20",
     "dots": "M5 12h.01M12 12h.01M19 12h.01",
+    "columns": "M3 5h18v14H3zM12 5v14",
+    "palette": "M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.5-1.5-1.5-1-3 .5-1.4 2-1 4-1a3 3 0 0 0 3-3c0-5-3.6-9-8-9M7.5 11h.01M10 7.5h.01M14.5 7.5h.01",
 }
 
 #: Icon per Design Lab family (presentation only; family keys/labels come from

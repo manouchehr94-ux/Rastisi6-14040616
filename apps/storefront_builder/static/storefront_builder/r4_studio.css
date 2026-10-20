@@ -438,3 +438,125 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 .rs-studio .r4-ws-subpanel .r4-ws-card-body[data-r4-ws-fields]>.r4-field--integer,
 .rs-studio .r4-ws-subpanel .r4-ws-card-body[data-r4-ws-fields]>.r4-field--boolean,
 .rs-studio .r4-ws-subpanel .r4-ws-card-body[data-r4-ws-fields]>.r4-field--color{grid-column:auto}
+
+/* ==========================================================================
+   V5-02A — Studio shell layer (presentation only; appended, nothing above is edited).
+   Geometry and colours follow RastiSi_Studio_V5.html: 70px dark top bar (#151a25), 92px tool rail (#191f2c),
+   mint accent #94edc4; the reference's own ≤800px values (65px bar, 67px rail) apply on narrow screens.
+   Every control here is an existing Studio action (data-rastisi-action); no write path, no storage and no new state
+   lives in this layer. The temporary drawer / backdrop keep their behaviour; only their anchor moves under the bar
+   and beside the rail (the rail is never hidden, so every tool stays reachable at every width).
+   ========================================================================== */
+.rs-studio .app-top{position:relative;z-index:11;height:70px;min-height:70px;flex:0 0 auto;padding:0 20px;gap:12px;background:#151a25;color:#f1f4f8;border-bottom:0;box-shadow:0 3px 16px #0b12212b;flex-wrap:nowrap}
+.rs-studio .app-top>*{min-width:0}
+.rs-studio .app-top a.brand{color:#fff;flex:0 0 auto;gap:10px;min-width:150px}
+.rs-studio .app-top .brand-mark{background:#9af0ca;color:#124233;border-radius:13px;width:42px;height:42px;font-size:21px;font-weight:900}
+.rs-studio .app-top .brand small{color:#9aa6b9;font-size:10px;letter-spacing:.14em}
+.rs-studio .app-top .project-title{display:flex;align-items:center;gap:0;padding-inline-start:14px;border-inline-start:1px solid #ffffff1f;flex:0 1 270px;min-width:0}
+.rs-studio .app-top .project-avatar{display:none}
+.rs-studio .app-top .project-title>div{min-width:0}
+.rs-studio .app-top .project-title h1{color:#fff;font-size:13px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-studio .app-top .project-title p{color:#9aa6b9;font-size:10px;line-height:1.5;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.rs-studio .app-top .top-nav{flex:1 1 auto;justify-content:center;height:auto;gap:7px;margin:0 auto}
+.rs-studio .app-top .top-nav button{height:40px;margin:0;padding:0 14px;border:1px solid #343e4d;border-radius:11px;background:#202736;color:#dfe8f5;font-size:12px;font-weight:750;gap:8px}
+.rs-studio .app-top .top-nav button:hover{background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio .app-top .top-nav button.active,.rs-studio .app-top .top-nav button[aria-pressed="true"]{background:#94edc4;border-color:#94edc4;color:#104a36;box-shadow:none}
+.rs-studio .app-top .top-nav button[data-rastisi-action=lab].active{background:#cfc4f5;border-color:#cfc4f5;color:#2f2150}
+.rs-studio .app-top .top-nav .nav-label{white-space:nowrap}
+.rs-studio .app-top .project-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.rs-studio .app-top .save-feedback{color:#9aa6b9;margin:0;max-width:130px;white-space:nowrap}
+.rs-studio .app-top .save-feedback .icon{color:#94edc4}
+.rs-studio .app-top .save-feedback.error,.rs-studio .app-top .save-feedback.conflict{color:#ffb4b6}
+.rs-studio .app-top .history-buttons{display:flex;align-items:center;gap:4px}
+.rs-studio.rs-studio .app-top .icon-btn{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;color:#dfe8f5;border-radius:11px;border:1px solid #343e4d;background:#202736}
+.rs-studio.rs-studio .app-top .icon-btn:hover:not(:disabled){background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio.rs-studio .app-top .icon-btn:disabled{background:transparent;border-color:#293242;color:#74839a}
+.rs-studio .app-top .project-actions .outline{height:40px;background:#202736;border:1px solid #343e4d;color:#dfe8f5;border-radius:11px;font-weight:750}
+.rs-studio .app-top .project-actions .outline:hover:not(:disabled){background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio .app-top .project-actions .outline:disabled{background:transparent;border-color:#293242;color:#74839a}
+.rs-studio .app-top .project-actions .primary{height:40px;min-width:104px;background:#94edc4;border:1px solid #94edc4;color:#104a36;border-radius:11px;font-weight:750}
+.rs-studio .app-top .project-actions .primary:hover:not(:disabled){background:#b0f9d7}
+.rs-studio .app-top .project-actions .primary:disabled{background:#2a3b3a;border-color:#2a3b3a;color:#9fb4ad}
+.rs-studio .app-top .user-menu{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.rs-studio .app-top .user-menu>button:not(.avatar){color:#dfe8f5;background:transparent;border:0}
+.rs-studio .app-top .user-menu>button:not(.avatar):hover{color:#fff;background:#ffffff14}
+.rs-studio .app-top .user-menu button.avatar{background:#94edc4;color:#104a36;width:36px;height:36px;border-radius:50%}
+.rs-studio .app-top .user-menu button.avatar:hover{background:#b0f9d7}
+.rs-studio .app-top a.brand:focus-visible,.rs-studio .app-top button:focus-visible{outline:3px solid #94edc4;outline-offset:2px;box-shadow:none}
+
+/* body = rail (first child, so it sits on the inline-start edge) + main column */
+.rs-studio .rs-body{display:flex;flex:1 1 auto;min-height:0;min-width:0}
+.rs-studio .rs-main{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
+.rs-studio .rs-main>.studio-layout{flex:1 1 0;height:auto;min-height:0}
+.rs-studio .rs-rail{flex:0 0 92px;width:92px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:10px;padding:17px 8px;background:#191f2c;border-left:1px solid #333b49;overflow-y:auto;overscroll-behavior:contain;z-index:11}
+.rs-studio .rs-rail .rail-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;width:76px;min-height:69px;padding:6px 2px;border:1px solid transparent;border-radius:13px;background:transparent;color:#bbc8d8;font:inherit;font-size:10px;font-weight:700;line-height:1.3;text-align:center;cursor:pointer}
+.rs-studio .rs-rail .rail-btn .icon{width:22px;height:22px}
+.rs-studio .rs-rail .rail-btn:hover{background:#2d3748;border-color:#425369;color:#fff}
+.rs-studio .rs-rail .rail-btn.rail-primary{background:#1d3b35;border-color:#3c8f72;color:#94edc4}
+.rs-studio .rs-rail .rail-btn.rail-primary:hover{background:#25483f;color:#b0f9d7}
+.rs-studio .rs-rail .rail-btn:focus-visible{outline:3px solid #94edc4;outline-offset:-2px}
+
+/* white stage toolbar + softly lifted canvas */
+.rs-studio .stage-toolbar{background:#fff;border-bottom:1px solid var(--line)}
+.rs-studio .canvas{box-shadow:0 18px 48px #1b284a24}
+
+/* floating quick bar (existing actions: add section / page structure) */
+.rs-studio .rs-float-bar{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);z-index:12;display:flex;gap:8px;padding:8px;background:#151a25;border-radius:16px;box-shadow:0 14px 36px #0f1a2a4d}
+.rs-studio .rs-float-bar button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border:1px solid #343e4d;border-radius:11px;background:#202736;color:#dfe8f5;font:inherit;font-size:12.5px;font-weight:750;white-space:nowrap;cursor:pointer}
+.rs-studio .rs-float-bar button:hover{background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio .rs-float-bar button.float-primary{background:#94edc4;border-color:#94edc4;color:#104a36}
+.rs-studio .rs-float-bar button.float-primary:hover{background:#b0f9d7}
+.rs-studio .rs-float-bar button:focus-visible{outline:3px solid #94edc4;outline-offset:2px}
+.rs-studio[data-rs-mode="lab"] .rs-float-bar,.rs-studio[data-rs-drawer="structure"] .rs-float-bar,.rs-studio[data-rs-drawer="global"] .rs-float-bar{display:none}
+
+/* the temporary drawer + its backdrop hang under the 70px bar and beside the 92px rail (the rail stays clickable) */
+.rs-studio .context-panel{top:70px;right:92px}
+.rs-studio .rs-drawer-backdrop{top:70px;right:92px}
+
+/* header budget: the bar carries ten more controls than the reference, so secondary text yields first and the
+   labelled navigation yields last (icon-only with title tooltips below 1400px); no control is ever removed */
+@media (max-width:1800px){
+  .rs-studio .app-top .project-title p{display:none}
+  .rs-studio .app-top .project-title{flex-basis:150px}
+  .rs-studio .app-top .top-nav{gap:4px}
+  .rs-studio .app-top .top-nav button{padding:0 11px;font-size:11.5px}
+  .rs-studio .app-top .project-actions .hide-medium{display:none}
+}
+@media (max-width:1500px){
+  .rs-studio .app-top .project-title{flex:0 0 auto;padding-inline-start:12px}
+  .rs-studio .app-top .project-title h1{font-size:0}
+  .rs-studio .app-top .project-title h1 .pill{font-size:10px;margin:0}
+}
+@media (max-width:1280px){
+  .rs-studio .app-top .brand small{display:none}
+  .rs-studio .app-top .top-nav button{padding:0 9px;font-size:11px;gap:6px}
+}
+@media (max-width:1400px){
+  .rs-studio .app-top a.brand{min-width:0}
+  .rs-studio .app-top .top-nav .nav-label{display:none}
+  .rs-studio .app-top .top-nav button{width:40px;padding:0;justify-content:center}
+  .rs-studio .app-top .save-feedback{max-width:96px}
+}
+/* the reference's own narrow-screen values: 65px bar, 67px rail with 57px tools */
+@media (max-width:800px){
+  .rs-studio .app-top{height:65px;min-height:65px;padding:0 9px;gap:5px}
+  .rs-studio .app-top .brand .rs-brand-name{display:none}
+  .rs-studio .app-top .project-title{display:none}
+  .rs-studio .app-top .brand-mark{width:38px;height:38px}
+  .rs-studio .app-top .save-feedback{display:none}
+  .rs-studio .app-top .project-actions{gap:4px}
+  .rs-studio .app-top .project-actions .primary{min-width:0;padding:0 12px}
+  .rs-studio .app-top .user-menu>button:not(.avatar){font-size:0;gap:0;padding:0 8px}
+  .rs-studio .rs-rail{flex-basis:67px;width:67px;padding:10px 4px}
+  .rs-studio .rs-rail .rail-btn{width:57px;min-height:62px;font-size:9px}
+  .rs-studio .context-panel,.rs-studio .rs-drawer-backdrop{top:65px;right:67px}
+}
+@media (max-width:560px){
+  .rs-studio .app-top .top-nav{flex:1 1 0;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;gap:4px}
+  .rs-studio .app-top .top-nav button{flex:0 0 auto;width:34px;height:34px}
+  .rs-studio.rs-studio .app-top .icon-btn{width:32px;height:32px}
+  .rs-studio .app-top .user-menu{display:none}
+  .rs-studio .app-top .project-actions .outline{width:34px;height:34px;padding:0}
+  .rs-studio .app-top .project-actions .primary{height:34px}
+  .rs-studio .rs-float-bar{bottom:60px}
+}
