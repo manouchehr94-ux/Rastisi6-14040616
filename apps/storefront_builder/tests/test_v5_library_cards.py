@@ -48,7 +48,11 @@ class V5LibraryCardTests(unittest.TestCase):
         # r4_editor.js still builds section.add from the select value of #r4StructureAddButton's own scope
         self.assertIn("var addScope = addBtn.closest('[data-r4-add-section]') || structurePanel;", EDITOR_JS)
         self.assertIn("section_key: sectionKey,", EDITOR_JS)
-        self.assertEqual(STUDIO_JS.count("section.add"), 0)
+        # the Studio script names section.add in exactly ONE place: the guided three-section row chain (see test_v5_layout_patterns);
+        # the library cards / suggestions never enqueue anything themselves
+        self.assertEqual(STUDIO_JS.count("section.add"), 1)
+        chain = STUDIO_JS[STUDIO_JS.index("function buildPatternRow("):STUDIO_JS.index("// FOLLOWUP-12 — guided two-column row")]
+        self.assertIn("type: 'section.add'", chain)
 
     def test_library_and_layout_card_css_is_scoped_and_not_hiding_anything(self):
         css = strip_comments(STUDIO_CSS[STUDIO_CSS.index(".rs-studio .rs-library{"):])

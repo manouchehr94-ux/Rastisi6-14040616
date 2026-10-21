@@ -48,14 +48,15 @@ class AddDialogRenderingTests(_BandBase):
         self.assertIn('id="r4StructureAddSelect"', html)
         self.assertIn('id="r4StructureAddButton"', html)
 
-    def test_layout_tab_offers_only_engine_supported_two_cell_presets(self):
+    def test_layout_tab_offers_the_two_cell_presets_then_only_the_two_reference_patterns(self):
         from apps.storefront_builder.services import container_service
 
         html = self._html()
         offered = re.findall(r'name="rs_row_layout" value="(\w+)"', html)
         expected = [k for k, widths in container_service.LAYOUT_PRESETS.items() if len(widths) == 2]
-        self.assertEqual(offered, expected)
-        self.assertFalse({"thirds", "quarters", "single"} & set(offered))        # frozen multi-cell / unsupported presets never shown
+        self.assertEqual(offered[:len(expected)], expected)                       # the five existing ratios are untouched, same order
+        self.assertEqual(offered[len(expected):], ["thirds_equal", "big_right_two_left"])    # V5-LAYOUT-001 (see test_v5_layout_patterns)
+        self.assertFalse({"quarters", "single"} & set(offered))                   # no other preset is ever offered
 
     def test_the_empty_cell_add_control_stays_in_the_structure_panel(self):
         # the preview chip is compact now; the authoritative add-to-empty-cell controls are server-rendered hooks that remain

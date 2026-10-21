@@ -244,6 +244,36 @@ def rs_section_wire(section_key):
     return _LIBRARY_WIRE.get(str(section_key or ""), "lines")
 
 
+def _layout_key_for(widths):
+    from apps.storefront_builder.services import container_service
+
+    return next((key for key, value in container_service.LAYOUT_PRESETS.items() if tuple(value) == tuple(widths)), None)
+
+
+@register.simple_tag
+def rs_three_cell_patterns():
+    """V5-LAYOUT-001 — the two section-count-3 patterns of the reference, expressed ONLY through engine presets that already
+    exist in ``container_service.LAYOUT_PRESETS`` (looked up by their widths, so a registry change can only remove a pattern,
+    never invent one): three equal columns (4,4,4), and one big column + one narrow column that stacks two sections (8,4;
+    the narrow cell takes two blocks through repeated ``cell.add_section``). ``cells`` maps each chosen section to the Cell index
+    that receives it (0 = the section ``section.add`` creates)."""
+    thirds = _layout_key_for((4, 4, 4))
+    big_small = _layout_key_for((8, 4))
+    patterns = []
+    if thirds:
+        patterns.append({
+            "key": "thirds_equal", "engine": thirds, "widths": (4, 4, 4), "stacked": False, "name": "سه ستون مساوی",
+            "cells": "0,1,2", "slot_labels": "بخش ستون اول (راست)|بخش ستون دوم (وسط)|بخش ستون سوم (چپ)",
+        })
+    if big_small:
+        patterns.append({
+            "key": "big_right_two_left", "engine": big_small, "widths": (8, 4), "stacked": True,
+            "name": "بزرگ راست + دو کوچک چپ", "cells": "0,1,1",
+            "slot_labels": "بخش بزرگ (راست)|بخش کوچک بالا (چپ)|بخش کوچک پایین (چپ)",
+        })
+    return patterns
+
+
 @register.simple_tag
 def rs_featured(items, attr, current, count):
     """Split a real choice list for the Design Studio: the current choice

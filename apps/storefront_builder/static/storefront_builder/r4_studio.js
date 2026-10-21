@@ -1319,6 +1319,67 @@
     setTimeout(function () { closeModal(); notify('بخش تازه به انتهای صفحه اضافه شد.'); }, 0);
   });
 
+  // V5-LAYOUT-001 — three-section rows. The form's radio carries the ENGINE preset (data-rs-engine-layout, validated server-side
+  // against container_service.LAYOUT_PRESETS) and which Cell receives each chosen section (data-rs-slot-cells). The chain below only
+  // uses the three canonical mutation types through the one structural queue — the same ones R4.addTwoColumnRow chains.
+  function syncRowForm(form) {
+    var picked = form.querySelector('input[name="rs_row_layout"]:checked');
+    var labels = picked && picked.getAttribute('data-rs-slot-labels') ? picked.getAttribute('data-rs-slot-labels').split('|') : [];
+    var defaults = ['بخش ستون اول (راست)', 'بخش ستون دوم (چپ)', 'بخش سوم'];
+    var slots = labels.length || 2;
+    $all('[data-rs-slot-field]', form).forEach(function (field) {
+      var index = Number(field.getAttribute('data-rs-slot-field'));
+      field.hidden = index >= slots;
+      var text = field.querySelector('[data-rs-slot-label]');
+      if (text) text.textContent = labels[index] || defaults[index];
+    });
+    var submit = form.querySelector('[data-rs-add-row-submit]');
+    if (submit) submit.lastChild.nodeValue = slots === 3 ? 'ساختن ردیف سه‌بخشی' : 'ساختن ردیف دو‌ستونه';
+  }
+
+  function structureIds(selector, attr) {
+    var out = [];
+    if (!structurePanel) return out;
+    $all(selector, structurePanel).forEach(function (node) { out.push(Number(node.getAttribute(attr))); });
+    return out;
+  }
+
+  function buildPatternRow(engineLayout, keys, cellMap) {
+    var pageType = root.getAttribute('data-r4-page-type') || 'home';
+    var steps = 2 + keys.slice(1).filter(Boolean).length;
+    var done = 0;
+    function stop(result) { return { ok: false, partial: done > 0, done: done, steps: steps, result: result || null }; }
+    return R4.enqueueStructuralMutation({ type: 'section.add', section_key: keys[0], page_type: pageType }).then(function (added) {
+      if (!added || !added.ok) return stop(added);
+      done += 1;
+      var containerIds = structureIds('[data-r4-structure-container-id]', 'data-r4-structure-container-id');
+      var containerId = containerIds[containerIds.length - 1];
+      var emptyBefore = structureIds('[data-r4-structure-empty-cell]', 'data-r4-structure-cell-id');
+      if (!containerId) return stop({ code: 'container_not_found' });
+      return R4.enqueueStructuralMutation({ type: 'container.change_layout', container_id: containerId, layout_key: engineLayout }).then(function (changed) {
+        if (!changed || !changed.ok) return stop(changed);
+        done += 1;
+        var fresh = structureIds('[data-r4-structure-empty-cell]', 'data-r4-structure-cell-id').filter(function (id) { return emptyBefore.indexOf(id) === -1; });
+        var jobs = [];
+        for (var i = 1; i < keys.length; i += 1) {
+          if (keys[i]) jobs.push({ key: keys[i], cellId: fresh[cellMap[i] - 1] });
+        }
+        // strictly sequential: a later section never starts after an earlier step failed, and a failure is returned, never swallowed
+        return jobs.reduce(function (chain, job) {
+          return chain.then(function (previous) {
+            if (previous) return previous;
+            if (!job.cellId) return stop({ code: 'cell_not_found' });
+            return R4.enqueueStructuralMutation({ type: 'cell.add_section', section_key: job.key, cell_id: job.cellId }).then(function (filled) {
+              if (!filled || !filled.ok) return stop(filled);
+              done += 1;
+              return null;
+            });
+          });
+        }, Promise.resolve(null)).then(function (failed) { return failed || { ok: true, done: done, steps: steps }; });
+      });
+    });
+  }
+
   // FOLLOWUP-12 — guided two-column row: R4.addTwoColumnRow chains the existing mutations.
   modalRoot.addEventListener('submit', function (evt) {
     var form = evt.target.closest('[data-rs-add-row-form]');
@@ -1329,6 +1390,18 @@
     var layout = form.querySelector('input[name="rs_row_layout"]:checked');
     if (!first || !first.value) { notify('بخش ستون اول را انتخاب کنید.'); first && first.focus(); return; }
     var submit = form.querySelector('[data-rs-add-row-submit]');
+    var engineLayout = layout && layout.getAttribute('data-rs-engine-layout');
+    if (engineLayout) {
+      var third = form.querySelector('[data-rs-add-row-third]');
+      var cellMap = (layout.getAttribute('data-rs-slot-cells') || '0,1,2').split(',').map(Number);
+      if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن ردیف…'; }
+      buildPatternRow(engineLayout, [first.value, second ? second.value : '', third ? third.value : ''], cellMap).then(function (built) {
+        closeModal();
+        if (built && built.ok) notify('ردیف سه‌بخشی به انتهای صفحه اضافه شد. هنوز منتشر نشده است.');
+        else if (built && built.partial) notify('ردیف فقط تا مرحلهٔ ' + num(built.done) + ' از ' + num(built.steps) + ' ساخته شد؛ ستون‌های خالی را از «خانه‌های خالی» پر کنید یا واگرد بزنید.');
+      });
+      return;
+    }
     if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن ردیف…'; }
     R4.addTwoColumnRow(layout ? layout.value : 'half', first.value, second ? second.value : '').then(function (result) {
       closeModal();
@@ -1346,22 +1419,24 @@
     return String(text || '').toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[\u200c\s]+/g, ' ').trim();
   }
   function filterLibrary(input) {
-    var library = input.closest('.rs-library');
-    if (!library) return;
+    var scope = input.closest('.rs-add-section');
+    if (!scope) return;
     var needle = normalizeSearch(input.value);
     var visibleTotal = 0;
-    $all('[data-rs-library-group]', library).forEach(function (group) {
+    // suggestion choices and library cards share one filter (title + category); a group with no visible item hides entirely
+    $all('[data-rs-library-group]', scope).forEach(function (group) {
       var visibleInGroup = 0;
-      $all('.rs-library-card', group).forEach(function (card) {
-        var haystack = normalizeSearch(card.getAttribute('data-rs-library-label') + ' ' + card.getAttribute('data-rs-library-category'));
+      $all('[data-rs-library-label]', group).forEach(function (item) {
+        var haystack = normalizeSearch(item.getAttribute('data-rs-library-label') + ' ' + item.getAttribute('data-rs-library-category'));
         var match = !needle || haystack.indexOf(needle) !== -1;
-        card.hidden = !match;
+        item.hidden = !match;
         if (match) visibleInGroup += 1;
       });
       group.hidden = visibleInGroup === 0;
+      if (visibleInGroup && needle && group.tagName === 'DETAILS') group.open = true;
       visibleTotal += visibleInGroup;
     });
-    var empty = $('[data-rs-library-empty]', library);
+    var empty = $('[data-rs-library-empty]', scope);
     if (empty) empty.hidden = visibleTotal !== 0;
   }
 
@@ -1372,6 +1447,12 @@
       var grid = modalRoot.querySelector('[data-rs-gallery-grid]');
       if (grid) grid.innerHTML = templateTiles();
     }
+  });
+
+  modalRoot.addEventListener('change', function (evt) {
+    if (evt.target.name !== 'rs_row_layout') return;
+    var rowForm = evt.target.closest('[data-rs-add-row-form]');
+    if (rowForm) syncRowForm(rowForm);
   });
 
   root.addEventListener('change', function (evt) {

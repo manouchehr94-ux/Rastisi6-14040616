@@ -655,3 +655,8 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
   .rs-studio .rs-library-card{min-height:128px;padding:10px}
   .rs-studio .rs-add-tabs{margin:12px 14px 0}
 }
+
+/* ---- V5-LAYOUT-001: schematic for the stacked pattern (one big cell + one narrow cell holding two sections) ---- */
+.rs-studio .rs-layout-preview .rs-stack{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rs-studio .rs-layout-preview .rs-stack i{flex:1 1 0;background:#a8b9cc}
+.rs-studio .rs-layout-preview .rs-stack i:first-child{background:#a8b9cc}

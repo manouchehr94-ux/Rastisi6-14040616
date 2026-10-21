@@ -142,12 +142,16 @@ sender). This whole element is re-fetched by R4 after structural mutations.
   {% endcomment %}
   <template data-rs-add-section-template>
     <div class="rs-add-section" data-r4-add-section>
+      {% comment %}V5-UI-005: the ONE search field is the first control of the pane (right under the tabs), above the suggestions. It only
+      hides/shows the already-rendered suggestion choices and library cards (r4_studio.js); it never sends anything.{% endcomment %}
+      <label class="rs-library-search">{% rs_icon "search" %}<span class="visually-hidden">جستجو در بخش‌ها</span><input type="search" data-control="library-search" placeholder="جستجوی بخش یا دسته‌بندی…" autocomplete="off"></label>
+      <p class="rs-library-empty" data-rs-library-empty role="status" hidden>نتیجه‌ای پیدا نشد؛ عبارت دیگری را امتحان کنید.</p>
       {% if showcase_choices %}
-      <details class="r4-showcase" data-r4-showcase open>
+      <details class="r4-showcase" data-r4-showcase data-rs-library-group open>
         <summary class="section-label"><span>ویترین فروشگاه</span><span class="pill">پیشنهادی</span></summary>
         <div class="demo-grid rs-showcase-grid" role="group" aria-label="ویترین فروشگاه">
           {% for choice in showcase_choices %}
-          <button type="button" class="r4-showcase-choice" data-r4-showcase-choice data-section-key="{{ choice.section_key }}">{% if choice.content_type == "products" %}{% rs_icon "grid" %}{% elif choice.content_type == "categories" %}{% rs_icon "layers" %}{% elif choice.content_type == "collections" %}{% rs_icon "card" %}{% else %}{% rs_icon "tag" %}{% endif %}<span class="rs-choice-copy"><strong>{{ choice.label }}</strong>{% if choice.description %}<small>{{ choice.description }}</small>{% endif %}</span></button>
+          <button type="button" class="r4-showcase-choice" data-r4-showcase-choice data-section-key="{{ choice.section_key }}" data-rs-library-label="{{ choice.label }}" data-rs-library-category="ویترین فروشگاه">{% if choice.content_type == "products" %}{% rs_icon "grid" %}{% elif choice.content_type == "categories" %}{% rs_icon "layers" %}{% elif choice.content_type == "collections" %}{% rs_icon "card" %}{% else %}{% rs_icon "tag" %}{% endif %}<span class="rs-choice-copy"><strong>{{ choice.label }}</strong>{% if choice.description %}<small>{{ choice.description }}</small>{% endif %}</span></button>
           {% endfor %}
         </div>
       </details>
@@ -158,8 +162,6 @@ sender). This whole element is re-fetched by R4 after structural mutations.
       single R4 section.add path stays the only writer. Same structure_library as the select: no second legality rule.{% endcomment %}
       {% if structure_library %}
       <div class="rs-library" role="group" aria-label="کتابخانهٔ بخش‌ها">
-        <label class="rs-library-search">{% rs_icon "search" %}<span class="visually-hidden">جستجو در بخش‌ها</span><input type="search" data-control="library-search" placeholder="جستجوی بخش یا دسته‌بندی…" autocomplete="off"></label>
-        <p class="rs-library-empty" data-rs-library-empty role="status" hidden>نتیجه‌ای پیدا نشد؛ عبارت دیگری را امتحان کنید.</p>
         {% for group in structure_library %}
         <section class="rs-library-group" data-rs-library-group>
           <h3 class="section-label">{{ group.category }}</h3>
@@ -192,9 +194,10 @@ sender). This whole element is re-fetched by R4 after structural mutations.
 
   <template data-rs-add-row-template>
     <form class="rs-add-row" data-rs-add-row-form novalidate>
-      <p class="rs-add-row-help">یک ردیف با دو ستون می‌سازد. ستون «اول» در سمت راست صفحه (راست‌چین) و ستون «دوم» سمت چپ آن قرار می‌گیرد؛ در موبایل زیر هم نمایش داده می‌شوند.</p>
+      <p class="rs-add-row-help">یک ردیف چندستونه می‌سازد. بخش «اول» در سمت راست صفحه (راست‌چین) و بخش‌های بعدی به‌ترتیب سمت چپ آن قرار می‌گیرند؛ در موبایل زیر هم نمایش داده می‌شوند.</p>
+      {% rs_three_cell_patterns as three_patterns %}
       <fieldset class="rs-add-row-layouts">
-        <legend>نسبت دو ستون</legend>
+        <legend>چیدمان ردیف</legend>
         {% for preset_key, preset_label, widths in two_column_presets %}
         <label class="rs-layout-card">
           <input type="radio" name="rs_row_layout" value="{{ preset_key }}" {% if forloop.first %}checked{% endif %}>
@@ -202,20 +205,33 @@ sender). This whole element is re-fetched by R4 after structural mutations.
           <span class="rs-layout-name">{{ preset_label }}</span>
         </label>
         {% endfor %}
+        {% for pattern in three_patterns %}
+        <label class="rs-layout-card">
+          <input type="radio" name="rs_row_layout" value="{{ pattern.key }}" data-rs-engine-layout="{{ pattern.engine }}" data-rs-slot-cells="{{ pattern.cells }}" data-rs-slot-labels="{{ pattern.slot_labels }}">
+          <span class="rs-layout-preview" aria-hidden="true">{% if pattern.stacked %}<i style="flex:{{ pattern.widths.0 }}"></i><span class="rs-stack" style="flex:{{ pattern.widths.1 }}"><i></i><i></i></span>{% else %}{% for w in pattern.widths %}<i style="flex:{{ w }}"></i>{% endfor %}{% endif %}</span>
+          <span class="rs-layout-name">{{ pattern.name }}</span>
+        </label>
+        {% endfor %}
       </fieldset>
-      <label class="field"><span>بخش ستون اول (راست)</span>
+      <label class="field" data-rs-slot-field="0"><span data-rs-slot-label>بخش ستون اول (راست)</span>
         <select data-rs-add-row-first required>
           <option value="">یک بخش انتخاب کنید…</option>
           {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
         </select>
       </label>
-      <label class="field"><span>بخش ستون دوم (چپ)</span>
+      <label class="field" data-rs-slot-field="1"><span data-rs-slot-label>بخش ستون دوم (چپ)</span>
         <select data-rs-add-row-second>
           <option value="">خالی بماند (بعداً از «خانه‌های خالی» پر می‌شود)</option>
           {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
         </select>
       </label>
-      <p class="rs-add-row-note">ردیف به انتهای همین صفحه اضافه می‌شود و فقط در پیش‌نویس می‌ماند؛ تا «انتشار» نزنید، فروشگاه عمومی تغییر نمی‌کند. با «واگرد» مرحله‌به‌مرحله برمی‌گردد (ساخت ردیف سه مرحله دارد).</p>
+      <label class="field" data-rs-slot-field="2" hidden><span data-rs-slot-label>بخش سوم</span>
+        <select data-rs-add-row-third>
+          <option value="">خالی بماند (بعداً از «خانه‌های خالی» پر می‌شود)</option>
+          {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
+        </select>
+      </label>
+      <p class="rs-add-row-note">ردیف به انتهای همین صفحه اضافه می‌شود و فقط در پیش‌نویس می‌ماند؛ تا «انتشار» نزنید، فروشگاه عمومی تغییر نمی‌کند. با «واگرد» مرحله‌به‌مرحله برمی‌گردد (هر بخش و هر تغییر چیدمان یک مرحلهٔ جدا دارد).</p>
       <button type="submit" class="primary full" data-rs-add-row-submit>{% rs_icon "plus" %}ساختن ردیف دو‌ستونه</button>
     </form>
   </template>
