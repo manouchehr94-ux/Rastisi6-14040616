@@ -1175,6 +1175,18 @@
       case 'global-tab': setGlobalTab(el.getAttribute('data-tab')); break;
       case 'add-section': openModal('add-section'); break;
       case 'add-row': openModal('add-row'); break;
+      case 'library-add': {
+        // V5 block library card: forward to the SAME controls the select chooser uses — r4_editor.js stays the only writer.
+        var libScope = el.closest('[data-r4-add-section]');
+        var libSelect = libScope ? libScope.querySelector('#r4StructureAddSelect') : null;
+        var libButton = libScope ? libScope.querySelector('#r4StructureAddButton') : null;
+        var libKey = el.getAttribute('data-rs-library-key');
+        if (libSelect && libButton && libKey) {
+          libSelect.value = libKey;
+          if (libSelect.value === libKey) libButton.click();
+        }
+        break;
+      }
       case 'section-enable': sectionCommand('toggle_active'); break;
       case 'section-lock': sectionCommand('toggle_locked'); break;
       case 'section-up': sectionCommand('up'); break;

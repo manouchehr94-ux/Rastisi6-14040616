@@ -153,6 +153,22 @@ sender). This whole element is re-fetched by R4 after structural mutations.
       </details>
       <div class="section-divider"></div>
       {% endif %}
+      {% comment %}V5 block library: one card per legal section of this page, grouped by the registry category. A card only
+      forwards to the controls below (r4_studio.js "library-add" sets the select and clicks #r4StructureAddButton), so the
+      single R4 section.add path stays the only writer. Same structure_library as the select: no second legality rule.{% endcomment %}
+      {% if structure_library %}
+      <div class="rs-library" role="group" aria-label="کتابخانهٔ بخش‌ها">
+        {% for group in structure_library %}
+        <section class="rs-library-group">
+          <h3 class="section-label">{{ group.category }}</h3>
+          <div class="rs-library-grid">
+            {% for entry in group.items %}<button type="button" class="rs-library-card" data-rastisi-action="library-add" data-rs-library-key="{{ entry.key }}">{% rs_icon "plus" %}<strong>{{ entry.label }}</strong></button>{% endfor %}
+          </div>
+        </section>
+        {% endfor %}
+      </div>
+      <div class="section-divider"></div>
+      {% endif %}
       <label class="field" for="r4StructureAddSelect"><span>همهٔ بخش‌های مجاز این صفحه</span>
         <select id="r4StructureAddSelect">
           <option value="">یک بخش انتخاب کنید…</option>

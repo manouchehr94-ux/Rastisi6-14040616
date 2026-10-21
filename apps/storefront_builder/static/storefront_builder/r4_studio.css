@@ -560,3 +560,59 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
   .rs-studio .app-top .project-actions .primary{height:34px}
   .rs-studio .rs-float-bar{bottom:60px}
 }
+
+/* ---- V5 stage head, canvas frame, dialogs, block library and layout cards (RastiSi_Studio_V5.html: .stagehead / .seg /
+   .modal / .library-card / .layout-card). Presentation only; same markup, same actions, same hooks as before. ---- */
+.rs-studio .stage{background-color:#e8edf1;background-image:radial-gradient(circle,#cbd5df 1px,transparent 1.2px);background-size:20px 20px}
+.rs-studio .stage-toolbar{height:59px;min-height:59px;padding:10px 23px;gap:12px;background:#fdfefe;border-bottom:1px solid #d7e0e8}
+.rs-studio .stage-toolbar>.row{flex:1 1 auto;min-width:0;gap:9px;color:#8a98a7;font-size:11px}
+.rs-studio .stage-toolbar .page-select{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;background:transparent;color:#8a98a7}
+.rs-studio .stage-toolbar .page-select select{min-width:150px;height:36px;padding:0 12px;border:1px solid #e0e7ed;border-radius:11px;background:#fdfefe;color:#152233;font-size:13px;font-weight:800}
+.rs-studio .stage-toolbar .scope-tag{color:#8a98a7;font-size:11px}
+.rs-studio .device-switch{height:auto;gap:3px;padding:3px;border:1px solid #e0e7ed;border-radius:11px;background:#edf2f6}
+.rs-studio .device-switch button{min-height:30px;height:30px;padding:0 10px;border-radius:8px;color:#64748b}
+.rs-studio .device-switch button.active{background:#fff;color:#104a36;box-shadow:0 1px 4px #1b284a1f}
+.rs-studio .device-switch span{color:#64748b}
+.rs-studio .stage-toolbar select[data-control=zoom]{border:0;background:transparent;color:#64748b;font-size:11px}
+.rs-studio .browser-chrome{height:34px;min-height:34px;border-color:#d7e0e8;border-radius:14px 14px 0 0;background:#fff}
+.rs-studio .browser-url{min-width:min(380px,40%);justify-content:center;padding:4px 14px;border-radius:8px;background:#f1f4f7;color:#8a98a7}
+.rs-studio .stage-caption{color:#64748b}
+
+.rs-studio .modal-backdrop{background:#0d182a66;backdrop-filter:blur(4px)}
+.rs-studio .modal{border:1px solid #edf1f4;border-radius:20px;box-shadow:0 30px 90px #0d182a66}
+.rs-studio .modal:has(.rs-library),.rs-studio .modal:has(.rs-add-row){width:min(100%,860px)}
+.rs-studio .modal-head{padding:19px 25px;border-bottom:1px solid #e7ebf1}
+.rs-studio .modal-head h2{color:#152233;font-size:18px;font-weight:800}
+.rs-studio .modal-head p{color:#8a98a7}
+.rs-studio .modal-head .icon-btn{width:36px;height:36px;border:1px solid #e0e7ed;border-radius:10px;color:#475569}
+.rs-studio .modal-body{padding:23px 27px 31px}
+.rs-studio .modal-foot{padding:15px 25px;background:#f8fafb;border-top:1px solid #e7ecf0}
+.rs-studio .modal-foot p{color:#8a98a7}
+.rs-studio .rs-toast{background:#151a25;color:#fff;border-radius:12px;padding:11px 16px;box-shadow:0 6px 18px #0004}
+
+.rs-studio .rs-library{display:grid;gap:18px}
+.rs-studio .rs-library-group>.section-label{margin-bottom:10px;color:#64748b;font-size:12px;font-weight:800}
+.rs-studio .rs-library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.rs-studio .rs-library-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;min-height:84px;padding:14px;border:1px solid #e2e9ef;border-radius:14px;background:#fff;color:#152233;text-align:right;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.rs-studio .rs-library-card .icon{width:20px;height:20px;color:#169b73}
+.rs-studio .rs-library-card strong{font-size:12.5px;font-weight:800;line-height:1.5}
+.rs-studio .rs-library-card:hover{border-color:#81caae;box-shadow:0 10px 26px #18384716;transform:translateY(-2px)}
+.rs-studio .rs-library-card:focus-visible{outline:3px solid #169b73;outline-offset:2px}
+
+.rs-studio .rs-add-row-layouts{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.rs-studio .rs-add-row-layouts legend{color:#152233;font-size:13px;font-weight:800}
+.rs-studio .rs-layout-card{gap:8px;justify-items:stretch;padding:12px;border:1px solid #e2e9ef;border-radius:14px;background:#fff}
+.rs-studio .rs-layout-card:hover{border-color:#81caae;box-shadow:0 10px 26px #18384716}
+.rs-studio .rs-layout-card:has(input:checked){border-color:#169b73;background:#f3fbf7;box-shadow:0 0 0 2px #169b73}
+.rs-studio .rs-layout-card:has(input:checked)::before{content:"✓ انتخاب شده";position:absolute;top:18px;inset-inline-end:18px;z-index:1;padding:2px 7px;border-radius:6px;background:#d9f7ea;color:#0b6b4f;font-size:9px;font-weight:800;pointer-events:none}
+.rs-studio .rs-layout-preview{box-sizing:border-box;height:46px;padding:6px;border:1px solid #e7ecf0;border-radius:10px;background:#f5f8fa}
+.rs-studio .rs-layout-preview i{border-radius:5px;background:#a8b9cc}
+.rs-studio .rs-layout-preview i:first-child{background:#3fae8c}
+.rs-studio .rs-layout-name{color:#152233;font-size:12.5px;font-weight:800;text-align:center}
+
+@media (max-width:800px){
+  .rs-studio .stage-toolbar{padding:8px;height:auto;min-height:59px}
+  .rs-studio .modal-body{padding:17px}
+  .rs-studio .modal-head{padding:13px}
+  .rs-studio .rs-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
