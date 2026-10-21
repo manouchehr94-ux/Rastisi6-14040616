@@ -36,11 +36,11 @@ class V5ShellNoInertControlsTests(unittest.TestCase):
 
     def test_help_and_every_tool_stay_reachable_when_the_header_collapses(self):
         # ≤560px hides .user-menu (help + avatar) and ≤1100px hides nav labels: the rail (never hidden, see css test) carries help,
-        # structure, templates, global design, add-section and add-row; the top-nav (icon-only / scrollable) carries the rest.
+        # structure, templates, global design, open-add-section and add-row; the top-nav (icon-only / scrollable) carries the rest.
         rail = EDITOR_HTML[EDITOR_HTML.index('<aside class="rs-rail"'):EDITOR_HTML.index("</aside>", EDITOR_HTML.index('<aside class="rs-rail"'))]
         nav = EDITOR_HTML[EDITOR_HTML.index('class="top-nav"'):EDITOR_HTML.index("</nav>")]
         reachable = set(re.findall(r'data-rastisi-action="([a-z-]+)"', rail + nav))
-        self.assertGreaterEqual(reachable, {"help", "structure", "templates", "global", "add-section", "add-row", "section-settings"})
+        self.assertGreaterEqual(reachable, {"help", "structure", "templates", "global", "open-add-section", "add-row", "section-settings"})
         for button in re.findall(r"<button\b[^>]*>", nav):
             self.assertIn("title=", button)          # icon-only on narrow screens: the accessible name must survive
 

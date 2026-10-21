@@ -336,6 +336,29 @@ R4_ERROR_MESSAGES_FA = {
     "invalid_preset": "این بازنشانی انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "baseline_reset_error": "بازنشانی به قالب انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "no_active_draft": "پیش‌نویس فعالی وجود ندارد؛ صفحه را دوباره بارگذاری کنید.",
+    # V5-QA-FIX-01 (V5-FUNC-002) — structural refusals are legitimate, protective server decisions (nothing was written).
+    # Without a Persian ``message`` the Studio could only show the generic «ذخیره ناموفق»; with one, the client's existing
+    # known-refusal path keeps the saved state and tells the merchant exactly why the move/duplicate/remove did not happen.
+    "move_boundary": "این بخش در همان جهت جای دیگری برای رفتن ندارد.",
+    "section_locked": "این بخش قفل است؛ برای جابه‌جایی یا تغییر، ابتدا قفل آن را باز کنید. هیچ تغییری ذخیره نشد.",
+    "target_locked": "بخش مجاور قفل است و جابه‌جایی از روی آن ممکن نیست؛ قفل آن را باز کنید یا جای دیگری امتحان کنید. هیچ تغییری ذخیره نشد.",
+    "container_locked": "ردیفی که این بخش در آن است قفل شده؛ هیچ تغییری ذخیره نشد.",
+    "target_container_locked": "ردیف مجاور قفل شده و جابه‌جایی از روی آن ممکن نیست؛ هیچ تغییری ذخیره نشد.",
+    "row_layout_invalid": (
+        "این جابه‌جایی چیدمان یک ردیف چندبخشی را به‌هم می‌ریزد؛ بخش را بعد از کل آن ردیف قرار دهید. "
+        "هیچ تغییری ذخیره نشد."
+    ),
+    "unsupported_placement": "جایگاه این بخش با این جابه‌جایی سازگار نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_placement": "جایگاه انتخاب‌شده برای این بخش معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "section_not_placed": "این بخش هنوز در چیدمان صفحه جایگاهی ندارد؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "section_not_found": "این بخش دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "cell_not_found": "این خانه دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "container_not_found": "این ردیف دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "section_not_removable": "این بخش برای صفحه ضروری است و حذف نمی‌شود.",
+    "section_not_duplicable": "از این بخش فقط یک نمونه می‌تواند در صفحه باشد.",
+    "max_instances_exceeded": "به حداکثر تعداد مجاز این بخش در صفحه رسیده‌اید.",
+    "min_instances_violation": "تعداد لازم از این بخش باید در صفحه بماند؛ حذف آن ممکن نیست.",
+    "row_member": "این بخش عضو یک ردیف چندبخشی است و از اینجا حذف نمی‌شود؛ هیچ تغییری ذخیره نشد.",
 }
 
 

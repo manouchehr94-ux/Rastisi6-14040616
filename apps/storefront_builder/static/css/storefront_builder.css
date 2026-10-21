@@ -3610,3 +3610,39 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 .rsec[data-d~="zoom"] :is(.pcard .img,.special-image)>img[data-img-role]{transform:scale(var(--d-zoom,1));transform-origin:var(--img-pos,center)}
 html[data-sfb-image-hover="zoom"] .rsec[data-d~="zoom"] .pcard:hover .img>img[data-img-role]{transform:scale(calc(var(--d-zoom,1)*1.08))}
 html[data-sfb-image-hover="none"] .rsec[data-d~="zoom"] .pcard:hover .img>img[data-img-role]{transform:scale(var(--d-zoom,1))}
+
+/* V5-QA-FIX-01 (V5-FUNC-001 / V5-UI-004) — builder-canvas placeholders must never hide real content.
+   Both selectors below exist ONLY in the Studio/standalone Preview (render_containers.html `is_preview`, preview.html
+   markEmptyBuilderSections); the public storefront never renders them. They are zero-height-neutral overlays, so a
+   large centred/full-width box sat on top of the NEXT section (an added «متن» section right after an empty cell or an empty
+   block was covered; it reappeared once moved away). They are now compact chips pinned to the inline-end corner (where
+   right-aligned RTL content does not start); the add control for an empty cell stays reachable here and in «ساختار صفحه». */
+.sfb-empty-cell-add {
+  height: 32px;
+  width: max-content;
+  max-width: min(220px, calc(100% - 16px));
+  inset-inline: auto 8px;
+  top: 4px;
+  flex-direction: row;
+  gap: 8px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .78);
+}
+.sfb-empty-cell-add > span { width: 22px; height: 22px; font-size: 15px; box-shadow: none; flex: none; }
+.sfb-empty-cell-add strong { font-size: 11.5px; white-space: nowrap; }
+.sfb-empty-cell-add small { display: none; }
+.sfb-empty-cell-add:hover, .sfb-empty-cell-add:focus-visible { background: #fff; }
+.sfb-preview-sections .rsec.sfb-rsec-builder-empty::before {
+  left: 8px;
+  right: auto;
+  transform: none;
+  top: 2px;
+  max-width: min(240px, calc(100% - 16px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, .86);
+}

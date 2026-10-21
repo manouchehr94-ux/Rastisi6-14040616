@@ -7,7 +7,7 @@ import unittest
 from ._v5_shell_support import EDITOR_HTML, STUDIO_JS, rail_and_float_markup, v5_layer
 
 #: Studio actions the rail and the floating bar are allowed to trigger (all pre-existing).
-ALLOWED_SHELL_ACTIONS = {"add-section", "add-row", "global", "structure", "templates", "help"}
+ALLOWED_SHELL_ACTIONS = {"open-add-section", "add-row", "global", "structure", "templates", "help"}
 
 
 class V5ShellNoNewWritePathsTests(unittest.TestCase):

@@ -212,6 +212,39 @@ def rs_section_icon(section_key):
 
 
 @register.simple_tag
+def rs_section_description(section_key):
+    """Merchant-facing one-liner of a section type for the Studio block library — read straight from the registry
+    (``SectionDefinition.description_fa``); empty when the registry declares none. Presentation only, never a second source."""
+    from apps.storefront_builder import section_registry
+
+    try:
+        return section_registry.get_definition(str(section_key or "")).description_fa or ""
+    except ValueError:
+        return ""
+
+
+#: Abstract wireframe family per section type (a schematic glyph for the library card, NOT a rendering of the section):
+#: grid = several tiles, wide = one wide banner, cards = banner cards, split = media + text, lines = text, strip = thin band.
+_LIBRARY_WIRE = {
+    "featured_products": "grid", "newest_products": "grid", "best_sellers": "grid", "discounted_products": "grid",
+    "amazing_offers": "grid", "product_section": "grid", "catalog_product_wall": "grid", "category_grid": "grid",
+    "collection_tiles": "grid", "brand_carousel": "grid",
+    "hero_banner": "wide", "fashion_lifestyle_hero": "wide", "image_slider": "wide", "single_banner": "wide",
+    "multi_banner": "cards", "promo_cards": "cards",
+    "image_text": "split", "video_section": "split",
+    "rich_text": "lines", "blog_posts": "lines", "faq": "lines", "testimonials": "lines", "newsletter": "lines",
+    "quick_links": "strip", "story_rail": "strip", "decorative_strip": "strip", "trust_features": "strip",
+    "surface_panel": "strip",
+}
+
+
+@register.simple_tag
+def rs_section_wire(section_key):
+    """CSS class suffix of the schematic glyph for a library card (``lines`` for an unknown type)."""
+    return _LIBRARY_WIRE.get(str(section_key or ""), "lines")
+
+
+@register.simple_tag
 def rs_featured(items, attr, current, count):
     """Split a real choice list for the Design Studio: the current choice
     first plus the next ones up to ``count`` stay visible, the rest go into a

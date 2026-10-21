@@ -4,7 +4,7 @@
 import re
 import unittest
 
-from ._v5_shell_support import APP, EDITOR_JS, STUDIO_CSS, STUDIO_JS
+from ._v5_shell_support import APP, EDITOR_JS, STUDIO_CSS, STUDIO_JS, strip_comments
 
 PARTIAL = (APP / "templates" / "dashboard" / "storefront_builder" / "r4" / "partials" / "studio_structure.html").read_text(encoding="utf-8")
 
@@ -51,7 +51,7 @@ class V5LibraryCardTests(unittest.TestCase):
         self.assertEqual(STUDIO_JS.count("section.add"), 0)
 
     def test_library_and_layout_card_css_is_scoped_and_not_hiding_anything(self):
-        css = STUDIO_CSS[STUDIO_CSS.index(".rs-studio .rs-library{"):]
+        css = strip_comments(STUDIO_CSS[STUDIO_CSS.index(".rs-studio .rs-library{"):])
         for rule in re.findall(r"([^{}]+)\{", css):
             for selector in (s.strip() for s in rule.split(",")):
                 if selector and not selector.startswith("@"):

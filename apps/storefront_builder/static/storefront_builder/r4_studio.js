@@ -920,15 +920,21 @@
         foot = '<p>' + icon('lock') + ' محصولات، تصاویر و متن‌ها حفظ می‌شوند. تغییر قالب قابل واگرد است.</p>' + btn('close-modal', 'بازگشت به استودیو', 'arrow', 'outline', busy ? 'disabled' : '');
         break;
       case 'add-section':
+      case 'add-row': {
+        // V5: ONE add dialog with two tabs — «بخش‌ها» (block library + the legacy select) and «چیدمان» (the real, engine-supported
+        // two-column row presets). Both panes are the server-rendered Structure-panel templates; the tab is UI-only state.
+        var addTab = m.tab || (m.type === 'add-row' ? 'layout' : 'sections');
         title = 'چه چیزی به این صفحه اضافه کنیم؟';
-        sub = 'یک بخش جدید، فقط در همین صفحه.';
-        body = '<div data-rs-add-section-slot></div>';
+        sub = 'یک بخش یا یک ردیف دو‌ستونه؛ فقط در همین صفحه و فقط در پیش‌نویس.';
+        top = '<div class="rs-add-tabs" role="tablist" aria-label="نوع افزودن">' +
+          [['sections', 'بخش‌ها'], ['layout', 'چیدمان']].map(function (t) {
+            return '<button type="button" role="tab" data-rastisi-action="add-tab" data-tab="' + t[0] + '" aria-selected="' + (addTab === t[0]) + '"' +
+              (addTab === t[0] ? ' class="active"' : '') + '>' + t[1] + '</button>';
+          }).join('') + '</div>';
+        body = '<div data-rs-add-pane="sections" role="tabpanel"' + (addTab === 'sections' ? '' : ' hidden') + '><div data-rs-add-section-slot></div></div>' +
+          '<div data-rs-add-pane="layout" role="tabpanel"' + (addTab === 'layout' ? '' : ' hidden') + '><div data-rs-add-row-slot></div></div>';
         break;
-      case 'add-row':
-        title = 'ردیف دو‌ستونه بسازید';
-        sub = 'دو بخش کنار هم، فقط در همین صفحه.';
-        body = '<div data-rs-add-row-slot></div>';
-        break;
+      }
       case 'remove-section':
         title = 'این بخش از صفحه حذف شود؟';
         body = '<p class="modal-message">محصولات فروشگاه حذف نمی‌شوند؛ فقط این بخش از چیدمان صفحه برداشته می‌شود. می‌توانید آن را واگرد کنید.</p>';
@@ -1056,14 +1062,14 @@
       btn('close-modal', '', 'close', 'icon-btn', 'aria-label="بستن پنجره" ' + (busy || ui.publishing ? 'disabled' : '')) + '</header>' +
       top + '<div class="modal-body">' + body + '</div>' + (foot ? '<footer class="modal-foot">' + foot + '</footer>' : '') + '</section></div>';
 
-    if (m.type === 'add-section') {
+    if (m.type === 'add-section' || m.type === 'add-row') {
       // The chooser markup is the server-rendered one from the Structure
       // panel (its controls keep the R4 hooks R4 handles).
       var slot = modalRoot.querySelector('[data-rs-add-section-slot]');
       var template = structurePanel ? structurePanel.querySelector('template[data-rs-add-section-template]') : null;
       if (slot && template) slot.appendChild(template.content.cloneNode(true));
     }
-    if (m.type === 'add-row') {
+    if (m.type === 'add-section' || m.type === 'add-row') {
       var rowSlot = modalRoot.querySelector('[data-rs-add-row-slot]');
       var rowTemplate = structurePanel ? structurePanel.querySelector('template[data-rs-add-row-template]') : null;
       if (rowSlot && rowTemplate) rowSlot.appendChild(rowTemplate.content.cloneNode(true));
@@ -1175,6 +1181,19 @@
       case 'global-tab': setGlobalTab(el.getAttribute('data-tab')); break;
       case 'add-section': openModal('add-section'); break;
       case 'add-row': openModal('add-row'); break;
+      case 'open-add-section': openModal('add-section'); break;
+      case 'add-tab': {
+        // UI-only: switch the visible pane of the add dialog; nothing is written.
+        var tabName = el.getAttribute('data-tab') === 'layout' ? 'layout' : 'sections';
+        if (ui.modal) ui.modal.tab = tabName;
+        $all('[data-rastisi-action="add-tab"]', modalRoot).forEach(function (t) {
+          var on = t.getAttribute('data-tab') === tabName;
+          t.classList.toggle('active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        $all('[data-rs-add-pane]', modalRoot).forEach(function (pane) { pane.hidden = pane.getAttribute('data-rs-add-pane') !== tabName; });
+        break;
+      }
       case 'library-add': {
         // V5 block library card: forward to the SAME controls the select chooser uses — r4_editor.js stays the only writer.
         var libScope = el.closest('[data-r4-add-section]');
@@ -1292,7 +1311,7 @@
   // dialog simply closes.
   modalRoot.addEventListener('click', function (evt) {
     var choice = evt.target.closest('[data-r4-showcase-choice], #r4StructureAddButton');
-    if (!choice || !ui.modal || ui.modal.type !== 'add-section') return;
+    if (!choice || !ui.modal || (ui.modal.type !== 'add-section' && ui.modal.type !== 'add-row')) return;
     if (choice.id === 'r4StructureAddButton') {
       var select = modalRoot.querySelector('#r4StructureAddSelect');
       if (!select || !select.value) { notify('یک بخش انتخاب کنید.'); return; }
@@ -1322,7 +1341,32 @@
     if (evt.target.classList && evt.target.classList.contains('modal-backdrop') && !ui.busy) closeModal();
   });
 
+  // V5 block library search: pure presentation — hides/shows already-rendered cards by title or category; no request, no write.
+  function normalizeSearch(text) {
+    return String(text || '').toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[\u200c\s]+/g, ' ').trim();
+  }
+  function filterLibrary(input) {
+    var library = input.closest('.rs-library');
+    if (!library) return;
+    var needle = normalizeSearch(input.value);
+    var visibleTotal = 0;
+    $all('[data-rs-library-group]', library).forEach(function (group) {
+      var visibleInGroup = 0;
+      $all('.rs-library-card', group).forEach(function (card) {
+        var haystack = normalizeSearch(card.getAttribute('data-rs-library-label') + ' ' + card.getAttribute('data-rs-library-category'));
+        var match = !needle || haystack.indexOf(needle) !== -1;
+        card.hidden = !match;
+        if (match) visibleInGroup += 1;
+      });
+      group.hidden = visibleInGroup === 0;
+      visibleTotal += visibleInGroup;
+    });
+    var empty = $('[data-rs-library-empty]', library);
+    if (empty) empty.hidden = visibleTotal !== 0;
+  }
+
   root.addEventListener('input', function (evt) {
+    if (evt.target.getAttribute('data-control') === 'library-search') { filterLibrary(evt.target); return; }
     if (evt.target.getAttribute('data-control') === 'template-search') {
       ui.query = evt.target.value;
       var grid = modalRoot.querySelector('[data-rs-gallery-grid]');

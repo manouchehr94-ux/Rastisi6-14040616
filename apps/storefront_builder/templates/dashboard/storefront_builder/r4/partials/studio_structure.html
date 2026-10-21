@@ -158,11 +158,18 @@ sender). This whole element is re-fetched by R4 after structural mutations.
       single R4 section.add path stays the only writer. Same structure_library as the select: no second legality rule.{% endcomment %}
       {% if structure_library %}
       <div class="rs-library" role="group" aria-label="کتابخانهٔ بخش‌ها">
+        <label class="rs-library-search">{% rs_icon "search" %}<span class="visually-hidden">جستجو در بخش‌ها</span><input type="search" data-control="library-search" placeholder="جستجوی بخش یا دسته‌بندی…" autocomplete="off"></label>
+        <p class="rs-library-empty" data-rs-library-empty role="status" hidden>نتیجه‌ای پیدا نشد؛ عبارت دیگری را امتحان کنید.</p>
         {% for group in structure_library %}
-        <section class="rs-library-group">
+        <section class="rs-library-group" data-rs-library-group>
           <h3 class="section-label">{{ group.category }}</h3>
           <div class="rs-library-grid">
-            {% for entry in group.items %}<button type="button" class="rs-library-card" data-rastisi-action="library-add" data-rs-library-key="{{ entry.key }}">{% rs_icon "plus" %}<strong>{{ entry.label }}</strong></button>{% endfor %}
+            {% for entry in group.items %}{% rs_section_description entry.key as entry_description %}<button type="button" class="rs-library-card" data-rastisi-action="library-add" data-rs-library-key="{{ entry.key }}" data-rs-library-label="{{ entry.label }}" data-rs-library-category="{{ group.category }}">
+              <span class="rs-wire rs-wire--{% rs_section_wire entry.key %}" aria-hidden="true"><i></i><i></i><i></i></span>
+              <strong>{% rs_section_icon entry.key %}<span>{{ entry.label }}</span></strong>
+              {% if entry_description %}<small>{{ entry_description }}</small>{% endif %}
+              <em>{{ group.category }}</em>
+            </button>{% endfor %}
           </div>
         </section>
         {% endfor %}
