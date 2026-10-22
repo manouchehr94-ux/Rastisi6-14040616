@@ -76,13 +76,13 @@ class AddDialogStaticContractTests(_BandBase):
             self.assertFalse(forbidden in search, forbidden)
 
     def test_builder_placeholder_overrides_are_builder_only_and_compact(self):
+        # V5-QA-FIX-01's empty-section placeholder chip (the empty-CELL control was redesigned in V5-UI-006/007, see test_v5_ui_006_add_controls)
         mark = BUILDER_CSS.index("V5-QA-FIX-01 (V5-FUNC-001")
-        block = BUILDER_CSS[BUILDER_CSS.rindex("/*", 0, mark):]
+        block = BUILDER_CSS[BUILDER_CSS.rindex("/*", 0, mark):BUILDER_CSS.index("/* V5-UI-006/007 — add-section controls")]
         css = strip_comments(block)
         for selector in re.findall(r"([^{}]+)\{", css):
-            self.assertTrue(selector.strip().startswith((".sfb-empty-cell-add", ".sfb-preview-sections .rsec.sfb-rsec-builder-empty")), selector)
-        self.assertIn("height: 32px;", css)
-        self.assertIn("inset-inline: auto 8px;", css)
+            self.assertTrue(selector.strip().startswith(".sfb-preview-sections .rsec.sfb-rsec-builder-empty"), selector)
+        self.assertIn("left: 8px;", css)
         # the chip exists in the DOM only for Preview (never the public storefront)
         self.assertRegex(CONTAINERS, r"\{% elif is_preview %\}\s*<button type=\"button\" class=\"sfb-empty-cell-add\"")
 

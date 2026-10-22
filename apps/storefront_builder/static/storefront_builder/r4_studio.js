@@ -920,7 +920,7 @@
         foot = '<p>' + icon('lock') + ' محصولات، تصاویر و متن‌ها حفظ می‌شوند. تغییر قالب قابل واگرد است.</p>' + btn('close-modal', 'بازگشت به استودیو', 'arrow', 'outline', busy ? 'disabled' : '');
         break;
       case 'add-cell':
-        title = 'افزودن محتوا به این خانه';
+        title = 'افزودن بخش به این خانه';
         sub = 'فقط به همین خانه اضافه می‌شود؛ جای دیگری از صفحه تغییر نمی‌کند و تا «انتشار» نزنید عمومی نمی‌شود.';
         body = '<div data-rs-add-section-slot data-rs-cell-mode></div>';
         break;
@@ -1393,7 +1393,7 @@
       layoutBuilding = false;
       closeModal();
       if (result && result.ok) {
-        notify('چیدمان به انتهای صفحه اضافه شد. هنوز منتشر نشده است.' + (anyContent ? '' : ' خانه‌ها خالی‌اند؛ از روی بوم یا «خانه‌های خالی» محتوا اضافه کنید.'));
+        notify('چیدمان به انتهای صفحه اضافه شد. هنوز منتشر نشده است.' + (anyContent ? '' : ' خانه‌ها خالی‌اند؛ از روی بوم به هر خانه بخش اضافه کنید.'));
       } else if (!result || !result.message) {
         notify('چیدمان ساخته نشد؛ هیچ تغییری ذخیره نشد.');   // a refusal that names its cause is already shown by R4 (nothing was saved either way)
       }
@@ -1403,7 +1403,7 @@
     });
   });
 
-  // V5-LAYOUT-ATOMIC — a click on an empty Cell (or on «افزودن کامپوننت» inside a Cell) in the canvas opens the dialog below, which adds
+  // V5-LAYOUT-ATOMIC — a click on an empty Cell (or on «افزودن بخش دیگر» inside a Cell) in the canvas opens the dialog below, which adds
   // content to THAT Cell only (R4.addSection(key, cellId) -> the existing cell.add_section), never to the page end.
   // preview.html's own click interceptor swallows every <button> click in edit mode before its sfb:addToCell post can run, and that file is
   // protected; so the Studio listens on the (same-origin) preview WINDOW in the capture phase, which fires before the document-level

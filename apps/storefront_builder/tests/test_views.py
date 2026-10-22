@@ -513,7 +513,7 @@ class PageSwitchingTests(StorefrontBuilderViewsTestCase):
         # Container/Cell intentionally keeps empty layout cells visible in the
         # Builder preview so the merchant can add content into them.
         self.assertContains(resp, "sfb-empty-cell-add")
-        self.assertContains(resp, "افزودن محتوا")
+        self.assertContains(resp, "افزودن بخش به این خانه")
 
 
 class ProductDetailContextAwareSectionsPreviewTests(StorefrontBuilderViewsTestCase):

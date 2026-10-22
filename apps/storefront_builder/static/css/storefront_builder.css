@@ -3615,24 +3615,10 @@ html[data-sfb-image-hover="none"] .rsec[data-d~="zoom"] .pcard:hover .img>img[da
    Both selectors below exist ONLY in the Studio/standalone Preview (render_containers.html `is_preview`, preview.html
    markEmptyBuilderSections); the public storefront never renders them. They are zero-height-neutral overlays, so a
    large centred/full-width box sat on top of the NEXT section (an added «متن» section right after an empty cell or an empty
-   block was covered; it reappeared once moved away). They are now compact chips pinned to the inline-end corner (where
-   right-aligned RTL content does not start); the add control for an empty cell stays reachable here and in «ساختار صفحه». */
-.sfb-empty-cell-add {
-  height: 32px;
-  width: max-content;
-  max-width: min(220px, calc(100% - 16px));
-  inset-inline: auto 8px;
-  top: 4px;
-  flex-direction: row;
-  gap: 8px;
-  padding: 0 12px 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .78);
-}
-.sfb-empty-cell-add > span { width: 22px; height: 22px; font-size: 15px; box-shadow: none; flex: none; }
-.sfb-empty-cell-add strong { font-size: 11.5px; white-space: nowrap; }
-.sfb-empty-cell-add small { display: none; }
-.sfb-empty-cell-add:hover, .sfb-empty-cell-add:focus-visible { background: #fff; }
+   block was covered; it reappeared once moved away). The empty-section placeholder below stays a compact chip pinned to the
+   inline-end corner (where right-aligned RTL content does not start). The empty-CELL add control was redesigned in V5-UI-006/007
+   (see the next block): the Cell itself now has a visible minimum height, so its control fills the Cell instead of floating over
+   the next section. */
 .sfb-preview-sections .rsec.sfb-rsec-builder-empty::before {
   left: 8px;
   right: auto;
@@ -3646,3 +3632,124 @@ html[data-sfb-image-hover="none"] .rsec[data-d~="zoom"] .pcard:hover .img>img[da
   line-height: 1.4;
   background: rgba(255, 255, 255, .86);
 }
+
+/* V5-UI-006/007 — add-section controls on the canvas. Builder-only: every selector below exists ONLY in the Studio/standalone Preview
+   (render_containers.html `is_preview`); the public storefront never renders these classes.
+   One term: «افزودن بخش». Two controls, two clear jobs —
+   · an EMPTY Cell is a framed, labelled region (real column share, a minimum height so the whole box is visible) whose single button
+     fills the Cell and opens the add dialog for THIS Cell; the overlay covers only the Cell's own (empty) area, never other content;
+   · a Cell that already holds Blocks keeps a small secondary «افزودن بخش دیگر» pill centred on its bottom edge. It no longer spans the
+     Cell and no longer sits on top of the last Block's content or the section tool strip (which lives at the top inline-end corner).
+   The ONE geometry exception to «builder chrome is layout-neutral» is `.rcontainer-cell.sfb-empty-cell { min-height }`: an empty Cell has
+   no content, so without a height its frame would collapse to a line and the control would have to float over the next section (the
+   V5-FUNC-001 defect). The class exists only in builder markup; published pages are unaffected. */
+.rcontainer-cell.sfb-empty-cell {
+  min-height: 132px;
+  align-self: stretch;
+  border-radius: 12px;
+  outline: 2px dashed rgba(109, 74, 255, .5);
+  outline-offset: -2px;
+  background: repeating-linear-gradient(135deg, rgba(109, 74, 255, .06) 0 10px, rgba(109, 74, 255, .02) 10px 20px);
+}
+.rcontainer-cell.sfb-empty-cell:hover,
+.rcontainer-cell.sfb-empty-cell:focus-within {
+  outline-color: #6d4aff;
+  background-color: rgba(109, 74, 255, .07);
+}
+.sfb-empty-cell-add {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  padding: 10px 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #3f3a8f;
+  font: inherit;
+  text-align: center;
+}
+.sfb-empty-cell-add > span { order: 2; width: 34px; height: 34px; font-size: 20px; box-shadow: 0 5px 14px rgba(109, 74, 255, .25); }
+.sfb-empty-cell-add strong { order: 3; font-size: 12.5px; font-weight: 700; color: #3f3a8f; white-space: normal; line-height: 1.5; }
+.sfb-empty-cell-add small {
+  order: 1;
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px solid rgba(109, 74, 255, .35);
+  border-radius: 999px;
+  background: #fff;
+  color: #4b3fc7;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.sfb-empty-cell-add:hover, .sfb-empty-cell-add:focus-visible { background: transparent; color: #3f3a8f; }
+.sfb-empty-cell-add:focus-visible { outline: 3px solid #6d4aff; outline-offset: -5px; }
+
+/* a Cell whose Blocks are ALL content-less (an empty «متن», an empty FAQ …) collapses to zero height in the builder, so its placeholder chip and
+   its add control would pile up on the previous row's control. It gets the same visible minimum as an empty Cell (builder markup only). */
+.rcontainer-cell:has(> .rsec.sfb-rsec-builder-empty):not(:has(> .rsec:not(.sfb-rsec-builder-empty))) {
+  min-height: 96px;
+  align-self: stretch;
+}
+
+/* every Cell of a multi-Cell layout shows its own frame at rest, so «3 columns» and «one big + two small» read as separate regions */
+.sfb-builder-container:has(> .rcontainer-cell ~ .rcontainer-cell) > .rcontainer-cell[data-cell-id]:not(.sfb-empty-cell) {
+  outline: 1px dashed rgba(102, 112, 133, .42);
+  outline-offset: -1px;
+  border-radius: 8px;
+}
+.sfb-builder-container:has(> .rcontainer-cell ~ .rcontainer-cell) > .rcontainer-cell[data-cell-id]:not(.sfb-empty-cell):hover {
+  outline-color: rgba(109, 74, 255, .72);
+}
+
+.sfb-cell-add-more {
+  inset-inline: auto;
+  left: 50%;
+  right: auto;
+  bottom: -7px;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  min-height: 22px;
+  height: 22px;
+  padding: 0 10px;
+  transform: translateX(-50%);
+  border: 1px solid #8b85d6;
+  border-radius: 999px;
+  background: #fff;
+  color: #4b3fc7;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(24, 24, 27, .12);
+  opacity: .94;
+  pointer-events: auto;
+}
+.sfb-cell-add-more:hover, .sfb-cell-add-more:focus-visible { background: #f5f3ff; border-color: #6d4aff; color: #3f3a8f; opacity: 1; }
+.sfb-cell-add-more:focus-visible { outline: 3px solid #6d4aff; outline-offset: 2px; }
+
+/* display-only level tag: this frame is the whole LAYOUT (not a Cell, not a Section) */
+.sfb-container-tag {
+  position: absolute;
+  z-index: 17;
+  top: -10px;
+  inset-inline-end: 12px;                /* the left corner in RTL: away from the section tool strip, which sits at the top inline-start */
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: #6d4aff;
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 1.7;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.sfb-builder-container:hover > .sfb-container-tag,
+.sfb-builder-container.sfb-builder-container-selected > .sfb-container-tag { opacity: 1; }
+html[data-sfb-builder-mode="preview"] .sfb-container-tag { display: none !important; }
+
+/* the section tool strip never runs under the drag handle in a narrow Cell: it wraps inside the Cell instead */
+.rcontainer-cell > .rsec > .sfb-rsec-toolbar { flex-wrap: wrap; max-width: calc(100% - 52px); }

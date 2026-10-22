@@ -667,7 +667,26 @@ class BuilderChromeIsLayoutNeutralTests(SimpleTestCase):
         for needle in (".sfb-cell-add-more", ".sfb-empty-cell-add", ".sfb-hidden-cell-content"):
             bodies = " ".join(body for selector, body in _css_rules(BUILDER_CSS, needle) if selector.strip() == needle)
             self.assertIn("position:absolute", bodies.replace(" ", ""), needle)
-        self.assertNotRegex(BUILDER_CSS, r"\.sfb-empty-cell\s*\{[^}]*min-height")
+
+    def test_the_only_builder_geometry_exceptions_are_visible_minimums_for_content_less_cells(self):
+        # V5-UI-006/007: an EMPTY Cell (and a Cell holding only content-less sections) gets a visible minimum height so its frame and its add
+        # control are not a zero-height line floating over the next section. Pinned narrowly: exactly these two selectors, only min-height /
+        # align-self, only on builder-only classes; filled Cells, Containers and every public class stay layout-neutral.
+        allowed = {
+            ".rcontainer-cell.sfb-empty-cell",
+            ".rcontainer-cell:has(> .rsec.sfb-rsec-builder-empty):not(:has(> .rsec:not(.sfb-rsec-builder-empty)))",
+        }
+        with_min_height = {
+            sel
+            for needle in ("sfb-empty-cell", "sfb-rsec-builder-empty")
+            for sel, body in _css_rules(BUILDER_CSS, needle)
+            if "min-height" in body and not sel.startswith(".sfb-empty-cell-add")
+        }
+        self.assertEqual(with_min_height, allowed)
+
+    def test_empty_cell_markup_is_emitted_for_builder_preview_only(self):
+        template = (APP / "templates" / "storefront_builder" / "partials" / "render_containers.html").read_text(encoding="utf-8")
+        self.assertIn("{% if is_preview and not blocks %} sfb-empty-cell{% endif %}", template)
 
     def test_edit_mode_does_not_reposition_storefront_elements(self):
         css = (APP / "static" / "css" / "storefront_builder_preview_v22.css").read_text(encoding="utf-8")
