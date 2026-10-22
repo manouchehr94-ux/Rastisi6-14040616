@@ -639,3 +639,19 @@ input[type=range]{width:100%;accent-color:var(--leaf)}
 .r-terms-link{color:var(--leaf);font-weight:800;border-bottom:2px solid color-mix(in srgb,var(--leaf) 35%,transparent)}
 .r-terms-link:hover{border-color:var(--leaf)}
 .p-error{color:#b3261e}
+
+/* "more templates" tag + real template catalog */
+.tag-more{display:inline-block;text-decoration:none;background:transparent;color:var(--sign-ink);border:2px dashed color-mix(in srgb,var(--saffron) 70%,transparent);padding:10px 16px 6px}
+.tag-more:hover{background:var(--saffron);color:var(--saffron-ink);transform:rotate(-3deg)}
+.tpl .im{aspect-ratio:4/3}
+.tpl .im img{object-position:top center}
+.tpl .im .tpl-svg{display:block;width:100%;height:100%}
+.tpl .im .tpl-svg svg{width:100%;height:100%;display:block}
+.tpl[hidden]{display:none}
+.tpl-tools{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:22px}
+.tpl-search{margin:0;flex:1 1 320px;max-width:520px}
+.tpl-count{color:var(--muted);font-weight:700}
+.tpl-count b{color:var(--leaf);font-size:20px}
+.tpl .bd p{min-height:0}
+/* the label now sits on its own line under the tags (the extra "more" tag needs the room) */
+.tags .tags-label{position:static;flex:1 0 100%;margin-top:2px;font-size:13px}

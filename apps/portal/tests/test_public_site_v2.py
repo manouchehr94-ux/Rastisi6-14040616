@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from apps.portal.models import PlatformAuditLogEntry, PublicSiteSetting
+from apps.portal.models import PlatformAuditLogEntry, PublicSitePhoto, PublicSiteSetting
 from apps.portal.public_site import registry, services
 from apps.subscriptions.models import Plan, PlanVersion
 
@@ -163,6 +163,101 @@ class EditableContentTests(TestCase):
     def test_register_prefills_the_phone_from_the_closing_form(self):
         response = self.client.get("/register/?phone=09121234567", HTTP_HOST=PUBLIC_HOST)
         self.assertContains(response, 'value="09121234567"')
+
+
+@override_settings(ALLOWED_HOSTS=HOSTS)
+class DemoStoreAndTemplateCatalogTests(TestCase):
+    def _get(self, path):
+        return self.client.get(path, HTTP_HOST=PUBLIC_HOST)
+
+    def _catalog(self):
+        from apps.storefront_builder import layout_preset_registry
+
+        return layout_preset_registry.list_ready_templates()
+
+    def test_demo_store_names_products_prices_colours_and_photos_are_editable(self):
+        for key, val in {
+            "demo.1.name": "فروشگاه من", "demo.1.tag": "ساده‌ی من", "demo.1.url": "my-shop.ir",
+            "demo.1.p1.name": "محصول اول من", "demo.1.p1.price": "۱۲۳", "demo.1.p1.img": "extra01",
+            "demo.1.hero": "extra02", "demo.1.acc": "#aa3311", "demo.1.radius": "12px",
+        }.items():
+            PublicSiteSetting.objects.create(key=key, value=val)
+        html = self._get("/").content.decode()
+        self.assertIn("فروشگاه من", html)
+        self.assertIn("ساده‌ی من", html)
+        self.assertIn('"محصول اول من"', html)           # product name inside the demo data (readable Persian)
+        self.assertIn("/portal/images/public/extra.webp", html)   # spare slots show the neutral placeholder
+        self.assertIn('"--s-acc": "#aa3311"', html)
+        self.assertIn('"--s-r": "12px"', html)
+
+    def test_demo_values_are_revalidated_before_reaching_css_variables(self):
+        PublicSiteSetting.objects.create(key="demo.1.acc", value="red;}</style>")
+        PublicSiteSetting.objects.create(key="demo.1.radius", value="9999px;x")
+        html = self._get("/").content.decode()
+        self.assertNotIn("red;}", html)
+        self.assertIn('"--s-r": "3px"', html)
+
+    def test_spare_photo_slots_can_be_uploaded_and_used_by_the_demo(self):
+        from apps.portal.public_site import services
+
+        self.assertEqual(services.photo("extra03")["url"].rsplit("/", 1)[-1], "extra.webp")
+        self.assertIn("extra01", dict(PublicSitePhoto.SLOT_CHOICES))
+        PublicSiteSetting.objects.create(key="demo.1.p1.img", value="extra01")
+        self.assertContains(self._get("/"), "extra01")
+
+    def test_more_templates_tag_links_to_the_templates_page_and_can_be_hidden(self):
+        response = self._get("/")
+        self.assertContains(response, 'class="tag tag-more" href="/design/"')
+        self.assertContains(response, "قالب‌های بیشتر")
+        PublicSiteSetting.objects.create(key="home.hero.more_tag", value="-")
+        self.assertNotContains(self._get("/"), "tag-more")
+        PublicSiteSetting.objects.filter(key="home.hero.more_tag").update(value="همه قالب‌ها ←")
+        self.assertContains(self._get("/"), "همه قالب‌ها ←")
+
+    def test_templates_page_lists_every_real_ready_template(self):
+        presets = self._catalog()
+        self.assertGreater(len(presets), 20)
+        html = self._get("/design/").content.decode()
+        self.assertEqual(html.count('class="tpl"'), len(presets))
+        for preset in presets[:5]:
+            self.assertIn(preset.label_fa, html)
+        self.assertIn('id="tplQ"', html)
+
+    def test_owner_can_rename_hide_categorise_and_feature_a_template(self):
+        a, b, c = self._catalog()[:3]
+        PublicSiteSetting.objects.create(key=f"rt.{a.key}.name", value="نام تازه من")
+        PublicSiteSetting.objects.create(key=f"rt.{a.key}.desc", value="توضیح من")
+        PublicSiteSetting.objects.create(key=f"rt.{b.key}.hide", value="1")
+        PublicSiteSetting.objects.create(key=f"rt.{c.key}.cat", value="پوشاک")
+        PublicSiteSetting.objects.create(key=f"rt.{c.key}.home", value="1")
+        html = self._get("/design/").content.decode()
+        self.assertIn("نام تازه من", html)
+        self.assertIn("توضیح من", html)
+        self.assertNotIn(f"data-name=\"{b.label_fa}\"", html)
+        self.assertIn('data-cat="پوشاک"', html)
+        self.assertIn("data-cat=\"*\"", html)       # category filter appears once a category exists
+        home = self._get("/").content.decode()
+        shelf = home[home.index('class="shelf"'):]
+        self.assertIn(c.label_fa, shelf[:shelf.index("</div>\n  </div>\n</div>")] if "</div>\n  </div>\n</div>" in shelf else shelf)
+        self.assertEqual(shelf[:3000].count('class="tpl"'), 1)   # only the featured one
+
+    def test_home_shelf_defaults_to_the_first_four_templates(self):
+        home = self._get("/").content.decode()
+        self.assertEqual(home.count('class="tpl"'), 4)
+
+    def test_a_new_ready_template_appears_without_any_code_change(self):
+        from unittest import mock
+
+        from apps.portal.public_site import services
+
+        real = self._catalog()
+        extra = real[0].__class__(**{**real[0].__dict__, "key": "brand_new_template", "label_fa": "قالب کاملاً تازه"})
+        with mock.patch(
+            "apps.storefront_builder.layout_preset_registry.list_ready_templates", return_value=real + [extra],
+        ):
+            rows = services.ready_template_rows()
+        self.assertEqual(rows[-1]["name"], "قالب کاملاً تازه")
+        self.assertEqual(len(rows), len(real) + 1)
 
 
 class RegistryContractTests(SimpleTestCase):
@@ -334,3 +429,28 @@ class PlatformAdminEditorTests(TestCase):
             PlatformAuditLogEntry.objects.filter(action_code="platform_admin.public_site_design_switched").count(), 2,
         )
         self.assertEqual(self._post("/public-site/switch/", {"design": "evil"}).status_code, 404)
+
+    def test_templates_group_edits_each_real_ready_template(self):
+        from apps.storefront_builder import layout_preset_registry
+
+        preset = layout_preset_registry.list_ready_templates()[0]
+        response = self.client.get("/public-site/templates/", HTTP_HOST=ADMIN_HOST)
+        self.assertContains(response, f'name="rt.{preset.key}.name"')
+        self.assertContains(response, f'name="rt.{preset.key}.hide"')
+        data = self._form_for("templates")
+        data[f"rt.{preset.key}.name"] = "نام ویرایش‌شده"
+        data[f"rt.{preset.key}.hide"] = "1"
+        self.assertEqual(self._post("/public-site/templates/", data).status_code, 302)
+        stored = dict(PublicSiteSetting.objects.values_list("key", "value"))
+        self.assertEqual(stored, {f"rt.{preset.key}.name": "نام ویرایش‌شده", f"rt.{preset.key}.hide": "1"})
+        self.assertNotContains(self.client.get("/design/", HTTP_HOST=PUBLIC_HOST), preset.label_fa)
+        # reset removes the dynamic overrides too
+        self._post("/public-site/templates/reset/", {})
+        self.assertFalse(PublicSiteSetting.objects.exists())
+
+    def test_demo_radius_and_unknown_template_keys_are_validated(self):
+        data = self._form_for("home")
+        data["demo.1.radius"] = "50%"
+        response = self._post("/public-site/home/", data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PublicSiteSetting.objects.exists())

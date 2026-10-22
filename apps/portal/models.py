@@ -523,6 +523,8 @@ class PublicSitePhoto(models.Model):
         ("skincare", "محصولات مراقبت پوست"),
         ("bag", "عکس کیف و اکسسوری"),
         ("logo", "لوگوی سایت عمومی (سربرگ و پاورقی)"),
+    ) + tuple(
+        (f"extra{n:02d}", f"تصویر اضافه {n} (برای انتخاب در فروشگاه نمونه صفحه اصلی)") for n in range(1, 17)
     )
 
     slot = models.CharField("جایگاه تصویر", max_length=24, primary_key=True, choices=SLOT_CHOICES)

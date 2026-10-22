@@ -8,7 +8,7 @@
 <meta property="og:description" content="{% ps 'home.meta_description' %}">{% endblock %}
 {% block content %}
 {% ps_items 'demo' as demos %}
-{% ps_items 'tpl' as tpls %}
+{% ps_featured_templates as tpls %}
 {% ps_items 'faq' as faqs %}
 {% ps_photo 'bag' as p_bag %}{% ps_photo 'fashion' as p_fashion %}{% ps_photo 'skincare' as p_skin %}
 
@@ -33,6 +33,7 @@
     <div class="vitrine">
       <div class="tags" id="demoTags" role="group" aria-label="{% ps 'home.hero.tags_label' %}">
         {% for d in demos %}<button class="tag" type="button" data-t="{{ forloop.counter0 }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ d.tag }}</button>{% endfor %}
+        {% ps 'home.hero.more_tag' as more_tag %}{% if more_tag %}<a class="tag tag-more" href="{% url 'portal:design' %}">{{ more_tag }}</a>{% endif %}
         <span class="tags-label">{% ps 'home.hero.tags_label' %}</span>
       </div>
       <div class="window">
@@ -179,7 +180,7 @@
 <div class="sec sec-band">
   <div class="wrap">
     <div class="intro"><h2 class="h2">{% ps 'home.shelf.title' %}</h2><p class="sub">{% ps 'home.shelf.sub' %} <a href="{% url 'portal:design' %}" class="lnk">{% ps 'home.shelf.link' %}</a></p></div>
-    <div class="shelf">{% for t in tpls|slice:":4" %}{% include "portal/public_v2/_tpl_card.html" %}{% endfor %}</div>
+    <div class="shelf">{% for t in tpls %}{% include "portal/public_v2/_tpl_card.html" %}{% endfor %}</div>
   </div>
 </div>
 

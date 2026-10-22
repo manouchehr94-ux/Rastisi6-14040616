@@ -26,7 +26,7 @@ def _is_platform_staff(user):
 
 
 def _group_keys(group):
-    return [f.key for section in group.sections for f in section.fields]
+    return [f.key for section in registry.group_sections(group) for f in section.fields]
 
 
 def _preview_url(request, path):
@@ -87,7 +87,7 @@ def public_site_switch(request):
 def _field_rows(group, overrides, posted=None, errors=None):
     """Template-friendly sections with the value to show in each input."""
     sections = []
-    for section in group.sections:
+    for section in registry.group_sections(group):
         fields = []
         for f in section.fields:
             override = overrides.get(f.key)
@@ -125,7 +125,7 @@ def public_site_edit(request, slug):
     if request.method == "POST":
         posted = request.POST
         changes, to_store, to_delete = [], {}, []
-        for section in group.sections:
+        for section in registry.group_sections(group):
             for f in section.fields:
                 if posted.get(_RESET_PREFIX + f.key):
                     if f.key in overrides:

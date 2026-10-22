@@ -12,7 +12,7 @@
 from types import SimpleNamespace
 
 from django import template
-from django.utils.html import format_html, json_script
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from apps.portal.public_site import services
@@ -125,4 +125,21 @@ def ps_year():
 
 @register.simple_tag(takes_context=True)
 def ps_demo_data(context):
-    return json_script(services.demo_payload(_request(context)), "ps-demo-data")
+    """Like Django's ``json_script`` (``<``, ``>``, ``&`` escaped) but keeps Persian text readable."""
+    import json
+
+    text = json.dumps(services.demo_payload(_request(context)), ensure_ascii=False)
+    text = text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    return mark_safe(f'<script id="ps-demo-data" type="application/json">{text}</script>')
+
+
+@register.simple_tag(takes_context=True)
+def ps_ready_templates(context):
+    return services.ready_template_rows(_request(context))
+
+
+@register.simple_tag(takes_context=True)
+def ps_featured_templates(context):
+    """Templates the owner marked for the home page; the first four when none is marked."""
+    rows = services.ready_template_rows(_request(context))
+    return [r for r in rows if r["home"]] or rows[:4]

@@ -103,7 +103,8 @@ def items(prefix, noun, spec, rows, *, spare=0, primary=None, sub=None):
     sub_spec = ()
     if sub:
         sub_name, sub_count, sub_names, sub_primary = sub
-        sub_spec = (sub_name, sub_count, tuple(n for n, _ in sub_names), sub_primary)
+        sub_kinds = {sn[0]: (sn[2] if len(sn) > 2 else KIND_TEXT) for sn in sub_names}
+        sub_spec = (sub_name, sub_count, tuple(sn[0] for sn in sub_names), sub_primary, sub_kinds)
     LISTS[prefix] = ListSpec(prefix, total, names, primary or names[0], kinds, sub_spec)
     sections = []
     for i in range(1, total + 1):
@@ -118,8 +119,10 @@ def items(prefix, noun, spec, rows, *, spare=0, primary=None, sub=None):
             sub_defaults = row[len(spec)] if len(row) > len(spec) else ()
             for j in range(1, sub_count + 1):
                 pair = sub_defaults[j - 1] if j <= len(sub_defaults) else ("",) * len(sub_names)
-                for (sname, slabel), sdefault in zip(sub_names, pair):
-                    fields.append(Field(f"{prefix}.{i}.{sub_name}{j}.{sname}", f"{slabel} {j}", sdefault))
+                for sn, sdefault in zip(sub_names, pair):
+                    skind = sn[2] if len(sn) > 2 else KIND_TEXT
+                    schoices = sn[3] if len(sn) > 3 else ()
+                    fields.append(Field(f"{prefix}.{i}.{sub_name}{j}.{sn[0]}", f"{sn[1]} {j}", sdefault, skind, "", schoices))
         fields.append(Field(f"{prefix}.{i}.hide", "پنهان شود", "", KIND_BOOL))
         sections.append(Section(f"{noun} {i}", _register(*fields)))
     return tuple(sections)
@@ -271,19 +274,33 @@ _home = [
         txt("home.hero.fact2", "ویژگی ۲", "پرداخت ماهانه یا سالانه"),
         txt("home.hero.fact3", "ویژگی ۳", "پشتیبانی تلفنی"),
         txt("home.hero.tags_label", "نوشته کنار دکمه‌های سبک", "یک فروشگاه، چهار ظاهر"),
+        txt("home.hero.more_tag", "دکمه آخرِ سبک‌ها (به صفحه قالب‌ها می‌رود؛ «-» یعنی نمایش داده نشود)", "قالب‌های بیشتر"),
         txt("home.hero.window_label", "برچسب پنجره نمونه", "نمونه زنده"),
         txt("home.hero.store_cta", "دکمه داخل فروشگاه نمونه", "مشاهده محصولات"),
     ),
-    *items("demo", "فروشگاه نمونه", (
+    *items("demo", "ظاهر فروشگاه نمونه", (
         ("tag", "نام دکمه سبک"), ("name", "نام فروشگاه"), ("url", "آدرس نمایشی"),
         ("title", "تیتر فروشگاه"), ("sub", "توضیح فروشگاه"),
         ("hero", "عکس اصلی", KIND_PHOTO, PHOTO_CHOICES),
+        ("bg", "رنگ پس‌زمینه", KIND_COLOR), ("ink", "رنگ نوشته", KIND_COLOR),
+        ("acc", "رنگ تأکید (دکمه و سبد)", KIND_COLOR), ("soft", "رنگ کارت محصول", KIND_COLOR),
+        ("radius", "گردی گوشه‌ها (مثل 3px)"),
+        ("layout", "چیدمان", KIND_CHOICE, (("classic", "ساده (متن کنار عکس)"), ("editorial", "مجله‌ای (عکس بالا)"))),
     ), (
-        ("مینیمال", "خانه آبان", "abanhome.ir", "اشیایی برای خانه‌ای که شبیه شماست", "سرامیک و اکسسوری دست‌ساز، ارسال به سراسر ایران", "ceramics"),
-        ("لوکس", "NOIR", "noir-leather.ir", "چرم دست‌دوز، برای کسانی که جزئیات را می‌بینند", "کالکشن محدود ۱۴۰۵", "bag"),
-        ("شاد", "گلو", "glowshop.ir", "پوستت را دوست داشته باش", "مراقبت پوست اورجینال با ارسال رایگان", "skincare"),
-        ("طبیعی", "باغ سبز", "baghsabz.ir", "از باغ، تازه به خانه شما", "محصولات ارگانیک شمال ایران", "stilllife"),
-    ), primary="name"),
+        ("مینیمال", "خانه آبان", "abanhome.ir", "اشیایی برای خانه‌ای که شبیه شماست", "سرامیک و اکسسوری دست‌ساز، ارسال به سراسر ایران", "ceramics",
+         "#fbfaf7", "#1c1c1c", "#1c1c1c", "#efece6", "3px", "classic",
+         (("clay", "کاسه سفالی", "۴۸۰"), ("ivory", "گلدان", "۶۹۰"), ("olive", "روغن زیتون", "۳۲۰"), ("stilllife", "ست میز", "۱٬۲۸۰"))),
+        ("لوکس", "NOIR", "noir-leather.ir", "چرم دست‌دوز، برای کسانی که جزئیات را می‌بینند", "کالکشن محدود ۱۴۰۵", "bag",
+         "#16130f", "#f2e6c9", "#c9a45c", "#221e18", "0px", "editorial",
+         (("bag", "کیف دوشی", "۲٬۴۵۰"), ("fashion", "کت پاییزه", "۳٬۹۰۰"), ("ivory", "شال", "۸۹۰"), ("clay", "کمربند", "۷۵۰"))),
+        ("شاد", "گلو", "glowshop.ir", "پوستت را دوست داشته باش", "مراقبت پوست اورجینال با ارسال رایگان", "skincare",
+         "#fff3ee", "#3a1d2b", "#e8445e", "#ffe1d8", "16px", "classic",
+         (("skincare", "سرم ویتامین C", "۵۹۰"), ("ivory", "کرم آبرسان", "۴۲۰"), ("olive", "روغن مو", "۳۱۰"), ("clay", "ماسک خاک رس", "۲۸۰"))),
+        ("طبیعی", "باغ سبز", "baghsabz.ir", "از باغ، تازه به خانه شما", "محصولات ارگانیک شمال ایران", "stilllife",
+         "#eef3ea", "#1f3324", "#2f6b45", "#dfe9d8", "10px", "editorial",
+         (("olive", "زیتون", "۲۴۰"), ("stilllife", "عسل کوهستان", "۸۹۰"), ("clay", "سبد هدیه", "۱٬۴۵۰"), ("ceramics", "ترشی محلی", "۱۹۰"))),
+    ), spare=2, primary="name",
+        sub=("p", 4, (("img", "عکس محصول", KIND_PHOTO, PHOTO_CHOICES), ("name", "نام محصول"), ("price", "قیمت (هزار تومان)")), "name")),
     section(
         "«راستی‌سی چیست؟»",
         area("home.what.big", "پاراگراف بزرگ", "راستی‌سی ابزاری است که با آن خودتان سایت فروشگاهی می‌سازید. برنامه‌نویس، هاست و طراح لازم ندارید. ثبت‌نام می‌کنید، ظاهر فروشگاه را می‌چینید، محصولات را اضافه می‌کنید و لینک فروشگاه را به مشتری‌ها می‌دهید. پرداخت آنلاین، ارسال و مدیریت سفارش از قبل آماده است."),
@@ -468,7 +485,7 @@ GROUPS.append(Group(
 # Templates / design page
 # --------------------------------------------------------------------------
 GROUPS.append(Group(
-    "templates", "قالب‌ها و طراحی", "فهرست قالب‌ها و نکته‌های ویرایشگر. تصویر هر قالب از «تصاویر سایت عمومی» عوض می‌شود یا از اینجا جایگاه دیگری برایش انتخاب کنید.",
+    "templates", "قالب‌ها و طراحی", "فهرست قالب‌ها از کاتالوگ واقعی «قالب‌های آماده» پر می‌شود و هر قالب تازه‌ای که ساخته شود خودکار اضافه می‌شود. پایین همین صفحه برای هر قالب می‌توانید نام، توضیح، دسته‌بندی را عوض کنید یا آن را پنهان کنید یا به صفحه اصلی بیاورید.",
     (
         section(
             "بالای صفحه",
@@ -479,23 +496,15 @@ GROUPS.append(Group(
             area("design.lead", "توضیح", "قالبی نزدیک به کالای خودتان انتخاب کنید و با ویرایشگر بصری، هر بخش و رنگ و فونتی را عوض کنید."),
             txt("design.filter_all", "برچسب فیلتر «همه»", "همه"),
             txt("design.filter_aria", "توضیح فیلتر (دسترس‌پذیری)", "فیلتر قالب‌ها"),
-            txt("design.card_prefix", "پیشوند نام قالب", "قالب"),
+            txt("design.card_prefix", "پیشوند نام قالب (خالی با «-»)", "قالب"),
             txt("design.card_link", "لینک زیر هر قالب", "با این قالب بسازید"),
+            txt("design.search_placeholder", "متن فیلد جستجوی قالب", "جستجوی نام قالب…"),
+            txt("design.search_aria", "توضیح فیلد جستجو", "جستجوی قالب"),
+            txt("design.count_label", "نوشته شمارنده قالب‌ها", "قالب آماده"),
+            txt("design.empty", "پیام نبودن نتیجه جستجو", "قالبی با این نام پیدا نشد."),
+            txt("design.empty_catalog", "پیام وقتی قالبی ثبت نشده", "فهرست قالب‌ها به‌زودی اینجا نمایش داده می‌شود."),
             txt("design.editor_title", "عنوان بخش ویرایشگر", "در ویرایشگر چه چیزهایی را تغییر می‌دهید؟"),
         ),
-        *items("tpl", "قالب", (
-            ("name", "نام قالب"), ("cat", "دسته‌بندی"), ("d", "توضیح کوتاه"),
-            ("img", "عکس قالب", KIND_PHOTO, PHOTO_CHOICES),
-        ), (
-            ("آرام", "خانه", "دکوراسیون، سرامیک و دست‌ساز", "ceramics"),
-            ("ادیتوریال", "پوشاک", "پوشاک و برندهای تصویری", "fashion"),
-            ("گرم", "آرایشی", "آرایشی و مراقبت پوست", "skincare"),
-            ("چرم", "اکسسوری", "کیف، کفش و اکسسوری", "bag"),
-            ("باغ", "خوراکی", "محصولات ارگانیک و خوراکی", "olive"),
-            ("استودیو", "خانه", "لوازم خانه و آشپزخانه", "stilllife"),
-            ("خاک", "اکسسوری", "صنایع‌دستی و هنر", "clay"),
-            ("عاج", "پوشاک", "بوتیک و مزون", "ivory"),
-        ), spare=2, primary="name"),
         *items("flist", "نکته ویرایشگر", (("b", "عنوان"), ("s", "توضیح", KIND_TEXTAREA)), (
             ("چیدمان هر صفحه", "بخش‌ها را اضافه، حذف و جابه‌جا کنید."),
             ("رنگ و فونت برند", "یک‌بار تعیین کنید، در کل سایت اعمال می‌شود."),
@@ -677,6 +686,57 @@ GROUPS.append(Group(
         ),
     ), "/",
 ))
+
+
+
+
+# --------------------------------------------------------------------------
+# Ready-template catalog (read-only projection of the platform's real Ready Templates).
+# Every template the platform has — and every one added later — appears on the public
+# templates page automatically; these dynamic fields only let the owner rename/describe/
+# categorise/hide/feature each one. Keys: rt.<template_key>.<name|desc|cat|hide|home>
+# --------------------------------------------------------------------------
+_BOILERPLATE_START = "قالب آمادهٔ"
+_DYNAMIC: dict | None = None
+
+
+def _dynamic():
+    global _DYNAMIC
+    if _DYNAMIC is None:
+        from apps.storefront_builder import layout_preset_registry
+
+        sections, fields = [], {}
+        for preset in layout_preset_registry.list_ready_templates():
+            desc = preset.description_fa or ""
+            default_desc = "" if desc.startswith(_BOILERPLATE_START) else desc
+            row = (
+                Field(f"rt.{preset.key}.name", "نام نمایشی", preset.label_fa),
+                Field(f"rt.{preset.key}.desc", "توضیح کوتاه", default_desc, KIND_TEXTAREA,
+                      "خالی یعنی توضیحی زیر قالب نمایش داده نشود."),
+                Field(f"rt.{preset.key}.cat", "دسته‌بندی (برای فیلتر؛ مثلاً پوشاک)", ""),
+                Field(f"rt.{preset.key}.home", "نمایش در صفحه اصلی", "", KIND_BOOL),
+                Field(f"rt.{preset.key}.hide", "پنهان از سایت عمومی", "", KIND_BOOL),
+            )
+            for f in row:
+                fields[f.key] = f
+            sections.append(Section(f"{preset.label_fa} — {preset.key}", row))
+        _DYNAMIC = {"sections": tuple(sections), "fields": fields}
+    return _DYNAMIC
+
+
+def get_field(key):
+    """Static field, or a per-ready-template field (``rt.<key>.<name>``); None when unknown."""
+    field = FIELDS.get(key)
+    if field is None and key.startswith("rt."):
+        field = _dynamic()["fields"].get(key)
+    return field
+
+
+def group_sections(group):
+    """A group's sections including the dynamic ones (the templates group lists every real template)."""
+    if group.slug == "templates":
+        return group.sections + _dynamic()["sections"]
+    return group.sections
 
 
 def all_defaults() -> dict[str, str]:

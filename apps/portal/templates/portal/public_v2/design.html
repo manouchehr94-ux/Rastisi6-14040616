@@ -1,17 +1,26 @@
 {% extends "portal/public_v2/base.html" %}
-{% load public_site %}
+{% load public_site persian %}
 {% block title %}{% ps 'design.meta_title' %}{% endblock %}
 {% block meta_description %}<meta name="description" content="{% ps 'design.meta_description' %}">{% endblock %}
 {% block content %}
 {% ps 'design.crumb' as crumb %}{% ps 'design.title' as title %}{% ps 'design.lead' as lead %}
 {% include "portal/public_v2/_pghead.html" %}
-{% ps_items 'tpl' as tpls %}{% ps_unique tpls 'cat' as categories %}
+{% ps_ready_templates as tpls %}{% ps_unique tpls 'cat' as categories %}
 <div class="sec"><div class="wrap">
+  {% if tpls %}
+  <div class="tpl-tools">
+    <div class="faq-search tpl-search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" id="tplQ" placeholder="{% ps 'design.search_placeholder' %}" aria-label="{% ps 'design.search_aria' %}" autocomplete="off"></div>
+    <p class="tpl-count"><b class="num">{{ tpls|length|fa_number }}</b> {% ps 'design.count_label' %}</p>
+  </div>
+  {% if categories %}
   <div class="filters" id="tplFilters" role="group" aria-label="{% ps 'design.filter_aria' %}">
     <button type="button" aria-pressed="true" data-cat="*">{% ps 'design.filter_all' %}</button>
     {% for cat in categories %}<button type="button" aria-pressed="false" data-cat="{{ cat }}">{{ cat }}</button>{% endfor %}
   </div>
+  {% endif %}
   <div class="shelf wide" id="tplAll">{% for t in tpls %}{% include "portal/public_v2/_tpl_card.html" %}{% endfor %}</div>
+  <p class="faq-none" id="tplNone" hidden>{% ps 'design.empty' %}</p>
+  {% else %}<p class="faq-none">{% ps 'design.empty_catalog' %}</p>{% endif %}
 </div></div>
 <div class="sec sec-band"><div class="wrap">
   <div class="intro"><h2 class="h2-sm h2">{% ps 'design.editor_title' %}</h2></div>

@@ -22,6 +22,7 @@ EMPTY_MARK = "-"   # an override of just "-" means "show nothing" (otherwise emp
 _COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _FONT_NAME_RE = re.compile(r"^[A-Za-z0-9؀-ۿ‌ _.\-]{1,60}$")
 _TOKEN_RE = re.compile(r"\{(trial|support_phone|support_email|support_email_link|days)\}")
+_RADIUS_RE = re.compile(r"^(?:[0-9]|[1-3][0-9]|40)px$")
 _CACHE_ATTR = "_public_site_cache"
 _URL_PREFIXES = ("https://", "http://", "mailto:", "tel:", "/")
 
@@ -111,7 +112,7 @@ def apply_tokens(text: str, request=None, **extra) -> str:
 
 def raw_value(key: str, request=None) -> str:
     """Override if present, else the registry default (tokens NOT applied)."""
-    field = registry.FIELDS.get(key)
+    field = registry.get_field(key)
     if field is None:
         raise KeyError(f"unknown public-site key: {key}")
     override = get_overrides(request).get(key)
@@ -123,7 +124,7 @@ def raw_value(key: str, request=None) -> str:
 
 
 def value(key: str, request=None, **extra) -> str:
-    field = registry.FIELDS.get(key)
+    field = registry.get_field(key)
     text = raw_value(key, request)
     if field is not None and field.kind in (registry.KIND_BOOL, registry.KIND_COLOR, registry.KIND_CHOICE, registry.KIND_PHOTO):
         return text
@@ -157,11 +158,16 @@ def photo(slot: str, request=None) -> dict:
                 return {"url": config_logo.url, "alt": ""}
         except Exception:
             pass
-    return {"url": static(f"portal/images/public/{slot}.webp"), "alt": ""}
+    fallback = "extra" if slot.startswith("extra") else slot   # spare slots show a neutral placeholder until used
+    return {"url": static(f"portal/images/public/{fallback}.webp"), "alt": ""}
 
 
 def photo_urls(request=None) -> dict:
     return {slot: photo(slot, request)["url"] for slot, _ in registry.PHOTO_SLOTS}
+
+
+def photo_alts(request=None) -> dict:
+    return {slot: photo(slot, request)["alt"] for slot, _ in registry.PHOTO_SLOTS}
 
 
 # ---------------------------------------------------------------------------
@@ -184,11 +190,15 @@ def list_items(prefix: str, request=None) -> list:
             elif kind == registry.KIND_BOOL:
                 data[name] = data[name] == "1"
         if spec.sub:
-            sub_name, sub_count, sub_names, sub_primary = spec.sub
+            sub_name, sub_count, sub_names, sub_primary, sub_kinds = spec.sub
             sub_rows = []
             for j in range(1, sub_count + 1):
                 sub_data = {n: value(f"{prefix}.{i}.{sub_name}{j}.{n}", request) for n in sub_names}
                 if sub_data.get(sub_primary):
+                    for n, kind in sub_kinds.items():
+                        if kind == registry.KIND_PHOTO:
+                            picked = photo(sub_data[n] or "stilllife", request)
+                            sub_data[f"{n}_url"], sub_data[f"{n}_alt"] = picked["url"], picked["alt"]
                     sub_rows.append(sub_data)
             data["items"] = sub_rows
         data["i"] = i
@@ -244,6 +254,10 @@ def validate(field: registry.Field, raw: str):
         if raw == EMPTY_MARK or raw.startswith(("https://", "http://", "mailto:", "tel:", "/")):
             return raw, None
         return None, "آدرس باید با https:// یا mailto: شروع شود."
+    if field.key.endswith(".radius") and field.key.startswith("demo."):
+        if not _RADIUS_RE.match(raw):
+            return None, "مثلاً 3px یا 16px (حداکثر ۴۰)."
+        return raw, None
     if field.key == "font.base_size":
         if not raw.isdigit() or not 14 <= int(raw) <= 20:
             return None, "عددی بین ۱۴ تا ۲۰ وارد کنید."
@@ -309,23 +323,50 @@ def theme_css(request=None) -> str:
     return "".join(parts)
 
 
+def _color_or(text: str, fallback: str) -> str:
+    return text if is_valid_color(text) else fallback
+
+
 def demo_payload(request=None) -> dict:
-    """Data the landing demo (switchable sample store) needs, with photo URLs resolved."""
-    store_vars = {
-        0: {"v": {"--s-bg": "#fbfaf7", "--s-ink": "#1c1c1c", "--s-acc": "#1c1c1c", "--s-soft": "#efece6", "--s-r": "3px"}, "layout": "",
-            "p": [["clay", "کاسه سفالی", "۴۸۰"], ["ivory", "گلدان", "۶۹۰"], ["olive", "روغن زیتون", "۳۲۰"], ["stilllife", "ست میز", "۱٬۲۸۰"]]},
-        1: {"v": {"--s-bg": "#16130f", "--s-ink": "#f2e6c9", "--s-acc": "#c9a45c", "--s-soft": "#221e18", "--s-r": "0px"}, "layout": "editorial",
-            "p": [["bag", "کیف دوشی", "۲٬۴۵۰"], ["fashion", "کت پاییزه", "۳٬۹۰۰"], ["ivory", "شال", "۸۹۰"], ["clay", "کمربند", "۷۵۰"]]},
-        2: {"v": {"--s-bg": "#fff3ee", "--s-ink": "#3a1d2b", "--s-acc": "#e8445e", "--s-soft": "#ffe1d8", "--s-r": "16px"}, "layout": "",
-            "p": [["skincare", "سرم ویتامین C", "۵۹۰"], ["ivory", "کرم آبرسان", "۴۲۰"], ["olive", "روغن مو", "۳۱۰"], ["clay", "ماسک خاک رس", "۲۸۰"]]},
-        3: {"v": {"--s-bg": "#eef3ea", "--s-ink": "#1f3324", "--s-acc": "#2f6b45", "--s-soft": "#dfe9d8", "--s-r": "10px"}, "layout": "editorial",
-            "p": [["olive", "زیتون", "۲۴۰"], ["stilllife", "عسل کوهستان", "۸۹۰"], ["clay", "سبد هدیه", "۱٬۴۵۰"], ["ceramics", "ترشی محلی", "۱۹۰"]]},
-    }
+    """Data the landing demo (switchable sample store) needs, with photo URLs resolved.
+    Everything comes from the editable ``demo`` list; values are re-validated here because
+    the JS writes them into CSS custom properties."""
     themes = []
-    for pos, row in enumerate(list_items("demo", request)):
-        base = store_vars.get(row["i"] - 1, store_vars[pos % 4])
+    for row in list_items("demo", request):
+        radius = row["radius"] if _RADIUS_RE.match(row["radius"] or "") else "3px"
         themes.append({
             "tag": row["tag"], "name": row["name"], "url": row["url"], "title": row["title"], "sub": row["sub"],
-            "hero": row["hero"], "layout": base["layout"], "v": base["v"], "p": base["p"],
+            "hero": row["hero"], "layout": "editorial" if row["layout"] == "editorial" else "",
+            "v": {
+                "--s-bg": _color_or(row["bg"], "#fbfaf7"), "--s-ink": _color_or(row["ink"], "#1c1c1c"),
+                "--s-acc": _color_or(row["acc"], "#1c1c1c"), "--s-soft": _color_or(row["soft"], "#efece6"),
+                "--s-r": radius,
+            },
+            "p": [[p["img"], p["name"], p["price"]] for p in row.get("items", [])],
         })
-    return {"IMG": photo_urls(request), "THEMES": themes}
+    return {"IMG": photo_urls(request), "ALT": photo_alts(request), "THEMES": themes}
+
+
+def ready_template_rows(request=None) -> list:
+    """The platform's real Ready Templates (one card each, latest version) as public-page rows.
+    Read-only; new templates appear automatically. Owner overrides: name/desc/cat/hide/home."""
+    from apps.storefront_builder.services import ready_template_card_service
+
+    cards = ready_template_card_service.build_ready_template_cards(
+        None, current_template_key=None, current_template_version=None,
+    )
+    rows = []
+    for card in cards:
+        key = card["preset"].key
+        if truthy(f"rt.{key}.hide", request):
+            continue
+        rows.append({
+            "key": key,
+            "name": value(f"rt.{key}.name", request) or card["preset"].label_fa,
+            "desc": value(f"rt.{key}.desc", request),
+            "cat": value(f"rt.{key}.cat", request),
+            "home": truthy(f"rt.{key}.home", request),
+            "thumbnail_kind": card["thumbnail_kind"], "thumbnail_url": card["thumbnail_url"],
+            "thumbnail_svg": card["thumbnail_svg"], "palette": card["palette_swatch"],
+        })
+    return rows
