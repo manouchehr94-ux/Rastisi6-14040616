@@ -119,6 +119,56 @@ def add_section(*, draft, section_key: str, page_type: str) -> StorefrontSection
     return new_section
 
 
+#: V5-LAYOUT-ATOMIC — bounds of one ``add_container`` request (a layout has at most ``container_service.MAX_CELLS`` cells).
+MAX_BLOCKS_PER_CELL = 4
+MAX_BLOCKS_PER_CONTAINER = 8
+
+
+def add_container(*, draft, page_type: str, layout_key: str, cells=None) -> StorefrontContainer:
+    """V5-LAYOUT-ATOMIC — create ONE new Container (at the end of the page) with the Cells of an EXISTING layout preset, optionally
+    with initial Blocks per Cell. Everything runs inside the caller's single ``apply_mutation`` transaction, so a refusal in ANY
+    Block (page/type legality, single-instance limit, ...) rolls the whole build back: no half-built layout, one Revision, one
+    history step. Reuses only existing primitives — ``create_empty_container`` for the layout and ``add_section_to_cell`` for each
+    Block, i.e. every per-Block validation (page type, hidden-from-library, max instances, container lock, draft scoping) is the
+    SAME code path as ``cell.add_section``; nothing is re-implemented or relaxed here.
+
+    ``cells`` is optional: ``None``/``[]``/empty lists create fully EMPTY Cells (the merchant fills them later through
+    ``cell.add_section``). Otherwise it is a list (at most one entry per Cell of the preset) of lists of section keys; a Cell with
+    two keys becomes a multi-block Cell whose Blocks are independent Sections (own id, own settings)."""
+    if page_type not in StorefrontPage.PageType.values:
+        raise SectionStructureError("invalid_page_type")
+    spans = container_service.LAYOUT_PRESETS.get(layout_key) if isinstance(layout_key, str) else None
+    if spans is None or len(spans) < 2:
+        raise SectionStructureError("invalid_container_layout")
+
+    if cells is None:
+        cells = []
+    if not isinstance(cells, (list, tuple)) or len(cells) > len(spans):
+        raise SectionStructureError("invalid_cells")
+    plan = []
+    total = 0
+    for entry in cells:
+        keys = list(entry) if isinstance(entry, (list, tuple)) else None
+        if keys is None or len(keys) > MAX_BLOCKS_PER_CELL or any(not isinstance(k, str) or not k for k in keys):
+            raise SectionStructureError("invalid_cells")
+        total += len(keys)
+        plan.append(keys)
+    if total > MAX_BLOCKS_PER_CONTAINER:
+        raise SectionStructureError("invalid_cells")
+
+    page = draft.get_page(page_type)
+    container_service.ensure_page_containers(page)
+    try:
+        container = container_service.create_empty_container(page, layout_key)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_container_layout") from exc
+    created_cells = list(container.cells.order_by("order", "id"))
+    for cell, keys in zip(created_cells, plan):
+        for section_key in keys:
+            add_section_to_cell(draft=draft, section_key=section_key, cell_id=cell.pk)
+    return container
+
+
 def _scoped_cell(draft, cell_id) -> StorefrontCell:
     """Same strict scoping rule as ``_scoped_section`` above, for a Cell
     id instead of a Section id."""

@@ -71,7 +71,9 @@ class AddRowJsContractTests(_BandBase):
         self.assertNotIn("publish", body.lower())
 
     def test_studio_dialog_calls_the_chain_and_never_publishes(self):
-        self.assertIn("R4.addTwoColumnRow(", STUDIO_JS)
+        # V5-LAYOUT-ATOMIC: the Studio form builds with ONE container.add; the legacy chain helper stays available in r4_editor.js untouched.
+        self.assertIn("type: 'container.add'", STUDIO_JS)
+        self.assertIn("R4.addTwoColumnRow = function", Path(__file__).resolve().parents[1].joinpath("static/storefront_builder/r4_editor.js").read_text(encoding="utf-8"))
         self.assertIn("case 'add-row': openModal('add-row')", STUDIO_JS)
         submit = STUDIO_JS[STUDIO_JS.index("data-rs-add-row-form]"):][:1400]
         self.assertNotIn("publish", submit.lower().replace("منتشر", ""))

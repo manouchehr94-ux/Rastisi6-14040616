@@ -919,13 +919,18 @@
           '<div class="gallery-grid" data-rs-gallery-grid>' + templateTiles() + '</div>';
         foot = '<p>' + icon('lock') + ' محصولات، تصاویر و متن‌ها حفظ می‌شوند. تغییر قالب قابل واگرد است.</p>' + btn('close-modal', 'بازگشت به استودیو', 'arrow', 'outline', busy ? 'disabled' : '');
         break;
+      case 'add-cell':
+        title = 'افزودن محتوا به این خانه';
+        sub = 'فقط به همین خانه اضافه می‌شود؛ جای دیگری از صفحه تغییر نمی‌کند و تا «انتشار» نزنید عمومی نمی‌شود.';
+        body = '<div data-rs-add-section-slot data-rs-cell-mode></div>';
+        break;
       case 'add-section':
       case 'add-row': {
         // V5: ONE add dialog with two tabs — «بخش‌ها» (block library + the legacy select) and «چیدمان» (the real, engine-supported
         // two-column row presets). Both panes are the server-rendered Structure-panel templates; the tab is UI-only state.
         var addTab = m.tab || (m.type === 'add-row' ? 'layout' : 'sections');
         title = 'چه چیزی به این صفحه اضافه کنیم؟';
-        sub = 'یک بخش یا یک ردیف دو‌ستونه؛ فقط در همین صفحه و فقط در پیش‌نویس.';
+        sub = 'یک بخش یا یک چیدمان چندستونه (دو یا سه قسمتی)؛ فقط در همین صفحه و فقط در پیش‌نویس.';
         top = '<div class="rs-add-tabs" role="tablist" aria-label="نوع افزودن">' +
           [['sections', 'بخش‌ها'], ['layout', 'چیدمان']].map(function (t) {
             return '<button type="button" role="tab" data-rastisi-action="add-tab" data-tab="' + t[0] + '" aria-selected="' + (addTab === t[0]) + '"' +
@@ -1062,12 +1067,20 @@
       btn('close-modal', '', 'close', 'icon-btn', 'aria-label="بستن پنجره" ' + (busy || ui.publishing ? 'disabled' : '')) + '</header>' +
       top + '<div class="modal-body">' + body + '</div>' + (foot ? '<footer class="modal-foot">' + foot + '</footer>' : '') + '</section></div>';
 
-    if (m.type === 'add-section' || m.type === 'add-row') {
+    if (m.type === 'add-section' || m.type === 'add-row' || m.type === 'add-cell') {
       // The chooser markup is the server-rendered one from the Structure
       // panel (its controls keep the R4 hooks R4 handles).
       var slot = modalRoot.querySelector('[data-rs-add-section-slot]');
       var template = structurePanel ? structurePanel.querySelector('template[data-rs-add-section-template]') : null;
       if (slot && template) slot.appendChild(template.content.cloneNode(true));
+      if (m.type === 'add-cell' && slot) {
+        // Cell mode: ONLY the library cards remain. The page-end controls (showcase choices, the legacy select and «افزودن به انتهای صفحه»)
+        // are removed so nothing in this dialog can add to the end of the page; a card goes to cell.add_section for this Cell.
+        $all('[data-r4-showcase], #r4StructureAddButton, .section-divider', slot).forEach(function (node) { node.remove(); });
+        $all('[data-rastisi-action="library-add"]', slot).forEach(function (card) { card.setAttribute('data-rastisi-action', 'cell-add'); });
+        var pageEndSelect = slot.querySelector('#r4StructureAddSelect');
+        if (pageEndSelect && pageEndSelect.closest('label')) pageEndSelect.closest('label').remove();
+      }
     }
     if (m.type === 'add-section' || m.type === 'add-row') {
       var rowSlot = modalRoot.querySelector('[data-rs-add-row-slot]');
@@ -1192,6 +1205,19 @@
           t.setAttribute('aria-selected', on ? 'true' : 'false');
         });
         $all('[data-rs-add-pane]', modalRoot).forEach(function (pane) { pane.hidden = pane.getAttribute('data-rs-add-pane') !== tabName; });
+        break;
+      }
+      case 'cell-add': {
+        // V5-LAYOUT-ATOMIC: a library card inside the «add content to this Cell» dialog -> the existing cell.add_section for THAT Cell.
+        var cellKey = el.getAttribute('data-rs-library-key');
+        if (!cellKey || cellAdding || !ui.modal || ui.modal.type !== 'add-cell') break;
+        cellAdding = true;
+        R4.addSection(cellKey, ui.modal.cellId).then(function (added) {
+          cellAdding = false;
+          closeModal();
+          if (added && added.ok) notify('بخش تازه به همین خانه اضافه شد.');
+          else if (!added || !added.message) notify('بخش اضافه نشد؛ هیچ تغییری ذخیره نشد.');
+        });
         break;
       }
       case 'library-add': {
@@ -1319,9 +1345,10 @@
     setTimeout(function () { closeModal(); notify('بخش تازه به انتهای صفحه اضافه شد.'); }, 0);
   });
 
-  // V5-LAYOUT-001 — three-section rows. The form's radio carries the ENGINE preset (data-rs-engine-layout, validated server-side
-  // against container_service.LAYOUT_PRESETS) and which Cell receives each chosen section (data-rs-slot-cells). The chain below only
-  // uses the three canonical mutation types through the one structural queue — the same ones R4.addTwoColumnRow chains.
+  // V5-LAYOUT-ATOMIC — the «چیدمان» tab builds ONE Container through the single canonical ``container.add`` mutation: one request,
+  // one Revision, one Undo step. Choosing content is optional — with nothing chosen the Cells are created EMPTY and are filled later
+  // (from the canvas or «خانه‌های خالی»). If content IS chosen, the server creates every Block inside the same transaction, so a
+  // refusal in any Block rolls the whole build back: no half-built layout. The radio carries the ENGINE preset (validated server-side).
   function syncRowForm(form) {
     var picked = form.querySelector('input[name="rs_row_layout"]:checked');
     var labels = picked && picked.getAttribute('data-rs-slot-labels') ? picked.getAttribute('data-rs-slot-labels').split('|') : [];
@@ -1333,82 +1360,86 @@
       var text = field.querySelector('[data-rs-slot-label]');
       if (text) text.textContent = labels[index] || defaults[index];
     });
-    var submit = form.querySelector('[data-rs-add-row-submit]');
-    if (submit) submit.lastChild.nodeValue = slots === 3 ? 'ساختن ردیف سه‌بخشی' : 'ساختن ردیف دو‌ستونه';
   }
 
-  function structureIds(selector, attr) {
-    var out = [];
-    if (!structurePanel) return out;
-    $all(selector, structurePanel).forEach(function (node) { out.push(Number(node.getAttribute(attr))); });
-    return out;
-  }
+  var layoutBuilding = false;   // double-click / repeated submit guard (the server additionally answers a replayed base_revision with 409)
 
-  function buildPatternRow(engineLayout, keys, cellMap) {
-    var pageType = root.getAttribute('data-r4-page-type') || 'home';
-    var steps = 2 + keys.slice(1).filter(Boolean).length;
-    var done = 0;
-    function stop(result) { return { ok: false, partial: done > 0, done: done, steps: steps, result: result || null }; }
-    return R4.enqueueStructuralMutation({ type: 'section.add', section_key: keys[0], page_type: pageType }).then(function (added) {
-      if (!added || !added.ok) return stop(added);
-      done += 1;
-      var containerIds = structureIds('[data-r4-structure-container-id]', 'data-r4-structure-container-id');
-      var containerId = containerIds[containerIds.length - 1];
-      var emptyBefore = structureIds('[data-r4-structure-empty-cell]', 'data-r4-structure-cell-id');
-      if (!containerId) return stop({ code: 'container_not_found' });
-      return R4.enqueueStructuralMutation({ type: 'container.change_layout', container_id: containerId, layout_key: engineLayout }).then(function (changed) {
-        if (!changed || !changed.ok) return stop(changed);
-        done += 1;
-        var fresh = structureIds('[data-r4-structure-empty-cell]', 'data-r4-structure-cell-id').filter(function (id) { return emptyBefore.indexOf(id) === -1; });
-        var jobs = [];
-        for (var i = 1; i < keys.length; i += 1) {
-          if (keys[i]) jobs.push({ key: keys[i], cellId: fresh[cellMap[i] - 1] });
-        }
-        // strictly sequential: a later section never starts after an earlier step failed, and a failure is returned, never swallowed
-        return jobs.reduce(function (chain, job) {
-          return chain.then(function (previous) {
-            if (previous) return previous;
-            if (!job.cellId) return stop({ code: 'cell_not_found' });
-            return R4.enqueueStructuralMutation({ type: 'cell.add_section', section_key: job.key, cell_id: job.cellId }).then(function (filled) {
-              if (!filled || !filled.ok) return stop(filled);
-              done += 1;
-              return null;
-            });
-          });
-        }, Promise.resolve(null)).then(function (failed) { return failed || { ok: true, done: done, steps: steps }; });
-      });
-    });
-  }
-
-  // FOLLOWUP-12 — guided two-column row: R4.addTwoColumnRow chains the existing mutations.
   modalRoot.addEventListener('submit', function (evt) {
     var form = evt.target.closest('[data-rs-add-row-form]');
     if (!form) return;
     evt.preventDefault();
-    var first = form.querySelector('[data-rs-add-row-first]');
-    var second = form.querySelector('[data-rs-add-row-second]');
+    if (layoutBuilding) return;
     var layout = form.querySelector('input[name="rs_row_layout"]:checked');
-    if (!first || !first.value) { notify('بخش ستون اول را انتخاب کنید.'); first && first.focus(); return; }
+    if (!layout) { notify('یک چیدمان را انتخاب کنید.'); return; }
+    var engineLayout = layout.getAttribute('data-rs-engine-layout') || layout.value;
+    var cellMap = (layout.getAttribute('data-rs-slot-cells') || '0,1').split(',').map(Number);
+    var picks = ['[data-rs-add-row-first]', '[data-rs-add-row-second]', '[data-rs-add-row-third]'].map(function (selector) {
+      var select = form.querySelector(selector);
+      return select ? select.value : '';
+    });
+    var cellCount = Math.max.apply(null, cellMap) + 1;
+    var cells = [];
+    for (var c = 0; c < cellCount; c += 1) cells.push([]);
+    var anyContent = false;
+    picks.forEach(function (key, index) {
+      if (key && cellMap[index] !== undefined) { cells[cellMap[index]].push(key); anyContent = true; }
+    });
+    var mutation = { type: 'container.add', page_type: root.getAttribute('data-r4-page-type') || 'home', layout_key: engineLayout };
+    if (anyContent) mutation.cells = cells;
     var submit = form.querySelector('[data-rs-add-row-submit]');
-    var engineLayout = layout && layout.getAttribute('data-rs-engine-layout');
-    if (engineLayout) {
-      var third = form.querySelector('[data-rs-add-row-third]');
-      var cellMap = (layout.getAttribute('data-rs-slot-cells') || '0,1,2').split(',').map(Number);
-      if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن ردیف…'; }
-      buildPatternRow(engineLayout, [first.value, second ? second.value : '', third ? third.value : ''], cellMap).then(function (built) {
-        closeModal();
-        if (built && built.ok) notify('ردیف سه‌بخشی به انتهای صفحه اضافه شد. هنوز منتشر نشده است.');
-        else if (built && built.partial) notify('ردیف فقط تا مرحلهٔ ' + num(built.done) + ' از ' + num(built.steps) + ' ساخته شد؛ ستون‌های خالی را از «خانه‌های خالی» پر کنید یا واگرد بزنید.');
-      });
-      return;
-    }
-    if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن ردیف…'; }
-    R4.addTwoColumnRow(layout ? layout.value : 'half', first.value, second ? second.value : '').then(function (result) {
+    layoutBuilding = true;
+    if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن چیدمان…'; }
+    R4.enqueueStructuralMutation(mutation).then(function (result) {
+      layoutBuilding = false;
       closeModal();
-      if (result && result.ok) notify('ردیف دو‌ستونه به انتهای صفحه اضافه شد. هنوز منتشر نشده است.');
-      else if (result && result.partial) notify('ردیف فقط تا نیمه ساخته شد؛ ستون‌های خالی را از «خانه‌های خالی» پر کنید یا واگرد بزنید.');
+      if (result && result.ok) {
+        notify('چیدمان به انتهای صفحه اضافه شد. هنوز منتشر نشده است.' + (anyContent ? '' : ' خانه‌ها خالی‌اند؛ از روی بوم یا «خانه‌های خالی» محتوا اضافه کنید.'));
+      } else if (!result || !result.message) {
+        notify('چیدمان ساخته نشد؛ هیچ تغییری ذخیره نشد.');   // a refusal that names its cause is already shown by R4 (nothing was saved either way)
+      }
+    }, function () {
+      layoutBuilding = false;
+      notify('نتیجهٔ ساخت چیدمان مشخص نشد؛ صفحه را تازه کنید و وضعیت را ببینید.');
     });
   });
+
+  // V5-LAYOUT-ATOMIC — a click on an empty Cell (or on «افزودن کامپوننت» inside a Cell) in the canvas opens the dialog below, which adds
+  // content to THAT Cell only (R4.addSection(key, cellId) -> the existing cell.add_section), never to the page end.
+  // preview.html's own click interceptor swallows every <button> click in edit mode before its sfb:addToCell post can run, and that file is
+  // protected; so the Studio listens on the (same-origin) preview WINDOW in the capture phase, which fires before the document-level
+  // handlers. Read-only: it only reads the clicked element's cell id. The sfb:addToCell message path stays supported too.
+  function openCellAdd(cellId) {
+    cellId = Number(cellId);
+    if (!cellId || ui.lab.active || ui.modal) return;
+    openModal('add-cell', { cellId: cellId });
+  }
+  function bindCanvasCellChips(frame) {
+    var win = null;
+    try { win = frame && frame.contentWindow; if (!win || !win.document) return; } catch (e) { return; }
+    if (win.__rsCellChips) return;
+    win.__rsCellChips = true;
+    win.addEventListener('click', function (evt) {
+      var chip = evt.target && evt.target.closest ? evt.target.closest('[data-empty-cell], [data-cell-add]') : null;
+      if (!chip || win.document.documentElement.getAttribute('data-sfb-builder-mode') === 'preview') return;
+      evt.preventDefault();
+      evt.stopPropagation();
+      openCellAdd(chip.getAttribute('data-empty-cell') || chip.getAttribute('data-cell-add'));
+    }, true);
+  }
+  // R4 refreshes the preview by loading a cloned «twin» iframe and swapping it in, so the frame element changes after every mutation.
+  // `load` does not bubble: listen in the capture phase and bind each preview frame (the clone keeps data-rs-draft-src) once, when it loads.
+  document.addEventListener('load', function (evt) {
+    var frame = evt.target;
+    if (frame && frame.tagName === 'IFRAME' && frame.hasAttribute('data-rs-draft-src')) bindCanvasCellChips(frame);
+  }, true);
+  bindCanvasCellChips(document.getElementById('r4PreviewFrame'));
+  window.addEventListener('message', function (evt) {
+    var frame = document.getElementById('r4PreviewFrame');
+    if (!frame || evt.source !== frame.contentWindow || evt.origin !== window.location.origin) return;
+    if (!evt.data || evt.data.type !== 'sfb:addToCell') return;
+    openCellAdd(evt.data.cellId);
+  });
+  var cellAdding = false;
 
   modalRoot.addEventListener('click', function (evt) {
     if (evt.target.classList && evt.target.classList.contains('modal-backdrop') && !ui.busy) closeModal();

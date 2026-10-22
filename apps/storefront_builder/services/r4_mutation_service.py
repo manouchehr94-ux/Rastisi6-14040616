@@ -85,6 +85,7 @@ _MUTATION_HISTORY_LABELS = {
     "section.toggle_active": "نمایش/مخفی کردن بخش",
     "section.toggle_locked": "قفل/بازکردن بخش",
     "container.change_layout": "تغییر چیدمان",
+    "container.add": "افزودن چیدمان",
     "cell.add_section": "افزودن بخش به خانه",
     "section.move_to_cell": "انتقال بخش به خانه دیگر",
     "container.update_settings": "ویرایش تنظیمات چیدمان",
@@ -359,6 +360,14 @@ R4_ERROR_MESSAGES_FA = {
     "max_instances_exceeded": "به حداکثر تعداد مجاز این بخش در صفحه رسیده‌اید.",
     "min_instances_violation": "تعداد لازم از این بخش باید در صفحه بماند؛ حذف آن ممکن نیست.",
     "row_member": "این بخش عضو یک ردیف چندبخشی است و از اینجا حذف نمی‌شود؛ هیچ تغییری ذخیره نشد.",
+    # V5-LAYOUT-ATOMIC — container.add / cell.add_section refusals (the whole build is rolled back; nothing was saved)
+    "invalid_section_key": "یکی از بخش‌های انتخاب‌شده معتبر نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "section_not_allowed_on_page": "یکی از بخش‌های انتخاب‌شده روی این صفحه مجاز نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "section_hidden_from_library": "یکی از بخش‌های انتخاب‌شده دیگر در کتابخانه نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "invalid_container_layout": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_layout_key": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_cells": "انتخاب بخش‌های چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_page_type": "نوع صفحه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
 }
 
 
@@ -507,6 +516,22 @@ def _apply_container_change_layout(*, draft: StorefrontLayoutVersion, mutation: 
         section_structure_service.change_container_layout(
             draft=draft, container_id=container_id, layout_key=layout_key,
         )
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-LAYOUT-ATOMIC — one new Container (layout preset) with EMPTY or pre-filled Cells, all-or-nothing inside this mutation's
+    single transaction. Shape checks here; every legality rule is the existing service code (see ``add_container``)."""
+    page_type = mutation.get("page_type")
+    layout_key = mutation.get("layout_key")
+    cells = mutation.get("cells")
+    if not isinstance(layout_key, str) or not layout_key:
+        raise R4MutationError("invalid_layout_key")
+    if cells is not None and not isinstance(cells, list):
+        raise R4MutationError("invalid_cells")
+    try:
+        section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells)
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 
@@ -1263,6 +1288,9 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "container.change_layout":
         _apply_container_change_layout(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.add":
+        _apply_container_add(draft=draft, mutation=mutation)
         return
     if mutation_type == "cell.add_section":
         _apply_cell_add_section(draft=draft, mutation=mutation)

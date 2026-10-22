@@ -118,23 +118,45 @@ class PatternMutationChainTests(_BandBase):
 
 
 class PatternClientContractTests(_BandBase):
-    def test_chain_uses_only_the_three_canonical_mutation_types_sequentially_and_never_hides_a_failure(self):
-        start = STUDIO_JS.index("function buildPatternRow(")
-        body = STUDIO_JS[start:STUDIO_JS.index("// FOLLOWUP-12 — guided two-column row", start)]
-        self.assertEqual(set(re.findall(r"type: '([a-z_.]+)'", body)), {"section.add", "container.change_layout", "cell.add_section"})
-        for forbidden in ("fetch(", "publish", "XMLHttpRequest", "localStorage"):
+    """V5-LAYOUT-ATOMIC: the layout form sends ONE ``container.add``; the old section.add -> change_layout -> cell.add_section chain is gone."""
+
+    def _submit_handler(self):
+        start = STUDIO_JS.index("var layoutBuilding = false;")
+        return STUDIO_JS[start:STUDIO_JS.index("// V5-LAYOUT-ATOMIC — a click on an empty Cell")]
+
+    def test_the_form_sends_exactly_one_container_add_through_the_single_queue(self):
+        body = self._submit_handler()
+        self.assertEqual(set(re.findall(r"type: '([a-z_.]+)'", body)), {"container.add"})
+        self.assertEqual(body.count("R4.enqueueStructuralMutation("), 1)
+        for forbidden in ("fetch(", "publish", "XMLHttpRequest", "localStorage", "R4.addTwoColumnRow", "jobs.reduce("):
             self.assertFalse(forbidden in body, forbidden)
-        self.assertIn("jobs.reduce(", body)                                    # strictly sequential
-        self.assertIn("if (previous) return previous;", body)                  # a failed step stops the rest
-        self.assertIn("if (!added || !added.ok) return stop(added);", body)
-        self.assertIn("if (!changed || !changed.ok) return stop(changed);", body)
-        self.assertIn("if (!filled || !filled.ok) return stop(filled);", body)
 
-    def test_success_is_announced_only_when_every_step_succeeded_and_partial_is_reported(self):
-        start = STUDIO_JS.index("var engineLayout = layout && layout.getAttribute('data-rs-engine-layout');")
-        handler = STUDIO_JS[start:start + 1500]
-        self.assertIn("if (built && built.ok) notify('ردیف سه‌بخشی به انتهای صفحه اضافه شد.", handler)
-        self.assertIn("else if (built && built.partial) notify('ردیف فقط تا مرحلهٔ '", handler)
+    def test_content_choice_is_optional_and_cells_are_sent_only_when_something_was_chosen(self):
+        body = self._submit_handler()
+        self.assertIn("if (anyContent) mutation.cells = cells;", body)
+        self.assertNotIn("required", body)
+        self.assertNotIn("notify('یک بخش", body)          # no «pick a section first» gate
 
-    def test_the_two_column_chain_is_untouched(self):
-        self.assertIn("R4.addTwoColumnRow(layout ? layout.value : 'half', first.value, second ? second.value : '')", STUDIO_JS)
+    def test_double_submit_is_guarded_and_released_after_the_response(self):
+        body = self._submit_handler()
+        self.assertIn("if (layoutBuilding) return;", body)
+        self.assertIn("layoutBuilding = true;", body)
+        self.assertIn("then(function (result) {\n      layoutBuilding = false;", body)          # released after the response ...
+        self.assertIn("}, function () {\n      layoutBuilding = false;", body)                 # ... and after a rejection
+        self.assertIn("submit.disabled = true;", body)
+
+    def test_success_is_announced_only_when_the_server_accepted_the_build(self):
+        body = self._submit_handler()
+        self.assertIn("if (result && result.ok) {", body)
+        self.assertIn("notify('چیدمان به انتهای صفحه اضافه شد.", body)
+
+    def test_selecting_a_card_never_builds_only_the_submit_does(self):
+        # the only writer call lives inside the form's own submit listener
+        before = STUDIO_JS[:STUDIO_JS.index("modalRoot.addEventListener('submit'")]
+        self.assertNotIn("type: 'container.add'", before)
+
+    def test_the_templates_no_longer_force_a_first_section(self):
+        template = (Path(__file__).resolve().parents[1] / "templates/dashboard/storefront_builder/r4/partials/studio_structure.html").read_text(encoding="utf-8")
+        form = template[template.index("<template data-rs-add-row-template>"):]
+        self.assertNotIn("required", form[:form.index("</template>")])
+        self.assertIn("ساختن چیدمان", form)
