@@ -390,7 +390,7 @@ def resize_section(*, draft, section_id: int, changes: dict) -> StorefrontSectio
                 design.pop("width_align", None)          # a section at full width has no placement to remember
         else:
             design[key] = value
-    applicable = design_block.properties_for_capabilities(definition.capabilities)
+    applicable = design_block.all_properties_for_capabilities(definition.capabilities)
     dormant = design_block.dormant_design_keys(current.get("design"), applicable)
     try:
         cleaned = design_block.validate_design_settings(design_block.split_resubmitted_dormant(design, dormant), applicable)

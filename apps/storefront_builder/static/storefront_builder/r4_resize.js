@@ -228,7 +228,8 @@
     if (sec) {
       var b = box(m, sec);
       var onScreen = b.t + b.h > area.t + 4 && b.t < area.b - 4 && b.l + b.w > area.l && b.l < area.r;
-      if (onScreen && resizeAllowed()) renderSectionHandles(m, sec, b, area, usedKeys);
+      // an empty / hidden Section is only a placeholder in the builder: there is no real surface to size yet
+      if (onScreen && resizeAllowed() && !sec.classList.contains('sfb-rsec-builder-empty')) renderSectionHandles(m, sec, b, area, usedKeys);
       sectionBox = onScreen ? b : null;
     }
 
@@ -724,17 +725,16 @@
     if (evt.key === 'Escape' && drag && drag.source === 'keyboard') { evt.preventDefault(); cancelKeyboard(); return; }
     var kind = kindOf(el);
     if (!kind) return;
-    var dx = 0, dy = 0;
-    var step = evt.shiftKey ? KEY_STEP * 4 : KEY_STEP;
-    if (evt.key === 'ArrowUp') dy = -step;
-    else if (evt.key === 'ArrowDown') dy = step;
-    else if (evt.key === 'ArrowLeft') dx = -step;
-    else if (evt.key === 'ArrowRight') dx = step;
+    var sx = 0, sy = 0;
+    if (evt.key === 'ArrowUp') sy = -1;
+    else if (evt.key === 'ArrowDown') sy = 1;
+    else if (evt.key === 'ArrowLeft') sx = -1;
+    else if (evt.key === 'ArrowRight') sx = 1;
     else if (evt.key === 'Enter' && drag && drag.source === 'keyboard') { evt.preventDefault(); commitKeyboard(); return; }
     else return;
     evt.preventDefault();
     var horizontal = kind === 'column' || kind === 'width';
-    if ((horizontal && !dx) || (!horizontal && !dy)) return;
+    if ((horizontal && !sx) || (!horizontal && !sy)) return;
     if (!drag) {
       var ctx = ctxFor(kind, el);
       var m = mapping();
@@ -745,7 +745,10 @@
       el.classList.add('dragging');
       overlay.classList.add('is-dragging');
     }
-    drag.pos.x += dx; drag.pos.y += dy;
+    // one press = one grid column for a column boundary, KEY_STEP px otherwise (Shift = four times as far)
+    var unit = drag.kind === 'column' ? Math.max(KEY_STEP, (drag.track + drag.gap) * drag.m.k) : KEY_STEP;
+    var press = unit * (evt.shiftKey ? 4 : 1);
+    drag.pos.x += sx * press; drag.pos.y += sy * press;
     drag.m = mapping() || drag.m;
     drivers[drag.kind].move(drag, drag.pos.x, drag.pos.y);
     clearTimeout(drag.timer);

@@ -571,7 +571,7 @@ def clean_section_schema_patch(definition, raw_patch: dict, current_settings: di
     from . import design_block
 
     dormant = design_block.dormant_design_keys(
-        (current_settings or {}).get("design"), design_block.inspector_properties_for_capabilities(definition.capabilities),
+        (current_settings or {}).get("design"), design_block.properties_for_capabilities(definition.capabilities),
     )
     if dormant and "design" in merged:
         merged = {**merged, "design": design_block.split_resubmitted_dormant(merged["design"], dormant)}

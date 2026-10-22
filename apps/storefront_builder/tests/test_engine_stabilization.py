@@ -116,8 +116,7 @@ class DesignBlockTests(SimpleTestCase):
         for section_key in capable:
             groups = design_block.serialize_registry_for_inspector(section_key)
             shown = {p["key"] for g in groups for p in g["properties"]}
-            self.assertEqual(shown, set(design_block.inspector_properties(section_key)))
-            self.assertTrue(shown <= set(design_block.applicable_properties(section_key)))     # V5-RESIZE: size keys are canvas-only
+            self.assertEqual(shown, set(design_block.applicable_properties(section_key)))
 
     def test_design_field_is_projected_onto_the_schema_before_background(self):
         for key in design_block.design_capable_section_keys():

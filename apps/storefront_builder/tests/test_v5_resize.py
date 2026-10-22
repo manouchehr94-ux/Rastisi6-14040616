@@ -100,7 +100,7 @@ class SectionResizeTests(_ResizeBase):
         for key in keys:
             with self.subTest(section=key):
                 definition = section_registry.get_definition(key)
-                self.assertIn("design_size", definition.capabilities)
+                self.assertIn("canvas_size", definition.capabilities)
                 section = StorefrontSection.objects.create(version=self.draft, section_key=key, order=90)
                 self._mutate({"type": "section.resize", "section_id": section.pk, "height": 480, "width": 70, "align": "start"})
                 self.assertEqual(self._design(section), {"min_height": 480, "width_pct": 70, "width_align": "start"})
@@ -162,7 +162,7 @@ class SectionResizeTests(_ResizeBase):
         self.assertNotIn("--d-w", json.dumps(design_block.render_attributes({"width_pct": 100}), ensure_ascii=False))
 
     def test_design_validator_accepts_only_granted_size_keys_and_clamps_ranges(self):
-        applicable = design_block.applicable_properties("hero_banner")
+        applicable = design_block.all_properties("hero_banner")
         self.assertTrue({"min_height", "width_pct", "width_align"} <= set(applicable))
         cleaned = design_block.validate_design_settings({"min_height": 5000, "width_pct": 5, "width_align": "start"}, applicable)
         self.assertEqual(cleaned, {"min_height": 1600, "width_pct": 30, "width_align": "start"})

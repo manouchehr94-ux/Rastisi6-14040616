@@ -1075,7 +1075,7 @@ def _build_items_from_sections(
             context["campaign"] = _campaign_panel_view(store, context["settings"])
         # Sparse ``design`` block -> data-d flags + --d-* custom properties for the wrapper.
         context["design_attrs"] = design_block.render_attributes(
-            context["settings"].get("design"), design_block.applicable_properties(section.section_key),
+            context["settings"].get("design"), design_block.all_properties(section.section_key),
         )
         # Column counts: the section's own ``*_columns`` (product-section contract) win over the shared
         # ``responsive`` block; a ``design`` block may still override them through ``--cols-*``.
