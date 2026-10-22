@@ -174,6 +174,7 @@ class R4MutationSecurityCoverageTests(R4MutationApiTestCase):
                                                 "layout_key": "single"},
             # V5-LAYOUT-ATOMIC: one new Container (existing preset) with a pre-filled and an empty Cell; no foreign id involved
             "container.add": lambda: {"type": "container.add", "page_type": "home", "layout_key": "half", "cells": [["faq"], []]},
+            "container.remove": lambda: {"type": "container.remove", "container_id": c.pk},
             "cell.add_section": lambda: {"type": "cell.add_section", "section_key": "faq", "cell_id": cell.pk},
             "section.move_to_cell": lambda: {"type": "section.move_to_cell", "section_id": s.pk, "cell_id": cell.pk},
             "container.update_settings": lambda: {"type": "container.update_settings", "container_id": c.pk,
@@ -207,7 +208,7 @@ class R4MutationSecurityCoverageTests(R4MutationApiTestCase):
     # ------------------------------------------------------------------------------------------------- completeness
     def test_the_protection_table_covers_exactly_the_dispatcher(self):
         self.assertEqual(set(self._payloads()), _dispatched_types())
-        self.assertEqual(len(_dispatched_types()), 26)
+        self.assertEqual(len(_dispatched_types()), 27)
         self.assertTrue(ID_TARGETED <= set(self._payloads()))
         self.assertTrue(DRAFT_PINNED <= set(self._payloads()))
 

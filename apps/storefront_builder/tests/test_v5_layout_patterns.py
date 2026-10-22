@@ -29,17 +29,20 @@ class PatternMarkupTests(_BandBase):
 
         patterns = {p["key"]: p for p in rs_three_cell_patterns()}
         self.assertEqual(list(patterns), ["thirds_equal", "big_right_two_left"])
-        for pattern in patterns.values():
-            self.assertEqual(tuple(container_service.LAYOUT_PRESETS[pattern["engine"]]), tuple(pattern["widths"]))
+        self.assertEqual(tuple(container_service.LAYOUT_PRESETS[patterns["thirds_equal"]["engine"]]), (4, 4, 4))
+        # V5-LAYOUT-011: the stacked pattern is the engine's STACKED preset — three real Cells (8,4,4), one slot each
+        self.assertEqual(patterns["big_right_two_left"]["engine"], "big_right_two_left")
+        self.assertEqual(tuple(container_service.STACKED_LAYOUT_PRESETS["big_right_two_left"]), (8, 4, 4))
+        self.assertNotIn("big_right_two_left", container_service.LAYOUT_PRESETS)      # the side-by-side registry is untouched
         self.assertEqual(patterns["thirds_equal"]["cells"], "0,1,2")
-        self.assertEqual(patterns["big_right_two_left"]["cells"], "0,1,1")     # both small sections go to the SAME (narrow) Cell
+        self.assertEqual(patterns["big_right_two_left"]["cells"], "0,1,2")     # big / small-top / small-bottom: one Cell each
 
     def test_layout_tab_renders_both_cards_with_slot_labels_and_a_third_picker(self):
         html = self._html()
         tpl = html[html.index("data-rs-add-row-template"):]
         tpl = tpl[:tpl.index("</template>")]
         self.assertIn('value="thirds_equal" data-rs-engine-layout="thirds"', tpl)
-        self.assertIn('data-rs-slot-cells="0,1,1"', tpl)
+        self.assertIn('value="big_right_two_left" data-rs-engine-layout="big_right_two_left" data-rs-slot-cells="0,1,2"', tpl)
         self.assertIn("rs-stack", tpl)                                         # the stacked schematic
         self.assertIn("data-rs-add-row-third", tpl)
         self.assertRegex(tpl, r'data-rs-slot-field="2"[^>]*hidden')            # hidden for the two-column presets

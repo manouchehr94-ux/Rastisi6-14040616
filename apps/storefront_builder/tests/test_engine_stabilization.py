@@ -665,12 +665,15 @@ class BuilderChromeIsLayoutNeutralTests(SimpleTestCase):
 
     def test_add_controls_and_hidden_cell_notices_are_absolute_overlays(self):
         # ``.sfb-cell-add-more`` is no longer an overlay: V5-UI-008 made it an in-flow row below the Cell's last Block (see next test)
-        for needle in (".sfb-empty-cell-add", ".sfb-hidden-cell-content"):
+        for needle in (".sfb-empty-cell-add",):
             bodies = " ".join(body for selector, body in _css_rules(BUILDER_CSS, needle) if selector.strip() == needle)
             self.assertIn("position:absolute", bodies.replace(" ", ""), needle)
+        # V5-LAYOUT-011: the «hidden content» notice of an all-hidden Cell is in flow (the Cell holds nothing else), no longer an overlay
+        hidden = [body for selector, body in _css_rules(BUILDER_CSS, ".sfb-hidden-cell-content") if selector.strip() == ".sfb-hidden-cell-content"][-1]
+        self.assertIn("position:relative", hidden.replace(" ", ""))
 
     def test_the_filled_cell_add_control_is_an_in_flow_row_and_never_floats_over_blocks(self):
-        last = [body for selector, body in _css_rules(BUILDER_CSS, ".sfb-cell-add-more") if selector.strip() == ".sfb-cell-add-more"][-1]
+        last = [body for selector, body in _css_rules(BUILDER_CSS, ".sfb-cell-add-more") if selector.strip() == ".sfb-cell-add-more" and "position" in body][-1]
         compact = last.replace(" ", "")
         self.assertIn("position:static", compact)
         self.assertNotIn("transform:translate", compact)

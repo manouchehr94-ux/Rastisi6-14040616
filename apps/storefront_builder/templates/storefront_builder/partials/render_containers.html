@@ -80,6 +80,7 @@
       <button type="button" class="sfb-empty-cell-add" data-empty-cell="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن بخش به خانه {{ forloop.counter }} از {{ composition.cells|length }}">
         <span aria-hidden="true">＋</span><strong>افزودن بخش به این خانه</strong><small>خانه {{ forloop.counter|fa_number }} · {{ cell.span|fa_number }} از ۱۲ ستون</small>
       </button>
+      {% if forloop.first and not composition.has_placement %}<button type="button" class="sfb-empty-cell-remove" data-container-remove="{{ container.pk }}" aria-label="حذف این چیدمان خالی">🗑 حذف چیدمان خالی</button>{% endif %}
     {% endif %}
   </div>
   {% endwith %}

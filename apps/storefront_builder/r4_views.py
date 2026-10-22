@@ -708,6 +708,25 @@ def storefront_r4_editor(request):
             if not container_service.blocks_from_prefetched_cell(cell_obj):
                 empty_cells.append({"container_id": container_obj.pk, "cell_id": cell_obj.pk})
 
+    # V5-LAYOUT-011 — one row per REAL Container of the page (empty ones included). The «ردیف‌ها و ستون‌بندی» panel used to be built from
+    # the Sections' own container_id (a ``regroup``), so a Container with no Section had no row and therefore no way to be changed or
+    # removed. A pure read in the page's own visual order.
+    members_by_container: dict[int, list[str]] = {}
+    for member in structure_items:
+        if member["container_id"] is not None:
+            members_by_container.setdefault(member["container_id"], []).append(member["label"])
+    structure_containers = [
+        {
+            "container_id": container_obj.pk,
+            "layout_key": container_obj.layout_key,
+            "is_locked": bool(container_obj.is_locked),
+            "settings": container_service.effective_container_settings(container_obj.settings),
+            "members": members_by_container.get(container_obj.pk, []),
+            "is_empty": container_obj.pk not in members_by_container,
+        }
+        for container_obj in page.containers.order_by("order", "id")
+    ]
+
     # The shell has no <form>/{% csrf_token %} of its own, so the browser
     # mutation client (r4_editor.js) has no other trigger to guarantee a
     # csrftoken cookie exists before its first POST to the Task 5 endpoint.
@@ -730,6 +749,7 @@ def storefront_r4_editor(request):
             "sections": sections,
             "r4_edit_revision": draft.edit_revision,
             "structure_items": structure_items,
+            "structure_containers": structure_containers,
             "structure_library": structure_library,
             # Phase 5 Task 6 — Storefront Showcase creation-facade choices
             # (see _build_showcase_choices): merchant-facing UX over the four
@@ -742,7 +762,7 @@ def storefront_r4_editor(request):
             # list/translation.
             "container_layout_presets": [
                 (key, container_service.LAYOUT_PRESET_LABELS_FA.get(key, key))
-                for key in container_service.LAYOUT_PRESETS
+                for key in (*container_service.LAYOUT_PRESETS, *container_service.STACKED_LAYOUT_PRESETS)
             ],
             # FOLLOWUP-12 — the 2-cell subset of the SAME registry, for the guided
             # "two-column row" dialog (no second preset list).

@@ -137,7 +137,7 @@ def add_container(*, draft, page_type: str, layout_key: str, cells=None) -> Stor
     two keys becomes a multi-block Cell whose Blocks are independent Sections (own id, own settings)."""
     if page_type not in StorefrontPage.PageType.values:
         raise SectionStructureError("invalid_page_type")
-    spans = container_service.LAYOUT_PRESETS.get(layout_key) if isinstance(layout_key, str) else None
+    spans = container_service.layout_spans(layout_key)
     if spans is None or len(spans) < 2:
         raise SectionStructureError("invalid_container_layout")
 
@@ -352,6 +352,26 @@ def change_container_layout(*, draft, container_id: int, layout_key: str) -> Sto
         return container_service.change_container_layout(container, layout_key)
     except container_service.ContainerLayoutError as exc:
         raise SectionStructureError("invalid_container_layout") from exc
+
+
+def remove_container(*, draft, container_id: int) -> None:
+    """V5-LAYOUT-011 — remove a Container (see ``container_service.remove_container``): an empty one is deleted; one with content is
+    dissolved into independent single-Cell rows, never deleting a Section. Refused WITHOUT any change when the Container is locked, when
+    any of its Blocks is locked, or when a Block is a legacy row member (same guards as ``section.move_to_cell``)."""
+    container = _scoped_container(draft, container_id)
+    if container.is_locked:
+        raise SectionStructureError("container_locked")
+    cells = list(container.cells.order_by("order", "id"))
+    for cell in cells:
+        for block in container_service.get_cell_blocks(cell):
+            if block.is_locked:
+                raise SectionStructureError("container_has_locked_section")
+            if row_service.is_row_member(block):
+                raise SectionStructureError("container_has_row_member")
+    try:
+        container_service.remove_container(container)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_placement") from exc
 
 
 def build_structure_projection(page) -> list[dict]:

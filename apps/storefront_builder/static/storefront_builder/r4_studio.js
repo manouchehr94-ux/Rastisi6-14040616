@@ -940,6 +940,16 @@
           '<div data-rs-add-pane="layout" role="tabpanel"' + (addTab === 'layout' ? '' : ' hidden') + '><div data-rs-add-row-slot></div></div>';
         break;
       }
+      case 'remove-container': {
+        // V5-LAYOUT-011 — removing a LAYOUT never deletes content: an empty one is simply removed, a filled one is dissolved into independent rows.
+        var rmFilled = Number(m.members) > 0;
+        title = rmFilled ? 'این چیدمان برداشته شود؟' : 'این چیدمان خالی حذف شود؟';
+        body = rmFilled
+          ? '<p class="modal-message">هیچ بخشی حذف نمی‌شود. فقط قاب چیدمان برداشته می‌شود و هر بخش، با همان تنظیمات، رسانه‌ها و به همان ترتیب، به یک ردیف مستقل تبدیل می‌شود. با «واگرد» می‌توانید همه‌چیز را برگردانید. نسخهٔ منتشرشده تغییر نمی‌کند.</p>'
+          : '<p class="modal-message">این چیدمان هیچ بخشی ندارد؛ فقط خانه‌های خالی آن حذف می‌شوند. با «واگرد» می‌توانید آن را برگردانید. نسخهٔ منتشرشده تغییر نمی‌کند.</p>';
+        foot = btn('confirm-remove-container', rmFilled ? 'برداشتن چیدمان (بخش‌ها می‌مانند)' : 'حذف چیدمان خالی', 'trash', 'outline danger') + btn('close-modal', 'نگه داشتن چیدمان', '', 'primary');
+        break;
+      }
       case 'remove-section':
         title = 'این بخش از صفحه حذف شود؟';
         body = '<p class="modal-message">محصولات فروشگاه حذف نمی‌شوند؛ فقط این بخش از چیدمان صفحه برداشته می‌شود. می‌توانید آن را واگرد کنید.</p>';
@@ -1244,6 +1254,25 @@
         break;
       }
       case 'section-remove': openModal('remove-section', { sectionId: ui.selectedSectionId }); break;
+      case 'remove-container': {
+        var rmId = Number(el.getAttribute('data-container-id'));
+        if (!rmId || el.disabled) break;
+        if (ui.lab.active) { notify('ابتدا آزمایش را اعمال کنید یا از آن خارج شوید.'); break; }
+        openModal('remove-container', { containerId: rmId, members: Number(el.getAttribute('data-container-members') || 0) });
+        break;
+      }
+      case 'confirm-remove-container': {
+        var rmTarget = ui.modal && ui.modal.containerId;
+        var rmHadContent = Number(ui.modal && ui.modal.members) > 0;
+        closeModal(false);
+        if (rmTarget) {
+          R4.enqueueStructuralMutation({ type: 'container.remove', container_id: rmTarget }).then(function (removed) {
+            if (removed && removed.ok) notify(rmHadContent ? 'چیدمان برداشته شد؛ همهٔ بخش‌ها حفظ شدند. هنوز منتشر نشده است.' : 'چیدمان خالی حذف شد. هنوز منتشر نشده است.');
+            else if (!removed || !removed.message) notify('چیدمان حذف نشد؛ هیچ تغییری ذخیره نشد.');
+          });
+        }
+        break;
+      }
       case 'confirm-remove': {
         var removeId = ui.modal && ui.modal.sectionId;
         closeModal(false);
@@ -1419,8 +1448,17 @@
     if (win.__rsCellChips) return;
     win.__rsCellChips = true;
     win.addEventListener('click', function (evt) {
+      if (win.document.documentElement.getAttribute('data-sfb-builder-mode') === 'preview') return;
+      // «حذف چیدمان خالی» inside a fully empty layout (it lives in an empty Cell, never over a Section): confirm in the Studio dialog
+      var removeBtn = evt.target && evt.target.closest ? evt.target.closest('[data-container-remove]') : null;
+      if (removeBtn) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (!ui.lab.active && !ui.modal) openModal('remove-container', { containerId: Number(removeBtn.getAttribute('data-container-remove')), members: 0 });
+        return;
+      }
       var chip = evt.target && evt.target.closest ? evt.target.closest('[data-empty-cell], [data-cell-add]') : null;
-      if (!chip || win.document.documentElement.getAttribute('data-sfb-builder-mode') === 'preview') return;
+      if (!chip) return;
       evt.preventDefault();
       evt.stopPropagation();
       openCellAdd(chip.getAttribute('data-empty-cell') || chip.getAttribute('data-cell-add'));

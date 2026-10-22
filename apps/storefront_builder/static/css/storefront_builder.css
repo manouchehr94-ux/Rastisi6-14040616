@@ -816,6 +816,26 @@
   flex: 1 1 auto;
 }
 
+/* V5-LAYOUT-011 — the stacked preset «big + two small» (container_service.STACKED_LAYOUT_PRESETS) is THREE real Cells: the 1st is the big
+   column, the 2nd and 3rd are stacked in the other column. Central, layout-key driven (data-layout), shared by Preview and the published
+   page — no template-specific rule. Rows are «auto 1fr»: the top small Cell takes its natural height, the bottom one the rest, so the two
+   small Blocks sit one under the other with only the container gap between them while the whole small column ends level with the big
+   one (no fixed heights, nothing cut off, nothing stretched: Cells keep the container's own natural/equal alignment). On narrow screens
+   (mobile_mode «stack») the Cells simply follow each other in DOM order: big, small-top, small-bottom. */
+.rcontainer[data-layout="big_right_two_left"] { grid-template-rows: auto 1fr; }
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell { grid-column: 1 / span var(--cell-span, 8); grid-row: 1 / span 2; }
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell ~ .rcontainer-cell { grid-column: span var(--cell-span, 4) / -1; grid-row: 1; }
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell ~ .rcontainer-cell ~ .rcontainer-cell { grid-row: 2; }
+@media (max-width: 1000px) {
+  .rcontainer[data-layout="big_right_two_left"][data-mobile-mode="stack"] { grid-template-rows: none; }
+  .rcontainer[data-layout="big_right_two_left"][data-mobile-mode="stack"] > .rcontainer-cell,
+  .rcontainer[data-layout="big_right_two_left"][data-mobile-mode="stack"] > .rcontainer-cell ~ .rcontainer-cell,
+  .rcontainer[data-layout="big_right_two_left"][data-mobile-mode="stack"] > .rcontainer-cell ~ .rcontainer-cell ~ .rcontainer-cell {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}
+
 /* Phase 3.9 — full-site palette miniatures. */
 
 /* ========================================================================
@@ -3758,3 +3778,32 @@ body[data-sfb-studio-host] .sfb-rsec-drag-handle { display: none !important; }
    is dropped there for Sections that have content. The empty-Section placeholder chip (.sfb-rsec-builder-empty) is a different control and stays. */
 body[data-sfb-studio-host] .sfb-preview-sections .rsec[data-section-id]:not(.sfb-rsec-builder-empty):hover::before,
 body[data-sfb-studio-host] .sfb-preview-sections .rsec[data-section-id].sfb-rsec-selected:not(.sfb-rsec-builder-empty)::before { content: none; display: none; }
+
+/* V5-LAYOUT-011 — a Cell whose Blocks are ALL hidden: the «hidden content» notice (builder markup only) used to be an absolutely positioned
+   overlay on a zero-height Cell, so it lay over the next row and over the Cell's own add row. The Cell holds nothing else, so the notice is
+   now in flow: it gives the Cell its real height and the add row simply follows it. Published pages never render hidden Blocks nor this notice. */
+.sfb-hidden-cell-content { position: relative; top: auto; inset-inline: auto; z-index: auto; margin: 0; }
+
+/* V5-LAYOUT-011 — «حذف چیدمان خالی»: shown only inside the FIRST Cell of a layout whose Cells are all empty (builder markup only). It lives
+   in an empty Cell, so it never lies over a Section; it sits in the Cell's top inline-start corner, above the Cell's own add button. */
+.sfb-empty-cell-remove {
+  position: absolute;
+  z-index: 31;
+  top: 8px;
+  inset-inline-start: 8px;
+  padding: 3px 9px;
+  border: 1px solid rgba(180, 35, 24, .45);
+  border-radius: 999px;
+  background: #fff;
+  color: #b42318;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.sfb-empty-cell-remove:hover, .sfb-empty-cell-remove:focus-visible { background: #fef3f2; border-color: #b42318; }
+.sfb-empty-cell-remove:focus-visible { outline: 3px solid #b42318; outline-offset: 2px; }
+
+/* touch: a finger-sized add row (builder only) */
+@media (pointer: coarse) { .sfb-cell-add-more { min-height: 44px; } }

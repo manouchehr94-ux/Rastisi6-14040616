@@ -86,6 +86,7 @@ _MUTATION_HISTORY_LABELS = {
     "section.toggle_locked": "قفل/بازکردن بخش",
     "container.change_layout": "تغییر چیدمان",
     "container.add": "افزودن چیدمان",
+    "container.remove": "حذف چیدمان",
     "cell.add_section": "افزودن بخش به خانه",
     "section.move_to_cell": "انتقال بخش به خانه دیگر",
     "container.update_settings": "ویرایش تنظیمات چیدمان",
@@ -368,6 +369,9 @@ R4_ERROR_MESSAGES_FA = {
     "invalid_layout_key": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
     "invalid_cells": "انتخاب بخش‌های چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
     "invalid_page_type": "نوع صفحه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    # V5-LAYOUT-011 — container.remove refusals (nothing was changed)
+    "container_has_locked_section": "یکی از بخش‌های این چیدمان قفل است؛ ابتدا قفل آن را باز کنید. چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
+    "container_has_row_member": "یکی از بخش‌های این چیدمان عضو یک ردیف چندبخشی قدیمی است؛ چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
 }
 
 
@@ -532,6 +536,18 @@ def _apply_container_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_cells")
     try:
         section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_remove(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-LAYOUT-011 — remove one Container; content is always preserved (an empty Container is deleted, a filled one is dissolved into
+    independent rows). No payload option can delete a Section: the only accepted fields are ``type`` and ``container_id``."""
+    container_id = mutation.get("container_id")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    try:
+        section_structure_service.remove_container(draft=draft, container_id=container_id)
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 
@@ -1291,6 +1307,9 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "container.add":
         _apply_container_add(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.remove":
+        _apply_container_remove(draft=draft, mutation=mutation)
         return
     if mutation_type == "cell.add_section":
         _apply_cell_add_section(draft=draft, mutation=mutation)

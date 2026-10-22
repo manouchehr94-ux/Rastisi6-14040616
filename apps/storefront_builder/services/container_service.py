@@ -71,6 +71,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from django.db import transaction
+from django.db.models import F
 
 from ..models import StorefrontCell, StorefrontContainer, StorefrontSection
 
@@ -88,8 +89,31 @@ LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
     "quarters": (3, 3, 3, 3),
 }
 
+#: V5-LAYOUT-011 — presets whose Cells are NOT all side by side: «one big column + two small Cells stacked beside it». Each stacked slot is a
+#: REAL Cell (own id, own order), so an empty slot can exist, be filled and be reordered independently — unlike a 2-Cell 8/4 row whose narrow
+#: Cell merely holds two Blocks (an empty top/bottom position cannot be represented there). Kept apart from ``LAYOUT_PRESETS`` on purpose:
+#: that registry is the side-by-side composition vocabulary the appearance/Design-Lab component catalogue is built from; this one adds
+#: layout keys without touching it. Spans are the Cells' own widths (the CHECK constraint stays 1..12); ``STACKED_LAYOUT_COLUMNS`` are the
+#: visual column widths the 12-unit total is validated against. The placement itself is central CSS keyed by ``data-layout``
+#: (storefront_builder.css), shared by Preview and the published page — no per-template rule.
+STACKED_LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
+    "big_right_two_left": (8, 4, 4),
+}
+STACKED_LAYOUT_COLUMNS: dict[str, tuple[int, ...]] = {
+    "big_right_two_left": (8, 4),
+}
+
+
+def layout_spans(layout_key):
+    """Cell spans of any KNOWN preset (side-by-side or stacked), else ``None``."""
+    if not isinstance(layout_key, str):
+        return None
+    return LAYOUT_PRESETS.get(layout_key) or STACKED_LAYOUT_PRESETS.get(layout_key)
+
+
 #: Persian labels for the container layout presets (Studio layout picker).
 LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
+    "big_right_two_left": "بزرگ راست + دو کوچک چپ",
     "single": "۱۰۰٪",
     "half": "۵۰/۵۰",
     "quarter_left": "۲۵/۷۵",
@@ -128,6 +152,9 @@ class ContainerLayoutError(ValueError):
 def layout_key_for_spans(spans) -> str:
     spans = tuple(int(value) for value in spans)
     for key, preset in LAYOUT_PRESETS.items():
+        if spans == preset:
+            return key
+    for key, preset in STACKED_LAYOUT_PRESETS.items():
         if spans == preset:
             return key
     return "custom"
@@ -242,6 +269,12 @@ def validate_container(container: StorefrontContainer, cells=None) -> None:
             actual_orders = sorted(block.cell_order for block in cell_blocks)
             if actual_orders != list(range(len(cell_blocks))):
                 raise ContainerLayoutError("ترتیب بلاک‌های یک خانه باید نرمال‌شده (بدون شکاف) باشد")
+    columns = STACKED_LAYOUT_COLUMNS.get(container.layout_key)
+    if columns is not None:
+        # a stacked layout: its Cells must be exactly the preset's, and the 12-unit total is that of its visual COLUMNS
+        if tuple(int(cell.span) for cell in cells) != STACKED_LAYOUT_PRESETS[container.layout_key]:
+            raise ContainerLayoutError("خانه‌های این چیدمان با الگوی انتخاب‌شده هم‌خوان نیستند")
+        total = sum(columns)
     if total != GRID_UNITS:
         raise ContainerLayoutError(
             f"مجموع عرض خانه‌های چیدمان باید دقیقاً {GRID_UNITS} باشد — مقدار فعلی: {total}"
@@ -363,7 +396,7 @@ def ensure_version_containers(version) -> None:
 
 @transaction.atomic
 def create_empty_container(page, layout_key: str = "single", *, order: int | None = None, settings=None):
-    spans = LAYOUT_PRESETS.get(layout_key)
+    spans = layout_spans(layout_key)
     if spans is None:
         raise ContainerLayoutError("چینش انتخاب‌شده معتبر نیست")
 
@@ -1033,6 +1066,58 @@ def clone_page_containers(source_page, target_page, target_sections_by_stable_id
             StorefrontSection.objects.bulk_update(blocks_to_update, ["cell", "cell_order"])
 
 @transaction.atomic
+@transaction.atomic
+def remove_container(container: StorefrontContainer) -> list[StorefrontContainer]:
+    """V5-LAYOUT-011 — delete one Container WITHOUT ever deleting user content.
+
+    · an EMPTY Container (no Blocks, hidden/inactive ones count as content) is simply deleted;
+    · a Container that holds Blocks is dissolved: every Block (hidden ones included) keeps its Section row — same id, settings, media and
+      Draft/Publish lifecycle — and is re-homed, in reading order (Cell.order -> Block.cell_order), into its OWN new single-Cell Container
+      that takes the removed Container's place in the page order (inheriting its container settings). Later Containers are shifted
+      down to make room; nothing else on the page moves.
+
+    The caller (``section_structure_service.remove_container``) enforces the lock / row-member / scoping refusals BEFORE this runs; the whole
+    operation sits inside the caller's single ``apply_mutation`` transaction, so any failure leaves the page untouched. Returns the new
+    Containers (empty list when the Container was empty)."""
+    container = StorefrontContainer.objects.select_for_update().get(pk=container.pk)
+    cells = list(
+        StorefrontCell.objects.select_for_update()
+        .filter(container=container)
+        .select_related("section")
+        .prefetch_related("blocks")
+        .order_by("order", "id")
+    )
+    blocks: list[StorefrontSection] = []
+    for cell in cells:
+        blocks.extend(get_cell_blocks(cell))
+
+    if not blocks:
+        container.delete()
+        return []
+
+    page = container.page
+    base_order = container.order
+    shift = len(blocks) - 1
+    if shift:
+        StorefrontContainer.objects.filter(page=page, order__gt=base_order).update(order=F("order") + shift)
+
+    created: list[StorefrontContainer] = []
+    homes: list[tuple[StorefrontSection, StorefrontCell]] = []
+    for index, block in enumerate(blocks):
+        row = StorefrontContainer.objects.create(
+            page=page, order=base_order + index, layout_key="single", settings=deepcopy(container.settings or {}),
+        )
+        cell = StorefrontCell.objects.create(container=row, order=0, span=GRID_UNITS)
+        created.append(row)
+        homes.append((block, cell))
+    for block, cell in homes:
+        move_block(block, cell)
+    container.delete()
+    for row in created:
+        validate_container(row)
+    return created
+
+
 def change_container_layout(container: StorefrontContainer, layout_key: str) -> StorefrontContainer:
     """Change one Container preset without treating content as the layout.
 
@@ -1047,7 +1132,7 @@ def change_container_layout(container: StorefrontContainer, layout_key: str) -> 
     silently destroyed, per the approved V3 prototype). This is the core
     merchant UX: choose the shape first, and content follows safely.
     """
-    spans = LAYOUT_PRESETS.get(layout_key)
+    spans = layout_spans(layout_key)
     if spans is None:
         raise ContainerLayoutError("چینش انتخاب‌شده معتبر نیست")
 
