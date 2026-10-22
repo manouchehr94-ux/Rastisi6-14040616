@@ -826,6 +826,26 @@
 .rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell { grid-column: 1 / span var(--cell-span, 8); grid-row: 1 / span 2; }
 .rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell ~ .rcontainer-cell { grid-column: span var(--cell-span, 4) / -1; grid-row: 1; }
 .rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell ~ .rcontainer-cell ~ .rcontainer-cell { grid-row: 2; }
+/* V5-LAYOUT-012 — height coordination of the stacked preset. Measured on real content: the big Cell spans BOTH grid rows, but natural mode aligns
+   it to the start, so a short banner ended at its own height (≈350px) while the two small Sections beside it took ≈890px — a ≈540px hole under the
+   banner. For THIS layout the Cells therefore stretch to their grid area (the layout's whole point is a matched composition), regardless of the
+   container's natural/equal setting, and the matching is done by SURFACES, never by stretching content:
+     1. Cell, .rsec and the Section's own surface (.rsec > .section — its background / frame / panel) fill the free height;
+     2. the contents (text, product cards, carousels, images) keep their natural proportions and stay top-aligned — nothing is stretched, clipped or hidden;
+     3. the shared banner frame (.hero-inner: an aspect-ratio box whose slides already cover it) takes the free height on top of its natural
+        aspect-ratio height (flex-grow), at most 125% of its Cell's width (a 4:5 portrait) so a picture is never zoomed to an extreme.
+   Other families own their frames (atelier / luxury / split / fashion heroes, single_banner …): they get 1–2 and keep their natural media size.
+   Sections never receive a fixed height, overflow:hidden or a hidden product count. On narrow screens (mobile_mode «stack») the Cells are
+   auto-height blocks in DOM order, so none of this adds height there. Preview and published share this one stylesheet. */
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+}
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell > .rsec { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell > .rsec > .section { flex: 1 1 auto; display: flex; flex-direction: column; }
+.rcontainer[data-layout="big_right_two_left"] > .rcontainer-cell > .rsec .hero-inner { flex: 1 1 auto; max-height: 125cqw; }
 @media (max-width: 1000px) {
   .rcontainer[data-layout="big_right_two_left"][data-mobile-mode="stack"] { grid-template-rows: none; }
   .rcontainer[data-layout="big_right_two_left"][data-mobile-mode="stack"] > .rcontainer-cell,

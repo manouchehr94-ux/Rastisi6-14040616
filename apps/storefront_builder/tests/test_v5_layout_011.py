@@ -319,3 +319,49 @@ class UiContractTests(_Base):
         html = render_to_string("storefront_builder/partials/render_containers.html", {"render_containers": context["render_containers"], "is_preview": False})
         for marker in ("sfb-empty-cell-remove", "data-container-remove", "حذف چیدمان"):
             self.assertNotIn(marker, html, marker)
+
+
+class LayoutHeightContractTests(_Base):
+    """V5-LAYOUT-012 — the stacked preset matches heights with SURFACES only: layout-key scoped, no fixed heights, nothing clipped."""
+
+    APP = __import__("pathlib").Path(__file__).resolve().parents[1]
+
+    def _block(self):
+        import re
+
+        css = (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
+        start = css.index("V5-LAYOUT-012 — height coordination")
+        end = css.index("@media (max-width: 1000px) {\n  .rcontainer[data-layout=\"big_right_two_left\"][data-mobile-mode=\"stack\"]", start)
+        return re.sub(r"/\*.*?\*/", "", css[start - 3:end], flags=re.S)
+
+    def test_every_rule_is_scoped_to_the_stacked_layout_key_so_legacy_natural_and_equal_cannot_change(self):
+        import re
+
+        block = self._block()
+        selectors = [s.strip() for rule in re.findall(r"([^{}]+)\{", block) for s in rule.split(",")]
+        self.assertGreaterEqual(len(selectors), 4)
+        for selector in selectors:
+            self.assertTrue(selector.startswith('.rcontainer[data-layout="big_right_two_left"]'), selector)
+        css = (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
+        for legacy in ('.rcontainer[data-height-mode="natural"] > .rcontainer-cell {\n  align-self: start;\n}',
+                       '.rcontainer[data-height-mode="equal"] > .rcontainer-cell {\n  align-self: stretch;\n  height: auto;'):
+            self.assertIn(legacy, css)                                              # the existing contract is byte-for-byte untouched
+
+    def test_surfaces_fill_but_contents_are_never_stretched_clipped_or_given_fixed_heights(self):
+        import re
+
+        block = self._block()
+        for forbidden in ("overflow", "object-fit", "transform", "height: 100%", "pcard", "pcarousel", " img", "!important"):
+            self.assertNotIn(forbidden, block, forbidden)
+        for declaration in re.findall(r"(?<![-\w])(height|min-height)\s*:\s*([^;]+);", block):
+            self.assertEqual(declaration, ("min-height", "0"), "a fixed/min height was introduced: %r" % (declaration,))   # only the flex «may shrink» reset
+        self.assertIn("align-self: stretch;", block)
+        self.assertIn("> .rsec > .section { flex: 1 1 auto;", block)
+        # the shared banner frame grows from its natural aspect-ratio height (flex-grow) and is capped to a 4:5 portrait of its Cell
+        self.assertIn(".hero-inner { flex: 1 1 auto; max-height: 125cqw; }", block)
+
+    def test_mobile_stack_resets_the_grid_and_adds_no_height(self):
+        css = (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
+        mobile = css[css.index('@media (max-width: 1000px) {\n  .rcontainer[data-layout="big_right_two_left"]'):][:800]
+        self.assertIn("grid-template-rows: none;", mobile)
+        self.assertNotIn("height", mobile.replace("grid-template-rows", ""))
