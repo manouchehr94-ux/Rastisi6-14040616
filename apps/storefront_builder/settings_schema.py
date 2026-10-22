@@ -566,10 +566,12 @@ def clean_section_schema_patch(definition, raw_patch: dict, current_settings: di
     # Legacy-settings compatibility (one generic rule): design properties the section stored while its capabilities
     # still granted them are DORMANT after a capability change — carried through every write untouched, never a reason
     # to reject an unrelated edit. Newly submitted unsupported properties are still rejected by the section validator.
+    # V5-RESIZE: the canvas-only size keys (set by the drag handles, not offered in the Inspector) travel the same way, so an Inspector
+    # edit can never silently drop a manual size.
     from . import design_block
 
     dormant = design_block.dormant_design_keys(
-        (current_settings or {}).get("design"), design_block.properties_for_capabilities(definition.capabilities),
+        (current_settings or {}).get("design"), design_block.inspector_properties_for_capabilities(definition.capabilities),
     )
     if dormant and "design" in merged:
         merged = {**merged, "design": design_block.split_resubmitted_dormant(merged["design"], dormant)}

@@ -2,12 +2,12 @@
 {% for composition in render_containers %}
 {% with container=composition.container csettings=composition.settings %}
 <div class="rcontainer{% if is_preview %} sfb-builder-container{% endif %}"
-     style="--container-gap:{{ csettings.gap }}px{% if csettings.background_color %};background-color:{{ csettings.background_color }}{% endif %}"
+     style="--container-gap:{{ csettings.gap }}px{% if csettings.background_color %};background-color:{{ csettings.background_color }}{% endif %}{% if csettings.stack_split %};--stack-top:{{ csettings.stack_top }}fr;--stack-bottom:{{ csettings.stack_bottom }}fr{% endif %}"
      data-layout="{{ container.layout_key }}"
      data-mobile-mode="{{ csettings.mobile_mode }}"
      data-content-width="{{ csettings.content_width }}"
      data-vertical-align="{{ csettings.vertical_align }}"
-     data-height-mode="{{ csettings.height_mode }}"
+     data-height-mode="{{ csettings.height_mode }}"{% if csettings.stack_split %} data-stack-split="{{ csettings.stack_split }}"{% endif %}
      {% if csettings.background_mode != "transparent" %}data-container-bg="{{ csettings.background_mode }}"{% endif %}
      {% if csettings.background_mode == "pattern" and csettings.background_pattern %}data-container-pattern="{{ csettings.background_pattern }}"{% endif %}
      {% if is_preview %}data-container-id="{{ container.pk }}" data-container-locked="{% if container.is_locked %}1{% else %}0{% endif %}"{% endif %}>

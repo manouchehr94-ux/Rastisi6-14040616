@@ -25,7 +25,7 @@ class V5ShellNoNewWritePathsTests(unittest.TestCase):
             self.assertFalse(forbidden in markup, forbidden)
 
     def test_template_gained_no_inline_script_or_form(self):
-        self.assertEqual(len(re.findall(r"<script\b", EDITOR_HTML)), 4)          # the four asset scripts; data is json_script tags
+        self.assertEqual(len(re.findall(r"<script\b", EDITOR_HTML)), 5)          # the five asset scripts (V5-RESIZE adds r4_resize.js); data is json_script tags
         self.assertNotIn("<form", EDITOR_HTML)
 
     def test_v5_layer_has_no_behaviour(self):

@@ -104,6 +104,12 @@ STACKED_LAYOUT_COLUMNS: dict[str, tuple[int, ...]] = {
 }
 
 
+#: V5-RESIZE — the big column of a stacked layout may be dragged within these spans (the small column is always ``12 - big``), and the
+#: top small Cell's share of the column height (``settings["stack_split"]``, in %) within these bounds. Auto = the key is absent.
+STACKED_BIG_SPAN_RANGE = (4, 9)
+STACK_SPLIT_RANGE = (25, 75)
+
+
 def layout_spans(layout_key):
     """Cell spans of any KNOWN preset (side-by-side or stacked), else ``None``."""
     if not isinstance(layout_key, str):
@@ -222,6 +228,13 @@ def effective_container_settings(raw: dict | None) -> dict:
     cleaned["background_mode"] = background_mode
     cleaned["background_color"] = background_color
     cleaned["background_pattern"] = background_pattern
+
+    # V5-RESIZE — optional, sparse: present only when a merchant dragged the stacked layout's height divider (Auto otherwise)
+    split = raw.get("stack_split")
+    if isinstance(split, int) and not isinstance(split, bool) and STACK_SPLIT_RANGE[0] <= split <= STACK_SPLIT_RANGE[1]:
+        cleaned["stack_split"] = split
+        cleaned["stack_top"] = split
+        cleaned["stack_bottom"] = 100 - split
     return cleaned
 
 
@@ -271,10 +284,13 @@ def validate_container(container: StorefrontContainer, cells=None) -> None:
                 raise ContainerLayoutError("ترتیب بلاک‌های یک خانه باید نرمال‌شده (بدون شکاف) باشد")
     columns = STACKED_LAYOUT_COLUMNS.get(container.layout_key)
     if columns is not None:
-        # a stacked layout: its Cells must be exactly the preset's, and the 12-unit total is that of its visual COLUMNS
-        if tuple(int(cell.span) for cell in cells) != STACKED_LAYOUT_PRESETS[container.layout_key]:
+        # a stacked layout: «big | small / small» — the two small Cells share ONE column, so their spans are equal and the 12-unit
+        # total is that of its two visual COLUMNS (V5-RESIZE: the big/small column boundary can be dragged, the Cell count cannot change)
+        spans = [int(cell.span) for cell in cells]
+        if len(spans) != len(STACKED_LAYOUT_PRESETS[container.layout_key]) or spans[1] != spans[2] \
+                or not STACKED_BIG_SPAN_RANGE[0] <= spans[0] <= STACKED_BIG_SPAN_RANGE[1]:
             raise ContainerLayoutError("خانه‌های این چیدمان با الگوی انتخاب‌شده هم‌خوان نیستند")
-        total = sum(columns)
+        total = spans[0] + spans[1]
     if total != GRID_UNITS:
         raise ContainerLayoutError(
             f"مجموع عرض خانه‌های چیدمان باید دقیقاً {GRID_UNITS} باشد — مقدار فعلی: {total}"
@@ -1065,7 +1081,63 @@ def clone_page_containers(source_page, target_page, target_sections_by_stable_id
         if blocks_to_update:
             StorefrontSection.objects.bulk_update(blocks_to_update, ["cell", "cell_order"])
 
+
+class ContainerResizeError(ContainerLayoutError):
+    """A refused ``resize_container`` request; ``code`` is the stable R4 refusal code (nothing was changed)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
 @transaction.atomic
+def resize_container(container: StorefrontContainer, *, spans=None, stack_split=None, set_split: bool = False) -> StorefrontContainer:
+    """V5-RESIZE — change the column widths (``Cell.span``, the single width truth) and/or the stacked layout's height split of ONE Container.
+
+    Cells keep their ids, order, Blocks and settings — only the integer widths change, and the preset label follows them
+    (``layout_key_for_spans``; a stacked layout keeps its structural key). The 12-unit total, the minimum usable width, the Cell count
+    and the stacked shape are re-validated; a locked Container is refused. Everything is one transaction inside the caller's mutation."""
+    container = StorefrontContainer.objects.select_for_update().get(pk=container.pk)
+    if container.is_locked:
+        raise ContainerResizeError("container_locked", "این چیدمان قفل است")
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    stacked = container.layout_key in STACKED_LAYOUT_COLUMNS
+
+    if spans is not None:
+        spans = [int(v) for v in spans]
+        if len(spans) != len(cells):
+            raise ContainerResizeError("invalid_resize_value", "تعداد عرض‌ها با تعداد خانه‌ها یکی نیست")
+        if stacked:
+            big, first, second = spans if len(spans) == 3 else (0, 0, 1)
+            if first != second or big + first != GRID_UNITS or not STACKED_BIG_SPAN_RANGE[0] <= big <= STACKED_BIG_SPAN_RANGE[1]:
+                raise ContainerResizeError("invalid_resize_value", "عرض ستون‌ها در این چیدمان معتبر نیست")
+        else:
+            floor = 3 if len(spans) == 2 else 2
+            if len(spans) < 2 or sum(spans) != GRID_UNITS or min(spans) < floor:
+                raise ContainerResizeError("invalid_resize_value", "مجموع عرض‌ها باید ۱۲ باشد و هر ستون حداقل عرض قابل‌استفاده را داشته باشد")
+        for cell, span in zip(cells, spans):
+            cell.span = span
+        StorefrontCell.objects.bulk_update(cells, ["span"])
+        if not stacked:
+            container.layout_key = layout_key_for_spans(spans)
+
+    if set_split:
+        settings = dict(container.settings or {})
+        if stack_split is None:
+            settings.pop("stack_split", None)
+        else:
+            if not stacked:
+                raise ContainerResizeError("invalid_resize_layout", "نسبت ارتفاع فقط برای چیدمان «بزرگ + دو کوچک» است")
+            if not STACK_SPLIT_RANGE[0] <= int(stack_split) <= STACK_SPLIT_RANGE[1]:
+                raise ContainerResizeError("invalid_resize_value", "نسبت ارتفاع خارج از محدودهٔ مجاز است")
+            settings["stack_split"] = int(stack_split)
+        container.settings = settings
+
+    container.save(update_fields=["layout_key", "settings", "updated_at"])
+    validate_container(container, list(StorefrontCell.objects.filter(container=container).select_related("section").order_by("order", "id")))
+    return container
+
+
 @transaction.atomic
 def remove_container(container: StorefrontContainer) -> list[StorefrontContainer]:
     """V5-LAYOUT-011 — delete one Container WITHOUT ever deleting user content.

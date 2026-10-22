@@ -33,6 +33,7 @@ STUDIO_ICON_PATHS = {
     "tag": "m3 3 9 0 9 9-9 9-9-9zM7 7h.01",
     "trash": "M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7",
     "copy": "M9 8h11v13H9zM15 8V3H4v13h5",
+    "edit": "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
     "up": "m6 14 6-6 6 6",
     "down": "m6 10 6 6 6-6",
     "history": "M3 10a9 9 0 1 1 1 8M3 3v7h7M12 7v5l3 2",

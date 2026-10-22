@@ -1111,6 +1111,32 @@
 
   // Lifecycle confirmations (reset page / reset storefront) use the
   // workspace dialog instead of the browser prompt.
+  // V5-RESIZE — the narrow, read-mostly surface the on-canvas layer (r4_resize.js: contextual toolbar + resize handles) needs from this file.
+  // It owns no state of its own: selection, dialogs and toasts stay HERE, every write still goes through R4's mutation queue.
+  R4.studio = {
+    notify: notify,
+    icon: icon,
+    blocked: function () { return Boolean(ui.modal || ui.lab.active || ui.publishing || ui.mode === 'inspector'); },
+    selectedId: function () { return ui.selectedSectionId == null ? null : String(ui.selectedSectionId); },
+    rowState: function (id) {
+      var row = rowFor(id);
+      if (!row) return null;
+      var up = row.querySelector('[data-r4-structure-move="up"]');
+      var down = row.querySelector('[data-r4-structure-move="down"]');
+      var dup = row.querySelector('[data-r4-structure-duplicate]');
+      var rm = row.querySelector('[data-r4-structure-remove]');
+      return {
+        locked: row.getAttribute('data-rs-section-locked') === 'true',
+        canUp: Boolean(up && !up.disabled), canDown: Boolean(down && !down.disabled),
+        canDuplicate: Boolean(dup && !dup.disabled), canRemove: Boolean(rm && !rm.disabled),
+      };
+    },
+    edit: function (id) { R4.emit('r4:direct-edit', { sectionId: id }); R4.openSection(id); },
+    command: function (id, command) { ui.selectedSectionId = String(id); sectionCommand(command); },
+    askRemove: function (id) { if (!ui.modal) openModal('remove-section', { sectionId: id }); },
+    clearSelection: function () { ui.selectedSectionId = null; markSelectedRow(); R4.previewSelect(null); },
+  };
+
   R4.confirm = function (message) {
     return new Promise(function (resolve) {
       if (confirmResolver) confirmResolver(false);

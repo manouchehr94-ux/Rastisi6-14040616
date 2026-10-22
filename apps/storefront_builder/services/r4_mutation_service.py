@@ -87,6 +87,8 @@ _MUTATION_HISTORY_LABELS = {
     "container.change_layout": "تغییر چیدمان",
     "container.add": "افزودن چیدمان",
     "container.remove": "حذف چیدمان",
+    "section.resize": "تغییر اندازه بخش",
+    "container.resize": "تغییر اندازه ستون‌ها",
     "cell.add_section": "افزودن بخش به خانه",
     "section.move_to_cell": "انتقال بخش به خانه دیگر",
     "container.update_settings": "ویرایش تنظیمات چیدمان",
@@ -371,6 +373,8 @@ R4_ERROR_MESSAGES_FA = {
     "invalid_page_type": "نوع صفحه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
     # V5-LAYOUT-011 — container.remove refusals (nothing was changed)
     "container_has_locked_section": "یکی از بخش‌های این چیدمان قفل است؛ ابتدا قفل آن را باز کنید. چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
+    "invalid_resize_value": "اندازهٔ واردشده معتبر نیست یا خارج از محدودهٔ مجاز است؛ هیچ تغییری ذخیره نشد.",
+    "invalid_resize_layout": "این چیدمان با این تغییر اندازه سازگار نیست؛ هیچ تغییری ذخیره نشد.",
     "container_has_row_member": "یکی از بخش‌های این چیدمان عضو یک ردیف چندبخشی قدیمی است؛ چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
 }
 
@@ -536,6 +540,61 @@ def _apply_container_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_cells")
     try:
         section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+_SECTION_RESIZE_FIELDS = {"height": (0, 1600), "width": (30, 100)}
+_SECTION_RESIZE_ALIGN = ("start", "center", "end")
+
+
+def _apply_section_resize(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-RESIZE — one drag = one mutation. Payload: ``section_id`` plus any of ``height`` (px, floor), ``width`` (% of the Cell),
+    ``align`` (start/center/end); a key present with ``null`` returns that dimension to Auto, an absent key leaves it untouched.
+    Nothing else is accepted, so the mutation can only ever write the three size keys of the design block."""
+    section_id = mutation.get("section_id")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    unknown = set(mutation) - {"type", "section_id", *section_structure_service.RESIZE_DIMENSIONS}
+    changes = {k: mutation[k] for k in section_structure_service.RESIZE_DIMENSIONS if k in mutation}
+    if unknown or not changes:
+        raise R4MutationError("invalid_resize_value")
+    for dimension, value in changes.items():
+        if value is None:
+            continue
+        if dimension == "align":
+            if value not in _SECTION_RESIZE_ALIGN:
+                raise R4MutationError("invalid_resize_value")
+            continue
+        low, high = _SECTION_RESIZE_FIELDS[dimension]
+        if not _is_strict_int(value) or not low <= value <= high:
+            raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.resize_section(draft=draft, section_id=section_id, changes=changes)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_resize(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-RESIZE — column widths (``spans``: one int per Cell, the existing ``Cell.span`` truth) and/or the stacked layout's height split
+    (``stack_split``: the top small Cell's share in %, ``null`` = Auto). One drag = one mutation."""
+    container_id = mutation.get("container_id")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    unknown = set(mutation) - {"type", "container_id", "spans", "stack_split"}
+    if unknown or not ({"spans", "stack_split"} & set(mutation)):
+        raise R4MutationError("invalid_resize_value")
+    spans = mutation.get("spans")
+    if "spans" in mutation and (not isinstance(spans, list) or not all(_is_strict_int(v) for v in spans)):
+        raise R4MutationError("invalid_resize_value")
+    split = mutation.get("stack_split")
+    if "stack_split" in mutation and split is not None and not _is_strict_int(split):
+        raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.resize_container(
+            draft=draft, container_id=container_id, spans=spans if "spans" in mutation else None,
+            stack_split=split, set_split="stack_split" in mutation,
+        )
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 
@@ -1310,6 +1369,12 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "container.remove":
         _apply_container_remove(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.resize":
+        _apply_section_resize(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.resize":
+        _apply_container_resize(draft=draft, mutation=mutation)
         return
     if mutation_type == "cell.add_section":
         _apply_cell_add_section(draft=draft, mutation=mutation)

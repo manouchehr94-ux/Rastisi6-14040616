@@ -1439,7 +1439,7 @@ def _with_design(capabilities: frozenset, validate_fn, default_fn):
 
 def _with_design_schema_field(capabilities: frozenset, schema):
     """Project the generic ``design`` Inspector field onto an applicable section's schema (idempotent)."""
-    applicable = design_block.properties_for_capabilities(capabilities)
+    applicable = design_block.inspector_properties_for_capabilities(capabilities)
     if schema is None or not applicable or schema.get_field("design") is not None:
         return schema
     field = SettingsField(
@@ -3758,7 +3758,7 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
     finalized = {}
     for key, definition in base.items():
         validate_variants(definition.variants, default_variant=definition.default_variant)
-        capabilities = definition.capabilities | {"responsive"}
+        capabilities = definition.capabilities | {"responsive", "design_size"}
         unknown = capabilities - KNOWN_CAPABILITIES
         if unknown:
             raise ValueError(f"{key}: unknown capability {sorted(unknown)!r}")

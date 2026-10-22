@@ -66,6 +66,7 @@ sender). This whole element is re-fetched by R4 after structural mutations.
               {% for preset_key, preset_label in container_layout_presets %}
               <option value="{{ preset_key }}" {% if preset_key == row.layout_key %}selected{% endif %}>{{ preset_label }}</option>
               {% endfor %}
+              {% if row.layout_key == "custom" %}<option value="custom" selected disabled>سفارشی (با کشیدن مرز ستون‌ها)</option>{% endif %}
             </select>
           </label>
           <button type="button" class="outline small rs-container-remove" data-rastisi-action="remove-container" data-container-id="{{ row.container_id }}" data-container-empty="{{ row.is_empty|yesno:'true,false' }}" data-container-members="{{ row.members|length }}" {% if row.is_locked %}disabled title="این چیدمان قفل است"{% endif %}>{% rs_icon "trash" %}حذف چیدمان</button>

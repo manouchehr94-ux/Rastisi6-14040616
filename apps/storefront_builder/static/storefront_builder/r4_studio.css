@@ -668,3 +668,43 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 .rs-studio .rs-container-group .outline-header > span{flex:1 1 100%}
 .rs-studio .rs-container-group .outline-header > label{flex:1 1 150px;min-width:0}
 .rs-studio .rs-container-group .outline-header .r4-structure-layout-select{width:100%}
+
+/* ---- V5-RESIZE: on-canvas layer (contextual toolbar + resize handles). A transparent overlay above the preview: it never takes pointer
+   events itself, only the toolbar buttons and the handles do, so no invisible layer lies over the storefront content. ---- */
+.rs-studio .rs-overlay{position:absolute;inset:0;z-index:30;pointer-events:none;direction:rtl;overflow:hidden}
+.rs-studio .rs-overlay [hidden]{display:none}
+.rs-studio .rs-sel-toolbar{position:absolute;display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:#10192b;color:#e8edf6;box-shadow:0 8px 24px #0a122a52;pointer-events:auto;white-space:nowrap}
+.rs-studio .rs-sel-toolbar .rs-tb-btn{width:36px;height:36px;min-width:36px;padding:0;border-radius:9px;color:#cfd8e8;border:0;background:transparent}
+.rs-studio .rs-sel-toolbar .rs-tb-btn svg{width:18px;height:18px;flex:none}
+.rs-studio .rs-sel-toolbar .rs-tb-btn:hover:not(:disabled){background:#22304b;color:#fff}
+.rs-studio .rs-sel-toolbar .rs-tb-btn:disabled{color:#64708a;background:transparent}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.primary{width:auto;padding:0 14px 0 12px;background:#22c55e;color:#04230f;font-weight:700;gap:6px}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.primary:hover:not(:disabled){background:#4ade80;color:#04230f}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.primary + .rs-tb-btn{margin-inline-start:4px}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="up"],.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="remove"],.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="close"]{position:relative}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="up"]::before,.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="remove"]::before,.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="close"]::before{content:"";position:absolute;inset-inline-start:-2px;top:9px;bottom:9px;width:1px;background:#2b3a57}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="remove"]:hover:not(:disabled){background:#4a1f2a;color:#ffb4b8}
+.rs-studio .rs-sel-toolbar .rs-tb-btn:focus-visible{outline:2px solid #86efac;outline-offset:1px}
+.rs-studio .rs-handle{position:absolute;display:flex;align-items:center;justify-content:center;padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;z-index:2}
+.rs-studio .rs-handle i{display:block;border-radius:99px;background:var(--primary);box-shadow:0 0 0 2px #fff,0 2px 8px #1d1f2b4d;transition:transform .12s}
+.rs-studio .rs-handle:hover i,.rs-studio .rs-handle.dragging i,.rs-studio .rs-handle:focus-visible i{transform:scale(1.18);background:#3f3acf}
+.rs-studio .rs-handle:focus-visible{outline:2px solid #3f3acf;outline-offset:2px}
+.rs-studio .rs-handle-h{cursor:ns-resize}.rs-studio .rs-handle-h i{width:44px;height:6px}
+.rs-studio .rs-handle-s{cursor:ns-resize}.rs-studio .rs-handle-s i{width:44px;height:6px;background:#0f9d73}
+.rs-studio .rs-handle-w{cursor:ew-resize}.rs-studio .rs-handle-w i{width:6px;height:30px}
+.rs-studio .rs-handle-c{cursor:col-resize}.rs-studio .rs-handle-c i{width:6px;height:44px;background:#0f9d73}
+/* touch target >= 40px without changing the visible bar */
+.rs-studio .rs-handle-h::after,.rs-studio .rs-handle-s::after{content:"";position:absolute;inset:-12px 0}
+.rs-studio .rs-handle-w::after,.rs-studio .rs-handle-c::after{content:"";position:absolute;inset:0 -12px}
+.rs-studio .rs-overlay.is-dragging{cursor:grabbing}
+.rs-studio .rs-hint{position:absolute;padding:5px 10px;border-radius:8px;background:#10192b;color:#fff;font-size:12px;font-weight:600;box-shadow:0 6px 18px #0a122a52;pointer-events:none;white-space:nowrap;z-index:3}
+.rs-studio .rs-hint.note{max-width:min(420px,70%);white-space:normal;font-weight:500;background:#fff7e6;color:#6b4a00;border:1px solid #f0d9a2;box-shadow:0 4px 14px #4a37000f}
+.rs-studio .rs-auto-chip{position:absolute;padding:3px 11px;min-height:28px;border-radius:99px;background:#fff;border:1px solid #cfd0e6;color:var(--primary);font-size:12px;font-weight:600;pointer-events:auto;box-shadow:0 2px 8px #1d1f2b26;z-index:2}
+.rs-studio .rs-auto-chip:hover{background:var(--primary-soft)}
+@media (pointer:coarse){
+  .rs-studio .rs-sel-toolbar .rs-tb-btn{width:44px;height:44px;min-width:44px}
+  .rs-studio .rs-sel-toolbar .rs-tb-btn.primary{width:auto}
+  .rs-studio .rs-handle-h::after,.rs-studio .rs-handle-s::after{inset:-16px 0}
+  .rs-studio .rs-handle-w::after,.rs-studio .rs-handle-c::after{inset:0 -16px}
+  .rs-studio .rs-handle-w i{width:8px;height:40px}.rs-studio .rs-handle-c i{width:8px}
+}

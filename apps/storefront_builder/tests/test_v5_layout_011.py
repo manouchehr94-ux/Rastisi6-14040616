@@ -322,27 +322,32 @@ class UiContractTests(_Base):
 
 
 class LayoutHeightContractTests(_Base):
-    """V5-LAYOUT-012 — the stacked preset matches heights with SURFACES only: layout-key scoped, no fixed heights, nothing clipped."""
+    """V5-RESIZE — the ONE surface / media-fill primitive: the visible frame grows, content is never stretched, clipped or given a height."""
 
     APP = __import__("pathlib").Path(__file__).resolve().parents[1]
+    FRAMES = (".hero-inner", ".fashion-hero-inner", ".hero-split-inner", ".hero-atelier-inner", ".hero-luxury-stage", ".promo-dark")
+
+    def _css(self):
+        return (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
 
     def _block(self):
         import re
 
-        css = (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
-        start = css.index("V5-LAYOUT-012 — height coordination")
+        css = self._css()
+        start = css.index("V5-RESIZE — the central SURFACE / MEDIA FILL primitive")
         end = css.index("@media (max-width: 1000px) {\n  .rcontainer[data-layout=\"big_right_two_left\"][data-mobile-mode=\"stack\"]", start)
-        return re.sub(r"/\*.*?\*/", "", css[start - 3:end], flags=re.S)
+        return re.sub(r"/\*.*?\*/", "", css[css.rindex("/*", 0, start):end], flags=re.S)
 
-    def test_every_rule_is_scoped_to_the_stacked_layout_key_so_legacy_natural_and_equal_cannot_change(self):
+    def test_only_stacked_cells_and_manual_height_sections_are_fill_contexts_legacy_modes_are_untouched(self):
         import re
 
         block = self._block()
-        selectors = [s.strip() for rule in re.findall(r"([^{}]+)\{", block) for s in rule.split(",")]
-        self.assertGreaterEqual(len(selectors), 4)
-        for selector in selectors:
-            self.assertTrue(selector.startswith('.rcontainer[data-layout="big_right_two_left"]'), selector)
-        css = (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
+        for selector in [rule.strip() for rule in re.findall(r"([^{}]+)\{", block) if "@media" not in rule]:       # whole prelude (commas live inside :is())
+            self.assertTrue(
+                'data-layout="big_right_two_left"' in selector or 'data-d~="minh"' in selector or 'data-d~="w' in selector,
+                "a rule outside the stacked layout / manual-size contexts: %r" % selector,
+            )
+        css = self._css()
         for legacy in ('.rcontainer[data-height-mode="natural"] > .rcontainer-cell {\n  align-self: start;\n}',
                        '.rcontainer[data-height-mode="equal"] > .rcontainer-cell {\n  align-self: stretch;\n  height: auto;'):
             self.assertIn(legacy, css)                                              # the existing contract is byte-for-byte untouched
@@ -353,15 +358,57 @@ class LayoutHeightContractTests(_Base):
         block = self._block()
         for forbidden in ("overflow", "object-fit", "transform", "height: 100%", "pcard", "pcarousel", " img", "!important"):
             self.assertNotIn(forbidden, block, forbidden)
-        for declaration in re.findall(r"(?<![-\w])(height|min-height)\s*:\s*([^;]+);", block):
-            self.assertEqual(declaration, ("min-height", "0"), "a fixed/min height was introduced: %r" % (declaration,))   # only the flex «may shrink» reset
-        self.assertIn("align-self: stretch;", block)
-        self.assertIn("> .rsec > .section { flex: 1 1 auto;", block)
-        # the shared banner frame grows from its natural aspect-ratio height (flex-grow) and is capped to a 4:5 portrait of its Cell
-        self.assertIn(".hero-inner { flex: 1 1 auto; max-height: 125cqw; }", block)
+        for declaration in re.findall(r"(?<![-\w])(height|min-height|max-height)\s*:\s*([^;]+);", block):
+            # only: the flex «may shrink» reset, the bounded automatic growth of a media frame, lifting that cap for a manual height, and the phone bound
+            self.assertIn(declaration, (("min-height", "0"), ("max-height", "125cqw"), ("max-height", "none"),
+                                         ("min-height", "min(var(--d-minh), 80vw)")), declaration)
+        self.assertIn("> .section {\n  flex: 1 1 auto;", block)
+        self.assertIn("flex: 1 1 auto;", block)
+
+    def test_the_single_frame_list_names_every_hero_and_banner_family(self):
+        block = self._block()
+        for frame in self.FRAMES:
+            self.assertIn(frame, block)
+
+    def _class_names(self, name, depth=0):
+        import re
+
+        root = self.APP / "templates"
+        text = (root / name).read_text(encoding="utf-8")
+        names = {c for group in re.findall(r'class="([^"]+)"', text) for c in group.split()}
+        if depth < 3:
+            for include in re.findall(r"{% include ['\"]([^'\"]+)['\"]", text):
+                if (root / include).exists():
+                    names |= self._class_names(include, depth + 1)
+        return names
+
+    def test_every_hero_or_banner_section_template_names_its_frame_in_the_central_list(self):
+        import re
+
+        families = sorted(
+            p.name for p in (self.APP / "templates/storefront_builder/sections").glob("*.html")
+            if re.fullmatch(r"(hero_banner.*|image_slider|single_banner|fashion_lifestyle_hero)\.html", p.name)
+        )
+        self.assertGreaterEqual(len(families), 9)
+        for name in families:
+            names = self._class_names("storefront_builder/sections/" + name)
+            self.assertTrue(
+                [f for f in self.FRAMES if f.lstrip(".") in names],
+                "%s names no frame of the central fill primitive (a new family would silently fall outside the contract)" % name,
+            )
+
+    def test_manual_width_rules_exist_and_never_exceed_the_cell(self):
+        block = self._block()
+        self.assertIn('.rsec[data-d~="w"] { width: var(--d-w); max-width: 100%; }', block)
+        for anchor in ("wa-start", "wa-end", "wa-center"):
+            self.assertIn('data-d~="%s"' % anchor, block)
+
+    def test_height_split_rows_never_go_below_their_content(self):
+        block = self._block()
+        self.assertIn("minmax(min-content, var(--stack-top)) minmax(min-content, var(--stack-bottom))", block)
 
     def test_mobile_stack_resets_the_grid_and_adds_no_height(self):
-        css = (self.APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
+        css = self._css()
         mobile = css[css.index('@media (max-width: 1000px) {\n  .rcontainer[data-layout="big_right_two_left"]'):][:800]
         self.assertIn("grid-template-rows: none;", mobile)
         self.assertNotIn("height", mobile.replace("grid-template-rows", ""))
