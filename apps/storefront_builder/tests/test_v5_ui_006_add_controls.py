@@ -40,7 +40,8 @@ class TerminologyTests(R4MutationApiTestCase):
     def test_preview_uses_one_term_for_both_controls(self):
         html = self._preview()
         self.assertIn("افزودن بخش به این خانه", html)                      # empty Cell
-        self.assertIn("افزودن بخش دیگر", html)                              # Cell that already has a Block
+        self.assertIn("افزودن بخش به همین خانه", html)                      # Cell that already has a Block (in-flow row, V5-UI-008)
+        self.assertNotIn("افزودن بخش دیگر", html)
         self.assertNotIn("افزودن کامپوننت", html)
         self.assertNotIn("افزودن محتوا", html)
 
@@ -50,9 +51,9 @@ class TerminologyTests(R4MutationApiTestCase):
         self.assertEqual(tags, ["خانه ۲ · ۴ از ۱۲ ستون", "خانه ۳ · ۴ از ۱۲ ستون"])      # Cell 1 holds the FAQ; 2 and 3 are empty (RTL: 1 = right)
         self.assertEqual(len(re.findall(r'data-empty-cell="\d+"', html)), 2)
 
-    def test_the_level_tag_is_display_only_and_the_controls_still_target_their_own_cell(self):
+    def test_each_empty_cell_control_still_targets_its_own_cell(self):
         html = self._preview()
-        self.assertRegex(html, r'<span class="sfb-container-tag" aria-hidden="true">چیدمان ۳ خانه‌ای</span>')
+        self.assertNotIn("sfb-container-tag", html)                          # V5-UI-008: the hover tag was removed (it collided with the section drag handle)
         for cell_id in re.findall(r'data-empty-cell="(\d+)"', html):
             self.assertRegex(html, r'class="rcontainer-cell sfb-empty-cell"[^>]*data-cell-id="%s"' % cell_id)
 
@@ -67,7 +68,7 @@ class TerminologyTests(R4MutationApiTestCase):
         context = build_universal_storefront_context(Request(), self.store, StorefrontPage.PageType.HOME)
         html = render_to_string("storefront_builder/partials/render_containers.html", {"render_containers": context["render_containers"], "is_preview": False})
         self.assertIn("rcontainer-cell", html)
-        for marker in ("sfb-empty-cell", "sfb-cell-add-more", "sfb-container-tag", "sfb-rcontainer-toolbar", "data-empty-cell", "data-cell-add", "data-cell-id", "افزودن بخش", "افزودن کامپوننت", "چیدمان ۳ خانه‌ای"):
+        for marker in ("sfb-empty-cell", "sfb-cell-add-more", "sfb-container-tag", "sfb-rcontainer-toolbar", "data-empty-cell", "data-cell-add", "data-cell-id", "افزودن بخش", "افزودن کامپوننت"):
             self.assertNotIn(marker, html, marker)
 
 
@@ -79,10 +80,12 @@ class TemplateAndCssContractTests(R4MutationApiTestCase):
                 if not selector or selector.startswith("@"):
                     continue
                 self.assertRegex(selector, r"sfb-|\.rcontainer-cell", selector)
-        # the control that sits over content stays an absolute overlay; the empty-Cell control fills ONLY its own empty Cell
+        # V5-UI-008: the add control of a filled Cell is an IN-FLOW row (never floating over a Block); the empty-Cell control fills only its own empty Cell
         more = re.search(r"\n\.sfb-cell-add-more \{([^}]*)\}", block).group(1)
-        self.assertNotIn("position: static", more)
-        self.assertIn("bottom: -7px;", more)
+        self.assertIn("position: static;", more)
+        self.assertNotIn("absolute", more)
+        self.assertNotIn("opacity: 0", more)                                # always visible: not hover-only
+        self.assertNotIn("pointer-events: none", more)
         empty = re.search(r"\n\.sfb-empty-cell-add \{([^}]*)\}", block).group(1)
         self.assertIn("position: absolute;", empty)
         self.assertIn("inset: 0;", empty)

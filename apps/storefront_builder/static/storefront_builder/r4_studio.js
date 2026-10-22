@@ -1403,7 +1403,7 @@
     });
   });
 
-  // V5-LAYOUT-ATOMIC — a click on an empty Cell (or on «افزودن بخش دیگر» inside a Cell) in the canvas opens the dialog below, which adds
+  // V5-LAYOUT-ATOMIC — a click on an empty Cell (or on «افزودن بخش به همین خانه» inside a Cell) in the canvas opens the dialog below, which adds
   // content to THAT Cell only (R4.addSection(key, cellId) -> the existing cell.add_section), never to the page end.
   // preview.html's own click interceptor swallows every <button> click in edit mode before its sfb:addToCell post can run, and that file is
   // protected; so the Studio listens on the (same-origin) preview WINDOW in the capture phase, which fires before the document-level

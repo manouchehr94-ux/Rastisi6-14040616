@@ -3638,11 +3638,10 @@ html[data-sfb-image-hover="none"] .rsec[data-d~="zoom"] .pcard:hover .img>img[da
    One term: «افزودن بخش». Two controls, two clear jobs —
    · an EMPTY Cell is a framed, labelled region (real column share, a minimum height so the whole box is visible) whose single button
      fills the Cell and opens the add dialog for THIS Cell; the overlay covers only the Cell's own (empty) area, never other content;
-   · a Cell that already holds Blocks keeps a small secondary «افزودن بخش دیگر» pill centred on its bottom edge. It no longer spans the
-     Cell and no longer sits on top of the last Block's content or the section tool strip (which lives at the top inline-end corner).
-   The ONE geometry exception to «builder chrome is layout-neutral» is `.rcontainer-cell.sfb-empty-cell { min-height }`: an empty Cell has
-   no content, so without a height its frame would collapse to a line and the control would have to float over the next section (the
-   V5-FUNC-001 defect). The class exists only in builder markup; published pages are unaffected. */
+   · a Cell that already holds Blocks ends with a small IN-FLOW row «＋ افزودن بخش به همین خانه» (V5-UI-008). It takes a few px of height in
+     the builder only — the Blocks' own size and the published result are unchanged — and in exchange nothing floats over a Block's text.
+   The geometry exceptions to «builder chrome is layout-neutral» are builder-markup-only: `.rcontainer-cell.sfb-empty-cell { min-height }`
+   (an empty Cell has no content, so its frame/control would otherwise collapse — the V5-FUNC-001 defect) and that in-flow add row. */
 .rcontainer-cell.sfb-empty-cell {
   min-height: 132px;
   align-self: stretch;
@@ -3707,49 +3706,55 @@ html[data-sfb-image-hover="none"] .rsec[data-d~="zoom"] .pcard:hover .img>img[da
 }
 
 .sfb-cell-add-more {
-  inset-inline: auto;
-  left: 50%;
-  right: auto;
-  bottom: -7px;
-  width: max-content;
-  max-width: calc(100% - 16px);
-  min-height: 22px;
-  height: 22px;
-  padding: 0 10px;
-  transform: translateX(-50%);
-  border: 1px solid #8b85d6;
-  border-radius: 999px;
-  background: #fff;
-  color: #4b3fc7;
-  font-size: 11px;
+  /* V5-UI-008: an in-flow row at the END of the Cell's content (builder markup only). It sits below the last Block, so it can never lie
+     over a Block's text or selection outline, nor over the next Cell/Container; always visible (touch/keyboard friendly, not hover-only). */
+  position: static;
+  inset: auto;
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: calc(100% - 12px);
+  max-width: none;
+  height: auto;
+  min-height: 30px;
+  margin: 8px 6px 6px;
+  padding: 4px 10px;
+  border: 1px dashed #8b85d6;
+  border-radius: 8px;
+  background: rgba(109, 74, 255, .06);
+  color: #3f3a8f;
+  font-size: 12px;
   font-weight: 600;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(24, 24, 27, .12);
-  opacity: .94;
+  line-height: 1.5;
+  text-align: center;
+  box-shadow: none;
+  opacity: 1;
   pointer-events: auto;
+  cursor: pointer;
 }
-.sfb-cell-add-more:hover, .sfb-cell-add-more:focus-visible { background: #f5f3ff; border-color: #6d4aff; color: #3f3a8f; opacity: 1; }
+.sfb-cell-add-more:hover, .sfb-cell-add-more:focus-visible { background: rgba(109, 74, 255, .12); border-color: #6d4aff; color: #2f2a7a; }
 .sfb-cell-add-more:focus-visible { outline: 3px solid #6d4aff; outline-offset: 2px; }
-
-/* display-only level tag: this frame is the whole LAYOUT (not a Cell, not a Section) */
-.sfb-container-tag {
-  position: absolute;
-  z-index: 17;
-  top: -10px;
-  inset-inline-end: 12px;                /* the left corner in RTL: away from the section tool strip, which sits at the top inline-start */
-  padding: 1px 9px;
-  border-radius: 999px;
-  background: #6d4aff;
-  color: #fff;
-  font-size: 10.5px;
-  line-height: 1.7;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .12s;
-}
-.sfb-builder-container:hover > .sfb-container-tag,
-.sfb-builder-container.sfb-builder-container-selected > .sfb-container-tag { opacity: 1; }
-html[data-sfb-builder-mode="preview"] .sfb-container-tag { display: none !important; }
 
 /* the section tool strip never runs under the drag handle in a narrow Cell: it wraps inside the Cell instead */
 .rcontainer-cell > .rsec > .sfb-rsec-toolbar { flex-wrap: wrap; max-width: calc(100% - 52px); }
+
+/* V5-UI-008 — the container tool strip (▦ / remove-empty) was an absolutely positioned bar stretched across the whole top of each row
+   (left + right both set). Even at opacity 0 it caught the clicks meant for the first Section under it. R4 Studio does not handle its
+   messages (sfb:selectContainer / sfb:containerCommand are out of scope there), so inside the Studio the strip is hidden altogether; in the
+   standalone Preview it shrinks to its buttons and only takes pointer events while it is actually shown. */
+/* Same for the Section drag handle (⋮⋮, top inline-start corner of a selected Section): its dragstart posts sfb:moveBlock / sfb:reorderSections,
+   which R4 Studio does not handle — a dead control that sat on the first lines of the Section's text. Moving a Block is done from «ساختار صفحه». */
+body[data-sfb-studio-host] .sfb-rcontainer-toolbar,
+body[data-sfb-studio-host] .sfb-rsec-drag-handle { display: none !important; }
+.sfb-rcontainer-toolbar { right: auto; width: max-content; pointer-events: none; }
+.sfb-builder-container:hover > .sfb-rcontainer-toolbar button,
+.sfb-builder-container.sfb-builder-container-selected > .sfb-rcontainer-toolbar button { pointer-events: auto; }
+
+/* V5-UI-008 — the hover/selected «section name» tag (a ::before at the Section's top inline-end corner) lay on the first line of the Section's
+   own text. In the Studio the hovered/selected Section already shows its violet outline and the inspector/structure panel name it, so the tag
+   is dropped there for Sections that have content. The empty-Section placeholder chip (.sfb-rsec-builder-empty) is a different control and stays. */
+body[data-sfb-studio-host] .sfb-preview-sections .rsec[data-section-id]:not(.sfb-rsec-builder-empty):hover::before,
+body[data-sfb-studio-host] .sfb-preview-sections .rsec[data-section-id].sfb-rsec-selected:not(.sfb-rsec-builder-empty)::before { content: none; display: none; }

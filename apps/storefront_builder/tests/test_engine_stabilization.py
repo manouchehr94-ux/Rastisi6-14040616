@@ -664,9 +664,20 @@ class BuilderChromeIsLayoutNeutralTests(SimpleTestCase):
             self.assertNotRegex(body, r"display\s*:", selector)
 
     def test_add_controls_and_hidden_cell_notices_are_absolute_overlays(self):
-        for needle in (".sfb-cell-add-more", ".sfb-empty-cell-add", ".sfb-hidden-cell-content"):
+        # ``.sfb-cell-add-more`` is no longer an overlay: V5-UI-008 made it an in-flow row below the Cell's last Block (see next test)
+        for needle in (".sfb-empty-cell-add", ".sfb-hidden-cell-content"):
             bodies = " ".join(body for selector, body in _css_rules(BUILDER_CSS, needle) if selector.strip() == needle)
             self.assertIn("position:absolute", bodies.replace(" ", ""), needle)
+
+    def test_the_filled_cell_add_control_is_an_in_flow_row_and_never_floats_over_blocks(self):
+        last = [body for selector, body in _css_rules(BUILDER_CSS, ".sfb-cell-add-more") if selector.strip() == ".sfb-cell-add-more"][-1]
+        compact = last.replace(" ", "")
+        self.assertIn("position:static", compact)
+        self.assertNotIn("transform:translate", compact)
+        self.assertNotIn("bottom:-", compact)
+        # it exists only in builder markup (render_containers.html is_preview branches), so published geometry is untouched
+        template = (APP / "templates" / "storefront_builder" / "partials" / "render_containers.html").read_text(encoding="utf-8")
+        self.assertEqual(template.count('class="sfb-cell-add-more"'), 2)         # both inside is_preview branches; the published HTML is asserted in test_v5_ui_006_add_controls
 
     def test_the_only_builder_geometry_exceptions_are_visible_minimums_for_content_less_cells(self):
         # V5-UI-006/007: an EMPTY Cell (and a Cell holding only content-less sections) gets a visible minimum height so its frame and its add
