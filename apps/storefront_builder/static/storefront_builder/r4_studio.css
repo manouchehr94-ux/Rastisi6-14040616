@@ -708,3 +708,12 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
   .rs-studio .rs-handle-w::after,.rs-studio .rs-handle-c::after{inset:0 -16px}
   .rs-studio .rs-handle-w i{width:8px;height:40px}.rs-studio .rs-handle-c i{width:8px}
 }
+
+/* ---- V5 announcement strip block (global design panel) ---- */
+.rs-studio .r4-announce-block{display:flex;flex-direction:column;gap:8px}
+.rs-studio .r4-announce-image{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fafafc}
+.rs-studio .r4-announce-image-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rs-studio .r4-announce-thumb{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:40px;padding:0 6px;border:1px dashed #c9ccd6;border-radius:8px;background:#fff;color:var(--muted);font-size:11px}
+.rs-studio .r4-announce-thumb img{max-height:32px;max-width:96px;object-fit:contain}
+.rs-studio .r4-announce-image [data-r4-announce-status].is-error{color:var(--danger)}
+.rs-studio .r4-announce-image[aria-busy="true"] button{pointer-events:none;color:var(--disabled-ink)}

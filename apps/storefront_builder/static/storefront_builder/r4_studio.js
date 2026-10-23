@@ -1268,6 +1268,20 @@
         }
         break;
       }
+      case 'open-announcement': {
+        // V5 «نوار اطلاعیه» library card: creates NO section. It switches the ONE header announcement strip on (the switch's own change
+        // handler in r4_editor.js sends header.update — one Revision, Undo-able) and opens its settings in «طراحی سراسری».
+        closeModal(false);
+        focusGlobalRegion('header');
+        var annSwitch = document.querySelector('#r4GlobalDesign [data-r4-global-field="announcement_enabled"]');
+        if (annSwitch && !annSwitch.checked) {
+          annSwitch.checked = true;
+          annSwitch.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        var annBlock = document.querySelector('[data-r4-announce-block]');
+        if (annBlock) annBlock.scrollIntoView({ block: 'start', behavior: 'instant' });
+        break;
+      }
       case 'section-enable': sectionCommand('toggle_active'); break;
       case 'section-lock': sectionCommand('toggle_locked'); break;
       case 'section-up': sectionCommand('up'); break;
@@ -1828,8 +1842,21 @@
     markSelectedRow();
   });
 
+  // The global-design panel is re-rendered from the server after every accepted edit, which used to fold every «سربرگ / فوتر / …» section the
+  // merchant had open (so editing a header's six announcement fields meant re-opening it after each one). UI-only: remember which of those
+  // <details> are open and re-open them after the refresh. Nothing is stored; nothing is sent.
+  var openGlobalDetails = {};
+  root.addEventListener('toggle', function (evt) {
+    var details = evt.target;
+    if (details && details.matches && details.matches('#r4GlobalDesign details[id]')) openGlobalDetails[details.id] = details.open;
+  }, true);
+
   root.addEventListener('r4:global-refreshed', function () {
     if (ui.mode === 'global') setGlobalTab(root.dataset.rsGlobalTab || 'visual');
+    Object.keys(openGlobalDetails).forEach(function (id) {
+      var details = document.getElementById(id);
+      if (details && openGlobalDetails[id] && !details.open) details.open = true;
+    });
   });
 
   root.addEventListener('r4:device', function (evt) {

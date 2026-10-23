@@ -3197,6 +3197,21 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
     ),
+    "linked_image": SectionDefinition(
+        key="linked_image", label_fa="عکس لینک‌دار", icon="image",
+        # V5 — ONE independent picture with an optional link: no title, no copy, no button, no promo frame. Its picture is the ONE
+        # section-scoped PromotionalBanner row of THIS Section (the canonical media CRUD / MediaAsset authority — so Draft copy, duplicate,
+        # history and ownership already apply) and the link is that same row's DestinationMixin. It NEVER falls back to the store-wide banner
+        # pool (``_linked_image_context``): an empty section shows nothing in Published and a clear placeholder in the Studio.
+        # Presentation = the shared Design Block («نحوه جاگیری تصویر», «کانون تصویر», radius / frame / spacing) + the V5 Visual Resize contract.
+        capabilities=frozenset({
+            "layout_width", "motion", "design_frame", "design_image_fit", "design_image_position"}),
+        template_name="storefront_builder/sections/linked_image.html",
+        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
+        description_fa="فقط یک تصویر، با لینک اختیاری؛ بدون عنوان، متن و دکمه. مناسب خانه‌های کوچک و بزرگ چیدمان.",
+        settings_schema=SettingsSchema(fields=()),
+    ),
     "multi_banner": SectionDefinition(
         key="multi_banner", label_fa="ردیف چند بنری", icon="layout-grid",
         capabilities=frozenset({

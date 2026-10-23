@@ -176,6 +176,20 @@ sender). This whole element is re-fetched by R4 after structural mutations.
           </div>
         </section>
         {% endfor %}
+        {% comment %}V5 «نوار اطلاعیه»: NOT a section — the ONE announcement strip of the header (global setting, always above the header, one per store).
+        The card switches it on and opens its settings in «طراحی سراسری»; r4_studio.js "open-announcement" sends nothing itself (the field's own
+        change handler writes through header.update).{% endcomment %}
+        <section class="rs-library-group" data-rs-library-group>
+          <h3 class="section-label">نوار بالای صفحه</h3>
+          <div class="rs-library-grid">
+            <button type="button" class="rs-library-card" data-rastisi-action="open-announcement" data-rs-library-label="نوار اطلاعیه" data-rs-library-category="نوار بالای صفحه">
+              <span class="rs-wire rs-wire--strip" aria-hidden="true"><i></i><i></i><i></i></span>
+              <strong>{% rs_icon "megaphone" %}<span>نوار اطلاعیه</span></strong>
+              <small>نوار باریک بالای هدر با متن، تصویر کوچک و لینک اختیاری. همان «نوار اعلان» فروشگاه است؛ بخش جدیدی به صفحه اضافه نمی‌شود.</small>
+              <em>نوار بالای صفحه</em>
+            </button>
+          </div>
+        </section>
       </div>
       <div class="section-divider"></div>
       {% endif %}

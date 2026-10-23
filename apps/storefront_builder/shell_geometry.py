@@ -38,6 +38,8 @@ class ShellGeometryProperty:
     variants: tuple[str, ...] = ()
 
 
+#: ``"*"`` in ``variants`` = every variant (the announcement strip is the same shared element in all of them).
+_ALL = "*"
 _H = "stationery_search"
 _F = "stationery_dark"
 
@@ -57,6 +59,10 @@ SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key
     ShellGeometryProperty("chip_fill", "header", "رنگ دکمه برجسته", "color", css_var="--gh-chip-fill", variants=(_H,)),
     ShellGeometryProperty("chip_fill_alt", "header", "رنگ دکمه برجسته دوم", "color", css_var="--gh-chip-fill-alt", variants=(_H,)),
     ShellGeometryProperty("chip_text", "header", "رنگ متن دکمه‌های برجسته", "color", css_var="--gh-chip-text", variants=(_H,)),
+    # V5 announcement strip (every header variant): colours + the size of the small picture beside the text
+    ShellGeometryProperty("announce_bg", "header", "رنگ پس‌زمینهٔ نوار اطلاعیه", "color", css_var="--gh-announce-bg", variants=(_ALL,)),
+    ShellGeometryProperty("announce_fg", "header", "رنگ متن نوار اطلاعیه", "color", css_var="--gh-announce-fg", variants=(_ALL,)),
+    ShellGeometryProperty("announce_image_size", "header", "اندازهٔ تصویر کنار متن (px)", "int", 16, 40, 24, "--gh-announce-img", variants=(_ALL,)),
     ShellGeometryProperty("bar_height", "footer", "ارتفاع نوار پیوندها (px، ۰ = خودکار)", "int", 0, 200, 0, "--gf-bar-h", variants=(_F,)),
     ShellGeometryProperty("grid_min_height", "footer", "حداقل ارتفاع بلوک ستون‌ها (px)", "int", 0, 800, 440, "--gf-grid-h", variants=(_F,)),
     ShellGeometryProperty("column_count", "footer", "تعداد ستون‌ها", "int", 2, 6, 4, "--gf-cols", unit="", variants=(_F,)),
@@ -74,7 +80,7 @@ _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890
 
 
 def properties_for(region: str, variant: str | None = None) -> list[ShellGeometryProperty]:
-    return [p for (r, _k), p in SHELL_GEOMETRY.items() if r == region and (variant is None or variant in p.variants)]
+    return [p for (r, _k), p in SHELL_GEOMETRY.items() if r == region and (variant is None or _ALL in p.variants or variant in p.variants)]
 
 
 def validate_geometry(raw: object, region: str) -> dict:

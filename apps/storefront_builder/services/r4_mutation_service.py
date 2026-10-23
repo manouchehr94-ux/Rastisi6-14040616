@@ -375,6 +375,7 @@ R4_ERROR_MESSAGES_FA = {
     "container_has_locked_section": "یکی از بخش‌های این چیدمان قفل است؛ ابتدا قفل آن را باز کنید. چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
     "invalid_resize_value": "اندازهٔ واردشده معتبر نیست یا خارج از محدودهٔ مجاز است؛ هیچ تغییری ذخیره نشد.",
     "invalid_resize_layout": "این چیدمان با این تغییر اندازه سازگار نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_announcement_image": "تصویر نوار اطلاعیه متعلق به این فروشگاه نیست یا وجود ندارد؛ هیچ تغییری ذخیره نشد.",
     "container_has_row_member": "یکی از بخش‌های این چیدمان عضو یک ردیف چندبخشی قدیمی است؛ چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
 }
 
@@ -1226,8 +1227,17 @@ _HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
     {
         "header_variant", "announcement_text", "announcement_show_phone",
         "announcement_links", "extra_blocks", "responsive", "geometry",
+        # V5 — the announcement bar's picture / link / alignment / page scope (sparse extension of the SAME header_config)
+        "announcement_image_asset_id", "announcement_image_alt", "announcement_image_side",
+        "announcement_link_url", "announcement_link_new_tab", "announcement_align", "announcement_pages",
     }
     | set(HEADER_TOGGLE_FIELDS)
+)
+
+
+_ANNOUNCEMENT_EXTRA_KEYS = (
+    "announcement_image_asset_id", "announcement_image_alt", "announcement_image_side",
+    "announcement_link_url", "announcement_link_new_tab", "announcement_align", "announcement_pages",
 )
 
 
@@ -1250,6 +1260,9 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["announcement_show_phone"] = patch["announcement_show_phone"]
     if "announcement_links" in patch:
         candidate["announcement_links"] = patch["announcement_links"]
+    for key in _ANNOUNCEMENT_EXTRA_KEYS:
+        if key in patch:
+            candidate[key] = patch[key]
     if "extra_blocks" in patch:
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
@@ -1260,7 +1273,15 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     try:
         cleaned = layout_service.validate_header_config(candidate)
     except layout_service.HeaderConfigValidationError as exc:
-        raise R4MutationError("invalid_header_config") from exc
+        # the validator's own Persian sentence names the control and the rule («لینک نوار اعلان…»), so the merchant sees WHY nothing was saved
+        raise R4MutationError("invalid_header_config", payload={"message": f"{exc}؛ هیچ تغییری ذخیره نشد."}) from exc
+    # V5 — the announcement picture must be a MediaAsset of THIS Draft's store (never another tenant's, never a made-up id)
+    asset_id = cleaned.get("announcement_image_asset_id")
+    if asset_id is not None:
+        from apps.content.models import MediaAsset
+
+        if not MediaAsset.objects.filter(pk=asset_id, store_id=draft.layout.store_id).exists():
+            raise R4MutationError("invalid_announcement_image")
 
     # Persist the full validated header config first (toggles/announcement/
     # content preserved), then delegate the typed manifest header selection

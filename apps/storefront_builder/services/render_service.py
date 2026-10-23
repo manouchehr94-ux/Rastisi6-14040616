@@ -151,6 +151,15 @@ def _single_banner_context(store, section):
     return {"banners": _scoped_banners(store, section)[:1]}
 
 
+def _linked_image_context(store, section):
+    """V5 «عکس لینک‌دار» — ONLY this section's own picture row (no fallback to the store-wide banner pool, ever): a missing picture must show
+    nothing, never a random / default store banner. ``banners`` is a 0-or-1 list so the shared empty-state plumbing and the template agree."""
+    banner = PromotionalBanner.objects.filter(
+        store=store, section=section, is_active=True,
+    ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id").first()
+    return {"banners": [banner] if banner is not None else []}
+
+
 def _multi_banner_context(store, section):
     """Resolve a reusable slice of active promotional banners.
 
@@ -591,7 +600,7 @@ def _product_section_context(store, section):
 #: تکرارشده (duplicable) با تنظیماتِ متفاوت (مثلاً دو کالکشنِ متفاوت)
 #: محتوایِ یکسان (نمونه‌ی اول) نشان می‌دهند.
 PER_INSTANCE_SECTION_KEYS = {
-    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "multi_banner",
+    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "linked_image", "multi_banner",
     "category_grid", "brand_carousel", "collection_tiles", "quick_links", "video_section", "story_rail",
     #: Part 2D — same reason as ``product_section``/``category_grid``
     #: above: this builder's output depends on the section's own
@@ -750,6 +759,7 @@ _CONTEXT_BUILDERS = {
     "hero_banner": _hero_banner_context,
     "image_slider": _image_slider_context,
     "single_banner": _single_banner_context,
+    "linked_image": _linked_image_context,
     "multi_banner": _multi_banner_context,
     "category_grid": _category_grid_context,
     "featured_products": _featured_products_context,

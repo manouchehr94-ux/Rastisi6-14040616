@@ -5,13 +5,16 @@ Required context: ``hc``/``rc`` (``header_config``/``header_config.responsive``
 — every variant template sets these via ``{% with hc=... rc=... %}``
 before including this partial, exactly like page_shell_header.html does).
 {% endcomment %}
-{% if hc.announcement_enabled %}
+{% load storefront_builder_extras %}
+{% announcement_view hc as ann %}
+{% if hc.announcement_enabled and ann.visible %}
 <div class="gh-announce{% if is_builder_preview %} sfb-builder-announcement{% endif %}"
      {% if is_builder_preview %}data-builder-announcement{% endif %}
+     {% if ann.extended %}data-ann-x{% if ann.align %} data-ann-align="{{ ann.align }}"{% endif %}{% if ann.style %} style="{{ ann.style }}"{% endif %}{% endif %}
      {% if rc.announcement_enabled.hide_on_tablet %}data-shell-hide-tablet{% endif %}
      {% if rc.announcement_enabled.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
   <div class="wrap">
-    <span>{{ hc.announcement_text|default:"🚚 ارسال رایگان برای سفارش‌های بالای ۵۰۰,۰۰۰ تومان" }}</span>
+    {% include "storefront_builder/partials/global_header/_shared/announcement_content.html" %}
     <div class="gh-announce-links">
       {% if is_builder_preview %}
       <button type="button" class="sfb-announcement-edit-button" data-open-header-settings title="ویرایش نوار اعلان">⚙ ویرایش</button>

@@ -1,4 +1,4 @@
-{% load persian %}{% comment %}
+{% load persian %}{% load storefront_builder_extras %}{% comment %}
 Canonical Header/Navigation shell — the single implementation shared by the
 public Storefront (apps/catalog/templates/catalog/home_visual.html) and the
 Builder Preview (apps/storefront_builder/templates/storefront_builder/preview.html).
@@ -27,12 +27,14 @@ Builder Preview iframe (non-navigating, no live customer session/cart is ever
 touched from Preview) — everything else (mega-menu, categories) is identical.
 {% endcomment %}
 {% with hc=header_config rc=header_config.responsive %}
-{% if hc.announcement_enabled %}
+{% announcement_view hc as ann %}
+{% if hc.announcement_enabled and ann.visible %}
 <div class="announce{% if is_builder_preview %} sfb-builder-announcement{% endif %}"
      {% if is_builder_preview %}data-builder-announcement{% endif %}
+     {% if ann.extended %}data-ann-x{% if ann.align %} data-ann-align="{{ ann.align }}"{% endif %}{% if ann.style %} style="{{ ann.style }}"{% endif %}{% endif %}
      {% if rc.announcement_enabled.hide_on_tablet %}data-shell-hide-tablet{% endif %}
      {% if rc.announcement_enabled.hide_on_mobile %}data-shell-hide-mobile{% endif %}><div class="wrap">
-  <span>{{ hc.announcement_text|default:"🚚 ارسال رایگان برای سفارش‌های بالای ۵۰۰,۰۰۰ تومان" }}</span>
+  {% include "storefront_builder/partials/global_header/_shared/announcement_content.html" %}
   <div class="links">
     {% if is_builder_preview %}
     <button type="button" class="sfb-announcement-edit-button" data-open-header-settings title="ویرایش نوار اعلان">⚙ ویرایش</button>

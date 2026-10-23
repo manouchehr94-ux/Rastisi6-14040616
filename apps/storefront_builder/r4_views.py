@@ -424,6 +424,20 @@ _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
 }
 
 
+def _announcement_image_url(draft, header) -> str:
+    """Thumbnail of the announcement picture for the Studio panel (store-scoped MediaAsset only; empty when unset / foreign)."""
+    asset_id = (header or {}).get("announcement_image_asset_id")
+    if not asset_id:
+        return ""
+    from apps.content.models import MediaAsset
+
+    asset = MediaAsset.objects.filter(pk=asset_id, store_id=draft.layout.store_id).first()
+    try:
+        return asset.image.url if asset is not None and asset.image else ""
+    except ValueError:
+        return ""
+
+
 def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
     """R4 Task 11 (Section 23) — the Global Design panel's ENTIRE read
     projection: server-authoritative current config + registry-driven
@@ -497,9 +511,16 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         ),
         # Merchant-editable geometry/colour of the SELECTED header/footer variant (only the properties that
         # variant actually draws — shell_geometry.SHELL_GEOMETRY).
-        "header_geometry": shell_geometry.serialize_for_inspector(
-            "header", header.get("header_variant"), header.get("geometry"),
-        ),
+        "header_geometry": [
+            prop for prop in shell_geometry.serialize_for_inspector("header", header.get("header_variant"), header.get("geometry"))
+            if not prop["key"].startswith("announce_")
+        ],
+        # V5 — the announcement strip's own colour / picture-size controls (shown inside its block, not among the variant's geometry)
+        "header_announce_geometry": [
+            prop for prop in shell_geometry.serialize_for_inspector("header", header.get("header_variant"), header.get("geometry"))
+            if prop["key"].startswith("announce_")
+        ],
+        "announcement_image_url": _announcement_image_url(draft, header),
         "footer_geometry": shell_geometry.serialize_for_inspector(
             "footer", footer.get("footer_variant"), footer.get("geometry"),
         ),
@@ -977,6 +998,32 @@ def _is_strict_int(value: object) -> bool:
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_announcement_image(request):
+    """V5 — upload the announcement strip's small picture into THIS store's MediaAsset library (the same model, size limit and Pillow content
+    check as every other storefront picture) and return its id. It writes NO design state: the Studio then sends the normal ``header.update``
+    mutation (``announcement_image_asset_id``) — the single write authority with Revision / Undo / Draft isolation. A failed upload leaves
+    nothing behind (validation runs before the row exists)."""
+    from django.core.exceptions import ValidationError
+
+    from apps.content.models import MediaAsset
+
+    store = resolve_store_for_service(request)
+    upload = request.FILES.get("image")
+    if upload is None or len(request.FILES) != 1:
+        return JsonResponse({"ok": False, "code": "invalid_upload", "message": "یک تصویر انتخاب کنید."}, status=400)
+    asset = MediaAsset(store=store, image=upload)
+    try:
+        asset.full_clean()
+    except ValidationError as exc:
+        messages = exc.messages or ["تصویر نامعتبر است."]
+        return JsonResponse({"ok": False, "code": "invalid_image", "message": "؛ ".join(messages)}, status=400)
+    asset.save()
+    return JsonResponse({"ok": True, "asset_id": asset.pk, "url": asset.image.url})
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
 def storefront_r4_mutation(request):
     store = resolve_store_for_service(request)
 
@@ -1365,14 +1412,14 @@ def storefront_r4_section_inspector(request, pk):
             "dashboard:storefront-builder-section-media-list",
             kwargs={"pk": section.pk, "kind": media_kind},
         )
-        media_label_plural = media_views.media_label_for_kind(media_kind)
+        media_label_plural = media_views.media_config_for_kind(media_kind, section.section_key)["label_plural"]
         # Phase 5 Task 4 (remediation R1a) — R4-native media editing. Instead of
         # only linking out to the legacy screen, the Inspector embeds the
         # canonical media manager inline (the same media_views models/CRUD/
         # authority; never a second media system). The add/edit form and every
         # CRUD reswap happen through the existing media endpoints via htmx,
         # staying inside R4.
-        media_config = media_views.media_config_for_kind(media_kind)
+        media_config = media_views.media_config_for_kind(media_kind, section.section_key)
         media_items = list(
             media_config["model"].objects.filter(section=section).order_by("display_order", "id")
         )

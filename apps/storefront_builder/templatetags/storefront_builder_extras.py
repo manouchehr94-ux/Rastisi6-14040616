@@ -6,6 +6,8 @@ from django.contrib.staticfiles import finders
 from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
+from ..semantic_colors import semantic_color_css, semantic_foreground_css
+
 register = template.Library()
 
 
@@ -229,7 +231,7 @@ _LIBRARY_WIRE = {
     "featured_products": "grid", "newest_products": "grid", "best_sellers": "grid", "discounted_products": "grid",
     "amazing_offers": "grid", "product_section": "grid", "catalog_product_wall": "grid", "category_grid": "grid",
     "collection_tiles": "grid", "brand_carousel": "grid",
-    "hero_banner": "wide", "fashion_lifestyle_hero": "wide", "image_slider": "wide", "single_banner": "wide",
+    "hero_banner": "wide", "fashion_lifestyle_hero": "wide", "image_slider": "wide", "single_banner": "wide", "linked_image": "wide",
     "multi_banner": "cards", "promo_cards": "cards",
     "image_text": "split", "video_section": "split",
     "rich_text": "lines", "blog_posts": "lines", "faq": "lines", "testimonials": "lines", "newsletter": "lines",
@@ -342,7 +344,8 @@ def media_default_state(section, config):
     from ..services import media_defaults_service
 
     model = config.get("model") if hasattr(config, "get") else None
-    if model is None:
+    if model is None or config.get("no_defaults"):
+        # a section type that owns exactly its own picture (V5 «عکس لینک‌دار») never shows / adopts the store-wide default rows
         return media_defaults_service.DefaultMediaState()
     return media_defaults_service.default_media_state(section, model)
 
@@ -449,3 +452,60 @@ def static_v(path):
             cached = (mtime, hashlib.sha1(handle.read()).hexdigest()[:10])
         _STATIC_VERSION_CACHE[absolute] = cached
     return f"{url}?v={cached[1]}"
+
+
+@register.simple_tag(takes_context=True)
+def announcement_view(context, header_config):
+    """V5 — the ONE read model of the header's announcement strip (every header variant + the legacy shell read it through the shared
+    ``_shared/announcement_content.html``). Pure projection of ``header_config`` (single source); ``extended`` is False for a header that never
+    used the V5 keys, so those render the historical markup byte-for-byte.
+
+    * ``visible`` — the page scope (``announcement_pages``: all pages (default) or the home page only);
+    * ``image_url`` — the small picture, resolved ONLY from a ``MediaAsset`` of the current store (fail-closed: a foreign / deleted id shows nothing);
+    * ``style`` — merchant colours (``geometry.announce_bg`` / ``announce_fg``, semantic colours resolved + contrast-safe foreground)."""
+    hc = header_config if isinstance(header_config, dict) else {}
+    request = context.get("request")
+    page_type = context.get("page_type")
+    on_home = (page_type == "home") if page_type else bool(
+        getattr(getattr(request, "resolver_match", None), "url_name", "") == "home"
+    )
+    visible = hc.get("announcement_pages", "all") != "home" or on_home
+
+    image_url = ""
+    asset_id = hc.get("announcement_image_asset_id")
+    if asset_id:
+        store = context.get("store") or getattr(request, "store", None)
+        if store is not None:
+            from apps.content.models import MediaAsset
+
+            asset = MediaAsset.objects.filter(pk=asset_id, store=store).first()
+            if asset is not None and getattr(asset, "image", None):
+                try:
+                    image_url = asset.image.url
+                except ValueError:
+                    image_url = ""
+
+    geometry = hc.get("geometry") if isinstance(hc.get("geometry"), dict) else {}
+    css = []
+    background = semantic_color_css(geometry.get("announce_bg")) if geometry.get("announce_bg") else ""
+    foreground = semantic_color_css(geometry.get("announce_fg")) if geometry.get("announce_fg") else ""
+    if background:
+        css.append(f"background:{background}")
+        if not foreground:
+            foreground = semantic_foreground_css(geometry["announce_bg"])
+    if foreground:
+        css.append(f"color:{foreground}")
+    try:
+        size = int(geometry.get("announce_image_size") or 24)
+    except (TypeError, ValueError):
+        size = 24
+
+    link_url = hc.get("announcement_link_url") or ""
+    align = hc.get("announcement_align") or ""
+    extended = bool(image_url or link_url or align or css)
+    return {
+        "visible": visible, "extended": extended, "image_url": image_url,
+        "image_alt": hc.get("announcement_image_alt") or "", "image_side": hc.get("announcement_image_side") or "start",
+        "image_size": max(16, min(40, size)), "url": link_url, "new_tab": bool(hc.get("announcement_link_new_tab")),
+        "align": align, "style": ";".join(css),
+    }

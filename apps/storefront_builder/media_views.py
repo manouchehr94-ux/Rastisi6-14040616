@@ -24,7 +24,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -79,7 +79,7 @@ _MEDIA_KINDS = {
         "label_plural": "بنرها",
         "text_field": "description",
         "text_label": "توضیحات",
-        "section_keys": {"single_banner", "multi_banner"},
+        "section_keys": {"single_banner", "multi_banner", "linked_image"},
         "asset_fields": {"desktop_image": "desktop_asset", "mobile_image": "mobile_asset"},
         "file_fields": (
             {"name": "desktop_image", "label": "تصویر دسکتاپ", "required": True, "thumb": "desktop_image_url", "guide_key": "banner_desktop"},
@@ -145,7 +145,23 @@ def media_label_for_kind(kind: str) -> str:
     return _MEDIA_KINDS[kind]["label_plural"]
 
 
-def media_config_for_kind(kind: str) -> dict:
+#: V5 — per-SECTION-TYPE overlay on a media kind's config (never a second media system: the same model / CRUD / MediaAsset authority). The
+#: «عکس لینک‌دار» section uses the ``banners`` rows as its ONE picture: only the Alt text (the row's ``title``) + picture + link are asked,
+#: there is no copy / button, at most one row exists, and the store-wide default banners are never shown or adopted.
+_SECTION_MEDIA_PROFILES = {
+    "linked_image": {
+        "image_only": True, "max_items": 1, "no_defaults": True,
+        "label": "تصویر", "label_plural": "تصویر", "title_label": "متن جایگزین تصویر (Alt)",
+    },
+}
+
+
+def _profiled(config: dict, section_key: str | None) -> dict:
+    profile = _SECTION_MEDIA_PROFILES.get(section_key or "")
+    return {**config, **profile} if profile else config
+
+
+def media_config_for_kind(kind: str, section_key: str | None = None) -> dict:
     """Phase 5 Task 4 (remediation R1a) — the same public-accessor reasoning as
     the two accessors above: the R4 Inspector needs this kind's config (model +
     labels + thumb field) to render the canonical media list body inline,
@@ -154,8 +170,9 @@ def media_config_for_kind(kind: str) -> dict:
     ``media_kind_for_section_key`` (so section↔kind ownership is guaranteed);
     unlike ``_media_config`` this needs no section instance. The media list/
     CRUD endpoints still re-scope every request through ``_get_scoped_section``
-    — this accessor never bypasses that authority."""
-    return _MEDIA_KINDS[kind]
+    — this accessor never bypasses that authority. ``section_key`` (optional)
+    applies the section type's media profile (``_SECTION_MEDIA_PROFILES``)."""
+    return _profiled(_MEDIA_KINDS[kind], section_key)
 
 
 def _media_config(kind: str, section) -> dict:
@@ -164,7 +181,7 @@ def _media_config(kind: str, section) -> dict:
         raise Http404
     if section.section_key not in config["section_keys"]:
         raise Http404
-    return config
+    return _profiled(config, section.section_key)
 
 
 #: Phase 5 Task 4 (final review fix) — the EXPLICIT R4-inline context marker.
@@ -425,6 +442,10 @@ def storefront_section_media_form(request, pk, kind, item_pk=None):
     model = config["model"]
     store = _resolve_store(request)
     item = get_object_or_404(model, pk=item_pk, section=section) if item_pk else None
+    max_items = config.get("max_items")
+    if item is None and max_items and model.objects.filter(section=section).count() >= max_items:
+        # V5 «عکس لینک‌دار»: exactly one picture per section (the UI hides «افزودن»; this refuses a tampered / stale request, nothing is written)
+        return HttpResponse("این بخش فقط یک تصویر دارد؛ تصویر فعلی را ویرایش یا حذف کنید.", status=409, content_type="text/plain; charset=utf-8")
 
     file_fields = config["file_fields"]
     form_errors, error_tabs, error_tab, reselect_fields = [], [], "content", []
@@ -644,6 +665,8 @@ def storefront_section_media_adopt_defaults(request, pk, kind):
     """
     section = _get_scoped_section(request, pk)
     config = _media_config(kind, section)
+    if config.get("no_defaults"):
+        raise Http404   # a section type that owns exactly its own picture never adopts the store-wide default rows
     result = media_defaults_service.adopt_store_defaults(
         section, model=config["model"], related_name=_RELATED_NAME_FOR_KIND[kind],
         asset_fields=config.get("asset_fields") or {},

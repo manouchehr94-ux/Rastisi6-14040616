@@ -521,6 +521,7 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "testimonials",
         "surface_panel",
         "decorative_strip",
+        "linked_image",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):

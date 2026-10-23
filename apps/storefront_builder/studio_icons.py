@@ -14,6 +14,7 @@ STUDIO_ICON_PATHS = {
     "plus": "M12 5v14M5 12h14",
     "grid": "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
     "layers": "m12 3 10 5-10 5L2 8zM2 12l10 5 10-5M2 16l10 5 10-5",
+    "megaphone": "M3 10v4h3l7 4V6L6 10zM16 9a4 4 0 0 1 0 6",
     "sliders": "M4 5h16M4 12h16M4 19h16M8 3v4M16 10v4M9 17v4",
     "spark": "m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7zM20 2v4M18 4h4",
     "desktop": "M3 4h18v13H3zM12 17v4M8 21h8",

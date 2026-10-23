@@ -1,0 +1,17 @@
+{% load storefront_builder_extras %}
+{% comment %}
+V5 — the announcement strip's TEXT area, shared by the legacy shell (page_shell_header.html) and every Global Header Variant
+(_shared/announcement_bar.html): ONE contract, one markup. Context: ``hc`` (header_config) and ``ann`` (``announcement_view``).
+Historical header (no V5 key set => ``ann.extended`` is False): exactly the old ``<span>text</span>`` — nothing else is rendered.
+Extended: an optional small picture beside the text (start/end side, fixed small size, natural ratio, ``alt``) and an optional link on
+the text + picture as ONE anchor (never nested: the separate ``announcement_links`` live outside it and stay independent anchors).
+{% endcomment %}
+{% if ann.extended %}
+{% if ann.url %}<a class="ann-main ann-main--link" href="{{ ann.url }}"{% if ann.new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{% else %}<span class="ann-main">{% endif %}
+  {% if ann.image_url and ann.image_side != "end" %}<img class="ann-img" data-img-role="logo" src="{{ ann.image_url }}" alt="{{ ann.image_alt }}" style="--ann-img:{{ ann.image_size }}px" loading="lazy">{% endif %}
+  <span class="ann-text">{{ hc.announcement_text|default:"🚚 ارسال رایگان برای سفارش‌های بالای ۵۰۰,۰۰۰ تومان" }}</span>
+  {% if ann.image_url and ann.image_side == "end" %}<img class="ann-img" data-img-role="logo" src="{{ ann.image_url }}" alt="{{ ann.image_alt }}" style="--ann-img:{{ ann.image_size }}px" loading="lazy">{% endif %}
+{% if ann.url %}</a>{% else %}</span>{% endif %}
+{% else %}
+<span>{{ hc.announcement_text|default:"🚚 ارسال رایگان برای سفارش‌های بالای ۵۰۰,۰۰۰ تومان" }}</span>
+{% endif %}

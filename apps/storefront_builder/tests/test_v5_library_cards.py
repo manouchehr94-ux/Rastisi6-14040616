@@ -33,7 +33,10 @@ class V5LibraryCardTests(unittest.TestCase):
         markup = _library_markup()
         for forbidden in ("data-r4-showcase-choice", "data-section-key", "<form", "href=", "onclick", "hx-"):
             self.assertFalse(forbidden in markup, forbidden)
-        self.assertEqual(set(re.findall(r'data-rastisi-action="([a-z-]+)"', markup)), {"library-add"})
+        # the section cards are «library-add»; the one extra card is the V5 «نوار اطلاعیه» (NOT a section: it opens the header's announcement settings)
+        self.assertEqual(set(re.findall(r'data-rastisi-action="([a-z-]+)"', markup)), {"library-add", "open-announcement"})
+        announcement = re.search(r'<button[^>]*data-rastisi-action="open-announcement".*?</button>', markup, re.S).group(0)
+        self.assertNotIn("data-rs-library-key", announcement)
 
     def test_studio_handler_only_forwards_to_the_existing_controls(self):
         start = STUDIO_JS.index("case 'library-add':")

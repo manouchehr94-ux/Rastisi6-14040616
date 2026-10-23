@@ -53,6 +53,7 @@ MEDIA_ID_KEYS = (
     "desktop_asset_id",  # serialized Hero/Banner placement (#4 snapshots)
     "mobile_asset_id",   # serialized Hero/Banner placement (#4 snapshots)
     "image_asset_id",    # serialized Story placement (#4 snapshots)
+    "announcement_image_asset_id",  # V5 — the header announcement strip's picture (header_config JSON, every version)
 )
 
 
@@ -119,6 +120,17 @@ def _referenced_by_section_backgrounds(asset) -> bool:
     return False
 
 
+def _referenced_by_header_config(asset) -> bool:
+    """V5 — the header announcement strip's picture: ``header_config["announcement_image_asset_id"]`` of any version (Draft / Published /
+    Archived) of the asset's own store."""
+    from apps.storefront_builder.models import StorefrontLayoutVersion
+
+    for config in StorefrontLayoutVersion.objects.filter(layout__store=asset.store).values_list("header_config", flat=True).iterator():
+        if _payload_references_asset(config, asset.pk):
+            return True
+    return False
+
+
 def _referenced_by_recovery_snapshots(asset) -> bool:
     """Class #4 — the asset id is captured in a recoverable snapshot for the
     store:
@@ -166,6 +178,8 @@ def is_reachable_via_json_or_snapshots(asset) -> bool:
         return False
     try:
         if _referenced_by_section_backgrounds(asset):
+            return True
+        if _referenced_by_header_config(asset):
             return True
         if _referenced_by_recovery_snapshots(asset):
             return True
