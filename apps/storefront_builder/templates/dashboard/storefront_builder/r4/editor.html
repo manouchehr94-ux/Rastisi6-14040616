@@ -52,7 +52,8 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
           <button type="button" id="r4RedoButton" data-rastisi-action="redo" class="icon-btn" title="ازنو انجام{% if history.redo_label %}: {{ history.redo_label }}{% endif %}" aria-label="بازگردانی" {% if not history.can_redo %}disabled{% endif %}>{% rs_icon "redo" %}</button>
           <button type="button" data-rastisi-action="history" class="icon-btn" title="تاریخچه ویرایش" aria-label="تاریخچه ویرایش">{% rs_icon "history" %}</button>
         </div>
-        <button type="button" data-rastisi-action="public-preview" class="outline" aria-label="نمای عمومی" {% if not studio.public_url %}disabled title="نشانی عمومی فروشگاه هنوز فعال نیست"{% endif %} data-rs-public-url="{{ studio.public_url|default:'' }}">{% rs_icon "external" %}<span class="hide-medium">نمای عمومی</span></button>
+        <button type="button" data-rastisi-action="public-preview" class="outline" aria-label="پیش‌نمایش تغییرات (پیش‌نویس، بدون انتشار)" title="نمای مشتری از آخرین تغییرات ذخیره‌شده — بدون انتشار" data-rs-public-url="{{ studio.public_url|default:'' }}" data-rs-draft-url="{% url 'dashboard:storefront-builder-draft-preview' %}">{% rs_icon "eye" %}<span class="hide-medium">پیش‌نمایش</span></button>
+        <button type="button" data-rastisi-action="view-published" class="outline icon-btn" aria-label="مشاهدهٔ فروشگاه منتشرشده" {% if not studio.public_url %}disabled title="نشانی عمومی فروشگاه هنوز فعال نیست"{% else %}title="مشاهدهٔ فروشگاه منتشرشده (نسخهٔ فعلی مشتریان)"{% endif %}>{% rs_icon "external" %}</button>
         <button type="button" id="r4PublishButton" data-rastisi-action="publish" class="primary">{% rs_icon "globe" %}انتشار</button>
       </div>
       <div class="user-menu">

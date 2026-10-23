@@ -324,6 +324,7 @@ urlpatterns = [
         name="storefront-builder-template-live-preview",
     ),
     path("storefront-builder/preview/", storefront_builder_views.storefront_preview, name="storefront-builder-preview"),
+    path("storefront-builder/draft-preview/", storefront_builder_views.storefront_draft_preview, name="storefront-builder-draft-preview"),
     path("storefront-builder/sections/<int:pk>/product-search/", storefront_builder_views.storefront_section_product_search, name="storefront-builder-section-product-search"),
     path("storefront-builder/history/", storefront_builder_views.storefront_history, name="storefront-builder-history"),
     path("storefront-builder/apply-preset/", storefront_builder_views.storefront_apply_layout_preset, name="storefront-builder-apply-preset"),

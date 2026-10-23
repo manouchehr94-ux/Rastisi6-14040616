@@ -67,6 +67,7 @@
   var redoButton = document.getElementById('r4RedoButton');
   var publishButton = document.getElementById('r4PublishButton');
   var publicButton = $('[data-rastisi-action="public-preview"]');
+  var publishedButton = $('[data-rastisi-action="view-published"]');
   var pageSelect = document.getElementById('r4PageSwitcherSelect');
   var zoomSelect = $('[data-control="zoom"]');
   var saveFeedback = $('[data-rs-save-feedback]');
@@ -258,7 +259,8 @@
     if (redoButton) redoButton.disabled = !ui.canRedo || block;
     var historyButton = $('.history-buttons [data-rastisi-action="history"]');
     if (historyButton) historyButton.disabled = ui.busy;
-    if (publicButton) publicButton.disabled = block || !DATA.public_url;
+    if (publicButton) publicButton.disabled = block || !DATA.draft_preview_url;   // «پیش‌نمایش»: the saved Draft (needs no published URL)
+    if (publishedButton) publishedButton.disabled = block || !DATA.public_url;
     if (publishButton) publishButton.disabled = block || !ui.draftChanged || ui.saveState !== 'saved';
     if (pageSelect) pageSelect.disabled = ui.busy;
 
@@ -615,6 +617,36 @@
           btn('switch-template', 'اعمال', 'check', '', 'data-key="' + esc(t.key) + '" aria-label="اعمال قالب ' + esc(t.label) + '" ' + (ui.busy || t.is_current ? 'disabled' : '')) +
         '</div></article>';
     }).join('');
+  }
+
+  // «پیش‌نمایش»: the customer view of the SAVED Draft in a new tab (read-only; never publishes). The tab is opened synchronously (popup blockers)
+  // and pointed at the Draft view only after every pending edit is confirmed saved — an old or misleading view is never opened.
+  function openDraftPreview() {
+    if (ui.lab.active) { notify('ابتدا آزمایش را اعمال کنید یا از آن خارج شوید.'); return; }
+    if (!DATA.draft_preview_url) { notify('پیش‌نمایش در دسترس نیست.'); return; }
+    if (ui.saveState === 'conflict' || ui.saveState === 'error') {
+      notify('ذخیرهٔ تغییرات کامل نشد؛ تا رفع مشکل، پیش‌نمایش به‌روز باز نمی‌شود.');
+      return;
+    }
+    var url = DATA.draft_preview_url + '?page=' + encodeURIComponent(DATA.page_type || 'home');
+    var tab = window.open('', '_blank');
+    if (!tab) { notify('مرورگر باز شدن تب پیش‌نمایش را مسدود کرد؛ اجازهٔ پنجرهٔ بازشو را بدهید.'); return; }
+    try { tab.opener = null; tab.document.title = 'پیش‌نمایش…'; tab.document.body.innerText = 'در حال ذخیرهٔ تغییرات و آماده‌سازی پیش‌نمایش…'; } catch (e) { /* cross-origin guard: ignore */ }
+    var waiting = ui.saveState === 'saving' || R4.pendingWrites > 0;
+    if (waiting) notify('در حال ذخیرهٔ تغییرات؛ پیش‌نمایش بعد از تأیید ذخیره باز می‌شود…');
+    var started = Date.now();
+    Promise.resolve(R4.flushPending ? R4.flushPending() : null).catch(function () { /* judged by the save state below */ }).then(function wait() {
+      if (ui.saveState === 'conflict' || ui.saveState === 'error') return false;
+      if (ui.saveState === 'saving' || R4.pendingWrites > 0) {
+        if (Date.now() - started > 15000) return false;
+        return new Promise(function (resolve) { setTimeout(resolve, 150); }).then(wait);
+      }
+      return true;
+    }).then(function (ok) {
+      if (ok) { tab.location.replace(url); return; }
+      try { tab.close(); } catch (e) { /* ignore */ }
+      notify('ذخیرهٔ تغییرات تأیید نشد؛ پیش‌نمایش به‌روز باز نشد. وضعیت ذخیره را بررسی کنید.');
+    });
   }
 
   function openTemplateGallery() {
@@ -1343,7 +1375,7 @@
         switchTemplate(replaceKey, { confirm_replace: true, allow_locked: replaceLocked });
         break;
       }
-      case 'public-preview':
+      case 'public-preview': openDraftPreview(); break;
       case 'view-published':
         if (ui.lab.active) { notify('ابتدا آزمایش را اعمال کنید یا از آن خارج شوید.'); return; }
         if (DATA.public_url) window.open(DATA.public_url, '_blank', 'noopener');

@@ -939,6 +939,8 @@ def _build_studio_context(
         ),
         "live_preview_url": live_preview_url,
         "preview_url": reverse("dashboard:storefront-builder-preview"),
+        # «پیش‌نمایش»: the read-only customer view of the saved Draft (a different action from viewing the published store)
+        "draft_preview_url": reverse("dashboard:storefront-builder-draft-preview"),
         "templates": [
             {
                 "key": card["preset"].key,
