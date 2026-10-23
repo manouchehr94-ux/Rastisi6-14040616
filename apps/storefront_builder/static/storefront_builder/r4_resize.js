@@ -809,9 +809,22 @@
   window.addEventListener('resize', schedule);
   canvas.addEventListener('scroll', schedule, true);
 
+  // The storefront preview marks itself «hosted by the Studio» (body[data-sfb-studio-host]) only while its own frame element still carries
+  // #r4PreviewFrame. A refreshed preview is loaded in a hidden TWIN iframe whose id is removed until it is swapped in (r4_editor.js), so the
+  // twin's document never got the marker — and with it every Studio-only rule that hides the OLD in-page section toolbar / drag handle /
+  // name tag was off: the old strip came back next to this layer's toolbar after the first refresh. The Studio owns that frame, so the
+  // Studio (re)asserts the marker on every load, before the twin becomes visible. Builder previews only; the storefront itself is untouched.
+  function markStudioHost(win) {
+    try {
+      var doc = win.document;
+      if (doc && doc.body && doc.querySelector('.sfb-preview-sections')) doc.body.setAttribute('data-sfb-studio-host', '1');
+    } catch (e) { /* a document we cannot reach is not a Studio preview */ }
+  }
+
   function bindFrame(f) {
     var win;
     try { win = f && f.contentWindow; if (!win || !win.document) return; } catch (e) { return; }
+    markStudioHost(win);
     if (win.__rsResizeBound) return;
     win.__rsResizeBound = true;
     win.addEventListener('keydown', onEscape);
