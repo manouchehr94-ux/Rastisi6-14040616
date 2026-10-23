@@ -1301,19 +1301,17 @@
         break;
       }
       case 'open-announcement': {
-        // V5 «نوار اطلاعیه» library card: creates NO section. It switches the ONE header announcement strip on (the switch's own change
-        // handler in r4_editor.js sends header.update — one Revision, Undo-able) and opens its settings in «طراحی سراسری».
+        // V5 «نوار اطلاعیه» library card: creates NO section. It switches the ONE header announcement strip on (one header.update — one Revision,
+        // Undo-able) and opens the strip in the standard settings workspace, exactly like a click on it in the preview.
         closeModal(false);
-        focusGlobalRegion('header');
         var annSwitch = document.querySelector('#r4GlobalDesign [data-r4-global-field="announcement_enabled"]');
-        if (annSwitch && !annSwitch.checked) {
-          annSwitch.checked = true;
-          annSwitch.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        var annBlock = document.querySelector('[data-r4-announce-block]');
-        if (annBlock) annBlock.scrollIntoView({ block: 'start', behavior: 'instant' });
+        var enable = annSwitch && !annSwitch.checked
+          ? R4.enqueueMutation({ type: 'header.update', patch: { announcement_enabled: true } }).then(function (result) { if (result && result.ok) R4.refreshPreview(); })
+          : Promise.resolve();
+        enable.then(function () { if (R4.announcement) R4.announcement.open('content'); });
         break;
       }
+      case 'edit-announcement': break;      // handled by r4_announcement.js (the entry button of the global panel)
       case 'section-enable': sectionCommand('toggle_active'); break;
       case 'section-lock': sectionCommand('toggle_locked'); break;
       case 'section-up': sectionCommand('up'); break;

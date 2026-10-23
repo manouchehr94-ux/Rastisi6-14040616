@@ -25,6 +25,7 @@
   var FRAMES = '.hero-inner, .fashion-hero-inner, .hero-split-inner, .hero-atelier-inner, .hero-luxury-stage, .promo-dark';
   var MAX_HEIGHT = 1600;
   var MIN_WIDTH_PCT = 30;
+  var ANN = 'announcement';       // the header announcement strip: selectable like a Section, but fixed above the header (V5-UI-014)
   var STACKED = 'big_right_two_left';
   var STACKED_BIG = [4, 9];
   var SPLIT_RANGE = [25, 75];
@@ -37,7 +38,8 @@
   overlay.innerHTML =
     '<div class="rs-sel-toolbar" role="toolbar" aria-label="ابزار بخش انتخاب‌شده" data-rs-sel-toolbar hidden>' +
       tbButton('edit', 'edit', 'ویرایش', true) + tbButton('duplicate', 'copy', 'تکثیر بخش') + tbButton('up', 'up', 'انتقال به بالا') +
-      tbButton('down', 'down', 'انتقال به پایین') + tbButton('remove', 'trash', 'حذف بخش') + tbButton('close', 'close', 'بستن منو') +
+      tbButton('down', 'down', 'انتقال به پایین') + tbButton('remove', 'trash', 'حذف بخش') +
+      tbButton('ann-toggle', 'eye', 'غیرفعال‌کردن نوار اطلاعیه') + tbButton('close', 'close', 'بستن منو') +
     '</div>' +
     '<div class="rs-hint" role="status" data-rs-hint hidden></div>' +
     '<button type="button" class="rs-auto-chip" data-rs-auto hidden>اندازه خودکار</button>';
@@ -169,7 +171,10 @@
     return !device || device === 'desktop';
   }
 
-  function sectionEl(m, id) { return id ? m.doc.querySelector('.rsec[data-section-id="' + id + '"]') : null; }
+  function sectionEl(m, id) {
+    if (id === ANN) return m.doc.querySelector('[data-builder-announcement]');
+    return id ? m.doc.querySelector('.rsec[data-section-id="' + id + '"]') : null;
+  }
   function cellsOf(container) { return Array.prototype.filter.call(container.children, function (n) { return n.classList && n.classList.contains('rcontainer-cell'); }); }
   function isRtl(m) { return m.win.getComputedStyle(m.doc.documentElement).direction === 'rtl'; }
 
@@ -229,7 +234,7 @@
       var b = box(m, sec);
       var onScreen = b.t + b.h > area.t + 4 && b.t < area.b - 4 && b.l + b.w > area.l && b.l < area.r;
       // an empty / hidden Section is only a placeholder in the builder: there is no real surface to size yet
-      if (onScreen && resizeAllowed() && !sec.classList.contains('sfb-rsec-builder-empty')) renderSectionHandles(m, sec, b, area, usedKeys);
+      if (onScreen && id !== ANN && resizeAllowed() && !sec.classList.contains('sfb-rsec-builder-empty')) renderSectionHandles(m, sec, b, area, usedKeys);
       sectionBox = onScreen ? b : null;
     }
 
@@ -246,8 +251,21 @@
   }
 
   function renderToolbar(m, id, b, area, sec) {
+    var isAnn = id === ANN;
     var state = S.rowState(id) || {};
     toolbar.hidden = false;
+    // The announcement strip is fixed above the header: no move, no duplicate (and nothing removable — it is switched on/off, data kept).
+    ['duplicate', 'up', 'down', 'remove'].forEach(function (action) { toolbar.querySelector('[data-rs-sel="' + action + '"]').hidden = isAnn; });
+    var annToggle = toolbar.querySelector('[data-rs-sel="ann-toggle"]');
+    annToggle.hidden = !isAnn;
+    if (isAnn) {
+      var off = sec.hasAttribute('data-builder-announcement-off');
+      var label = off ? 'فعال‌کردن نوار اطلاعیه' : 'غیرفعال‌کردن نوار اطلاعیه';
+      annToggle.title = label;
+      annToggle.setAttribute('aria-label', label);
+      annToggle.setAttribute('aria-pressed', off ? 'true' : 'false');
+      toolbar.querySelector('[data-rs-sel="edit"]').disabled = false;
+    } else {
     toolbar.querySelector('[data-rs-sel="duplicate"]').disabled = state.locked === true || state.canDuplicate === false;
     toolbar.querySelector('[data-rs-sel="up"]').disabled = state.locked === true || state.canUp === false;
     toolbar.querySelector('[data-rs-sel="down"]').disabled = state.locked === true || state.canDown === false;
@@ -261,6 +279,7 @@
       button.title = button.disabled ? why : row[1];
       button.setAttribute('aria-label', button.disabled ? row[1] + ' — ' + why : row[1]);
     });
+    }
     var tw = toolbar.offsetWidth || 230;
     var th = toolbar.offsetHeight || 40;
     var gap = 8;
@@ -294,7 +313,7 @@
     var top = best.y;
     place(toolbar, left, top);
     // «اندازه خودکار» sits beside the toolbar while a manual size is set (one reset for height + width + placement)
-    var manual = manualState(sec);
+    var manual = isAnn ? { height: false, width: false } : manualState(sec);
     var locked = state.locked === true;
     if ((manual.height || manual.width) && !locked) {
       autoChip.hidden = false;
@@ -789,6 +808,12 @@
     var id = S.selectedId();
     if (!id) return;
     var action = button.getAttribute('data-rs-sel');
+    if (id === ANN) {
+      if (action === 'edit') { if (R4.announcement) R4.announcement.open('content'); }
+      else if (action === 'ann-toggle') { if (R4.announcement) R4.announcement.toggle().then(function () { window.setTimeout(schedule, 400); }); }
+      else if (action === 'close') { S.clearSelection(); hideAll(); }
+      return;
+    }
     if (action === 'edit') S.edit(Number(id));
     else if (action === 'duplicate') S.command(id, 'duplicate');
     else if (action === 'up') S.command(id, 'up');
@@ -803,7 +828,7 @@
   });
   root.addEventListener('r4:structure-refreshed', function () {
     var id = S.selectedId();
-    if (id && !S.rowState(id)) S.clearSelection();            // the section no longer exists (deleted / undone)
+    if (id && id !== ANN && !S.rowState(id)) S.clearSelection();            // the section no longer exists (deleted / undone)
     window.setTimeout(schedule, 60);
   });
   window.addEventListener('resize', schedule);

@@ -410,24 +410,31 @@ class AnnouncementUploadAndStudioTests(AnnouncementConfigTests):
         self.client.logout()
         self.assertNotEqual(self.client.post(reverse(self.URL), {"image": _png()}).status_code, 200)
 
-    def test_the_studio_panel_has_the_announcement_block_and_the_library_card_is_not_a_section(self):
+    def test_the_studio_offers_the_announcement_editor_and_the_library_card_is_not_a_section(self):
         html = self.client.get(reverse("dashboard:storefront-builder-r4-editor")).content.decode()
+        # V5-UI-014: the strip is edited in the standard workspace; the global panel only keeps an entry button to that same editor
+        self.assertIn('data-rastisi-action="edit-announcement"', html)
+        self.assertNotIn("data-r4-announce-block", html.split('id="r4GlobalDesign"', 1)[1] if 'id="r4GlobalDesign"' in html else html)
+        workspace = self.client.get(reverse("dashboard:storefront-builder-r4-announcement-inspector")).content.decode()
         for marker in ("data-r4-announce-block", 'data-r4-global-field="announcement_image_asset_id"', 'data-r4-global-field="announcement_link_url"',
                        'data-r4-global-field="announcement_pages"', 'data-r4-global-field="announcement_align"', 'data-r4-geometry-prop="announce_bg"'):
-            self.assertIn(marker, html, marker)
-        self.assertEqual(html.count('data-r4-geometry-prop="announce_bg"'), 1)               # not duplicated among the variant's geometry
-        # the text control keeps the strip short (a phone strip stays ≤ ~88px): the Studio field stops at 200 characters
-        self.assertRegex(html, r'<input[^>]*id="r4GlobalAnnouncementText"[^>]*maxlength="200"')
+            self.assertIn(marker, workspace, marker)
+        self.assertEqual(workspace.count('data-r4-geometry-prop="announce_bg"'), 1)
+        # the text control keeps the strip short (a phone strip stays ≤ ~88px): the field stops at 200 characters
+        self.assertRegex(workspace, r'<input[^>]*id="r4AnnText"[^>]*maxlength="200"')
         card = re.search(r'<button[^>]*data-rastisi-action="open-announcement".*?</button>', html, re.S).group(0)
         self.assertIn("نوار اطلاعیه", card)
         self.assertNotIn("data-rs-library-key", card)                                          # it adds NO section
 
     def test_the_client_script_is_ui_only_one_upload_transport_and_nothing_stored(self):
         js = re.sub(r"/\*.*?\*/", "", (STATIC / "r4_announcement.js").read_text(encoding="utf-8"), flags=re.S)   # code, not the header comment
-        self.assertEqual(js.count("fetch("), 1)
+        # two transports only: the read of the workspace HTML (GET) and the picture upload (POST); every write is the existing header.update
+        self.assertEqual(js.count("fetch("), 2)
         self.assertIn("data-r4-announce-upload-url", js)
-        for forbidden in ("localStorage", "sessionStorage", "indexedDB", "header.update", "enqueueMutation"):
-            self.assertNotIn(forbidden, js, forbidden)                                        # the mutation is sent by the existing field handler
+        self.assertIn("type: 'header.update'", js)
+        self.assertEqual(js.count("enqueueMutation("), 1)                                    # ONE send path, never a second write channel
+        for forbidden in ("localStorage", "sessionStorage", "indexedDB", "section.update_settings", "enqueueStructuralMutation"):
+            self.assertNotIn(forbidden, js, forbidden)
         studio = (STATIC / "r4_studio.js").read_text(encoding="utf-8")
         self.assertIn("case 'open-announcement'", studio)
         self.assertEqual(studio.count("fetch("), 1)

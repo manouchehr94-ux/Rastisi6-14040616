@@ -9,16 +9,13 @@ before including this partial, exactly like page_shell_header.html does).
 {% announcement_view hc as ann %}
 {% if hc.announcement_enabled and ann.visible %}
 <div class="gh-announce{% if is_builder_preview %} sfb-builder-announcement{% endif %}"
-     {% if is_builder_preview %}data-builder-announcement{% endif %}
+     {% if is_builder_preview %}data-builder-announcement data-section-id="announcement" data-section-key="header_announcement" aria-label="نوار اطلاعیه"{% endif %}
      {% if ann.extended %}data-ann-x{% if ann.align %} data-ann-align="{{ ann.align }}"{% endif %}{% if ann.style %} style="{{ ann.style }}"{% endif %}{% endif %}
      {% if rc.announcement_enabled.hide_on_tablet %}data-shell-hide-tablet{% endif %}
      {% if rc.announcement_enabled.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
   <div class="wrap">
     {% include "storefront_builder/partials/global_header/_shared/announcement_content.html" %}
     <div class="gh-announce-links">
-      {% if is_builder_preview %}
-      <button type="button" class="sfb-announcement-edit-button" data-open-header-settings title="ویرایش نوار اعلان">⚙ ویرایش</button>
-      {% endif %}
       {% for link in hc.announcement_links %}
       <a href="{{ link.url|default:'#' }}">{{ link.label }}</a>
       {% endfor %}
@@ -28,4 +25,5 @@ before including this partial, exactly like page_shell_header.html does).
     </div>
   </div>
 </div>
+{% elif is_builder_preview %}{% include "storefront_builder/partials/global_header/_shared/announcement_placeholder.html" %}
 {% endif %}

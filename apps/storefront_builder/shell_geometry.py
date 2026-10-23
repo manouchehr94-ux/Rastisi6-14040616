@@ -63,6 +63,8 @@ SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key
     ShellGeometryProperty("announce_bg", "header", "رنگ پس‌زمینهٔ نوار اطلاعیه", "color", css_var="--gh-announce-bg", variants=(_ALL,)),
     ShellGeometryProperty("announce_fg", "header", "رنگ متن نوار اطلاعیه", "color", css_var="--gh-announce-fg", variants=(_ALL,)),
     ShellGeometryProperty("announce_image_size", "header", "اندازهٔ تصویر کنار متن (px)", "int", 16, 40, 24, "--gh-announce-img", variants=(_ALL,)),
+    ShellGeometryProperty("announce_height", "header", "حداقل ارتفاع نوار (px)", "int", 32, 72, 32, "--gh-announce-h", variants=(_ALL,)),
+    ShellGeometryProperty("announce_padding", "header", "فاصلهٔ عمودیِ داخل نوار (px)", "int", 0, 16, 4, "--gh-announce-py", variants=(_ALL,)),
     ShellGeometryProperty("bar_height", "footer", "ارتفاع نوار پیوندها (px، ۰ = خودکار)", "int", 0, 200, 0, "--gf-bar-h", variants=(_F,)),
     ShellGeometryProperty("grid_min_height", "footer", "حداقل ارتفاع بلوک ستون‌ها (px)", "int", 0, 800, 440, "--gf-grid-h", variants=(_F,)),
     ShellGeometryProperty("column_count", "footer", "تعداد ستون‌ها", "int", 2, 6, 4, "--gf-cols", unit="", variants=(_F,)),

@@ -560,7 +560,7 @@ class ShellGeometryTests(R4MutationApiTestCase):
         header_keys = {p.key for p in shell_geometry.properties_for("header", "stationery_search")}
         self.assertIn("search_max_width", header_keys)
         # the legacy header draws no layout geometry of its own — only the shared V5 announcement-strip controls (colours + picture size) exist in every variant
-        self.assertEqual({p.key for p in shell_geometry.properties_for("header", "legacy_default")}, {"announce_bg", "announce_fg", "announce_image_size"})
+        self.assertEqual({p.key for p in shell_geometry.properties_for("header", "legacy_default")}, {"announce_bg", "announce_fg", "announce_image_size", "announce_height", "announce_padding"})
         self.assertEqual(shell_geometry.properties_for("footer", "legacy_default"), [])
         self.assertIn("badge_size", {p.key for p in shell_geometry.properties_for("footer", "stationery_dark")})
 

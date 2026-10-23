@@ -258,6 +258,11 @@ urlpatterns = [
         name="storefront-builder-r4-announcement-image",
     ),
     path(
+        "storefront-builder/r4/announcement/inspector/",
+        storefront_builder_r4_views.storefront_r4_announcement_inspector,
+        name="storefront-builder-r4-announcement-inspector",
+    ),
+    path(
         "storefront-builder/r4/mutate/",
         storefront_builder_r4_views.storefront_r4_mutation,
         name="storefront-builder-r4-mutation",

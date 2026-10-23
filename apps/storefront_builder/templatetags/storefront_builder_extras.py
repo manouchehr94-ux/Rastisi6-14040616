@@ -500,6 +500,13 @@ def announcement_view(context, header_config):
     except (TypeError, ValueError):
         size = 24
 
+    # V5-UI-014 — the bar's own height / vertical padding (validated 32–72 / 0–16 by shell_geometry; absent = the strip's built-in size)
+    for key, var, low, high in (("announce_height", "--ann-h", 32, 72), ("announce_padding", "--ann-py", 0, 16)):
+        try:
+            value = int(geometry.get(key))
+        except (TypeError, ValueError):
+            continue
+        css.append(f"{var}:{max(low, min(high, value))}px")
     link_url = hc.get("announcement_link_url") or ""
     align = hc.get("announcement_align") or ""
     extended = bool(image_url or link_url or align or css)

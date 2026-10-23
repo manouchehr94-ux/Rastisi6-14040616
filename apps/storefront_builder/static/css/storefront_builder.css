@@ -737,18 +737,12 @@
   outline: 1px dashed rgba(109, 74, 255, .5);
   outline-offset: -1px;
 }
-.sfb-announcement-edit-button {
-  border: 1px solid rgba(109, 74, 255, .3);
-  border-radius: 8px;
-  background: #6d4aff;
-  color: #fff;
-  padding: 4px 8px;
-  font-size: 10px;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.sfb-announcement-edit-button:hover { background: #5938e8; }
+/* V5-UI-014 — the strip is a selectable surface like a Section: the Studio's standard contextual toolbar (overlay) edits it; here only the
+   selection frame (same language as a selected Section) and the «switched off» stand-in. Builder-only: none of this exists in Published. */
+.sfb-builder-announcement[data-section-id] { cursor: pointer; }
+.sfb-builder-announcement.sfb-rsec-selected { outline: 2px solid var(--sfb-v3-accent, #6d4aff); outline-offset: -2px; box-shadow: 0 0 0 3px rgba(99, 102, 241, .16); }
+.sfb-builder-announcement--off { background: repeating-linear-gradient(135deg, #f4f4f5 0 10px, #eceef1 10px 20px); color: #52525b; text-align: center; font-size: 12px; }
+.sfb-builder-announcement--off .wrap { display: flex; justify-content: center; align-items: center; min-height: 32px; padding-block: 4px; }
 
 /* ========================================================================
    Phase 3.5 — reference-editable surfaces.
@@ -3714,7 +3708,7 @@ a.linked-image-frame:focus-visible { outline: 2px solid var(--brand, #4f46e5); o
    historical box exactly. The strip stays SHORT on purpose: desktop 32–72px, phone 36–88px — a one-line strip is 32 / 36px, longer text WRAPS
    (never clipped / truncated: nothing is hidden), the picture is a small fixed-height inline image of natural ratio (16–40px) and never a banner.
    ====================================================================== */
-html [data-ann-x][data-ann-x] .wrap { height: auto; min-height: 32px; padding-block: 4px; box-sizing: border-box; }
+html [data-ann-x][data-ann-x] .wrap { height: auto; min-height: var(--ann-h, 32px); padding-block: var(--ann-py, 4px); box-sizing: border-box; }
 html [data-ann-x][data-ann-x] .wrap > .ann-main {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: visible; white-space: normal;
   text-overflow: clip; color: inherit; text-decoration: none; line-height: 1.5;
@@ -3727,7 +3721,7 @@ html [data-ann-x][data-ann-x] .ann-img { flex: none; display: block; width: auto
 html [data-ann-x][data-ann-x] a.ann-main--link:hover .ann-text { text-decoration: underline; }
 html [data-ann-x][data-ann-x] a.ann-main--link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
 @media (max-width: 680px) {
-  html [data-ann-x][data-ann-x] .wrap { min-height: 36px; }
+  html [data-ann-x][data-ann-x] .wrap { min-height: max(var(--ann-h, 36px), 36px); }
   html [data-ann-x][data-ann-x] .wrap > .ann-main { font-size: 12px; }
 }
 

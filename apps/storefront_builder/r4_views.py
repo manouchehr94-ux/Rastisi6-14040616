@@ -941,6 +941,7 @@ def _build_studio_context(
         "preview_url": reverse("dashboard:storefront-builder-preview"),
         # «پیش‌نمایش»: the read-only customer view of the saved Draft (a different action from viewing the published store)
         "draft_preview_url": reverse("dashboard:storefront-builder-draft-preview"),
+        "announcement_inspector_url": reverse("dashboard:storefront-builder-r4-announcement-inspector"),
         "templates": [
             {
                 "key": card["preset"].key,
@@ -1021,6 +1022,26 @@ def storefront_r4_announcement_image(request):
         return JsonResponse({"ok": False, "code": "invalid_image", "message": "؛ ".join(messages)}, status=400)
     asset.save()
     return JsonResponse({"ok": True, "asset_id": asset.pk, "url": asset.image.url})
+
+
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_announcement_inspector(request):
+    """V5-UI-014 — the standard R4 settings workspace (محتوا / طراحی / پیشرفته) for the ONE header announcement strip. Read-only: it only renders the
+    Draft's header_config; every change travels through the normal ``header.update`` mutation (the single write authority). Never creates a Draft
+    (the Studio always has one) and exposes nothing of another store (the Draft is resolved from the signed-in manager's own store)."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    draft = layout.draft_version
+    if draft is None or draft.status != StorefrontLayoutVersion.Status.DRAFT:
+        raise Http404
+    design = _build_global_design_context(draft)
+    response = render(request, "dashboard/storefront_builder/r4/partials/announcement_inspector.html", {
+        "global_design": design, "announcement_image_url": design["announcement_image_url"],
+    })
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @require_POST
