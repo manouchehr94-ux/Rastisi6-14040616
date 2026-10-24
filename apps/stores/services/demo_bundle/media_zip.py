@@ -141,6 +141,19 @@ class MediaZip:
                     out[rel] = info
         return out
 
+    def read_bytes(self, info: zipfile.ZipInfo, limit: int = 64 * 1024 * 1024) -> bytes:
+        """One member in memory (recovery sources only; refuses anything above ``limit``)."""
+        if info.file_size > limit:
+            raise MediaZipError(f"{info.filename}: {info.file_size} bytes exceeds the {limit}-byte in-memory limit")
+        with self.zf.open(info) as src:
+            return src.read(limit + 1)
+
+    def same_name_elsewhere(self, rel: str) -> list[tuple[str, zipfile.ZipInfo]]:
+        """Members under the media root with the same file name as ``rel`` but another folder."""
+        wanted, own = posixpath.basename(_norm(rel)), _norm(rel)
+        return [(name, info) for name, info in sorted(self.rooted_files().items())
+                if posixpath.basename(name) == wanted and name != own]
+
     def copy_to(self, info: zipfile.ZipInfo, destination: Path) -> tuple[str, int]:
         """Stream one member to ``destination``; returns ``(sha256, size)``."""
         destination = long_path(destination)

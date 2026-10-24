@@ -115,6 +115,22 @@ bundle/
 
 چرا offset یکنواخت؟ نگاشت به وجودِ ردیف مرجع وابسته نیست، پس ارجاعِ از قبل شکسته در منبع، شکسته می‌ماند (نه اینکه به ردیف دیگری اشاره کند). اثبات درستی: (۱) `assert_lossless` — هیچ فیلدی جز ستون‌های id تغییر نمی‌کند و شمارش ردیف‌ها ثابت است؛ (۲) تعداد ارجاع‌های JSON شکسته پیش/پس از نگاشت برابر است؛ (۳) validator؛ (۴) import دو‌باره‌ی scratch بدون تغییر؛ (۵) **رندر همه‌ی صفحات از منبع و از import برابر است**.
 
+## ۴ج. رسانه‌ی غایب در ZIP: بازیابی با منشأ (`media_recovery.py`)
+
+| فایل در دیتابیس | شرط (نام ثبت‌شده باید گواه بدهد) | منبع | برچسب |
+|---|---|---|---|
+| `ProductImage.thumbnail` (`products/thumbnails/…`) | ردیف ProductImage با `image` | `products/originals/<نام>` در ZIP، وگرنه `image`؛ منطق `product_image_service` (۴۰۰px، `_encode`) و فرمتِ پسوندِ ثبت‌شده | `REGENERATED_DERIVATIVE` |
+| `Category.image` = `rasti-<slug>.*` | نام دسته در `curated/manifest.json` | `curated/categories/*.webp` | `RECOVERED_FROM_REPO` |
+| `Category.image` = `category-<slug>.*` (V5) | دسته در `CATEGORY_NAMES` ی seed و محصولِ کاورِ seed (`FSH-0xx`) در همان دسته | `_composite_visual_bytes(800×600)` از `products/<SKU>/01.webp` | `REGENERATED_DERIVATIVE` |
+| `Brand.logo` = `rasti-<slug>.*` | نام برند در manifest | `curated/brands/*.webp` | `RECOVERED_FROM_REPO` |
+| `HeroSlide.desktop_image/mobile_image` = `rasti-curated-hero-N[-mobile]` | `order = N-1` در manifest | `curated/hero/*` | `RECOVERED_FROM_REPO` |
+| `PromotionalBanner.*` = `rasti-curated-banner-N[-mobile]` | همان | `curated/banners/*` | `RECOVERED_FROM_REPO` |
+| `StoryRailItem.image` = `rasti-curated-story-N` | عنوان آیتم = نام دسته‌ی N ام manifest | عکس همان دسته | `RECOVERED_FROM_REPO` |
+| `ShopSettings.logo/favicon` = `rasti-mode-demo-logo/favicon` | — | `curated/branding/*` | `RECOVERED_FROM_REPO` |
+| هر چیز دیگر (مثل `categories/images/kafsh.jpg`) | — | فقط `--extra-media-dir` یا همان نام‌فایلِ یکتا در پوشه‌ی دیگر ZIP (`ORIGINAL`) | وگرنه `UNRECOVERABLE` |
+
+قواعد: پسوند «‎`_` + ۷ نویسه» که Django هنگام تکراری‌بودن نام اضافه می‌کند پذیرفته می‌شود؛ checksum فایل مخزن باید با `curated/SHA256SUMS.txt` بخواند؛ اگر پسوند ثبت‌شده با فرمت منبع فرق کند فایل تبدیل می‌شود، مسیر دیتابیس ثابت می‌ماند و برچسب `REGENERATED_DERIVATIVE` (نه کپی مخزن) می‌گیرد. خروجی: `MEDIA_PROVENANCE.json` با مسیر، برچسب، روش، SHA-256، منبع‌ها و گواه هر فایل + شمارنده در `manifest.json` (`conversion.media.provenance_counts`).
+
 ## ۵. آنچه عمداً منتقل نمی‌شود
 
 کاربران و رمزها، مشتریان، آدرس‌ها، سبدها، سفارش‌ها/پرداخت‌ها/مرجوعی، SMS/اعلان‌ها/کمپین، اشتراک و صورتحساب، لاگ‌های حسابرسی، تاریخچه‌ی ویرایش Studio (`StorefrontEditHistoryEntry`)، نشست‌ها. (دموها داده‌ی مشتری واقعی ندارند؛ با افزودن مدل‌ها به `contract.MODEL_SPECS` می‌توان دامنه را گسترش داد.)

@@ -12,11 +12,17 @@
   banners, stories, media - also unreferenced files).
 * ``--out`` is created ONLY if the bundle validates (exit 0). Exit 1 = FAIL,
   2 = BLOCKED (input missing/incomplete).
+* Files a media ZIP lacks are rebuilt - never invented - from the repository
+  (curated demo assets, the application's own thumbnail/seed code) or taken from
+  ``--extra-media-dir``; every referenced file is classified ORIGINAL /
+  RECOVERED_FROM_REPO / REGENERATED_DERIVATIVE / UNRECOVERABLE in
+  MEDIA_PROVENANCE.json. An UNRECOVERABLE file keeps the build BLOCKED.
 * By default a full scratch check runs too: a fresh scratch database imports the
   bundle twice (idempotency), integrity + HTTP are verified, and every page is
   rendered from the ORIGINAL database and from the import and compared.
 """
 
+import json
 import shutil
 import sys
 import tempfile
@@ -25,7 +31,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.stores.services.demo_bundle import contract
-from apps.stores.services.demo_bundle.converter import ConvertOptions, SourceSpec, convert
+from apps.stores.services.demo_bundle.converter import ConvertOptions, SourceSpec, convert, provenance_document
 from apps.stores.services.demo_bundle.fullcheck import run_full_check
 from apps.stores.services.demo_bundle.remap import RemapOptions
 from apps.stores.services.demo_bundle.report import Report
@@ -54,6 +60,10 @@ class Command(BaseCommand):
         parser.add_argument("--map-json-list-key", action="append", default=[], metavar="KEY", help="Studio JSON key holding a LIST of ids")
         parser.add_argument("--ignore-json-key", action="append", default=[], metavar="KEY", help="id-looking key that is NOT a reference")
         parser.add_argument("--keep-rejected", action="store_true")
+        parser.add_argument("--no-media-recovery", action="store_true", help="do not rebuild files the ZIP lacks (they stay BLOCKED)")
+        parser.add_argument("--curated-dir", default=None, help="curated demo asset pack (default: the one in this checkout)")
+        parser.add_argument("--extra-media-dir", default=None, help="folder laid out like MEDIA_ROOT with originals you supply for files the ZIP lacks (read only)")
+        parser.add_argument("--provenance-report", default=None, help="write MEDIA_PROVENANCE.json here (default: <out>.media_provenance.json, written even when the build is refused)")
         parser.add_argument("--report", default=None, help="write the JSON report here")
         parser.add_argument("--inspect-only", action="store_true", help="read + plan only (stores, ids, ZIP layout, unknown JSON keys); writes nothing")
 
@@ -91,7 +101,12 @@ class Command(BaseCommand):
             ),
             allow_unknown_migrations=o["allow_unknown_migrations"], keep_unreferenced_media=not o["drop_unreferenced_media"],
             keep_rejected=o["keep_rejected"], decode_images=not o["skip_image_decode"], inspect_only=o["inspect_only"],
+            recover_media=not o["no_media_recovery"],
+            curated_dir=Path(o["curated_dir"]) if o["curated_dir"] else None,
+            extra_media_dir=Path(o["extra_media_dir"]) if o["extra_media_dir"] else None,
         )
+        if options.extra_media_dir is not None and not options.extra_media_dir.is_dir():
+            raise CommandError(f"--extra-media-dir is not a folder: {options.extra_media_dir}")
         log = lambda m: self.stderr.write(m)  # noqa: E731 - progress goes to stderr, report to stdout
         try:
             result = convert(sources, out, targets=targets, options=options, work_dir=work, log=log)
@@ -109,6 +124,11 @@ class Command(BaseCommand):
             if result.out_dir is not None and report.status == "PASS":
                 (result.out_dir / "CONVERSION_REPORT.json").write_text(report.to_json(), encoding="utf-8")
                 (result.out_dir / "CONVERSION_REPORT.txt").write_text(report.to_text(), encoding="utf-8")
+            if result.provenance and not o["inspect_only"]:
+                target = Path(o["provenance_report"]) if o["provenance_report"] else out.with_name(out.name + ".media_provenance.json")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(json.dumps(provenance_document(result.provenance), ensure_ascii=False, indent=1), encoding="utf-8")
+                self.stderr.write(f"media provenance written to {target}")
         finally:
             if not o["keep_work"]:
                 shutil.rmtree(work, ignore_errors=True)

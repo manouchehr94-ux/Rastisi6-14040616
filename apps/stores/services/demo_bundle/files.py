@@ -27,6 +27,10 @@ class UnsafeMediaPath(ValueError):
     pass
 
 
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with open(long_path(path), "rb") as handle:

@@ -100,12 +100,14 @@
 | F14 | **اجرا روی Windows** (`.ps1`، `.bat`، مسیرهای طولانی/فارسی، کنسول cp1252) | **BLOCKED** | — | Windows و PowerShell در دسترس نیست: اسکریپت‌ها اجرا/syntax-check نشدند. منطق اصلی پایتونِ مستقل از OS است و فقط روی Linux تست شده؛ پیشوند `\\?\` و `reconfigure(errors="replace")` طراحی شده ولی روی Windows تأییدنشده |
 | F14b | **رگرسیون اجرای واقعی:** `remap.unmapped_json_key … header_config.announcement_image_asset_id = 22` | **PASS** (ابزار) | `ConvertSourceTests` (۴ تست تازه)، `RemapUnitTests` (۵ تست تازه) | کلید در کد فعلی وجود ندارد (نسخه‌ی دیگری از page builder نوشته بود)؛ اکنون هر `*asset_id(s)` و هر کلید رسانه‌ای (`logo/banner/image/…_id`) با همان offset بازنگاشت و در validator به MediaAsset حل می‌شود؛ بعد از import به MediaAsset همان فروشگاه اشاره می‌کند؛ ارجاع از قبل شکسته شکسته می‌ماند و خطا نمی‌دهد؛ `ignore_keys` اولویت دارد؛ تست «drift guard» همه‌ی literalهای `*_id(s)` کد page-builder/content را پویش و الزام می‌کند هر کدام بازنگاشت‌شونده یا صراحتاً غیرذخیره‌ای باشد. حساسیت: غیرفعال‌کردن قاعده ⇒ ۵ تست FAIL |
 | F15 | مصرف داده‌ی واقعی مالک | **BLOCKED – MISSING INPUT** | — | چهار فایل واقعی در محیط نیست |
+| F16 | **بازیابی رسانه‌ی غایب با منشأ** (گزارش اجرای واقعی: V5 ۱۶۰ و arch02 ۱۸۸ فایل `media.missing_at_export`) | **PASS** (ابزار؛ داده‌ی واقعی همچنان BLOCKED) | `manage.py test apps.stores.tests.test_demo_bundle_media_recovery` | ۳۲ تست: ۳۰۱ بندانگشتی (۱۵۰+۱۵۱) با مسیر دقیق دیتابیس؛ بندانگشتی از originalِ آپلودشده **بایت‌به‌بایت برابر** با خروجی `add_product_image` و ۳۰۰×۴۰۰ برای ۱۲۰۰×۱۶۰۰؛ پسوند ثبت‌شده حفظ می‌شود؛ ۳۶ فایل curated (۱۰ دسته، ۶ برند، ۸ Hero، ۱۰ StoryRail، لوگو، favicon) بایت‌به‌بایت و با checksum `SHA256SUMS.txt`؛ کاور دسته‌ی V5 با `_composite_visual_bytes` (JPEG ۸۰۰×۶۰۰)؛ نام غیرمطابق با refresh command و checksum دست‌خورده ⇒ `UNRECOVERABLE`؛ `kafsh.jpg` ⇒ `UNRECOVERABLE` و ساخت `BLOCKED` با validator فعال؛ `--extra-media-dir`/نام یکتا در پوشه‌ی دیگر ZIP ⇒ `ORIGINAL`؛ ورودی‌ها بی‌تغییر؛ بدون PASS هیچ bundle/`.partial` نمی‌ماند؛ `MEDIA_PROVENANCE.json` کنار خروجی حتی در رد؛ import×۲ idempotent، integrity+HTTP، صفحه‌ی محصول و Studio، بررسی کامل scratch (رندر منبع = رندر import)؛ مسیر `\\?\` و کنسول cp1252 و ZIP با `\`. حساسیت (mutation): تغییر ابعاد بندانگشتی ⇒ ۲ تست FAIL؛ حذف شرط نام ⇒ ۲ تست FAIL. suite کل `test_demo_bundle*`: ۱۴۱ تست OK |
 
 ## E. آنچه BLOCKED است (فهرست صریح)
 
 | مورد | علت |
 |---|---|
 | اجرای مبدل روی چهار فایل واقعی (SQLite + ZIP) و `.ps1`/`.bat` روی Windows | فایل‌ها و Windows در دسترس نیستند (F14/F15) |
+| `categories/images/kafsh.jpg` (دسته‌ی دستی arch02) | آپلود دستی؛ در Git وجود ندارد ⇒ `UNRECOVERABLE`؛ تا ارائه‌ی فایل اصلی ساخت bundle `BLOCKED` می‌ماند (F16) |
 | وجود/تعداد ۱۰۰ محصول، ۳۰۱ تصویر، ۱۲۶ صفحه، ۳۳۵ فایل رسانه‌ی واقعی دو دمو | داده‌ی اصلی در Git نیست |
 | تطابق بصری با دموهای اصلی | همان |
 | ShopSettings/برندینگ/لوگو/رنگِ اصلی هر دمو | همان |

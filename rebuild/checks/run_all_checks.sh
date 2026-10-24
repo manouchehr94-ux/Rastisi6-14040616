@@ -12,6 +12,6 @@ step "cleanup safety predicates";             bash rebuild/checks/test_cleanup_g
 step "django system check";                   "$PY" manage.py check || rc=1
 step "migrations are in sync with models";    "$PY" manage.py makemigrations --check --dry-run || rc=1
 step "targets manifest is valid JSON";        "$PY" -c "import json;d=json.load(open('rebuild/manifests/demo_stores.json'));assert set(d['stores'])=={'demo_v5','demo_arch02'}" || rc=1
-step "rebuild tooling tests";                 "$PY" manage.py test apps.stores.tests.test_demo_bundle apps.stores.tests.test_demo_bundle_converter --noinput || rc=1
+step "rebuild tooling tests";                 "$PY" manage.py test apps.stores.tests.test_demo_bundle apps.stores.tests.test_demo_bundle_converter apps.stores.tests.test_demo_bundle_media_recovery --noinput || rc=1
 echo; [ $rc = 0 ] && echo "ALL OFFLINE CHECKS PASSED" || echo "SOME CHECKS FAILED"
 exit $rc

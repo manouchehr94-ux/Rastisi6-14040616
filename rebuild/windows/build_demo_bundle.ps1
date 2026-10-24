@@ -7,6 +7,10 @@
       -Arch02Sqlite D:\in\demo_arch02.sqlite3 -Arch02MediaZip D:\in\demo_arch02_media.zip `
       -Out D:\out\rastisi-demo-bundle
 .NOTES
+  Files a media ZIP lacks are rebuilt from the repository (curated demo assets, the application's thumbnail
+  code) and classified ORIGINAL / RECOVERED_FROM_REPO / REGENERATED_DERIVATIVE / UNRECOVERABLE in
+  MEDIA_PROVENANCE.json (also written beside -Out as <Out>.media_provenance.json). An UNRECOVERABLE file keeps
+  the build BLOCKED; put your own copy under -ExtraMediaDir (laid out like MEDIA_ROOT, e.g. categories\images\kafsh.jpg).
   Needs Python 3.10+. Creates .venv inside the repository once. Exit code: 0 bundle written, 1 FAIL, 2 BLOCKED.
   Add -InspectOnly first to look at stores, ids, ZIP layout and unknown JSON keys without writing anything.
 #>
@@ -18,7 +22,8 @@ param(
   [string]$WheelDir,
   [switch]$InspectOnly, [switch]$SkipFullCheck, [switch]$KeepWork,
   [string[]]$MapJsonKey, [string[]]$MapJsonListKey, [string[]]$IgnoreJsonKey,
-  [string]$V5MediaPrefix, [string]$Arch02MediaPrefix
+  [string]$V5MediaPrefix, [string]$Arch02MediaPrefix,
+  [string]$ExtraMediaDir, [string]$CuratedDir, [string]$ProvenanceReport, [switch]$NoMediaRecovery
 )
 $ErrorActionPreference = "Stop"
 $env:PYTHONUTF8 = "1"
@@ -41,6 +46,10 @@ if ($WheelDir)      { $a += @("--wheel-dir", $WheelDir) }
 if ($InspectOnly)   { $a += "--inspect-only" }
 if ($SkipFullCheck) { $a += "--no-full-check" }
 if ($KeepWork)      { $a += "--keep-work" }
+if ($NoMediaRecovery) { $a += "--no-media-recovery" }
+if ($ExtraMediaDir)  { $a += @("--extra-media-dir", (Resolve-Path -LiteralPath $ExtraMediaDir).Path) }
+if ($CuratedDir)     { $a += @("--curated-dir", (Resolve-Path -LiteralPath $CuratedDir).Path) }
+if ($ProvenanceReport) { $a += @("--provenance-report", [System.IO.Path]::GetFullPath($ProvenanceReport)) }
 foreach ($k in $MapJsonKey)    { $a += @("--map-json-key", $k) }
 foreach ($k in $MapJsonListKey) { $a += @("--map-json-list-key", $k) }
 foreach ($k in $IgnoreJsonKey) { $a += @("--ignore-json-key", $k) }
