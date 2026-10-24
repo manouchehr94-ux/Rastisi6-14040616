@@ -17,12 +17,12 @@
 | A1 | Django system check | **PASS** | `python manage.py check` | `System check identified no issues (0 silenced).` |
 | A2 | migrationها با مدل‌ها هم‌خوان | **PASS** | `python manage.py makemigrations --check --dry-run` | `No changes detected` |
 | A3 | migrate از صفر روی SQLite و PostgreSQL 16 | **PASS** | `manage.py migrate` (هر دو) | هر دو بدون خطا؛ SQLite ≈ 50 s |
-| A4 | تست‌های ابزار ریبیلد (SQLite) | **PASS** | `manage.py test apps.stores.tests.test_demo_bundle` | `Ran 71 tests … OK` |
-| A5 | همان تست‌ها روی PostgreSQL 16 | **PASS** | `DATABASE_URL=postgres://… manage.py test apps.stores.tests.test_demo_bundle` | `Ran 71 tests … OK` (از جمله reset دنباله‌ها؛ با حذفِ عمدیِ reset همان تست **FAIL** می‌شود: `duplicate key … catalog_product_pkey` ← تست معنادار است) |
+| A4 | تست‌های ابزار ریبیلد (SQLite) | **PASS** | `manage.py test apps.stores.tests.test_demo_bundle` | `Ran 72 tests … OK` |
+| A5 | همان تست‌ها روی PostgreSQL 16 | **PASS** | `DATABASE_URL=postgres://… manage.py test apps.stores.tests.test_demo_bundle` | `Ran 72 tests … OK` (از جمله reset دنباله‌ها؛ با حذفِ عمدیِ reset همان تست **FAIL** می‌شود: `duplicate key … catalog_product_pkey` ← تست معنادار است) |
 | A6 | تست‌های موجودِ حساس به تغییرات من | **PASS** | `test apps.catalog.tests.test_price_inquiry apps.stores.tests.test_{golden_demo_owner_login_readiness,admin_host_enforcement,resolution,admin_superuser_gate}` | `Ran 153 tests … OK` |
 | A7 | تست‌های seed موجود (`seed_ready_template_fashion_demo`) | **PASS** | `test apps.stores.tests.test_seed_ready_template_fashion_demo_command` | `Ran 55 tests … OK` (39 min زیر بار موازی) |
 | A8 | تست email-transport (بازنویسی sink بدون `asyncore`) | **PASS** | `test apps.notifications.tests.test_email_transport` | `Ran 4 tests … OK`؛ این ماژول قبلاً روی Python ≥ 3.12 **import نمی‌شد** (`ModuleNotFoundError: asyncore`) |
-| A9 | مجموعه‌ی کامل تست‌ها | FULL_SUITE_RESULT | `manage.py test --noinput --parallel 4` | FULL_SUITE_DETAIL |
+| A9 | مجموعه‌ی کامل تست‌ها | **FAIL (همگی از پیش موجود، غیرمرتبط با این تغییرات)** | `manage.py test --noinput --parallel 4` | `Ran 11142 tests in 2646s — FAILED (failures=32, errors=5, skipped=124)`. **۳۵ مورد دقیقاً همان‌ها روی `main` دست‌نخورده نیز شکست می‌خورند** (اجرای ۱۵ ماژول مربوطه روی checkout اصلی `7d31155`: `Ran 233 tests — failures=32, errors=3`)؛ ماژول‌ها: onboarding_ready_template (4)، onboarding_template_fidelity، arch02b_gallery_unification، architecture_consolidation (2)، dense_marketplace_beraito_v2 (7)، editorial_jewelry_saremi_v2 (4)، phase28_canvas_first_ux، phase28c_direct_drawers، premium_leather_shokolati_v2 (3)، r411_image_display_contract (2)، r4_showcase_facade، warm_boutique_lalerokh_v2 (6)، refresh_rasti_mode_demo_visuals (2). ۲ مورد دیگر (`sms.test_gateway_live` setUpClass و `portal.test_public_site_v2…new_ready_template…`) فقط در اجرای **موازی** خطا دادند و هم روی شاخه‌ی من و هم روی `main` در اجرای جداگانه **PASS** هستند (`Ran 42 … OK` هر دو) ← ناپایداری ترتیب/موازی‌سازی. هیچ شکستی در تست‌های `apps.stores.tests.test_demo_bundle` یا ماژول‌های تغییرداده‌شده نبود. این ۳۵ مورد رفع نشدند (خارج از دامنه؛ علت ریشه‌ای بررسی نشده) |
 | A10 | پیکربندی production با env نمونه | **PASS** | `check --deploy` با `rastisi.env.example` (مقادیر جعلی موقت، `DEBUG=False`) | فقط هشدار `W004` (HSTS عمداً 0 در شروع) و `W009` (کلید جعلیِ کوتاهِ آزمایشی)؛ هیچ خطا |
 | A11 | سینتکس اسکریپت‌های shell | **PASS** | `bash -n rebuild/deployment/scripts/*.sh rebuild/checks/*.sh` | همه OK (shellcheck نصب نبود → استاتیک‌آنالیز بیشتر **BLOCKED**) |
 | A12 | محافظ‌های پاک‌سازی (RastiService) | **PASS** | `bash rebuild/checks/test_cleanup_guards.sh` | `PASS cleanup guards`: حذف `rastiservice*` (سرویس/nginx/DB/مسیر)، `/`, `/etc/nginx`, symlink escape همه رد؛ dry-run manifest حاوی ۴ مورد protected ← ۴ `REFUSED` و ۰ `WOULD` |
@@ -33,6 +33,12 @@
 | A17 | ZIP: مسیر موفق (کد-فقط) | **PASS** | `build_release_zip.py --out dist/rastisi-release.zip` | ≈ 24.5 MB، 2296 فایل، شامل MANIFEST.json + `.sha256`؛ **صفر** فایل `raw_user_catalog/qa_evidence/.env/sqlite` |
 | A18 | ZIP با bundle (فقط با `--targets` تک‌فروشگاه تست) | **PASS** | `--targets one_target.json --bundle <bundle>` | 333 فایل زیر `data/bundle`؛ برای دو فروشگاه واقعی **BLOCKED** |
 | A19 | PostgreSQL E2E واقعی | **PASS** | `migrate` → `retire_seed_store --confirm` → `import_demo_bundle` ×۲ → `create_install_accounts` → `verify_demo_integrity --http` → `rastisi_healthcheck` | import: 1319 ردیف، 330 فایل؛ import دوم: `media_copied=0`، همان شمارش؛ verify: **PASS** (55 URL پاسخ 200)؛ دقیقاً ۲ کاربر؛ هش `pbkdf2_sha256` |
+
+## A+. اجرای مستقل در GitHub Actions (Ubuntu 24.04، Python 3.12)
+
+| بررسی | وضعیت | مدرک |
+|---|---|---|
+| workflow `rebuild-package` (django check، migrations، محافظ‌های cleanup، ۷۲ تست ریبیلد، nginx syntax، ساخت ZIP کد-فقط) | **PASS** | run [40113626842](https://github.com/manouchehr94-ux/Rastisi6-14040616/actions/runs/40113626842) (push) و [40113646428](https://github.com/manouchehr94-ux/Rastisi6-14040616/actions/runs/40113646428) (PR) — `conclusion: success`؛ artifact `rastisi-release-code-only` (24.2 MB، sha256 `10ecdfc7…7e30`) |
 
 ## B. ۱۰ بررسی خواسته‌شده در دستور کار (§7)
 
