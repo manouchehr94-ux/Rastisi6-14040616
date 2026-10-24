@@ -44,6 +44,9 @@ _H = "stationery_search"
 _F = "stationery_dark"
 _FC = "floating_card"
 _B = "beauty_search_nav"
+#: every footer variant whose root element carries the geometry style (the legacy footer is inline in the shell and draws none)
+_FOOTER_VARIANTS_WITH_ROOT_GEOMETRY = ("marketplace_dense", "premium_columns", "boutique_editorial", "dark_tech", "promo_columns",
+                                       "beauty_retail_columns", "chocolate_dark_columns", "stationery_dark", "kawaii_minimal", "centered_contact")
 
 SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key): p for p in (
     ShellGeometryProperty("util_height", "header", "ارتفاع نوار بالایی (px)", "int", 24, 80, 40, "--gh-util-h", variants=(_H,)),
@@ -77,8 +80,8 @@ SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key
     ShellGeometryProperty("mobile_search_icon", "header", "جست‌وجوی موبایل به‌صورت آیکن (۰ = نوار، ۱ = آیکن)", "int", 0, 1, 0, "", unit="",
                           variants=("promo_search_nav", "marketplace_search_first")),
     # V5 spacious footer (every footer variant): vertical padding and the base text size of the whole footer
-    ShellGeometryProperty("pad_y", "footer", "فاصلهٔ عمودی بالا و پایین فوتر (px)", "int", 0, 160, 0, "--gf-pad-y", variants=(_ALL,)),
-    ShellGeometryProperty("text_size", "footer", "اندازهٔ متن فوتر (px)", "int", 11, 22, 13, "--gf-text", variants=(_ALL,)),
+    ShellGeometryProperty("pad_y", "footer", "فاصلهٔ عمودی بالا و پایین فوتر (px)", "int", 0, 160, 0, "--gf-pad-y", variants=_FOOTER_VARIANTS_WITH_ROOT_GEOMETRY),
+    ShellGeometryProperty("text_size", "footer", "اندازهٔ متن فوتر (px)", "int", 11, 22, 13, "--gf-text", variants=_FOOTER_VARIANTS_WITH_ROOT_GEOMETRY),
     ShellGeometryProperty("bar_height", "footer", "ارتفاع نوار پیوندها (px، ۰ = خودکار)", "int", 0, 200, 0, "--gf-bar-h", variants=(_F,)),
     ShellGeometryProperty("grid_min_height", "footer", "حداقل ارتفاع بلوک ستون‌ها (px)", "int", 0, 800, 440, "--gf-grid-h", variants=(_F,)),
     ShellGeometryProperty("column_count", "footer", "تعداد ستون‌ها", "int", 2, 6, 4, "--gf-cols", unit="", variants=(_F,)),
