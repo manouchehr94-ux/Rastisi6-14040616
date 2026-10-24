@@ -21,6 +21,7 @@
 ## ۳. ورود
 - مسیر مدیر پلتفرم **دست نخورد**: `platformadmins.rastisi.ir/login/` (URLconf جداگانه؛ `/login/` همین مسیر روی host فروشگاه ۴۰۴ است و `/admin/` جنگو روی host پلتفرم‌ادمین ۴۰۴).
 - ورود مرکزی مالک/عضو: `rastisi.ir/login/` با rate-limit مشترک (Redis الزامی در production) و **Cloudflare Turnstile fail-closed** (خالی‌بودن کلید/hostname در production باعث خطای startup می‌شود).
+- مشاهده (بدون تغییر، طبق دستور «سیاست را تغییر نده»): فرم ورود `platformadmins.rastisi.ir` Turnstile **ندارد**؛ فقط rate-limit (۱۰ تلاش/۱۰ دقیقه برای هر IP، شمارنده‌ی مشترک Redis) و دروازه‌ی `is_staff and is_superuser`. پیشنهاد عملیاتی اختیاری: محدودکردن این host با allow-list IP یا Basic-Auth در nginx. Turnstile روی فرم‌های `contact`, `register`, `login_otp`, `login_password` و `password_reset` پرتال مرکزی اعمال می‌شود.
 - انتقال به پنل: `enter_admin` یک ticket کوتاه‌عمر می‌سازد و به host خودِ فروشگاه می‌فرستد؛ کاربر بدون عضویت ۴۰۴ می‌گیرد.
 
 ## ۴. تنظیمات سرور

@@ -69,8 +69,10 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def validate_bundle(bundle: Path) -> None:
+def validate_bundle(bundle: Path, targets: str | None = None) -> None:
     cmd = [sys.executable, "manage.py", "validate_demo_bundle", str(bundle)]
+    if targets:
+        cmd += ["--targets", targets]
     result = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     sys.stdout.write(result.stdout)
     if result.returncode != 0:
@@ -82,6 +84,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True, help="output .zip path")
     ap.add_argument("--bundle", help="validated store data bundle directory to embed under data/bundle")
+    ap.add_argument("--targets", help="alternate targets manifest for validation (testing only; default: rebuild/manifests/demo_stores.json)")
     ap.add_argument("--include-raw-demo-assets", action="store_true")
     ap.add_argument("--allow-dirty", action="store_true", help="package even with uncommitted changes")
     args = ap.parse_args()
@@ -97,10 +100,16 @@ def main() -> int:
     if suspicious:
         sys.exit(f"refusing: secret-looking file name(s): {suspicious}")
 
+    bundle = None
+    if args.bundle:
+        bundle = Path(args.bundle).resolve()
+        validate_bundle(bundle, args.targets)  # exits before anything is written unless PASS
+
     entries: dict[str, str] = {}
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+    tmp = out.with_name(out.name + ".partial")
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for rel in sorted(files):
             data = (ROOT / rel).read_bytes()
             info = zipfile.ZipInfo(f"rastisi/{rel}", date_time=(2026, 1, 1, 0, 0, 0))
@@ -108,9 +117,7 @@ def main() -> int:
             info.external_attr = ((0o755 if rel.endswith(".sh") else 0o644) << 16)
             zf.writestr(info, data)
             entries[rel] = sha256(data)
-        if args.bundle:
-            bundle = Path(args.bundle).resolve()
-            validate_bundle(bundle)
+        if bundle is not None:
             for p in sorted(x for x in bundle.rglob("*") if x.is_file()):
                 rel = f"data/bundle/{p.relative_to(bundle).as_posix()}"
                 data = p.read_bytes()
@@ -126,6 +133,7 @@ def main() -> int:
             "files": entries,
         }
         zf.writestr("rastisi/MANIFEST.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+    tmp.replace(out)  # a half-written archive never carries the final name
     digest = sha256(out.read_bytes())
     Path(str(out) + ".sha256").write_text(f"{digest}  {out.name}\n")
     print(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {len(entries)} files, commit {commit[:12]})")

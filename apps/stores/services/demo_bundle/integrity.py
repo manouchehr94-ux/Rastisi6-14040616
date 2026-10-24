@@ -9,14 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from django.conf import settings
-from django.db.models import Q
 
 from apps.content.models import FooterSettings
 from apps.core.models import ShopSettings
 from apps.stores.models import Store, StoreDomain
 
 from . import contract
-from .exporter import _store_q, rows_for
+from .exporter import rows_for
 from .files import file_fields, model_for
 from .report import Report
 
@@ -25,7 +24,6 @@ def verify_store(store: Store, *, hostname: str | None = None, media_root: Path 
                  decode_images: bool = True, http: bool = False) -> Report:
     media_root = Path(media_root or settings.MEDIA_ROOT)
     report = Report(f"integrity {store.slug}")
-    s = store.slug
 
     _check_identity(store, hostname, report)
     _check_singletons(store, report)

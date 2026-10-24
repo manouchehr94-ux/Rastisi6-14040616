@@ -32,7 +32,7 @@ from apps.stores.models import Store, StoreDomain
 
 from . import contract
 from .exporter import _store_q
-from .files import copy_atomic, file_fields, model_for, safe_relative_media_path, sha256_file
+from .files import copy_atomic, model_for, safe_relative_media_path, sha256_file
 from .report import Report
 from .targets import TargetStore
 from .validator import load_manifest, load_records, validate_bundle

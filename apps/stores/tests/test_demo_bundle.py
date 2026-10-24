@@ -30,7 +30,7 @@ from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
 from apps.storefront_builder.models import StorefrontLayout, StorefrontPage, StorefrontSection
 from apps.storefront_builder.services import layout_service
 from apps.stores.models import Store, StoreDomain, StoreMembership
-from apps.stores.services.demo_bundle import accounts, contract, exporter, integrity
+from apps.stores.services.demo_bundle import accounts, exporter, integrity
 from apps.stores.services.demo_bundle.importer import ImportAborted, import_store
 from apps.stores.services.demo_bundle.report import BLOCKED, FAIL, PASS
 from apps.stores.services.demo_bundle.targets import TargetStore, load_targets
@@ -316,6 +316,20 @@ class ImportRoundTripTests(BundleTestBase):
         self.assertTrue((self.dst_media / shop.logo.name).is_file())
         domain = StoreDomain.objects.get(store=store)
         self.assertEqual((domain.hostname, domain.is_primary), ("demo-v5.rastisi.ir", True))
+
+    def test_new_rows_can_be_created_after_import_sequences_are_in_sync(self):
+        """Preserved primary keys must not leave PostgreSQL sequences behind
+        (the next INSERT would otherwise collide with an imported pk)."""
+        from django.db import connection
+
+        if connection.vendor == "postgresql":  # emulate a FRESH server: sequences start at 1
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT setval(pg_get_serial_sequence('catalog_product', 'id'), 1, false)")
+        store = self.do_import().store
+        vendor = Vendor.objects.get(store=store)
+        fresh = Product.objects.create(store=store, vendor=vendor, name="after", slug="after-import", sku="AFTER1", price=1)
+        self.assertNotIn(fresh.pk, self.product_ids)
+        self.assertGreater(fresh.pk, max(self.product_ids))
 
     def test_exactly_one_shopsettings_and_footer_per_store(self):
         store = self.do_import().store

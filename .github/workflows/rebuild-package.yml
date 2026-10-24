@@ -1,0 +1,42 @@
+name: rebuild-package
+
+# Offline checks + a downloadable CODE-ONLY release ZIP (no demo data, no secrets).
+# Runs on the rebuild branch, on manual dispatch, and for pull requests touching the tooling.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/rastisi-complete-rebuild-*"]
+  pull_request:
+    paths: ["rebuild/**", "docs/rebuild/**", "apps/stores/**", ".github/workflows/rebuild-package.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  checks-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies and nginx (for the syntax check)
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -y && sudo apt-get install -y --no-install-recommends nginx
+      - name: Offline checks (django check, migrations, cleanup guards, rebuild tests)
+        run: bash rebuild/checks/run_all_checks.sh python
+      - name: nginx syntax and safety properties
+        run: bash rebuild/checks/nginx_syntax_check.sh
+      - name: Build code-only release ZIP
+        run: python rebuild/tools/build_release_zip.py --out dist/rastisi-release.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rastisi-release-code-only
+          path: |
+            dist/rastisi-release.zip
+            dist/rastisi-release.zip.sha256
+          if-no-files-found: error
