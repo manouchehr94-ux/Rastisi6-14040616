@@ -1,0 +1,11 @@
+[Unit]
+Description=RastiSi gunicorn socket
+
+[Socket]
+ListenStream=/run/rastisi/gunicorn.sock
+SocketUser=rastisi
+SocketGroup=www-data
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

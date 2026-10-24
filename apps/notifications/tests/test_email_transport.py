@@ -3,9 +3,9 @@
 This proves our code speaks SMTP correctly (headers, multipart, recipients, failure → retry/backoff → single re-send); it does NOT
 prove a real provider/account/domain (SPF/DKIM/DMARC, reputation, inbox placement) — that needs operator verification."""
 
-import asyncore
-import smtpd
+import re
 import socket
+import socketserver
 import threading
 import warnings
 from datetime import timedelta
@@ -25,38 +25,86 @@ User = get_user_model()
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-class Sink(smtpd.SMTPServer):
-    received: list
-
-    def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        self.received.append((mailfrom, rcpttos, data))
-
-
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
+class _SmtpHandler(socketserver.StreamRequestHandler):
+    """Minimal SMTP receiver (RFC 5321 subset used by Django's SMTP backend).
+
+    ``smtpd``/``asyncore`` were removed in Python 3.12, so the sink is a plain
+    threaded socket server with the same observable behaviour: it records
+    ``(mailfrom, rcpttos, data)`` for every accepted message.
+    """
+
+    def _send(self, line):
+        self.wfile.write(line.encode("ascii") + b"\r\n")
+        self.wfile.flush()
+
+    @staticmethod
+    def _address(argument):
+        match = re.search(r"<([^>]*)>", argument)
+        return match.group(1) if match else argument.strip()
+
+    def handle(self):
+        mailfrom, rcpttos = None, []
+        self._send("220 sink ESMTP")
+        while True:
+            raw = self.rfile.readline()
+            if not raw:
+                return
+            line = raw.decode("utf-8", "replace").strip()
+            verb = line.split(" ", 1)[0].upper()
+            rest = line.split(" ", 1)[1] if " " in line else ""
+            if verb in ("EHLO", "HELO"):
+                self._send("250 sink")
+            elif verb == "MAIL":
+                mailfrom, rcpttos = self._address(rest), []
+                self._send("250 OK")
+            elif verb == "RCPT":
+                rcpttos.append(self._address(rest))
+                self._send("250 OK")
+            elif verb == "DATA":
+                self._send("354 End data with <CR><LF>.<CR><LF>")
+                lines = []
+                while True:
+                    part = self.rfile.readline()
+                    if not part or part in (b".\r\n", b".\n"):
+                        break
+                    lines.append(part[1:] if part.startswith(b"..") else part)
+                self.server.received.append((mailfrom, list(rcpttos), b"".join(lines).replace(b"\r\n", b"\n")))
+                self._send("250 OK")
+            elif verb == "RSET":
+                mailfrom, rcpttos = None, []
+                self._send("250 OK")
+            elif verb == "NOOP":
+                self._send("250 OK")
+            elif verb == "QUIT":
+                self._send("221 Bye")
+                return
+            else:
+                self._send("502 Command not implemented")
+
+
+class _Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 class SmtpSink:
     def __init__(self, port):
         self.received = []
-        Sink.received = self.received
-        self.server = Sink(("127.0.0.1", port), None, decode_data=False)
-        self.map = {}
-        self.running = True
-        self.thread = threading.Thread(target=self.loop, daemon=True)
+        self.server = _Server(("127.0.0.1", port), _SmtpHandler)
+        self.server.received = self.received
+        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.1}, daemon=True)
         self.thread.start()
 
-    def loop(self):
-        while self.running:
-            asyncore.loop(timeout=0.1, count=1)
-
     def stop(self):
-        self.running = False
+        self.server.shutdown()
+        self.server.server_close()
         self.thread.join(2)
-        self.server.close()
-        asyncore.close_all()
 
 
 class EmailTransportTests(TestCase):

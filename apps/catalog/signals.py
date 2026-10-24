@@ -19,6 +19,8 @@ _PRODUCT_FIELDS = {"category", "category_id", "price_mode_override"}
 
 @receiver(post_save, sender=Product)
 def sync_product_inquiry(sender, instance, created, update_fields, **kwargs):
+    if kwargs.get("raw"):
+        return  # fixture / bundle import: the serialized is_price_inquiry is authoritative
     if update_fields is not None and not (_PRODUCT_FIELDS & set(update_fields)):
         return
     pricing_mode_service.recompute_product(instance)
@@ -26,6 +28,8 @@ def sync_product_inquiry(sender, instance, created, update_fields, **kwargs):
 
 def _remember_inquiry_relevant_state(model, fields):
     def handler(sender, instance, **kwargs):
+        if kwargs.get("raw"):
+            return
         if not instance.pk:
             instance._inquiry_state_changed = True
             return
@@ -47,6 +51,8 @@ pre_save.connect(
 
 @receiver(post_save, sender=Category)
 def sync_category_inquiry(sender, instance, created, update_fields, **kwargs):
+    if kwargs.get("raw"):
+        return
     if created and instance.price_mode == PriceMode.STANDARD:
         return
     if not getattr(instance, "_inquiry_state_changed", True):
@@ -56,6 +62,8 @@ def sync_category_inquiry(sender, instance, created, update_fields, **kwargs):
 
 @receiver(post_save, sender=MerchantCollection)
 def sync_collection_inquiry(sender, instance, created, update_fields, **kwargs):
+    if kwargs.get("raw"):
+        return
     if created and instance.price_mode == PriceMode.STANDARD:
         return
     if not getattr(instance, "_inquiry_state_changed", True):
@@ -66,6 +74,8 @@ def sync_collection_inquiry(sender, instance, created, update_fields, **kwargs):
 @receiver(post_save, sender=MerchantCollectionItem)
 @receiver(post_delete, sender=MerchantCollectionItem)
 def sync_collection_item_inquiry(sender, instance, **kwargs):
+    if kwargs.get("raw"):
+        return
     from django.core.exceptions import ObjectDoesNotExist
 
     try:

@@ -143,9 +143,11 @@ def build_database_config(base_dir, *, environ=None):
     """
     database_url = env_str("DATABASE_URL", "", environ=environ)
     if not database_url:
+        # DJANGO_SQLITE_PATH lets offline tooling (and tests) point the default
+        # SQLite database at a scratch file without touching ``db.sqlite3``.
         return {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": str(base_dir / "db.sqlite3"),
+            "NAME": env_str("DJANGO_SQLITE_PATH", "", environ=environ) or str(base_dir / "db.sqlite3"),
         }
     parsed = urlparse(database_url)
     if parsed.scheme not in _SUPPORTED_DATABASE_URL_SCHEMES:

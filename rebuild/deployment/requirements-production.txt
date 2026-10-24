@@ -1,0 +1,3 @@
+# Production-only additions. Install with:  pip install -r rebuild/deployment/requirements-production.txt
+-r ../../requirements.txt
+gunicorn>=22.0,<24
