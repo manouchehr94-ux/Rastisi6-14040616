@@ -11,7 +11,7 @@ regulatory marks that a Merchant did not configure.
 {% load storefront_builder_extras %}
 {% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--beauty">
+<footer class="gf gf--beauty"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="wrap gf-beauty-guarantee" aria-label="مزایای خرید">
     <div class="gf-beauty-guarantee-item">
       <span class="gf-beauty-guarantee-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></span>

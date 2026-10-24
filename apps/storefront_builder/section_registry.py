@@ -1835,7 +1835,7 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: section that doesn't read it. Keeping the key in one shared validator
 #: (rather than forking a second near-identical function) is the same
 #: reuse choice already made for every other slider-level field.
-HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide", "clean_slider", "duo_carousel")
+HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide", "clean_slider", "duo_carousel", "split_open")
 
 #: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
 #: for the shared hero/image slider. ``cut`` is the historical, byte-identical
@@ -2569,7 +2569,11 @@ def _validate_faq_settings(raw: dict) -> dict:
         if not question or not answer:
             continue
         items.append({"question": question, "answer": answer})
-    return {"title": title, "items": items}
+    cleaned = {"title": title, "items": items}
+    # Optional presentation (written only when non-default): ``cards`` = two-column cards with every answer open.
+    if raw.get("style") == "cards":
+        cleaned["style"] = "cards"
+    return cleaned
 
 
 def default_faq_settings() -> dict:
@@ -2590,6 +2594,9 @@ FAQ_SCHEMA = SettingsSchema(fields=(
             SettingsField("answer", "پاسخ", "text", "basic", default="", max_length=_MAX_FAQ_ANSWER_LENGTH),
         ),
     ),
+    SettingsField("style", "نمایش پرسش‌ها", "choice", "advanced", default="", choices=(
+        ("", "فهرست آکاردئونی"), ("cards", "کارت‌های دوستونه با پاسخ باز"),
+    )),
 ))
 
 
@@ -2601,6 +2608,9 @@ _MAX_TESTIMONIAL_ITEMS = 20
 _MAX_TESTIMONIAL_NAME_LENGTH = 80
 _MAX_TESTIMONIAL_ROLE_LENGTH = 80
 _MAX_TESTIMONIAL_QUOTE_LENGTH = 400
+
+
+TESTIMONIAL_STYLES = ("avatar_grid", "card_row")
 
 
 def _validate_testimonials_settings(raw: dict) -> dict:
@@ -2620,12 +2630,20 @@ def _validate_testimonials_settings(raw: dict) -> dict:
         role = str(raw_item.get("role", "")).strip()[:_MAX_TESTIMONIAL_ROLE_LENGTH]
         if not name or not quote:
             continue
-        items.append({"name": name, "quote": quote, "role": role})
+        item = {"name": name, "quote": quote, "role": role}
+        # optional merchant-entered star rating (1-5); absent / 0 / invalid = no stars are drawn
+        try:
+            rating = int(raw_item.get("rating") or 0)
+        except (TypeError, ValueError):
+            rating = 0
+        if 1 <= rating <= 5:
+            item["rating"] = rating
+        items.append(item)
     cleaned = {"title": title, "items": items}
     # Optional presentation (written only when non-default): ``avatar_grid`` = two-column review cards
-    # with a round avatar chip beside the quote.
-    if raw.get("style") == "avatar_grid":
-        cleaned["style"] = "avatar_grid"
+    # with a round avatar chip beside the quote; ``card_row`` = a row of cards with an initial chip, name, role, stars and quote.
+    if raw.get("style") in TESTIMONIAL_STYLES:
+        cleaned["style"] = raw["style"]
     return cleaned
 
 
@@ -2646,8 +2664,12 @@ TESTIMONIALS_SCHEMA = SettingsSchema(fields=(
             SettingsField("name", "نام", "text", "basic", default="", max_length=_MAX_TESTIMONIAL_NAME_LENGTH),
             SettingsField("quote", "متن نظر", "text", "basic", default="", max_length=_MAX_TESTIMONIAL_QUOTE_LENGTH),
             SettingsField("role", "نقش/شهر", "text", "advanced", default="", max_length=_MAX_TESTIMONIAL_ROLE_LENGTH),
+            SettingsField("rating", "امتیاز (۱ تا ۵، خالی = بدون ستاره)", "integer", "advanced", default=0, min_value=0, max_value=5),
         ),
     ),
+    SettingsField("style", "نمایش کارت‌ها", "choice", "advanced", default="", choices=(
+        ("", "سه‌ستونه (پیش‌فرض)"), ("avatar_grid", "دو ستون با نشان گرد"), ("card_row", "ردیف کارت با نشان نام، نقش و ستاره"),
+    )),
 ))
 
 
@@ -3003,6 +3025,7 @@ IMAGE_TEXT_SCHEMA = SettingsSchema(fields=(
         default="", max_length=_MAX_RICH_TEXT_LENGTH,
         widget_hint="merchant_rich_text",
     ),
+    SettingsField("image_media_asset_id", "تصویر از کتابخانهٔ رسانه", "media", "basic", default=None),
     SettingsField(
         "image_position", "جای تصویر", "choice", "advanced",
         default="right", choices=(("right", "سمت راست"), ("left", "سمت چپ")),
@@ -3040,6 +3063,16 @@ def _validate_image_text_settings(raw: dict) -> dict:
     # of the cream card. Written only when non-default so existing sections stay byte-identical.
     if raw.get("block_style") == "plain":
         cleaned["block_style"] = "plain"
+    # Optional Store media-library picture (Store-scoped, resolved at render time; written only when chosen).
+    media_id = raw.get("image_media_asset_id")
+    if media_id not in (None, "", "null"):
+        try:
+            media_id = int(str(media_id))
+        except (TypeError, ValueError):
+            raise ValueError("رسانهٔ انتخاب‌شده نامعتبر است") from None
+        if media_id <= 0:
+            raise ValueError("رسانهٔ انتخاب‌شده نامعتبر است")
+        cleaned["image_media_asset_id"] = media_id
     # Optional icon + title + text rows shown under the body (written only when at least one row has a title).
     rows = []
     for item in (raw.get("feature_items") or [])[:4] if isinstance(raw.get("feature_items"), (list, tuple)) else []:
@@ -3397,6 +3430,11 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             VariantDefinition(
                 key="duo_carousel", label_fa="اسلایدر دوتایی با نمایش اسلاید همسایه",
                 renderer="storefront_builder/sections/hero_banner_duo.html",
+            ),
+            # Open split: large heading + prominent button on one side, the picture free-standing (contained, no frame, no clip) on the other.
+            VariantDefinition(
+                key="split_open", label_fa="دو ستون با تصویر آزاد (بدون قاب)",
+                renderer="storefront_builder/sections/hero_banner_split_open.html",
             ),
         ),
         default_variant="overlay", variant_setting_key="hero_style",

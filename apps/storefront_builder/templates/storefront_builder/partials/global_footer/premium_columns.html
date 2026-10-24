@@ -12,7 +12,7 @@ Required context: same three keys every variant renderer receives.
 {% load storefront_builder_extras %}
 {% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--premium">
+<footer class="gf gf--premium"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="wrap">
     {% if fc.show_about or fc.show_quick_links and NAV_FOOTER_1 or fc.show_categories and top_level_categories or fc.show_contact and gf_has_contact_data or fc.extra_blocks|has_renderable_footer_extra_block:SOCIAL_LINKS_FOOTER %}
     <div class="gf-premium-grid">

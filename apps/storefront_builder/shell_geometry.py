@@ -73,6 +73,12 @@ SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key
     ShellGeometryProperty("announce_image_size", "header", "اندازهٔ تصویر کنار متن (px)", "int", 16, 64, 24, "--gh-announce-img", variants=(_ALL,)),
     ShellGeometryProperty("announce_height", "header", "حداقل ارتفاع نوار (px)", "int", 32, 120, 32, "--gh-announce-h", variants=(_ALL,)),
     ShellGeometryProperty("announce_padding", "header", "فاصلهٔ عمودیِ داخل نوار (px)", "int", 0, 16, 4, "--gh-announce-py", variants=(_ALL,)),
+    # V5 mobile header: 1 = the phone shows a search icon that opens the search bar instead of an always-visible search row
+    ShellGeometryProperty("mobile_search_icon", "header", "جست‌وجوی موبایل به‌صورت آیکن (۰ = نوار، ۱ = آیکن)", "int", 0, 1, 0, "", unit="",
+                          variants=("promo_search_nav", "marketplace_search_first")),
+    # V5 spacious footer (every footer variant): vertical padding and the base text size of the whole footer
+    ShellGeometryProperty("pad_y", "footer", "فاصلهٔ عمودی بالا و پایین فوتر (px)", "int", 0, 160, 0, "--gf-pad-y", variants=(_ALL,)),
+    ShellGeometryProperty("text_size", "footer", "اندازهٔ متن فوتر (px)", "int", 11, 22, 13, "--gf-text", variants=(_ALL,)),
     ShellGeometryProperty("bar_height", "footer", "ارتفاع نوار پیوندها (px، ۰ = خودکار)", "int", 0, 200, 0, "--gf-bar-h", variants=(_F,)),
     ShellGeometryProperty("grid_min_height", "footer", "حداقل ارتفاع بلوک ستون‌ها (px)", "int", 0, 800, 440, "--gf-grid-h", variants=(_F,)),
     ShellGeometryProperty("column_count", "footer", "تعداد ستون‌ها", "int", 2, 6, 4, "--gf-cols", unit="", variants=(_F,)),

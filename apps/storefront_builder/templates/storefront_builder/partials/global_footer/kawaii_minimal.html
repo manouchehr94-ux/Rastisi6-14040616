@@ -1,3 +1,4 @@
+{% load storefront_builder_extras %}
 {% comment %}
 Light link-strip footer (key: kawaii_minimal).
 Structure: a pale grey strip of the merchant's quick links, then one quiet row
@@ -5,7 +6,7 @@ with the store mark at the RTL edge and the legal line / social icons at the
 other.  Shared merchant/footer data partials only.
 {% endcomment %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--kawaii">
+<footer class="gf gf--kawaii"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   {% if fc.show_quick_links and NAV_FOOTER_1 %}
   <div class="gf-kw-strip" {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
     <div class="wrap">

@@ -45,6 +45,7 @@ PRODUCT_MAIN_CHOICES = (
         ("plain", "بدون قاب"),
         ("card", "کارت با حاشیهٔ ملایم"),
         ("outlined", "کادر پررنگ با رنگ اصلی"),
+        ("outlined_tone", "کادر درشت با رنگ ثانویهٔ برند"),
     ), "plain"),
     ("price_layout", "نمایش قیمت", (
         ("box", "داخل کادر قیمت"),
@@ -67,6 +68,10 @@ PRODUCT_MAIN_CHOICES = (
         ("square", "تقریباً مربعی"),
         ("pill", "قرصی"),
     ), "rounded"),
+    ("option_size", "اندازهٔ گزینه‌های تنوع", (
+        ("normal", "معمولی"),
+        ("large", "درشت"),
+    ), "normal"),
     ("cta_width", "عرض دکمهٔ افزودن به سبد", (
         ("full", "تمام عرض ردیف"),
         ("auto", "به اندازهٔ متن"),
@@ -87,6 +92,11 @@ PRODUCT_MAIN_CHOICES = (
         ("secondary", "رنگ ثانویه"),
         ("accent", "رنگ تأکید"),
     ), "primary"),
+    # the picture frame: the historical rounded card, or a flush picture (no border / background / rounding — the photo sits on the page)
+    ("gallery_frame", "قاب عکس اصلی", (
+        ("card", "کارت گوشه‌گرد (پیش‌فرض)"),
+        ("flush", "بدون قاب"),
+    ), "card"),
     # typography (V5 six-site kit): the product title and the price are the two type roles a product page tunes per brand
     ("title_size", "اندازهٔ عنوان محصول", (
         ("normal", "معمولی"),
@@ -116,6 +126,8 @@ PRODUCT_MAIN_SWITCHES = (
     ("show_low_stock_alert", "هشدار کمبود موجودی (وقتی موجودی واقعی ۱۰ عدد یا کمتر است)", False),
     ("show_free_shipping_notice", "پیام ارسال رایگان (وقتی قیمت کالا به آستانهٔ ارسال رایگان فروشگاه می‌رسد)", False),
     ("show_contact_buttons", "دکمه‌های مشاورهٔ تلفنی و واتساپ (از اطلاعات تماس فروشگاه)", False),
+    # The product's first real specifications (label / value rows from the catalogue) as a short bullet list under the title.
+    ("show_spec_summary", "فهرست کوتاه مشخصات زیر عنوان (از مشخصات فنی واقعی کالا)", False),
     # Sticky purchase bar on wide screens: appears once the in-flow add-to-cart button has scrolled out of view (same price / stock / button state).
     ("show_desktop_sticky_bar", "نوار خرید چسبان در دسکتاپ (پس از اسکرول از دکمهٔ خرید)", False),
     # Gallery: full-screen enlarged view (zoom button, arrows, Esc, tap-to-zoom) and swipe between pictures on touch screens.
@@ -126,6 +138,7 @@ PRODUCT_MAIN_SWITCHES = (
 _PRODUCT_MAIN_ATTRIBUTE_NAMES = {
     "gallery_position": "gallery-pos",
     "gallery_split": "gallery-split",
+    "gallery_frame": "gallery-frame",
     "thumbs_position": "thumbs",
     "info_panel": "info-panel",
     "price_layout": "price-layout",
@@ -133,6 +146,7 @@ _PRODUCT_MAIN_ATTRIBUTE_NAMES = {
     "qty_layout": "qty-layout",
     "option_style": "option-style",
     "option_shape": "option-shape",
+    "option_size": "option-size",
     "cta_width": "cta-width",
     "cta_size": "cta-size",
     "cta_shape": "cta-shape",
@@ -226,6 +240,11 @@ PRODUCT_DESCRIPTION_CHOICES = (
         ("boxed", "قاب با حاشیه"),
         ("soft", "زمینهٔ ملایم"),
     ), "plain"),
+    # description text size: the store's body size, or a larger reading size
+    ("body_size", "اندازهٔ متن توضیحات", (
+        ("normal", "معمولی"),
+        ("large", "درشت"),
+    ), "normal"),
     # how the tabs behave on a phone: the historical accordion, or the same horizontal tab row as on a desktop
     ("mobile_layout", "نمایش تب‌ها در موبایل", (
         ("accordion", "آکاردئون (پیش‌فرض)"),
@@ -259,6 +278,7 @@ _PRODUCT_DESCRIPTION_ATTRIBUTE_NAMES = {
     "tab_align": "tab-align",
     "panel_style": "panel-style",
     "mobile_layout": "mobile",
+    "body_size": "body-size",
 }
 
 

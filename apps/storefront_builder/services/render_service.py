@@ -573,6 +573,18 @@ def _decorative_strip_context(store, section):
     return {"strip": decorative_strip.build_view(settings, image_url)}
 
 
+def _image_text_context(store, section):
+    """Destination (as every destination section) + the Store-scoped media-library picture, resolved server-side and fail-closed:
+    a missing / foreign asset yields no picture rather than a broken image. Absent unless a media asset is chosen."""
+    context = dict(_resolved_destination_context(store, section))
+    media_id = (section.settings or {}).get("image_media_asset_id")
+    if media_id:
+        from apps.content.services import resolve_background_media_url
+
+        context["image_media_url"] = resolve_background_media_url(store, {"mode": "image", "media_asset_id": media_id}) or ""
+    return context
+
+
 def _resolved_destination_context(store, section):
     """بلوکِ ``destination`` این section (اگر داشته باشد) را به URL/تب‌جدید
     واقعی حل می‌کند — برایِ انواعی که در ``destination`` capability
@@ -817,7 +829,7 @@ _CONTEXT_BUILDERS = {
     "brand_carousel": _brand_carousel_context,
     "promo_cards": _category_context_for_promo_cards,
     "rich_text": _static_context,
-    "image_text": _resolved_destination_context,
+    "image_text": _image_text_context,
     "blog_posts": _blog_posts_context,
     "product_section": _product_section_context,
     "catalog_product_wall": _catalog_product_wall_context,

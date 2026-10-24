@@ -1,10 +1,11 @@
+{% load storefront_builder_extras %}
 {% comment %}
 Centered contact footer (key: centered_contact).
 Structure: ONE centred column on a tinted surface — the Store's real phone (pill), social icons, trust badges / payment logos and the
 legal line. Optional about text / links appear above when their toggles are on. Shared merchant/footer data partials only.
 {% endcomment %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--centered-contact">
+<footer class="gf gf--centered-contact"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="wrap gf-cc-main">
     {% if fc.show_about %}
     <div class="gf-cc-about" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>

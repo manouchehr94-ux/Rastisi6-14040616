@@ -28,6 +28,10 @@ Required context: ``header_config``/``is_live_storefront``/``is_builder_preview`
     </div>
     {% endif %}
     <div class="gh-actions">
+      {% if hc.geometry.mobile_search_icon and hc.show_search %}
+      <input type="checkbox" id="gh-sx" class="gh-sx-check" hidden>
+      <label for="gh-sx" class="gh-btn gh-sx-toggle" role="button" aria-label="جستجو">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="search" %}</label>
+      {% endif %}
       {% include "storefront_builder/partials/global_header/_shared/admin_shortcut.html" %}
       {% if hc.show_cart %}
       {% include "storefront_builder/partials/global_header/_shared/cart_action.html" with show_label=True %}

@@ -1,5 +1,5 @@
 {% load storefront_builder_extras %}
-{% with title=settings.title body=settings.body_html image_url=settings.image_url image_position=settings.image_position|default:"right" link=destination block_style=settings.block_style %}
+{% with title=settings.title body=settings.body_html image_url=image_media_url|default:settings.image_url image_position=settings.image_position|default:"right" link=destination block_style=settings.block_style %}
 {% if title or body or image_url or settings.feature_items %}
 <section class="section{% if block_style == 'plain' %} imgtext-plain{% endif %}">
   <div class="cream" style="{% if image_position == 'left' %}flex-direction:row-reverse{% endif %}">

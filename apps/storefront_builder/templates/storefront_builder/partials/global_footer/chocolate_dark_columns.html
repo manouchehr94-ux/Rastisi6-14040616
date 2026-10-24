@@ -5,7 +5,7 @@ real Store/footer/navigation/contact/social data from shared footer partials.
 {% load storefront_builder_extras %}
 {% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--chocolate">
+<footer class="gf gf--chocolate"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="gf-chocolate-wave" aria-hidden="true"></div>
   <div class="wrap">
     <div class="gf-chocolate-brandline">{% include "storefront_builder/partials/global_footer/_shared/brand.html" %}</div>

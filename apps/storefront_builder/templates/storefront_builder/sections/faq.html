@@ -1,10 +1,10 @@
 {% comment %}چکپوینتِ ۱۲: سوالات متداول — آکاردئونِ بومیِ HTML، بدونِ جاوااسکریپتِ اضافه.{% endcomment %}
 {% if settings.items %}
-<section class="section">
+<section class="section{% if settings.style == 'cards' %} faq--cards{% endif %}">
   <div class="sec-head"><h2><span class="bar"></span>{{ settings.title|default:"سوالات متداول" }}</h2></div>
   <div class="faq-list">
     {% for item in settings.items %}
-    <details class="faq-item">
+    <details class="faq-item"{% if settings.style == 'cards' %} open{% endif %}>
       <summary>{{ item.question }}</summary>
       <p>{{ item.answer }}</p>
     </details>

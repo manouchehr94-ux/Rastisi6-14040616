@@ -1,0 +1,28 @@
+{% load content_tags %}
+{% comment %}
+Hero, "split_open" structural variant: the same real, Store-scoped HeroSlide data as the split layout (first slide by display order; title / subtitle
+/ button are HeroSlide's own fields), but the heading is large, the button is prominent and the picture is free-standing — contained, no frame, no clip.
+{% endcomment %}
+{% if hero_slides %}
+{% with slide=hero_slides.0 %}
+<section class="section hero hero-split hero-split--open">
+  <div class="hero-split-inner hero-open-inner"
+       {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}>
+    <div class="hero-split-text">
+      {% if slide.title %}<h1>{{ slide.title }}</h1>{% endif %}
+      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+      {% if slide.show_button and slide.button_label %}
+      {% resolve_destination slide as dest %}
+      {% if dest.url %}<a class="hero-cta" href="{{ dest.url }}" {% if dest.open_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ slide.button_label }}</a>{% endif %}
+      {% endif %}
+    </div>
+    <div class="hero-split-media">
+      <picture>
+        {% if slide.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ slide.mobile_image_url }}">{% endif %}
+        {% if slide.desktop_image_url %}<img src="{{ slide.desktop_image_url }}" data-img-role="hero" alt="{{ slide.title|default:'اسلاید' }}" loading="eager">{% endif %}
+      </picture>
+    </div>
+  </div>
+</section>
+{% endwith %}
+{% endif %}

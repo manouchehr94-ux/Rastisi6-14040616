@@ -15,7 +15,7 @@ already receives from ``{% include footer_variant_template with ... %}``.
 {% load storefront_builder_extras %}
 {% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--marketplace">
+<footer class="gf gf--marketplace"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   {% if fc.show_newsletter and FOOTER_SETTINGS.show_newsletter %}
   <div class="wrap gf-newsletter-row" {% if rc.show_newsletter.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_newsletter.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
     {% include "storefront_builder/partials/global_footer/_shared/newsletter.html" %}

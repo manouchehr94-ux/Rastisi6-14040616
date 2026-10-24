@@ -182,6 +182,9 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           {% if not pdp or pdp.show_sku %}<div class="sku-line" x-show="current && current.sku">کد کالا: <span dir="ltr" x-text="current ? current.sku : ''"></span></div>{% endif %}
         </div>
         {% endif %}
+        {% if pdp.show_spec_summary %}{% with specs=product.specifications.all %}{% if specs %}
+        <ul data-pdp-specs>{% for spec in specs|slice:":6" %}<li><b>{{ spec.label }}</b>{% if spec.value %}<span>{{ spec.value }}</span>{% endif %}</li>{% endfor %}</ul>
+        {% endif %}{% endwith %}{% endif %}
 
         {% if gift_wrap and gift_wrap.eligible and not price_inquiry %}
         <div class="gift-wrap-option" style="margin:12px 0;padding:10px 12px;border:1px dashed var(--line,#d9dce3);border-radius:12px;display:grid;gap:6px">

@@ -14,7 +14,7 @@ Required context: same three keys every variant renderer receives.
 {% load storefront_builder_extras %}
 {% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--boutique">
+<footer class="gf gf--boutique"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   {% if fc.show_about or fc.show_newsletter and FOOTER_SETTINGS.show_newsletter %}
   <div class="wrap gf-boutique-statement">
     {% if fc.show_about %}

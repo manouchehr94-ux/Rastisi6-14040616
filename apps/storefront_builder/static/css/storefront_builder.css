@@ -3260,6 +3260,39 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 .testimonials--avatar-grid .testimonial-avatar{flex:0 0 46px;width:46px;height:46px;border-radius:50%;background:color-mix(in srgb,var(--brand-primary) 22%,var(--brand-surface,#fff))}
 .testimonials--avatar-grid .testimonial-body{min-width:0}
 @media(max-width:680px){.testimonials--avatar-grid .testimonial-list{grid-template-columns:1fr}}
+/* -- header mobile search as an icon (geometry.mobile_search_icon): the checkbox toggle shows / hides the variant's own search row on phones -- */
+.gh-sx-toggle{display:none;cursor:pointer}
+@media(max-width:680px){
+  .gh-sx-toggle{display:inline-flex}
+  .gh-shell:has(.gh-sx-check:not(:checked)) :is(.gh-mobile-search,.gh-promo-search,.gh-inline-block:has(> .gh-search)){display:none}
+}
+/* -- footer geometry (every variant; rules apply ONLY when the merchant / recipe set the property, so existing footers are untouched) -- */
+.gf[style*="--gf-pad-y"]{padding-block:var(--gf-pad-y)}
+.gf[style*="--gf-text"] :is(a,p,li,span,small,address,dd,dt){font-size:var(--gf-text)}
+.gf[style*="--gf-text"] :is(h2,h3,h4,strong,b){font-size:calc(var(--gf-text) * 1.2)}
+/* -- hero split_open: large heading + prominent button beside a free-standing (contained, unframed) picture -- */
+.hero-split--open .hero-split-inner{grid-template-columns:1.1fr .9fr;gap:40px;min-height:420px}
+.hero-split--open .hero-split-text h1{font-size:calc(var(--sfb-hero-heading-size,26px) * 2);line-height:1.35}
+.hero-split--open .hero-split-text p{font-size:calc(var(--sfb-hero-body-size,13px) * 1.45);margin-bottom:26px}
+.hero-split--open .hero-cta{height:54px;min-width:200px;padding:0 28px;border:0;border-radius:12px;background:var(--brand-primary,#3355ff);color:var(--brand-primary-fg,#fff);font-size:16px;font-weight:800;box-shadow:none}
+.hero-split--open .hero-split-media{aspect-ratio:auto;border-radius:0;overflow:visible;display:flex;justify-content:center;align-items:center}
+.hero-split--open .hero-split-media picture{display:flex;justify-content:center;width:100%;height:auto}
+.hero-split--open .hero-split-media img{width:auto;max-width:100%;height:auto;max-height:440px;object-fit:var(--img-fit,contain)}
+@media(max-width:680px){.hero-split--open .hero-split-inner{grid-template-columns:1fr;gap:18px;min-height:0}.hero-split--open .hero-split-text{text-align:center}.hero-split--open .hero-split-media{order:-1}.hero-split--open .hero-split-text h1{font-size:calc(var(--sfb-hero-heading-size,26px) * 1.1)}.hero-split--open .hero-cta{height:48px;min-width:180px}.hero-split--open .hero-split-media img{max-height:300px}}
+.faq--cards .faq-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:none}
+.faq--cards .faq-item{border-radius:14px;padding:18px 22px;background:color-mix(in srgb,var(--card) 92%,var(--muted))}
+.faq--cards .faq-item summary{pointer-events:none;font-size:15px}
+.faq--cards .faq-item summary::before{content:none}
+@media(max-width:680px){.faq--cards .faq-list{grid-template-columns:1fr}}
+.testimonial-stars{display:flex;gap:2px;margin-top:4px;color:#f5b301;font-size:14px;line-height:1}
+.testimonial-stars i{font-style:normal}.testimonial-stars i.off{color:color-mix(in srgb,currentColor 25%,transparent);opacity:.45}
+.testimonials--card-row .testimonial-list{grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.testimonials--card-row .testimonial-card{display:flex;flex-direction:column;gap:14px;padding:22px 20px;border-radius:14px}
+.testimonials--card-row .testimonial-head{display:flex;align-items:center;gap:12px}
+.testimonials--card-row .testimonial-avatar{flex:0 0 52px;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:20px;font-weight:800;background:color-mix(in srgb,var(--brand-primary,#3355ff) 22%,transparent);color:var(--brand-primary,#3355ff)}
+.testimonials--card-row .quote{margin:0;font-size:13px;line-height:2;color:var(--muted)}
+@media(max-width:1000px){.testimonials--card-row .testimonial-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.testimonials--card-row .testimonial-list{grid-template-columns:1fr}}
 
 /* ---- white three-card rail panels (paired rows): the panel look belongs to the "surface" background (or no background);
         any other merchant-chosen background (colour / palette / image / pattern) owns the section fill instead ---- */
@@ -3903,12 +3936,12 @@ html[dir="rtl"] .decor-strip-bg[data-grad]{background-image:linear-gradient(to r
 .promo-grid--panel-4 .promo-card:nth-child(4n+2){background:linear-gradient(135deg,var(--brand-tone-2),color-mix(in srgb,var(--brand-tone-2) 55%,#000))}
 .promo-grid--panel-4 .promo-card:nth-child(4n+3){background:linear-gradient(135deg,var(--brand-tone-3),color-mix(in srgb,var(--brand-tone-3) 55%,#000))}
 .promo-grid--panel-4 .promo-card:nth-child(4n){background:linear-gradient(135deg,var(--brand-tone-4),color-mix(in srgb,var(--brand-tone-4) 55%,#000))}
-.promo-grid--panel-4 .promo-media{position:absolute;inset-block:12% 12%;inset-inline-end:14px;width:26%;opacity:.95}
+.promo-grid--panel-4 .promo-media{position:absolute;inset-block:12% 12%;inset-inline:auto 14px;width:26%;opacity:.95}
 .promo-grid--panel-4 .promo-media img{width:100%;height:100%;object-fit:var(--img-fit,contain)}
-.promo-grid--panel-4 .promo-overlay{position:relative;display:grid;gap:4px;padding:0 22px;max-width:70%;text-align:start}
+.promo-grid--panel-4 .promo-overlay{position:relative;inset:auto;display:grid;gap:4px;padding:0 22px;max-width:70%;text-align:start;background:none;color:inherit}
 .promo-grid--panel-4 .promo-overlay strong{font-size:17px;font-weight:800}
 .promo-grid--panel-4 .promo-overlay small{font-size:12.5px;opacity:.9}
-@media(max-width:680px){.promo-grid--panel-4{gap:10px}.promo-grid--panel-4 .promo-card{aspect-ratio:2.4/1}.promo-grid--panel-4 .promo-overlay strong{font-size:14px}.promo-grid--panel-4 .promo-overlay small{font-size:11px}}
+@media(max-width:680px){.grid.rsec-cols.promo-grid--panel-4{gap:10px}.promo-grid--panel-4 .promo-card{aspect-ratio:auto;min-height:168px;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:12px}.promo-grid--panel-4 .promo-media{position:static;inset:auto;width:62px;height:62px;margin:0 auto 8px;order:-1}.promo-grid--panel-4 .promo-overlay{max-width:none;padding:0;text-align:center}.promo-grid--panel-4 .promo-overlay strong{font-size:14px}.promo-grid--panel-4 .promo-overlay small{font-size:11px}}
 
 /* FOLLOWUP-08 — ONE mobile contract for the opened header navigation of EVERY Global Header variant (<= 680px).
    Real-browser QA at 320/375/390/430 showed the opened row of most variants was a clipped horizontal strip (3-4 of 10-14

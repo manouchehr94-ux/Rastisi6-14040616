@@ -111,9 +111,9 @@ class SettingsVocabularyTests(SimpleTestCase):
         # package-1 switches are all ON (everything the page showed stays shown); the three V5 six-site-kit purchase-support blocks are OFF
         # (an existing Store never gains them) and render nothing at all unless a merchant / recipe switches them on
         self.assertEqual({k for k, _l, default in pdp_settings.PRODUCT_MAIN_SWITCHES if default is not True},
-                         {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox", "show_desktop_sticky_bar"})
+                         {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox", "show_desktop_sticky_bar", "show_spec_summary"})
         self.assertTrue(all(default is False for k, _l, default in pdp_settings.PRODUCT_MAIN_SWITCHES
-                            if k in {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox", "show_desktop_sticky_bar"}))
+                            if k in {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox", "show_desktop_sticky_bar", "show_spec_summary"}))
         self.assertEqual({key: d for key, _l, _c, d in pdp_settings.PRODUCT_DESCRIPTION_CHOICES}["layout_mode"], "tabs")
 
     def test_schema_fields_mirror_the_vocabulary_exactly(self):
@@ -302,6 +302,12 @@ class ProductMainControlsTests(_PdpBase):
         self.assertIn('data-satc="d"', html)
         self._update(self.main, {"show_desktop_sticky_bar": False})
         self.assertNotIn("pdp-satc", self._preview(), "both switches off renders no bar")
+
+    def test_gallery_frame_flush_reaches_the_container_and_card_does_not(self):
+        self.assertNotIn("gallery-frame", _data_attrs(_pdp_tag(self._preview())))
+        self._update(self.main, {"gallery_frame": "flush"})
+        self.assertEqual(_data_attrs(_pdp_tag(self._preview()))["gallery-frame"], "flush")
+        self.assertEqual(pdp_settings.resolve_product_main_view({"gallery_frame": "x"})["gallery_frame"], "card")
 
     def test_option_style_chips_switches_the_swatch_branch_off_for_colours(self):
         self._update(self.main, {"option_style": "chips"})
@@ -570,6 +576,12 @@ class ProductDescriptionModesTests(_PdpBase):
         self.assertEqual(self._tabs(self._preview())["mobile"], "tabs")
         self.assertEqual(pdp_settings.resolve_product_description_view({"mobile_layout": "nope"})["mobile_layout"], "accordion")
         self.assertNotIn(("mobile", "accordion"), pdp_settings.resolve_product_description_view({})["attrs"])
+
+    def test_body_size_attribute_is_written_only_for_large(self):
+        self.assertNotIn("body-size", self._tabs(self._preview()))
+        self._update(self.desc, {"body_size": "large"})
+        self.assertEqual(self._tabs(self._preview())["body-size"], "large")
+        self.assertEqual(pdp_settings.resolve_product_description_view({"body_size": "huge"})["body_size"], "normal")
 
     def test_one_revision_per_edit_undo_redo_and_refusal_of_bad_input(self):
         start = self._revision()
