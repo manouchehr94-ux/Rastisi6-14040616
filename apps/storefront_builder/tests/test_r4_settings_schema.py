@@ -361,7 +361,8 @@ class RichTextSchemaRegistrationTests(SimpleTestCase):
         self.assertIsNotNone(rich_text.settings_schema)
         self.assertEqual(
             [f.key for f in rich_text.settings_schema.fields],
-            ["body_html", "background"],
+            # V5 composition: rich_text offers the generic Design block (align / vertical placement / frame / text) as well
+            ["body_html", "design", "background"],
         )
         # The raw module-level constant still declares only its own field.
         self.assertEqual(
@@ -402,6 +403,9 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "slider_ratio",
                 "slider_ratio_mobile",
                 "slider_width",
+                # V5 composition — picture side / column share of the split heroes (sparse, default-off)
+                "image_side",
+                "split_ratio",
                 "appearance_overrides",
                 # R4-11 — the generic Design field (hero gained the image focal-point control)
                 "design",

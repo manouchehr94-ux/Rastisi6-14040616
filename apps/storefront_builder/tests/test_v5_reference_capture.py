@@ -62,8 +62,25 @@ class ReferenceCaptureTests(StaticLiveServerTestCase):
 
                 Store.objects.filter(slug=f"cap-{site.lower()}").delete()
                 print('SEEDING', site, flush=True)
+                lab_name = preset if preset.startswith("lab_") else ""
                 store, owner, products = rc.seed_store(site, image_mode=os.environ.get("SFB_IMAGE_MODE", "reference"),
-                                                       preset_key=preset or None, host=HOST)
+                                                       preset_key=None if lab_name else (preset or None), host=HOST)
+                if lab_name:
+                    from apps.content.models import PromotionalBanner
+                    from apps.storefront_builder.qa import composition_lab
+
+                    pool = (rc.reference_images(site, rc.PACKS[site].get("exclude_images", "")) if os.environ.get("SFB_IMAGE_MODE", "reference") == "reference" else {})
+                    pictures = (pool.get("products") or []) + (pool.get("squares") or []) + (pool.get("wide") or [])
+                    counter = {"n": 0}
+
+                    def picture(section, _store=store):
+                        path = pictures[counter["n"] % len(pictures)] if pictures else None
+                        counter["n"] += 1
+                        row = PromotionalBanner(store=_store, section=section, is_active=True, display_order=0)
+                        row.desktop_image = rc.uploaded(path, "lab.jpg", max_side=1400, size=(1200, 800))
+                        row.save()
+
+                    composition_lab.build(lab_name, store, owner, picture=picture)
                 print('SEEDED', len(products), flush=True)
                 pack = rc.PACKS[site]
                 at = rc.pdp_product_index(pack)
@@ -71,5 +88,5 @@ class ReferenceCaptureTests(StaticLiveServerTestCase):
                 with rc.patched_best_sellers(products):
                     for name, path in (("home", "/"), ("product", pdp)):
                         for viewport in ("desktop", "mobile"):
-                            geometry = rc.capture_page(self.browser, base, HOST, path, viewport, out / site / f"{name}-{viewport}.png", site=site)
+                            geometry = rc.capture_page(self.browser, base, HOST, path, viewport, out / (f"{site}-{lab_name}" if lab_name else site) / f"{name}-{viewport}.png", site=site)
                             print(f"CAPTURE {site} {name}-{viewport} {geometry}")
