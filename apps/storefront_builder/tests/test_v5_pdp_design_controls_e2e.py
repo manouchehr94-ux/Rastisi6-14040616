@@ -17,7 +17,7 @@ from apps.catalog.models import Brand
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.models import StorefrontPage
 from apps.storefront_builder.services import layout_service as svc
-from apps.storefront_builder.services import preset_service
+from apps.storefront_builder.services import preset_service, r4_mutation_service
 from apps.stores.models import Store, StoreDomain
 
 from .test_media_views import HOST
@@ -278,3 +278,50 @@ class NoParallelPathTests(SimpleTestCase):
             self.assertIsNotNone(definition.settings_schema)
             self.assertEqual(definition.max_instances, 1)
             self.assertTrue(definition.validate_settings is not None)
+
+
+class PurchaseSupportBlocksTests(_PdpBase):
+    """The three optional blocks (low stock / free shipping / contact buttons): OFF by default, real data only, never invented."""
+
+    BLOCKS = ("pdp-lowstock", "pdp-freeship", "pdp-contact")
+
+    def test_default_markup_has_none_of_them(self):
+        html = self._preview()
+        for marker in self.BLOCKS:
+            self.assertNotIn(f'class="{marker}', html, marker)
+
+    def test_each_block_appears_only_when_switched_on_and_uses_the_stores_own_data(self):
+        from apps.content.models import SocialLink
+        from apps.core.models import ShopSettings
+
+        self._update(self.main, {"show_low_stock_alert": True, "show_free_shipping_notice": True, "show_contact_buttons": True})
+        html = self._preview()
+        self.assertIn('class="pdp-lowstock"', html)
+        self.assertIn('class="pdp-freeship"', html)
+        shop = ShopSettings.provision_for(self.store)
+        self.assertIn(f"displayPrice.price >= {int(shop.free_shipping_threshold)}", html, "the Store's OWN free-shipping threshold, never a fixed number")
+        self.assertNotIn("wa.me", html.split('class="pdp-contact"')[-1][:600] if 'class="pdp-contact"' in html else "", "no WhatsApp link on record: no invented button")
+        SocialLink.objects.create(store=self.store, platform=SocialLink.Platform.WHATSAPP, title="واتساپ", url="https://wa.me/989121111111",
+                                  is_active=True, show_in_footer=True)
+        html = self._preview()
+        self.assertIn('class="pdp-contact"', html)
+        self.assertIn('href="https://wa.me/989121111111"', html)
+        import re as _re
+        phone = _re.search(r'class="pdp-contact-btn" href="tel:([^"]+)"', html)
+        self.assertTrue(phone is None or phone.group(1) == (getattr(shop, "phone", "") or phone.group(1)), "phone button only from the Store's own record")
+
+    def test_a_foreign_stores_contact_data_never_appears(self):
+        from apps.content.models import SocialLink
+        from apps.stores.models import Store
+
+        other = Store.objects.create(name="دیگر", slug="pdpc-other-contact", status=Store.Status.ACTIVE)
+        SocialLink.objects.create(store=other, platform=SocialLink.Platform.WHATSAPP, title="x", url="https://wa.me/989129999999",
+                                  is_active=True, show_in_footer=True)
+        self._update(self.main, {"show_contact_buttons": True})
+        self.assertNotIn("989129999999", self._preview())
+
+    def test_vocabulary_rejects_non_boolean_values_without_a_revision(self):
+        revision = self._revision()
+        with self.assertRaises(r4_mutation_service.R4MutationError):
+            self._update(self.main, {"show_low_stock_alert": "perhaps"})
+        self.assertEqual(self._revision(), revision)

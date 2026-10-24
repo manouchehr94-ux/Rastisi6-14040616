@@ -105,6 +105,11 @@ PRODUCT_MAIN_SWITCHES = (
     ("show_quantity", "نمایش انتخاب تعداد (در غیر این صورت همیشه ۱ عدد)", True),
     ("show_wishlist", "نمایش دکمهٔ علاقه‌مندی", True),
     ("show_mobile_sticky_bar", "نوار خرید ثابت پایین صفحه در موبایل", True),
+    # V5 six-site kit — three OPTIONAL purchase-support blocks (default OFF: an existing Store never gains them). Each one is driven by
+    # real data only: the live (variant-aware) stock, the Store's own free-shipping threshold, the Store's own phone / WhatsApp link.
+    ("show_low_stock_alert", "هشدار کمبود موجودی (وقتی موجودی واقعی ۱۰ عدد یا کمتر است)", False),
+    ("show_free_shipping_notice", "پیام ارسال رایگان (وقتی قیمت کالا به آستانهٔ ارسال رایگان فروشگاه می‌رسد)", False),
+    ("show_contact_buttons", "دکمه‌های مشاورهٔ تلفنی و واتساپ (از اطلاعات تماس فروشگاه)", False),
 )
 
 #: choice value -> data attribute name the stylesheet reads (the three that already exist keep their historical name)

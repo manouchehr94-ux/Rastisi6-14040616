@@ -1,4 +1,4 @@
-{% load persian catalog_extras storefront_builder_extras %}
+{% load persian catalog_extras storefront_builder_extras l10n %}
 {% comment %}
 Phase 5 — گالری/عنوان/قیمت/انتخابِ تنوع/تعداد/افزودن‌به‌سبد صفحه محصول.
 یک بلوکِ Alpine واحد (``variantSelector``) — طبقِ همان دلیلِ فنی که
@@ -237,6 +237,28 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         {% endif %}
         {% endif %}
       </form>
+
+      {% if pdp and not price_inquiry %}
+      {% if pdp.show_low_stock_alert %}
+      <div class="pdp-lowstock" x-show="displayStock > 0 && displayStock <= 10" x-cloak role="status">
+        <div class="pdp-lowstock-text"><b>موجودی این محصول رو به اتمام است</b><small>تا قبل از تمام‌شدن، خریدتان را انجام دهید — فقط <span x-text="displayStock"></span> عدد مانده است.</small></div>
+        <div class="pdp-lowstock-bar" aria-hidden="true"><i :style="'width:' + Math.max(8, displayStock * 10) + '%'"></i></div>
+      </div>
+      {% endif %}
+      {% if pdp.show_free_shipping_notice and SHOP_FREE_SHIPPING_THRESHOLD and product.requires_shipping %}
+      <div class="pdp-freeship" x-show="displayPrice.price >= {{ SHOP_FREE_SHIPPING_THRESHOLD|unlocalize }}" x-cloak role="status">با افزودن این محصول به سبد خرید، ارسال شما رایگان می‌شود.</div>
+      {% endif %}
+      {% if pdp.show_contact_buttons %}
+      {% with whatsapp=SOCIAL_LINKS_FOOTER|first_social:"whatsapp" phone=FOOTER_SETTINGS.phone|default:SHOP_CONTACT_PHONE %}
+      {% if phone or whatsapp %}
+      <div class="pdp-contact">
+        {% if phone %}<a class="pdp-contact-btn" href="tel:{{ phone }}">مشاوره تلفنی</a>{% endif %}
+        {% if whatsapp %}<a class="pdp-contact-btn" href="{{ whatsapp.url }}" target="_blank" rel="noopener noreferrer">مشاوره واتساپ</a>{% endif %}
+      </div>
+      {% endif %}
+      {% endwith %}
+      {% endif %}
+      {% endif %}
 
       {% comment %}PDTX (Phase 5 Task 5) — this hard-coded guarantee strip is
       the backward-compatible FALLBACK. It renders only when the page has NO
