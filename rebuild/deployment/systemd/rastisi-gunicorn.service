@@ -1,0 +1,28 @@
+[Unit]
+Description=RastiSi gunicorn application server
+Requires=rastisi-gunicorn.socket
+After=network.target postgresql.service
+
+[Service]
+Type=notify
+User=rastisi
+Group=rastisi
+RuntimeDirectory=rastisi
+WorkingDirectory=/srv/rastisi
+EnvironmentFile=/etc/rastisi/env
+Environment=DJANGO_SETTINGS_MODULE=shop_core.settings
+ExecStart=/srv/rastisi/venv/bin/gunicorn --config /srv/rastisi/rebuild/deployment/gunicorn.conf.py shop_core.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+# Hardening: RastiSi may write only to its own data directories.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/rastisi /var/lib/rastisi /var/log/rastisi
+
+[Install]
+WantedBy=multi-user.target

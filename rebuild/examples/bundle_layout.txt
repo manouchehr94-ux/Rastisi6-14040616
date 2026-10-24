@@ -1,0 +1,16 @@
+Sample bundle layout (names only - the real bundle is NOT in Git).
+Produce one with:  python manage.py export_store_bundle --store OLD_SLUG_1=demo_v5 --store OLD_SLUG_2=demo_arch02 --out /secure/bundle
+
+bundle/
+  manifest.json                       {"format": "rastisi-store-bundle", "version": 1, "stores": {"demo_v5": {counts, media[], missing_media[], nulled_outside_references}, ...}}
+  stores/demo_v5/store.json           identity of the source store (informational)
+  stores/demo_v5/data.json            [{"model": "catalog.product", "pk": 12, "fields": {...}}, ...]
+  stores/demo_arch02/store.json
+  stores/demo_arch02/data.json
+  media/products/gallery/<file>.webp
+  media/products/thumbnails/<file>.webp
+  media/shop/branding/<logo>.png
+  media/homepage/hero/<file>.webp
+  ...                                 every FileField value referenced by data.json, at its MEDIA_ROOT-relative path
+
+Exit codes:  validate_demo_bundle  0 = PASS   1 = FAIL   2 = BLOCKED (input missing / incomplete)
