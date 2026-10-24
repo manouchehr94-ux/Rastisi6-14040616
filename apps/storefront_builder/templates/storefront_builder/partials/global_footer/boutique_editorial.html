@@ -18,7 +18,7 @@ Required context: same three keys every variant renderer receives.
   {% if fc.show_about or fc.show_newsletter and FOOTER_SETTINGS.show_newsletter %}
   <div class="wrap gf-boutique-statement">
     {% if fc.show_about %}
-    <div {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    <div data-gf-block="about" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
       {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
     </div>
     {% endif %}
@@ -34,17 +34,17 @@ Required context: same three keys every variant renderer receives.
   {% if fc.show_quick_links and NAV_FOOTER_1 or fc.show_categories and top_level_categories or fc.show_contact and gf_has_contact_data or fc.extra_blocks|has_renderable_footer_extra_block:SOCIAL_LINKS_FOOTER %}
   <div class="wrap gf-boutique-links">
     {% if fc.show_quick_links %}
-    <div {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    <div data-gf-block="links" {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
       {% include "storefront_builder/partials/global_footer/_shared/nav_column.html" %}
     </div>
     {% endif %}
     {% if fc.show_categories %}
-    <div {% if rc.show_categories.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_categories.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    <div data-gf-block="categories" {% if rc.show_categories.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_categories.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
       {% include "storefront_builder/partials/global_footer/_shared/categories_column.html" %}
     </div>
     {% endif %}
     {% if fc.show_contact %}
-    <div {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    <div data-gf-block="contact" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
       {% include "storefront_builder/partials/global_footer/_shared/contact_info.html" %}
     </div>
     {% endif %}

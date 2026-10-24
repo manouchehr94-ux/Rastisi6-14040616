@@ -486,3 +486,20 @@
 .pdp[data-option-size="large"] .size{min-width:92px;height:46px;font-size:15px}
 .pdp[data-option-size="large"] .sizes{gap:12px}
 .pdp-tabs[data-body-size="xlarge"] .pdp-tab-panel{font-size:19px;line-height:2.25}
+/* V5 composition: the merchant-ordered information column (only when data-info-order is written). The form is dissolved into the
+   panel grid so purchase blocks and the blocks around the form share ONE ordering context; the ordinary markup is untouched. */
+.pdp[data-info-order] .pinfo{display:grid;grid-template-columns:auto minmax(0,1fr);align-content:start}
+.pdp[data-info-order] .pinfo form{display:contents}
+.pdp[data-info-order] .pinfo>*,.pdp[data-info-order] .pinfo form>*{grid-column:1/-1}
+.pdp[data-info-order][data-qty-layout="inline"] .pinfo form>.qty{grid-column:1;margin-inline-end:12px}
+.pdp[data-info-order][data-qty-layout="inline"] .pinfo form>.pdp-actions{grid-column:2}
+.pdp[data-info-order] .pinfo>h1{order:-20}
+.pdp[data-info-order] .pinfo>.topline{order:-19}
+.pdp[data-info-order] [data-blk="options"]{order:var(--o-options,1)}
+.pdp[data-info-order] [data-blk="price"]{order:var(--o-price,2)}
+.pdp[data-info-order] [data-blk="specs"]{order:var(--o-specs,3)}
+.pdp[data-info-order] [data-blk="gift"]{order:var(--o-gift,4)}
+.pdp[data-info-order] [data-blk="actions"]{order:var(--o-actions,5)}
+.pdp[data-info-order] [data-blk="notices"]{order:var(--o-notices,6)}
+.pdp[data-info-order] [data-blk="contact"]{order:var(--o-contact,7)}
+.pdp[data-info-order] [data-blk="trust"]{order:var(--o-trust,8)}

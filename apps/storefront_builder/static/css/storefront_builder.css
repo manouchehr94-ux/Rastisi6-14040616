@@ -3260,6 +3260,30 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 .testimonials--avatar-grid .testimonial-avatar{flex:0 0 46px;width:46px;height:46px;border-radius:50%;background:color-mix(in srgb,var(--brand-primary) 22%,var(--brand-surface,#fff))}
 .testimonials--avatar-grid .testimonial-body{min-width:0}
 @media(max-width:680px){.testimonials--avatar-grid .testimonial-list{grid-template-columns:1fr}}
+/* -- design block: composition controls (ratio / gap / frame for banner tiles, vertical placement, phone layout of a card row) -- */
+.rsec[data-d~="ratio"] :is(.promo-card,.linked-image-frame,.testimonial-avatar){aspect-ratio:var(--d-ratio)}
+/* a picture row with a chosen ratio: the frame is the box, the picture fills it (never the other way round, or a tall photo stretches the row) */
+.rsec[data-d~="ratio"] .linked-image-frame{position:relative;overflow:hidden;flex:0 0 auto;align-self:stretch}
+.rsec[data-d~="ratio"] .linked-image .linked-image-img[data-img-role]{position:absolute;inset:0;width:100%;height:100%;object-fit:var(--img-fit,cover)}
+.rsec[data-d~="ratio"] .promo-card{min-height:0!important;height:auto}
+.rsec[data-d~="ratio"] .promo-card .promo-media{position:absolute;inset:0}
+.rsec[data-d~="ratio"] .promo-card :is(img,picture){width:100%;height:100%;object-fit:var(--img-fit,cover)}
+.rsec[data-d~="gap"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row){gap:var(--d-gap)}
+.rsec[data-d~="radius"] :is(.promo-card,.testimonial-card,.video-embed-wrap,.collection-tile){border-radius:var(--d-radius)}
+.rsec[data-d~="border"] :is(.promo-card,.testimonial-card){border:var(--d-border-w) solid var(--d-border-c)}
+.rsec[data-d~="valign"]{display:flex;flex-direction:column;justify-content:var(--d-valign)}
+.rsec[data-d~="valign"]>*{flex:0 0 auto;width:100%}
+/* a Section that is stretched (equal-height row / manual height) wraps its content in a growing .section: place the content inside it */
+.rsec[data-d~="valign"]>.section{justify-content:var(--d-valign)}
+@media(max-width:680px){
+  .rsec[data-d~="m-stack"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid){display:grid!important;grid-template-columns:1fr!important}
+  .rsec[data-d~="m-slider"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid),
+  .rsec[data-d~="m-slider2"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid){display:flex!important;grid-template-columns:none!important;grid-template-rows:none!important;aspect-ratio:auto!important;gap:var(--d-gap,12px);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding-bottom:4px}
+  .rsec[data-d~="m-slider"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid)::-webkit-scrollbar,
+  .rsec[data-d~="m-slider2"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid)::-webkit-scrollbar{display:none}
+  .rsec[data-d~="m-slider"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid)>*{flex:0 0 86%;min-width:0;scroll-snap-align:center;grid-row:auto!important;grid-column:auto!important}
+  .rsec[data-d~="m-slider2"] :is(.promo-grid,.testimonial-list,.features,.video-grid,.grid.g4,.blog-editorial-row,.blog-grid)>*{flex:0 0 calc(50% - 8px);min-width:0;scroll-snap-align:start;grid-row:auto!important;grid-column:auto!important}
+}
 /* -- header mobile search as an icon (geometry.mobile_search_icon): the checkbox toggle shows / hides the variant's own search row on phones -- */
 .gh-sx-toggle{display:none;cursor:pointer}
 @media(max-width:680px){
@@ -3270,6 +3294,33 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 .gf[style*="--gf-pad-y"]{padding-block:var(--gf-pad-y)}
 .gf[style*="--gf-text"] :is(a,p,li,span,small,address,dd,dt){font-size:var(--gf-text)}
 .gf[style*="--gf-text"] :is(h2,h3,h4,strong,b){font-size:calc(var(--gf-text) * 1.2)}
+/* -- two-column hero: picture side and column share (sparse; the default markup carries neither attribute) -- */
+.hero-split[data-image-side="start"] .hero-split-media{order:-1}
+.hero-split[data-split-ratio="text_wide"] .hero-split-inner{grid-template-columns:1.5fr 1fr}
+.hero-split[data-split-ratio="image_wide"] .hero-split-inner{grid-template-columns:1fr 1.5fr}
+.hero-split--open[data-split-ratio="text_wide"] .hero-split-inner{grid-template-columns:1.5fr 1fr}
+.hero-split--open[data-split-ratio="image_wide"] .hero-split-inner{grid-template-columns:1fr 1.5fr}
+@media(max-width:680px){.hero-split[data-split-ratio] .hero-split-inner{grid-template-columns:1fr}}
+/* -- container: phone behaviour (reverse the stacked order; one horizontal card at a time) -- */
+@media(max-width:1000px){
+  .rcontainer[data-mobile-order="reverse"][data-mobile-mode="stack"]{display:flex;flex-direction:column-reverse}
+  .rcontainer[data-mobile-order="reverse"][data-mobile-mode="stack"]>.rcontainer-cell{width:100%}
+}
+@media(max-width:680px){
+  .rcontainer[data-mobile-mode="slider"]{display:flex!important;grid-template-columns:none!important;grid-template-rows:none!important;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;gap:var(--container-gap,14px)}
+  .rcontainer[data-mobile-mode="slider"]::-webkit-scrollbar{display:none}
+  .rcontainer[data-mobile-mode="slider"]>.rcontainer-cell{flex:0 0 86%;scroll-snap-align:center;grid-row:auto!important;grid-column:auto!important}
+}
+/* -- footer column count / gap / order for every grid footer variant (applies only when the property is set) -- */
+.gf[style*="--gf-cols"] :is(.gf-dense-grid,.gf-premium-grid,.gf-beauty-grid,.gf-chocolate-grid,.gf-dark-grid,.gf-promo-grid){grid-template-columns:repeat(var(--gf-cols),minmax(0,1fr))}
+.gf[style*="--gf-col-gap"] :is(.gf-dense-grid,.gf-premium-grid,.gf-beauty-grid,.gf-chocolate-grid,.gf-dark-grid,.gf-promo-grid){gap:var(--gf-col-gap)}
+/* once ANY column position is chosen every column takes part in the order: the others keep their natural place (about 1, links 2, categories 3, contact 4, extra blocks last) */
+.gf[style*="--gf-o-"] [data-gf-block="about"]{order:var(--gf-o-about,1)}
+.gf[style*="--gf-o-"] [data-gf-block="links"]{order:var(--gf-o-links,2)}
+.gf[style*="--gf-o-"] [data-gf-block="categories"]{order:var(--gf-o-categories,3)}
+.gf[style*="--gf-o-"] [data-gf-block="contact"]{order:var(--gf-o-contact,4)}
+.gf[style*="--gf-o-"] :is(.gf-dense-grid,.gf-premium-grid,.gf-beauty-grid,.gf-chocolate-grid,.gf-dark-grid,.gf-promo-grid)>:not([data-gf-block]){order:9}
+@media(max-width:680px){.gf[style*="--gf-cols"] :is(.gf-dense-grid,.gf-premium-grid,.gf-beauty-grid,.gf-chocolate-grid,.gf-dark-grid,.gf-promo-grid){grid-template-columns:1fr 1fr}}
 /* -- hero split_open: large heading + prominent button beside a free-standing (contained, unframed) picture -- */
 .hero-split--open .hero-split-inner{grid-template-columns:1.1fr .9fr;gap:40px;min-height:420px}
 .hero-split--open .hero-split-text h1{font-size:calc(var(--sfb-hero-heading-size,26px) * 2);line-height:1.35}

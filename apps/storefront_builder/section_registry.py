@@ -1920,6 +1920,12 @@ def _validate_slider_settings(raw: dict) -> dict:
     # Edge-to-edge slider: spans the whole canvas (small side gutter) and sits flush against the block above it.
     if raw.get("slider_width") == "full":
         cleaned["slider_width"] = "full"
+    # Two-column hero variants (split / split_open): which side the picture sits on and how the two columns share the width.
+    # Sparse — written only when different from the historical default (picture at the end, equal columns).
+    if raw.get("image_side") == "start":
+        cleaned["image_side"] = "start"
+    if raw.get("split_ratio") in ("text_wide", "image_wide"):
+        cleaned["split_ratio"] = raw["split_ratio"]
     return cleaned
 
 
@@ -2001,6 +2007,16 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
         "slider_width", "عرض اسلایدر", "choice", "advanced", default="",
         choices=(("", "هم‌عرض محتوای صفحه"), ("full", "تمام‌عرض و چسبیده به بخش بالا")),
         visible_when=(("hero_style", ("clean_slider",)),),
+    ),
+    SettingsField(
+        "image_side", "جای تصویر", "choice", "advanced", default="",
+        choices=(("", "انتهای ردیف (پیش‌فرض)"), ("start", "ابتدای ردیف")),
+        visible_when=(("hero_style", ("split", "split_open")),),
+    ),
+    SettingsField(
+        "split_ratio", "سهم متن و تصویر از عرض", "choice", "advanced", default="",
+        choices=(("", "مساوی"), ("text_wide", "متن پهن‌تر"), ("image_wide", "تصویر پهن‌تر")),
+        visible_when=(("hero_style", ("split", "split_open")),),
     ),
     SettingsField(
         "appearance_overrides", "تایپوگرافی این بخش", "appearance_override", "advanced",
@@ -3212,6 +3228,13 @@ PRODUCT_MAIN_SCHEMA = SettingsSchema(fields=(
         SettingsField(key, label, "boolean", "basic", default=default)
         for key, label, default in pdp_settings.PRODUCT_MAIN_SWITCHES
     ),
+    SettingsField(
+        "info_order", "ترتیب بخش‌های ستون اطلاعات خرید", "repeater", "advanced",
+        default=[], min_value=0, max_value=pdp_settings.PRODUCT_INFO_MAX_ITEMS,
+        repeater_item_fields=(
+            SettingsField("key", "بخش", "choice", "basic", default="options", choices=pdp_settings.PRODUCT_INFO_BLOCK_LABELS),
+        ),
+    ),
 ))
 
 PRODUCT_DESCRIPTION_SCHEMA = SettingsSchema(fields=(
@@ -3496,7 +3519,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         # pool (``_linked_image_context``): an empty section shows nothing in Published and a clear placeholder in the Studio.
         # Presentation = the shared Design Block («نحوه جاگیری تصویر», «کانون تصویر», radius / frame / spacing) + the V5 Visual Resize contract.
         capabilities=frozenset({
-            "layout_width", "motion", "design_frame", "design_image_fit", "design_image_position"}),
+            "layout_width", "motion", "design_frame", "design_image_fit", "design_image_position", "design_image_ratio", "design_valign",}),
         template_name="storefront_builder/sections/linked_image.html",
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
@@ -3506,7 +3529,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "multi_banner": SectionDefinition(
         key="multi_banner", label_fa="ردیف چند بنری", icon="layout-grid",
         capabilities=frozenset({
-            "background", "columns", "columns_visual", "layout_width", "motion", "spacing", "design_image_position"}),
+            "background", "columns", "columns_visual", "layout_width", "motion", "spacing", "design_image_position", "design_image_ratio", "design_gap", "design_frame", "design_mobile_layout", "design_text",}),
         template_name="storefront_builder/sections/multi_banner.html",
         # Task 6 (Group C) — the U1A finding above is now resolved: see
         # ``_validate_multi_banner_settings``/``MULTI_BANNER_SCHEMA``.
@@ -3660,8 +3683,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "rich_text": SectionDefinition(
         key="rich_text", label_fa="متن", icon="text",
         capabilities=frozenset({
-            "background", "spacing",
-        }),
+            "background", "spacing", "design_align", "design_valign", "design_frame", "design_text",}),
         template_name="storefront_builder/sections/rich_text.html",
         validate_settings=_validate_rich_text_settings, default_settings=lambda: {"body_html": ""},
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -3692,8 +3714,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         capabilities=frozenset({
             "design_align", "design_buttons", "design_columns", "design_frame", "design_gap", "design_image_fit",
             "design_image_ratio", "design_min_height", "design_text", "design_visibility",
-            "internal_surface", "background", "spacing",
-        }),
+            "internal_surface", "background", "spacing", "design_mobile_layout",}),
         template_name="storefront_builder/sections/blog_posts.html",
         validate_settings=validate_blog_posts_settings, default_settings=default_blog_posts_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -3766,8 +3787,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "trust_features": SectionDefinition(
         key="trust_features", label_fa="ردیف اعتماد و ویژگی‌ها", icon="shield-check",
         capabilities=frozenset({
-            "background", "spacing",
-        }),
+            "background", "spacing", "internal_surface", "design_mobile_layout", "design_gap",}),
         template_name="storefront_builder/sections/trust_features.html",
         validate_settings=validate_trust_features_settings, default_settings=default_trust_features_settings,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True, category_fa="ساختار",
@@ -3777,7 +3797,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "collection_tiles": SectionDefinition(
         key="collection_tiles", label_fa="کارت‌های کالکشن", icon="layers",
         capabilities=frozenset({
-            "appearance_override", "background", "motion", "resource_source", "spacing", "design_image_fit", "design_image_position", "design_image_ratio"}),
+            "appearance_override", "background", "motion", "resource_source", "spacing", "design_image_fit", "design_image_position", "design_image_ratio", "design_mobile_layout", "design_gap",}),
         template_name="storefront_builder/sections/collection_tiles.html",
         validate_settings=_validate_collection_tiles_settings, default_settings=default_collection_tiles_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
@@ -3793,8 +3813,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "quick_links": SectionDefinition(
         key="quick_links", label_fa="دسترسی سریع", icon="compass",
         capabilities=frozenset({
-            "background", "spacing",
-        }),
+            "background", "spacing", "design_mobile_layout", "design_gap",}),
         template_name="storefront_builder/sections/quick_links.html",
         validate_settings=_validate_quick_links_settings, default_settings=default_quick_links_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="کشف و خرید",
@@ -3813,8 +3832,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "testimonials": SectionDefinition(
         key="testimonials", label_fa="نظرات مشتریان", icon="message-circle",
         capabilities=frozenset({
-            "background", "spacing",
-        }),
+            "background", "spacing", "design_mobile_layout", "design_gap",}),
         template_name="storefront_builder/sections/testimonials.html",
         validate_settings=_validate_testimonials_settings, default_settings=default_testimonials_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -3823,8 +3841,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     "video_section": SectionDefinition(
         key="video_section", label_fa="بخش ویدیو", icon="play-circle",
         capabilities=frozenset({
-            "background", "spacing",
-        }),
+            "background", "spacing", "design_mobile_layout", "design_gap",}),
         template_name="storefront_builder/sections/video_section.html",
         validate_settings=_validate_video_section_settings, default_settings=default_video_section_settings,
         duplicable=True, removable=True, has_settings_form=True, category_fa="محتوا",
@@ -3894,6 +3911,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         template_name="storefront_builder/sections/product_main.html",
         validate_settings=pdp_settings.clean_product_main_settings, default_settings=_empty_defaults,
         settings_schema=PRODUCT_MAIN_SCHEMA,
+        inspector_projection=pdp_settings.project_main_info_order_for_inspector,
         # گالری/قیمت/انتخابِ تنوع/افزودن‌به‌سبد یک کامپوننتِ Alpine واحد
         # است (``x-data="variantSelector(...)"``) — تجزیه‌ی آن به
         # section‌های کوچک‌تر اسکوپِ آن کامپوننت را می‌شکست؛ حذفِ کاملِ آن

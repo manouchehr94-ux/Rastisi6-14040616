@@ -4,7 +4,7 @@
 <div class="rcontainer{% if is_preview %} sfb-builder-container{% endif %}"
      style="--container-gap:{{ csettings.gap }}px{% if csettings.background_color %};background-color:{{ csettings.background_color }}{% endif %}{% if csettings.stack_split %};--stack-top:{{ csettings.stack_top }}fr;--stack-bottom:{{ csettings.stack_bottom }}fr{% endif %}"
      data-layout="{{ container.layout_key }}"
-     data-mobile-mode="{{ csettings.mobile_mode }}"
+     data-mobile-mode="{{ csettings.mobile_mode }}"{% if csettings.mobile_order == "reverse" %} data-mobile-order="reverse"{% endif %}
      data-content-width="{{ csettings.content_width }}"
      data-vertical-align="{{ csettings.vertical_align }}"
      data-height-mode="{{ csettings.height_mode }}"{% if csettings.stack_split %} data-stack-split="{{ csettings.stack_split }}"{% endif %}

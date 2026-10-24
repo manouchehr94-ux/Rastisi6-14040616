@@ -11,10 +11,10 @@ real Store/footer/navigation/contact/social data from shared footer partials.
     <div class="gf-chocolate-brandline">{% include "storefront_builder/partials/global_footer/_shared/brand.html" %}</div>
     {% if fc.show_about or fc.show_quick_links and NAV_FOOTER_1 or fc.show_categories and top_level_categories or fc.show_contact and gf_has_contact_data %}
     <div class="gf-chocolate-grid">
-      {% if fc.show_about %}<div class="gf-col gf-col-brand">{% include "storefront_builder/partials/global_footer/_shared/brand.html" %}</div>{% endif %}
-      {% if fc.show_quick_links %}<div>{% include "storefront_builder/partials/global_footer/_shared/nav_column.html" %}</div>{% endif %}
-      {% if fc.show_categories %}<div>{% include "storefront_builder/partials/global_footer/_shared/categories_column.html" %}</div>{% endif %}
-      {% if fc.show_contact and gf_has_contact_data %}<div class="gf-col gf-col-contact">{% include "storefront_builder/partials/global_footer/_shared/contact_column.html" %}</div>{% endif %}
+      {% if fc.show_about %}<div data-gf-block="about" class="gf-col gf-col-brand">{% include "storefront_builder/partials/global_footer/_shared/brand.html" %}</div>{% endif %}
+      {% if fc.show_quick_links %}<div data-gf-block="links">{% include "storefront_builder/partials/global_footer/_shared/nav_column.html" %}</div>{% endif %}
+      {% if fc.show_categories %}<div data-gf-block="categories">{% include "storefront_builder/partials/global_footer/_shared/categories_column.html" %}</div>{% endif %}
+      {% if fc.show_contact and gf_has_contact_data %}<div data-gf-block="contact" class="gf-col gf-col-contact">{% include "storefront_builder/partials/global_footer/_shared/contact_column.html" %}</div>{% endif %}
       {% include "storefront_builder/partials/global_footer/_shared/extra_blocks.html" %}
     </div>
     {% endif %}

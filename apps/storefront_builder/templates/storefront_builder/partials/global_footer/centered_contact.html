@@ -8,7 +8,7 @@ legal line. Optional about text / links appear above when their toggles are on. 
 <footer class="gf gf--centered-contact"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="wrap gf-cc-main">
     {% if fc.show_about %}
-    <div class="gf-cc-about" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+    <div data-gf-block="about" class="gf-cc-about" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
       {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
     </div>
     {% endif %}

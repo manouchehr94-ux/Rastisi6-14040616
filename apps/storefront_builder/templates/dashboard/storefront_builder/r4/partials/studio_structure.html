@@ -80,6 +80,12 @@ sender). This whole element is re-fetched by R4 after structural mutations.
               <select class="r4-structure-container-settings-input" data-r4-container-settings-field="mobile_mode" {% if row.is_locked %}disabled{% endif %}>
                 <option value="stack" {% if row.settings.mobile_mode == "stack" %}selected{% endif %}>پشت‌سرهم در موبایل</option>
                 <option value="same" {% if row.settings.mobile_mode == "same" %}selected{% endif %}>همان چیدمان در موبایل</option>
+                <option value="slider" {% if row.settings.mobile_mode == "slider" %}selected{% endif %}>اسلایدر افقی (هر بار یک خانه)</option>
+              </select></label>
+            <label class="field"><span>ترتیب خانه‌ها در موبایل</span>
+              <select class="r4-structure-container-settings-input" data-r4-container-settings-field="mobile_order" {% if row.is_locked %}disabled{% endif %}>
+                <option value="normal" {% if row.settings.mobile_order != "reverse" %}selected{% endif %}>همان ترتیب دسکتاپ</option>
+                <option value="reverse" {% if row.settings.mobile_order == "reverse" %}selected{% endif %}>معکوس</option>
               </select></label>
             <label class="field"><span>تراز عمودی</span>
               <select class="r4-structure-container-settings-input" data-r4-container-settings-field="vertical_align" {% if row.is_locked %}disabled{% endif %}>

@@ -178,6 +178,43 @@ def _choice(raw: dict, key: str, choices, default: str) -> str:
     return value if any(value == allowed for allowed, _label in choices) else default
 
 
+#: V5 composition: the blocks of the product information column the merchant can put in any order. ``options`` / ``price`` / ``actions``
+#: (quantity + add-to-cart) are purchase controls: they can move but are never hidden by this list.
+PRODUCT_INFO_BLOCK_KEYS = ("options", "price", "specs", "gift", "actions", "notices", "contact", "trust")
+PRODUCT_INFO_BLOCK_LABELS = (
+    ("options", "انتخاب تنوع (رنگ، سایز…)"), ("price", "قیمت"), ("specs", "فهرست کوتاه مشخصات"), ("gift", "کادوپیچی"),
+    ("actions", "تعداد و دکمهٔ افزودن به سبد"), ("notices", "هشدار موجودی و پیام ارسال رایگان"),
+    ("contact", "دکمه‌های مشاوره"), ("trust", "نوار ضمانت و ارسال"),
+)
+PRODUCT_INFO_MAX_ITEMS = len(PRODUCT_INFO_BLOCK_KEYS)
+
+
+def _clean_info_order(raw) -> list[dict]:
+    """The merchant's listed blocks: valid keys only, first occurrence wins; strings and ``{"key": …}`` rows are both accepted."""
+    rows: list[dict] = []
+    seen: set[str] = set()
+    if not isinstance(raw, (list, tuple)):
+        return rows
+    for item in raw:
+        key = item.get("key") if isinstance(item, dict) else item
+        if key not in PRODUCT_INFO_BLOCK_KEYS or key in seen:
+            continue
+        seen.add(key)
+        rows.append({"key": key})
+    return rows
+
+
+def effective_info_order(raw) -> list[str]:
+    """Every block in effective order: the listed ones first (in their order), then the rest at their default relative order."""
+    listed = [row["key"] for row in _clean_info_order(raw)]
+    return listed + [key for key in PRODUCT_INFO_BLOCK_KEYS if key not in listed]
+
+
+def project_main_info_order_for_inspector(settings: dict) -> dict:
+    """What the Inspector's list shows: all blocks in their effective order (a never-edited Store shows the default order)."""
+    return {"info_order": [{"key": key} for key in effective_info_order((settings or {}).get("info_order"))]}
+
+
 def clean_product_main_settings(raw: dict) -> dict:
     """Write-time cleaner (the section's legacy validator). Keeps EVERY other stored key untouched — the shared wrappers
     (design / background / spacing / responsive …) and any legacy value travel through exactly as before — and only normalises
@@ -191,6 +228,12 @@ def clean_product_main_settings(raw: dict) -> dict:
     for key, _label, default in PRODUCT_MAIN_SWITCHES:
         if key in raw:
             cleaned[key] = _flag(raw[key], default)
+    if "info_order" in raw:
+        rows = _clean_info_order(raw["info_order"])
+        if rows and [r["key"] for r in rows] != list(PRODUCT_INFO_BLOCK_KEYS[:len(rows)]):
+            cleaned["info_order"] = rows
+        else:
+            cleaned.pop("info_order", None)       # the default order is never stored (sparse)
     return cleaned
 
 
@@ -210,6 +253,11 @@ def resolve_product_main_view(raw) -> dict:
         view[key] = _flag(source.get(key), default)
     if not view["gallery_sticky"]:
         attrs.append(("gallery-sticky", "off"))
+    view["order_style"] = ""
+    stored_rows = _clean_info_order(source.get("info_order"))
+    if stored_rows and [r["key"] for r in stored_rows] != list(PRODUCT_INFO_BLOCK_KEYS[:len(stored_rows)]):
+        attrs.append(("info-order", "custom"))
+        view["order_style"] = ";".join(f"--o-{key}:{position}" for position, key in enumerate(effective_info_order(source.get("info_order")), 1))
     view["attrs"] = attrs
     return view
 

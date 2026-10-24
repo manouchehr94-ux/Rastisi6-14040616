@@ -652,7 +652,7 @@ def _apply_section_move_to_cell(*, draft: StorefrontLayoutVersion, mutation: dic
 #: family-safe implementation"), so it stays INTERNAL/NOT MERCHANT-FACING
 #: here as well, never a new capability invented beyond legacy parity.
 _CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS = frozenset({
-    "gap", "mobile_mode", "vertical_align", "height_mode",
+    "gap", "mobile_mode", "mobile_order", "vertical_align", "height_mode",
     "background_mode", "background_color", "background_pattern",
 })
 

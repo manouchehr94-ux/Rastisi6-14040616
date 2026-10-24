@@ -132,7 +132,8 @@ LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
 
 CONTAINER_SETTINGS_DEFAULTS = {
     "gap": 14,
-    "mobile_mode": "stack",   # stack | same
+    "mobile_mode": "stack",   # stack | same | slider (cells become horizontal one-at-a-time cards on a phone)
+    "mobile_order": "normal",  # normal | reverse (the cells' order when they stack on a phone)
     "content_width": "standard",  # standard | full
     # Independent content blocks should keep their natural height.  The old
     # ``stretch`` default made a short Slider Cell look as tall as a long
@@ -177,9 +178,14 @@ def effective_container_settings(raw: dict | None) -> dict:
     cleaned["gap"] = max(0, min(64, gap))
 
     mobile_mode = raw.get("mobile_mode", cleaned["mobile_mode"])
-    if mobile_mode not in {"stack", "same"}:
+    if mobile_mode not in {"stack", "same", "slider"}:
         mobile_mode = cleaned["mobile_mode"]
     cleaned["mobile_mode"] = mobile_mode
+
+    mobile_order = raw.get("mobile_order", cleaned["mobile_order"])
+    if mobile_order not in {"normal", "reverse"}:
+        mobile_order = cleaned["mobile_order"]
+    cleaned["mobile_order"] = mobile_order
 
     content_width = raw.get("content_width", cleaned["content_width"])
     if content_width not in {"standard", "full"}:

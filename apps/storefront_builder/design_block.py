@@ -46,7 +46,16 @@ class DesignProperty:
 _SHADOW_CHOICES = (("", "پیش‌فرض"), ("on", "سایه دارد"), ("off", "بدون سایه"))
 _ALIGN_CHOICES = (("", "پیش‌فرض"), ("start", "ابتدا"), ("center", "وسط"), ("end", "انتها"))
 _VISIBILITY_CHOICES = (("", "نمایش داده شود"), ("hidden", "مخفی باشد"))
-_RATIO_CHOICES = (("", "خودکار (مناسب این بخش)"), ("square", "مربع"), ("portrait", "عمودی"), ("landscape", "افقی"))
+_RATIO_CHOICES = (
+    ("", "خودکار (مناسب این بخش)"), ("square", "مربع"), ("portrait", "عمودی"), ("landscape", "افقی"),
+    ("photo", "عکس ۳:۲"), ("wide", "عریض ۱۶:۹"), ("ultrawide", "خیلی عریض ۲۱:۹"), ("panel", "پنل افقی ۲٫۴:۱"), ("tall", "بلند ۹:۱۶"),
+)
+#: how a row of cards behaves on a phone: as on the desktop (default), one card at a time, two at a time, or a plain single column
+_MOBILE_LAYOUT_CHOICES = (
+    ("", "مثل دسکتاپ (پیش‌فرض)"), ("slider", "اسلایدر — هر بار یک کارت"), ("slider2", "اسلایدر — دو کارت"), ("stack", "زیر هم (یک ستون)"),
+)
+#: where the content of a section with a minimum height sits vertically
+_VALIGN_CHOICES = (("", "بالا (پیش‌فرض)"), ("center", "وسط"), ("end", "پایین"))
 _FIT_CHOICES = (("", "خودکار (مناسب این بخش)"), ("contain", "نمایش کامل تصویر"), ("cover", "پر کردن قاب"))
 #: V5-RESIZE — where a section narrower than its Cell sits inside it (RTL: «راست» = the inline start).
 _WIDTH_ALIGN_CHOICES = (("", "وسط"), ("start", "راست"), ("center", "وسط"), ("end", "چپ"))
@@ -74,6 +83,10 @@ DESIGN_PROPERTIES: dict[str, DesignProperty] = {p.key: p for p in (
     DesignProperty("min_height", "حداقل ارتفاع (px)", "int", "layout", 0, 1600,
                    hint_fa="خالی = ارتفاع خودکار. این مقدار «حداقل» است: اگر محتوا بیشتر جا بخواهد، بخش بلندتر می‌شود و هیچ چیز بریده نمی‌شود."),
     DesignProperty("align", "تراز عنوان/محتوا", "choice", "layout", choices=_ALIGN_CHOICES),
+    DesignProperty("valign", "جای عمودی محتوا", "choice", "layout", choices=_VALIGN_CHOICES,
+                   hint_fa="وقتی «حداقل ارتفاع» از محتوا بلندتر است، محتوا بالا، وسط یا پایین قرار می‌گیرد."),
+    DesignProperty("mobile_layout", "چیدمان موبایل ردیف کارت‌ها", "choice", "layout", choices=_MOBILE_LAYOUT_CHOICES,
+                   hint_fa="فقط روی گوشی اثر دارد؛ دسکتاپ و تبلت دست‌نخورده می‌ماند."),
     DesignProperty("gap", "فاصله بین آیتم‌ها (px)", "int", "layout", 0, 60),
     DesignProperty("columns_desktop", "ستون‌ها در دسکتاپ", "int", "layout", 1, 8),
     DesignProperty("columns_tablet", "ستون‌ها در تبلت", "int", "layout", 1, 6),
@@ -142,6 +155,9 @@ DESIGN_CAPABILITIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "design_min_height": (("min_height",), ()),
     "design_align": (("align",), ()),
     "design_gap": (("gap",), ()),
+    #: V5 composition: phone behaviour of a row of cards / vertical placement of content inside a taller section
+    "design_mobile_layout": (("mobile_layout",), ()),
+    "design_valign": (("valign",), ()),
     "design_columns": (_COLUMNS, ()),
     "design_item_width": (("item_width",), ()),
     #: ``item_width`` sizes carousel cards only: a grid / campaign / catalog composition has nothing to size
@@ -320,7 +336,9 @@ _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890
 _POSITION_CSS = {"center": "center", "top": "center top", "bottom": "center bottom", "left": "left center",
                  "right": "right center"}
 _ZOOM_CSS = {"110": "1.1", "125": "1.25", "150": "1.5", "175": "1.75"}
-_RATIO_CSS = {"square": "1 / 1", "portrait": "3 / 4", "landscape": "4 / 3"}
+_RATIO_CSS = {"square": "1 / 1", "portrait": "3 / 4", "landscape": "4 / 3", "photo": "3 / 2", "wide": "16 / 9",
+              "ultrawide": "21 / 9", "panel": "2.4 / 1", "tall": "9 / 16"}
+_VALIGN_CSS = {"center": "center", "end": "flex-end"}
 _ALIGN_CSS = {"start": "start", "center": "center", "end": "end"}
 _DEFAULT_SHADOW_COLOR = "color-mix(in srgb, var(--brand-text, #222) 16%, transparent)"
 
@@ -392,6 +410,11 @@ def render_attributes(design: object, applicable: tuple[str, ...] | None = None)
         flags.append("align")
         put("align", _ALIGN_CSS[design["align"]])
         put("text-align", {"start": "start", "center": "center", "end": "end"}[design["align"]])
+    if design.get("mobile_layout") in ("slider", "slider2", "stack"):
+        flags.append("m-" + design["mobile_layout"])
+    if design.get("valign") in _VALIGN_CSS:
+        flags.append("valign")
+        put("valign", _VALIGN_CSS[design["valign"]])
     if "gap" in design:
         flags.append("gap")
         put("gap", f"{design['gap']}px")

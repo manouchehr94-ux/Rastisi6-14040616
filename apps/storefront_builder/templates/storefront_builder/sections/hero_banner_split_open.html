@@ -5,7 +5,7 @@ Hero, "split_open" structural variant: the same real, Store-scoped HeroSlide dat
 {% endcomment %}
 {% if hero_slides %}
 {% with slide=hero_slides.0 %}
-<section class="section hero hero-split hero-split--open">
+<section class="section hero hero-split hero-split--open"{% if slider_settings.image_side == "start" %} data-image-side="start"{% endif %}{% if slider_settings.split_ratio %} data-split-ratio="{{ slider_settings.split_ratio }}"{% endif %}>
   <div class="hero-split-inner hero-open-inner"
        {% if effective_section_typography %}style="--sfb-hero-heading-size:{{ effective_section_typography.heading }}px;--sfb-hero-body-size:{{ effective_section_typography.body }}px;--sfb-hero-font:'{{ effective_section_appearance.font }}';"{% endif %}>
     <div class="hero-split-text">
