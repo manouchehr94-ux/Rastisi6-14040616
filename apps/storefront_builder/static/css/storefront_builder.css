@@ -3478,7 +3478,10 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
 .decor-strip-bg::after{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--ds-ov,transparent)}
 .decor-strip[data-bleed]{border-radius:0}
 .decor-strip[data-bleed] .decor-strip-bg{inset:0 auto 0 50%;width:var(--sfb-canvas-width,100vw);transform:translateX(-50%);border-radius:0}
-.decor-strip-text{position:relative;font-size:13px;font-weight:700;line-height:1.4}
+.decor-strip-text{position:relative;font-size:var(--ds-fs,13px);font-weight:700;line-height:1.4;display:inline-flex;align-items:center;gap:10px}
+.decor-strip-link{color:inherit;text-decoration:none}
+.decor-strip-link:hover{text-decoration:underline}
+.decor-strip-icon svg{width:1.45em;height:1.45em;display:block}
 @media(max-width:1000px){.decor-strip{height:var(--ds-h-t,44px)}}
 @media(max-width:680px){.decor-strip{height:var(--ds-h-m,36px)}}
 @media(min-width:1001px){.decor-strip[data-hide~="desktop"]{display:none}}
@@ -3717,7 +3720,7 @@ html [data-ann-x][data-ann-x][data-ann-align="center"] .wrap > .ann-main { justi
 html [data-ann-x][data-ann-x][data-ann-align="end"] .wrap > .ann-main { justify-content: flex-end; text-align: end; }
 html [data-ann-x][data-ann-x][data-ann-align="start"] .wrap > .ann-main { justify-content: flex-start; text-align: start; }
 html [data-ann-x][data-ann-x] .ann-text { min-width: 0; overflow-wrap: anywhere; }
-html [data-ann-x][data-ann-x] .ann-img { flex: none; display: block; width: auto; height: var(--ann-img, 24px); max-height: 40px; max-width: min(160px, 40%); object-fit: var(--img-fit, contain); border-radius: 4px; }
+html [data-ann-x][data-ann-x] .ann-img { flex: none; display: block; width: auto; height: var(--ann-img, 24px); max-height: 64px; max-width: min(160px, 40%); object-fit: var(--img-fit, contain); border-radius: 4px; }
 html [data-ann-x][data-ann-x] a.ann-main--link:hover .ann-text { text-decoration: underline; }
 html [data-ann-x][data-ann-x] a.ann-main--link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
 @media (max-width: 680px) {
@@ -3903,3 +3906,127 @@ body[data-sfb-studio-host] .sfb-preview-sections .rsec[data-section-id].sfb-rsec
 
 /* touch: a finger-sized add row (builder only) */
 @media (pointer: coarse) { .sfb-cell-add-more { min-height: 44px; } }
+
+/* =====================================================================================================================
+   V5 — global section-heading style (``html[data-sfb-heading]``, appearance key ``heading_style``).
+   Absent attribute == the historical heading (nothing below applies). One rule-set for every section that renders ``.sec-head``.
+   ===================================================================================================================== */
+html[data-sfb-heading="plain"] .sec-head h2 .bar{display:none}
+html[data-sfb-heading="centered"] .sec-head,
+html[data-sfb-heading="centered_rule"] .sec-head{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
+html[data-sfb-heading="centered"] .sec-head h2 .bar,
+html[data-sfb-heading="centered_rule"] .sec-head h2 .bar{display:none}
+html[data-sfb-heading="centered"] .sec-head h2,
+html[data-sfb-heading="centered_rule"] .sec-head h2{justify-content:center;margin:0}
+html[data-sfb-heading="centered"] .sec-head :is(.more,.btn),
+html[data-sfb-heading="centered_rule"] .sec-head :is(.more,.btn){position:absolute;inset-inline-end:0;top:50%;transform:translateY(-50%)}
+html[data-sfb-heading="centered_rule"] .sec-head h2{
+  font-size:var(--sfb-heading-size,19px);font-weight:600;color:var(--brand-muted,#6b6b6b);padding:10px 0;position:relative}
+html[data-sfb-heading="centered"] .sec-head h2{font-size:var(--sfb-heading-size,19px)}
+html[data-sfb-heading="underline"] .sec-head h2{font-size:var(--sfb-heading-size,19px)}
+html[data-sfb-heading="centered_rule"] .sec-head h2::before,
+html[data-sfb-heading="centered_rule"] .sec-head h2::after{
+  content:"";position:absolute;inset-inline:50%;width:84px;margin-inline-start:-42px;height:0;border-top:1px solid var(--line,#e2e0dc)}
+html[data-sfb-heading="centered_rule"] .sec-head h2::before{top:0}
+html[data-sfb-heading="centered_rule"] .sec-head h2::after{bottom:0}
+html[data-sfb-heading="underline"] .sec-head{border-bottom:1px solid var(--line,#e4e0dd);padding-bottom:0;align-items:flex-end}
+html[data-sfb-heading="underline"] .sec-head h2 .bar{display:none}
+html[data-sfb-heading="underline"] .sec-head h2{margin:0 0 -1px;padding:0 2px 10px;border-bottom:2px solid var(--brand-primary,#333)}
+
+/* ---- 54: floating_card header --------------------------------------- */
+.gh-shell--fcard{--gh-bg:var(--brand-background,#fff)}
+.gh-shell--fcard .gh-announce{background:var(--gh-announce-bg,radial-gradient(ellipse at 38% -20%,color-mix(in srgb,var(--brand-secondary,#58472e) 62%,#fff) 0,var(--brand-secondary,#58472e) 64%));color:var(--gh-announce-fg,#fff);border-bottom:0;font-size:var(--gh-announce-fs,17px)}
+.gh-shell--fcard .gh-announce .wrap{position:relative;min-height:var(--ann-h,52px);height:auto;padding-block:var(--ann-py,6px);justify-content:center;gap:14px}
+.gh-shell--fcard .gh-announce .ann-main,.gh-shell--fcard .gh-announce .wrap>span{display:inline-flex;align-items:center;gap:10px;text-align:center;font-weight:600;color:inherit}
+
+.gh-shell--fcard .gh-announce-links{position:absolute;inset-inline-end:max(16px,3%);top:50%;transform:translateY(-50%);gap:8px}
+.gh-shell--fcard .gh-announce-links a{display:inline-flex;align-items:center;padding:6px 20px;border-radius:999px;background:#f7d117;color:#2c2410;font-size:14px;font-weight:700;opacity:1;box-shadow:0 0 0 3px rgba(247,209,23,.28),0 2px 6px rgba(0,0,0,.28)}
+.gh--fcard.header{position:relative;background:transparent;border:0;padding:0;box-shadow:none}
+.gh--fcard .gh-fc-band{position:absolute;inset:0 0 auto 0;height:var(--gh-fc-band-h,150px);background:var(--gh-fc-band,var(--brand-primary,#bfb291));border-radius:0 0 50% 50%/0 0 34px 34px}
+.gh-shell--fcard .gh--fcard .gh-fc-wrap{position:relative;display:block;height:auto;max-width:min(97%,var(--gh-fc-max,1810px));padding-block:34px 56px}
+.gh--fcard .gh-fc-card{width:100%;display:flex;align-items:center;gap:20px;min-height:var(--gh-fc-card-h,110px);padding:var(--gh-fc-pad-y,18px) 36px;background:var(--gh-fc-card-bg,var(--brand-surface,#fff));border-radius:var(--gh-fc-radius,12px);box-shadow:0 2px 10px rgba(40,30,10,.14)}
+.gh--fcard .gh-burger{display:none}
+.gh--fcard .gh-fc-nav{display:flex;align-items:center;gap:0;flex:0 0 auto}
+.gh--fcard .gh-fc-nav :is(a,button){padding:2px 14px;font-size:12px;font-weight:400;color:var(--brand-muted,#6b6b6b);border:0;border-inline-end:1px solid var(--line,#e6e2d9);line-height:1.2;background:none}
+.gh--fcard .gh-fc-nav :is(a,button):first-child{border-inline-start:1px solid var(--line,#e6e2d9)}
+.gh--fcard .gh-fc-nav :is(a,button):is(:hover,[aria-current=page]){color:var(--brand-primary,#8a7a52)}
+.gh--fcard .gh-fc-logo{flex:1;display:flex;justify-content:center}
+.gh--fcard .gh-fc-logo .gh-logo img{height:auto;max-height:var(--gh-fc-logo-h,90px);width:auto;max-width:min(100%,440px);object-fit:var(--img-fit,contain)}
+.gh--fcard .gh-fc-logo .gh-logo:has(img) .gh-logo-text,.gh--fcard .gh-fc-logo .gh-logo:has(img) .gh-logo-mark{display:none}
+.gh--fcard .gh-fc-logo .gh-logo-text b{font-size:26px;letter-spacing:.02em}
+.gh--fcard .gh-fc-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.gh--fcard .gh-fc-actions .gh-btn{border:0;background:transparent;box-shadow:none;color:#6a6a6a;width:42px;height:42px}
+.gh--fcard .gh-fc-actions .gh-btn svg{width:24px;height:24px}
+.gh--fcard .gh-fc-search{position:relative}
+.gh--fcard .gh-fc-search-panel{position:absolute;inset-inline-start:0;top:calc(100% + 8px);width:min(320px,80vw);background:var(--brand-surface,#fff);border:1px solid var(--line,#e6e2d9);border-radius:10px;box-shadow:0 8px 24px rgba(40,30,10,.16);padding:8px;z-index:30}
+@media (max-width:760px){
+  .gh-shell--fcard .gh-announce{font-size:12.5px}
+  .gh-shell--fcard .gh-announce .wrap{min-height:calc(var(--ann-h,52px) * .6);flex-wrap:wrap;padding-inline:10px}
+  .gh-shell--fcard .gh-announce .gh-announce-links{display:flex;position:static;transform:none}
+  .gh-shell--fcard .gh-announce-links a{font-size:11.5px;padding:3px 12px}
+  .gh--fcard .gh-fc-band{height:calc(var(--gh-fc-band-h,150px) * .55)}
+  .gh-shell--fcard .gh--fcard .gh-fc-wrap{padding-block:20px 22px;max-width:94%}
+  .gh--fcard .gh-fc-card{display:grid;grid-template-columns:auto 1fr auto;gap:8px;min-height:calc(var(--gh-fc-card-h,110px) * .62);padding:10px 14px}
+  .gh--fcard .gh-burger{display:inline-flex;grid-column:1}
+  .gh--fcard .gh-fc-logo{grid-column:2}
+  .gh--fcard .gh-fc-actions{grid-column:3}
+  .gh--fcard .gh-fc-nav{grid-column:1 / -1;grid-row:2;flex-direction:column;align-items:stretch}
+  .gh--fcard .gh-fc-nav.gh-nav-hidden{display:none}
+  .gh--fcard .gh-fc-nav :is(a,button){border:0;border-top:1px solid var(--line,#e6e2d9);padding:10px 4px;font-size:13px}
+  .gh--fcard .gh-fc-logo .gh-logo img{max-height:calc(var(--gh-fc-logo-h,90px) * .5)}
+  .gh--fcard .gh-fc-actions .gh-btn{width:34px;height:34px}
+}
+
+/* ---- 54: centered_contact footer ------------------------------------ */
+.gf--centered-contact{background:var(--theme-footer-bg,var(--brand-primary,#bfb291));color:var(--theme-footer-text,#fff);margin-top:var(--gf-cc-gap,72px)}
+.gf-cc-main{display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px;padding-block:var(--gf-cc-pad,28px) var(--gf-cc-pad,28px)}
+.gf-cc-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 22px;font-size:13px}
+.gf-cc-links a,.gf-cc-links span{color:inherit;opacity:.92}
+.gf-cc-phone{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:6px 16px;border-radius:8px;background:color-mix(in srgb,#000 12%,transparent);color:inherit;font-size:15px;line-height:1.4}
+.gf-cc-phone svg{width:14px;height:14px}
+.gf-cc-social .gf-socials{display:flex;gap:8px;justify-content:center}
+.gf-cc-social .gf-socials a{width:30px;height:30px;display:inline-grid;place-items:center;border-radius:4px;background:color-mix(in srgb,#000 14%,transparent);color:inherit}
+.gf-cc-social .gf-socials svg{width:16px;height:16px}
+.gf--centered-contact .gf-credibility{display:flex;justify-content:center;gap:12px}
+.gf--centered-contact .gf-trust-badge-item img{max-height:68px;width:auto;border-radius:6px;background:#fff;padding:4px}
+.gf-cc-legal{font-size:12px;opacity:.82}
+@media (max-width:760px){.gf--centered-contact{margin-top:40px}}
+
+/* ---- 54: category label_tiles --------------------------------------- */
+.category-label-tiles-section{margin:var(--sfb-section-gap,48px) 0}
+.category-label-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(18px,3vw,56px);max-width:1180px;margin-inline:auto}
+.category-label-tile{display:block;border-radius:4px;overflow:hidden;background:var(--brand-surface,#fff)}
+.category-label-bar{display:block;padding:8px 10px;text-align:center;background:var(--brand-primary,#bfb291);color:var(--brand-primary-fg,#fff);font-weight:600;font-size:16px;line-height:1.5}
+.category-label-media{display:block;aspect-ratio:3/2;background:color-mix(in srgb,var(--brand-primary,#bfb291) 18%,#fff)}
+.category-label-media img{width:100%;height:100%;object-fit:var(--img-fit,cover);display:block}
+.category-label-fallback{display:grid;place-items:center;height:100%;font-size:44px}
+@media (max-width:760px){.category-label-tiles{gap:14px}.category-label-bar{font-size:13px;padding:6px 6px}.category-label-media{aspect-ratio:3/4}}
+
+/* ---- 54: hero clean_slider ------------------------------------------ */
+.hero--clean{margin:0}
+.hero--clean .hero-inner{position:relative;aspect-ratio:var(--hero-clean-ratio,2.18/1);border:0;border-radius:var(--hero-clean-radius,0);overflow:hidden;background:var(--bg);min-height:0}
+.hero--clean .hero-slide{position:absolute;inset:0;min-height:0}
+.hero--clean .hero-media,.hero--clean .hero-media img{width:100%;height:100%}
+.hero--clean .hero-media img{object-fit:var(--img-fit,cover);display:block}
+.hero--clean .hero-text{display:none}
+.hero--clean .hero-arrow{background:transparent;border:0;color:#fff;font-size:46px;line-height:1;width:44px;height:64px;text-shadow:0 1px 6px rgba(0,0,0,.5);box-shadow:none}
+.hero--clean .hero-arrow:hover{background:transparent;opacity:.85}
+.hero--clean .hero-tabs{position:absolute;bottom:14px;inset-inline:0;display:flex;justify-content:center;gap:10px;padding:0;background:none;border:0}
+.hero--clean .hero-tabs button{font-size:0;flex:none;min-width:0;width:11px;height:11px;padding:0;border-radius:50%;background:#fff;border:0;opacity:.95}
+.hero--clean .hero-tabs button.active{background:var(--brand-primary,#bfb291)}
+@media(max-width:680px){.hero--clean .hero-inner{aspect-ratio:var(--hero-clean-ratio-m,.64/1)}.hero--clean .hero-arrow{font-size:32px;width:30px}}
+
+/* ---- 54: product_section view-all placed below the items ------------- */
+.product-more{display:flex;justify-content:center;margin-top:22px}
+.product-more-link{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;color:var(--brand-text,#27221c);font-size:14px;font-weight:500}
+.product-more-link:hover{color:var(--brand-primary,#8a7a52)}
+
+/* ---- V5 floating widgets (WhatsApp / phone / back-to-top) ------------- */
+.sfb-floating{position:fixed;inset-inline-end:18px;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:70;display:flex;flex-direction:column;gap:12px;align-items:center}
+.sfb-floating--start{inset-inline-end:auto;inset-inline-start:18px}
+.sfb-floating-btn{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--brand-primary,#555);color:var(--brand-primary-fg,#fff);box-shadow:0 3px 12px rgba(0,0,0,.28);border:0;cursor:pointer;text-decoration:none}
+.sfb-floating-btn svg{width:26px;height:26px}
+.sfb-floating-whatsapp{background:#fff;color:#1fa855;border:4px solid var(--brand-secondary,#58472e)}
+.sfb-floating-top{width:44px;height:44px}
+.sfb-floating-btn:hover{filter:brightness(1.08)}
+@media (max-width:760px){.sfb-floating--lift{bottom:calc(86px + env(safe-area-inset-bottom,0px))}.sfb-floating-btn{width:46px;height:46px}}

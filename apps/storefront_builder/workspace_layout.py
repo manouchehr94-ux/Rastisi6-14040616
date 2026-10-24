@@ -120,7 +120,7 @@ _LAYOUT_KEY = re.compile(
     r"(desktop|tablet|mobile)_(columns|height)|"
     # V5 PDP controls (``pdp_settings``): gallery / thumbnails / info panel / price / quantity / option / CTA arrangement and the
     # description section's tab / panel presentation — all «چیدمان» choices, so they sit in the Design tab with the other layout controls
-    r"(gallery|thumbs|info|price|qty|option|cta|tab|panel)_[a-z_]+)$"
+    r"(gallery|thumbs|info|price|qty|option|cta|tab|panel|title)_[a-z_]+)$"
 )
 _SPACING_KEY = re.compile(r"^(gap|row_gap|column_gap)$")
 _BEHAVIOR_KEY = re.compile(

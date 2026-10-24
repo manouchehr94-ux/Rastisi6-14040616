@@ -37,6 +37,7 @@ from apps.storefront_builder.storefront_appearance.persistence import (
     load_store_appearance_manifest,
 )
 from apps.stores.models import Store
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 
 def _fake_exists(path_self, _orig=Path.exists):
@@ -136,7 +137,7 @@ class W4CAll50CertificationHarnessTests(TestCase):
         fixture = Command()._build_w4c_fixture(self.store)
         expected = [{"key": p.key, "version": p.version} for p in lpr.list_ready_templates()]
         self.assertEqual(fixture["templates"], expected)
-        self.assertEqual(len(fixture["templates"]), 53)  # 50 A8 + 3 reference templates
+        self.assertEqual(len(fixture["templates"]), READY_TEMPLATE_COUNT)  # 50 A8 + 3 reference templates
 
     # -- 5 --------------------------------------------------------------
     def test_05_apply_and_verify_published_is_state_based_not_registry_based(self):
@@ -247,7 +248,7 @@ class W4CAll50CertificationHarnessTests(TestCase):
         self.assertEqual(
             {k: v for k, v in fixture["tier1_occasions"].items() if k in a8_keys}, expected,
         )
-        self.assertEqual(len(fixture["tier1_occasions"]), 53)
+        self.assertEqual(len(fixture["tier1_occasions"]), READY_TEMPLATE_COUNT)
         self.assertEqual(
             [fixture["tier1_occasions"][k] for k in (
                 "stationery_spectrum", "magenta_beauty_retail", "pastel_kawaii_stationery",
@@ -469,7 +470,7 @@ class W4CControlFlowCardinalityTests(TestCase):
 
     def test_18_theme_batch_invocation_cardinality(self):
         all_keys = [p.key for p in lpr.list_ready_templates()]
-        self.assertEqual(len(all_keys), 53)  # 53 Tier-1 invocations
+        self.assertEqual(len(all_keys), READY_TEMPLATE_COUNT)  # 53 Tier-1 invocations
         tier2_cells = self.command._planned_tier2_cells(all_keys)
         self.assertEqual(len(tier2_cells), 104 - 50)
 

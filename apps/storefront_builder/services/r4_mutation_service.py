@@ -699,7 +699,7 @@ _APPEARANCE_UPDATE_ALLOWED_PATCH_KEYS = frozenset({
     "template_slug", "palette_slug", "font", "type_scale", "motion", "button_style",
     "radius", "button_radius", "density",
     "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
-    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
     "color_overrides", "theme_overrides",
     # explicit, labelled merchant action: drop EVERY global colour / region-colour override (never a side effect of anything else)
     "clear_global_color_overrides",
@@ -1136,7 +1136,7 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # ``new_template is None`` either.
     for field in (
         "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
-        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
     ):
         if field in patch:
             candidate[field] = patch[field]
@@ -1191,6 +1191,9 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # can be a semantic no-op (for example, boutique keeps the default motion),
     # but template-owned fields such as template_slug/font still changed and
     # must be visible to record_change(), which reloads the Draft from the DB.
+    if patch.get("heading_style") == "default":
+        # the sparse key is absent from ``cleaned`` when it is the default; tell the authority merge to REMOVE the stored one
+        cleaned = {**cleaned, "heading_style": "default"}
     appearance_authority_service.apply_appearance_patch(version=draft, patch=cleaned)
     if "motion" in patch or new_template is not None:
         _sync_manifest_from_live_selectors(draft=draft)
@@ -1308,7 +1311,8 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 #: JSON and was already validated/synced on every save — it simply could
 #: never be CHANGED by a merchant through R4 before this.
 _FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry"} | set(FOOTER_TOGGLE_FIELDS)
+    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry",
+     "floating_whatsapp", "floating_phone", "floating_back_to_top", "floating_position"} | set(FOOTER_TOGGLE_FIELDS)
 )
 
 
@@ -1333,6 +1337,9 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
     if "geometry" in patch:
         candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
+    for field in (*layout_service.FLOATING_ACTION_KEYS, "floating_position"):
+        if field in patch:
+            candidate[field] = patch[field]
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)

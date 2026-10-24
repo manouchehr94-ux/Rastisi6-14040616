@@ -410,6 +410,29 @@ def _validate_footer_extra_blocks(raw) -> list[dict]:
     return cleaned
 
 
+FLOATING_ACTION_KEYS = ("floating_whatsapp", "floating_phone", "floating_back_to_top")
+_FLOATING_POSITIONS = ("start", "end")
+
+
+def validate_floating_extras(config: dict) -> dict:
+    """V5 — optional, SPARSE floating widgets (WhatsApp / phone / back-to-top). Written only when switched on, so a footer that never
+    touched them keeps its exact stored shape and renders byte-identically. The widgets carry NO data of their own: the WhatsApp link is
+    the Store's own active WhatsApp social link and the phone is the Store's own contact phone (resolved at render time)."""
+    extras: dict = {}
+    for key in FLOATING_ACTION_KEYS:
+        value = config.get(key, False)
+        if not isinstance(value, bool):
+            raise FooterConfigValidationError("مقدار ابزارک شناور باید درست/نادرست باشد")
+        if value:
+            extras[key] = True
+    position = config.get("floating_position") or "end"
+    if position not in _FLOATING_POSITIONS:
+        raise FooterConfigValidationError("جای ابزارک‌های شناور نامعتبر است")
+    if extras and position != "end":
+        extras["floating_position"] = position
+    return extras
+
+
 def validate_footer_config(config: dict) -> dict:
     """پیکربندی خام فوتر را اعتبارسنجی و پاک‌سازی می‌کند.
 
@@ -444,6 +467,8 @@ def validate_footer_config(config: dict) -> dict:
         )
     except global_region_registry.UnknownGlobalVariantSelectionError as exc:
         raise FooterConfigValidationError(str(exc)) from exc
+
+    cleaned.update(validate_floating_extras(config))
 
     # Optional, sparse: merchant-editable footer geometry/colours (shell_geometry.py).
     try:
@@ -678,6 +703,14 @@ def _apply_structural_page_fields(config: dict, cleaned: dict) -> None:
         if hero_style not in appearance_registry.SITE_HERO_STYLE_CHOICES:
             raise AppearanceConfigValidationError("سبکِ هیرویِ انتخاب‌شده نامعتبر است")
         cleaned["hero_style"] = hero_style
+
+    # V5 — sparse like the fields above: written only when it differs from the historical heading, so a Store that never
+    # touched it keeps its exact stored shape / fingerprint.
+    heading_style = config.get("heading_style")
+    if heading_style and heading_style != "default":
+        if heading_style not in appearance_registry.SITE_HEADING_STYLE_CHOICES:
+            raise AppearanceConfigValidationError("سبکِ عنوانِ بخش‌هایِ انتخاب‌شده نامعتبر است")
+        cleaned["heading_style"] = heading_style
 
 
 def validate_page_appearance_overrides(raw: dict) -> dict:

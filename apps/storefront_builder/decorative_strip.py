@@ -30,6 +30,8 @@ def build_view(settings: dict | None, image_url: str | None = None) -> dict:
         f"--ds-r:{0 if bleed else cfg['radius']}px",
         f"--ds-ja:{_ALIGN_CSS[cfg['alignment']]}",
     ]
+    if int(cfg["text_size"]) != _DECORATIVE_STRIP_DEFAULTS["text_size"]:
+        css.append(f"--ds-fs:{int(cfg['text_size'])}px")
     background = semantic_color_css(cfg["background_color"]) if mode in ("solid", "palette", "pattern", "image") else ""
     if mode == "image" and not image_url:
         mode_fill = background or "var(--brand-surface)"
@@ -70,4 +72,7 @@ def build_view(settings: dict | None, image_url: str | None = None) -> dict:
         "bleed": bleed,
         "hide": " ".join(hidden),
         "text": cfg["optional_text"],
+        "link": cfg["link_url"],
+        "icon": cfg["icon"],
+        "text_size": int(cfg["text_size"]),
     }

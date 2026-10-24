@@ -291,6 +291,14 @@ _KAWAII_CENTER_VARIANT = GlobalVariantDefinition(
     capabilities=frozenset({NAV_SURFACE}),
 )
 
+#: Floating-card boutique header: the announcement strip, a tinted band and one white rounded card holding the brand (image-first),
+#: the real Store navigation and the shopper actions. Mobile keeps the same card (menu, brand, cart + search).
+_FLOATING_CARD_VARIANT = GlobalVariantDefinition(
+    key="floating_card",
+    label_fa="کارت شناور (برند بزرگ + نوار رنگی)",
+    renderer="storefront_builder/partials/global_header/floating_card.html",
+)
+
 # A8 semantic header vocabulary.  Several identities deliberately reuse a
 # proven renderer when the inventory found the same topology; the identity is
 # still useful to recipes while renderer paths remain platform-owned.
@@ -328,6 +336,7 @@ GLOBAL_HEADER_REGION = GlobalRegionDefinition(
         _LUXURY_SEARCH_VARIANT,
         _STATIONERY_SEARCH_VARIANT,
         _KAWAII_CENTER_VARIANT,
+        _FLOATING_CARD_VARIANT,
         *_A8_HEADER_VARIANTS,
     ),
     default_variant="legacy_default",
@@ -411,6 +420,13 @@ _FOOTER_KAWAII_MINIMAL_VARIANT = GlobalVariantDefinition(
     capabilities=frozenset({NAV_SURFACE}),
 )
 
+#: Centered contact footer: one tinted centred column — phone pill, social icons, trust badges and the legal line.
+_FOOTER_CENTERED_CONTACT_VARIANT = GlobalVariantDefinition(
+    key="centered_contact",
+    label_fa="تماس مرکزی (تلفن + شبکه‌ها + نماد)",
+    renderer="storefront_builder/partials/global_footer/centered_contact.html",
+)
+
 _A8_FOOTER_VARIANTS = tuple(
     GlobalVariantDefinition(key=key, label_fa=label, renderer=renderer)
     for key, label, renderer in (
@@ -439,6 +455,7 @@ GLOBAL_FOOTER_REGION = GlobalRegionDefinition(
         _FOOTER_CHOCOLATE_DARK_VARIANT,
         _FOOTER_STATIONERY_DARK_VARIANT,
         _FOOTER_KAWAII_MINIMAL_VARIANT,
+        _FOOTER_CENTERED_CONTACT_VARIANT,
         *_A8_FOOTER_VARIANTS,
     ),
     default_variant="legacy_default",

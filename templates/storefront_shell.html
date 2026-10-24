@@ -13,5 +13,6 @@ in the content block; commerce content is never rewritten by the shell.
 
 {% block footer %}
 {% if FOOTER_SETTINGS and not FOOTER_SETTINGS.is_enabled %}<footer class="footer"></footer>{% else %}{% include footer_variant_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}{% endif %}
+{% include "storefront_builder/partials/global_footer/_shared/floating_actions.html" with footer_config=layout_footer_config %}
 {% if mobile_bottom_nav_template %}{% include mobile_bottom_nav_template with footer_config=layout_footer_config is_live_storefront=True is_builder_preview=False %}{% endif %}
 {% endblock %}

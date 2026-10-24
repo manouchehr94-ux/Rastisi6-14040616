@@ -41,6 +41,7 @@ from apps.catalog.models import Product
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.services import layout_service
 from apps.stores.models import Store
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 STORE_SLUG = "rasti-mode-demo"
 OTHER_REAL_SLUG = "rastisi-fashion-test"
@@ -202,7 +203,7 @@ class ApplyGoldenReferenceStorefrontCommandTests(TestCase):
         self._run()
         after = {p.key for p in lpr.list_ready_templates()}
         self.assertEqual(before, after)
-        self.assertEqual(len(after), 53)  # real registry: 50 A8 templates + 3 later ones (verified from list_ready_templates())
+        self.assertEqual(len(after), READY_TEMPLATE_COUNT)  # real registry: 50 A8 templates + 3 later ones (verified from list_ready_templates())
 
     # ------------------------------------------------------------------ Shell
 
@@ -301,7 +302,7 @@ class ApplyGoldenReferenceStorefrontCommandTests(TestCase):
         self._run()
         after = {p.key for p in lpr.list_ready_templates()}
         self.assertEqual(before, after)
-        self.assertEqual(len(after), 53)  # real registry: 50 A8 templates + 3 later ones (verified from list_ready_templates())
+        self.assertEqual(len(after), READY_TEMPLATE_COUNT)  # real registry: 50 A8 templates + 3 later ones (verified from list_ready_templates())
 
     def test_never_touches_another_store(self):
         other = Store.objects.create(

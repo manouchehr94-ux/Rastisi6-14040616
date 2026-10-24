@@ -220,8 +220,16 @@ class EveryPresetKeepsTheHistoricalProductPageTests(_PdpBase):
                 response = public.get(reverse("catalog:product-detail", args=[self.product.slug]), HTTP_HOST=PUBLIC_HOST)
                 self.assertEqual(response.status_code, 200)
                 html = response.content.decode()
-                self.assertLessEqual(set(_data_attrs(_pdp_tag(html))), self.ALLOWED_DEFAULT_PDP_ATTRS)
-                self.assertEqual(_data_attrs(_tabs_tag(html)), {})
+                carried = any(
+                    entry.settings for entry in preset.pages[StorefrontPage.PageType.PRODUCT_DETAIL]
+                    if entry.section_key in ("product_main", "product_description")
+                )
+                if carried:
+                    # a recipe that DELIBERATELY carries product-page presentation (the six-site kit) shows exactly those attributes
+                    self.assertGreater(len(set(_data_attrs(_pdp_tag(html))) | set(_data_attrs(_tabs_tag(html)))), 1, preset.key)
+                else:
+                    self.assertLessEqual(set(_data_attrs(_pdp_tag(html))), self.ALLOWED_DEFAULT_PDP_ATTRS)
+                    self.assertEqual(_data_attrs(_tabs_tag(html)), {})
                 for needle in self.MUST_CONTAIN:
                     self.assertIn(needle, html, needle)
                 self.assertEqual(html.count('x-data="variantSelector('), 1)

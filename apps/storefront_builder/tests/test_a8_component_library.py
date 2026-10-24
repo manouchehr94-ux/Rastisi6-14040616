@@ -119,22 +119,23 @@ class A8ComponentLibraryTests(SimpleTestCase):
                 # +2 header / +2 footer / +1 product_view variants registered for
                 # the reference templates 51-53 (stationery_search, kawaii_center,
                 # stationery_dark, kawaii_minimal, catalog_grid).
-                "header": 24,
+                # V5 six-site kit (54-59): +1 header (floating_card), +1 hero (clean_slider), +1 footer (centered_contact) for 54.
+                "header": 25,
                 "mega_menu": 1,
-                "hero": 20,
+                "hero": 21,
                 "layout": 17,
                 "product_view": 14,
                 "card": 17,
                 "badge": 2,
                 "motion": 3,
-                "footer": 18,
+                "footer": 19,
                 "bottom_nav": 9,
                 # P5-W2 — 8 occasion themes (none + 7 occasions) from the
                 # single theme_catalog, adapted into the central registry.
                 "theme": 8,
             },
         )
-        self.assertEqual(len(COMPONENT_REGISTRY), 133)
+        self.assertEqual(len(COMPONENT_REGISTRY), 136)
 
     def test_mapping_vocabulary_is_registered_once_and_resolves_from_allowlist(self):
         self.assertTrue(

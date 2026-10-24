@@ -41,7 +41,7 @@ here — so every future visual variant reads identical business semantics.
     {% endif %}
     {% if card.is_out_of_stock %}
     <div class="badges badges-stock"><span class="pill pill-outofstock">ناموجود</span></div>
-    {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible and card_settings.card_style != "compact" and card_settings.card_style != "beauty_retail" and card_settings.card_style != "chocolate_retail" and card_settings.card_style != "center_stepper" %}
+    {% elif card_settings.show_quick_add is not False and card.is_quick_add_eligible and not card_settings.card_style|card_cta_below and card_settings.card_style != "compact" and card_settings.card_style != "beauty_retail" and card_settings.card_style != "chocolate_retail" and card_settings.card_style != "center_stepper" %}
     <div class="addbar">
       <button type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none"
               onclick="event.preventDefault();event.stopPropagation()">
@@ -88,6 +88,18 @@ here — so every future visual variant reads identical business semantics.
     </button>
     {% else %}
     <a class="beauty-cart beauty-cart--select" href="{{ card.url }}">انتخاب گزینه‌ها</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if card_settings.card_style|card_cta_below and not card.is_out_of_stock %}
+  <div class="pcard-cta">
+    {% if card_settings.show_quick_add is False %}
+    <a class="pcard-cta-btn pcard-cta-btn--select" href="{{ card.url }}">مشاهده محصول</a>
+    {% elif card.is_quick_add_eligible %}
+    <button class="pcard-cta-btn" type="button" hx-post="{% url 'cart:add' product.slug %}" hx-vals='{"quantity": 1}' hx-swap="none"
+            onclick="event.preventDefault();event.stopPropagation()">افزودن به سبد خرید</button>
+    {% else %}
+    <a class="pcard-cta-btn pcard-cta-btn--select" href="{{ card.url }}">انتخاب گزینه‌ها</a>
     {% endif %}
   </div>
   {% endif %}

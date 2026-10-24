@@ -127,6 +127,13 @@ after each successful global edit.
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_crossfade" {% if global_design.appearance.card_image_crossfade %}checked{% endif %}> <span>کراس‌فید تصویر کارت</span></label>
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_zoom" {% if global_design.appearance.card_image_zoom %}checked{% endif %}> <span>زوم تصویر کارت روی هاور</span></label>
 
+          <label class="r4-field-sublabel" for="r4GlobalHeadingStyle">سبک عنوان بخش‌ها</label>
+          <select id="r4GlobalHeadingStyle" class="r4-control" data-r4-global-field="heading_style">
+            {% for c in global_design.site_heading_style_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.heading_style or c == 'default' and not global_design.appearance.heading_style %}selected{% endif %}>{{ c|rs_heading_style_label }}</option>
+            {% endfor %}
+          </select>
+
           <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض محتوای سایت</label>
           <select id="r4GlobalContentWidth" class="r4-control" data-r4-global-field="content_width">
             {% for w in global_design.site_content_width_choices %}

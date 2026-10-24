@@ -912,3 +912,23 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 .pcard .price-inquiry-link{text-decoration:underline;text-underline-offset:3px;position:relative;z-index:2}
 .pcard .price-inquiry-link:hover{text-decoration-thickness:2px}
 .pcard-qv-price .price-inquiry{font-weight:800;color:var(--violet-text,var(--ink))}
+
+/* ---- V5 six-site card styles (54-59). Presentation only; business data comes from product_card_data. ---- */
+.pcard-cta{padding:0 var(--pcard-pad,0) 4px}
+.pcard-cta-btn{display:inline-flex;align-items:center;justify-content:center;margin-top:10px;padding:7px 18px;border-radius:var(--sfb-button-radius,4px);background:var(--brand-accent,#6aaa56);color:var(--brand-accent-fg,#fff);font-size:12.5px;font-weight:600;line-height:1.4;text-decoration:none;cursor:pointer}
+.pcard-cta-btn:hover{filter:brightness(.94)}
+.pcard.style-lifestyle_cart{background:transparent;border:0;box-shadow:none;border-radius:0;--pcard-pad:0}
+.pcard.style-lifestyle_cart:hover{transform:none;box-shadow:none}
+.pcard.style-lifestyle_cart .img{background:var(--brand-surface-soft,#f4f2ee)!important;aspect-ratio:3/4;border-radius:var(--sfb-radius,4px);overflow:hidden}
+.pcard.style-lifestyle_cart .cover-photo,.pcard.style-lifestyle_cart .cover-photo-2{object-fit:var(--img-fit,cover)!important}
+.pcard.style-lifestyle_cart .body{padding:12px 0 0;text-align:start}
+.pcard.style-lifestyle_cart .name{font-size:13.5px;font-weight:500;color:var(--brand-text,#27221c);line-height:1.7}
+.pcard.style-lifestyle_cart .price .now{font-size:13px;font-weight:400;color:var(--theme-price,var(--brand-muted,#464136))}
+.pcard.style-outline_plain{background:var(--brand-surface,#fff);border:1px solid var(--line,#e3e0d8);border-radius:var(--sfb-radius,4px);box-shadow:none;overflow:hidden;padding:3px}
+.pcard.style-outline_plain:hover{transform:none;box-shadow:none}
+.pcard.style-outline_plain .img{background:var(--brand-surface-soft,#f4f2ee)!important;aspect-ratio:3/4;border-radius:2px;overflow:hidden}
+.pcard.style-outline_plain .cover-photo,.pcard.style-outline_plain .cover-photo-2{object-fit:var(--img-fit,cover)!important}
+.pcard.style-outline_plain .body{padding:10px 8px 8px;text-align:start}
+.pcard.style-outline_plain .name{font-size:13.5px;font-weight:700;color:var(--brand-text,#27221c)}
+.pcard.style-outline_plain .price{margin-top:2px}
+.pcard.style-outline_plain .price .now{font-size:12.5px;font-weight:400;color:var(--theme-price,var(--brand-muted,#464136))}

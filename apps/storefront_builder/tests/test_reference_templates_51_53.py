@@ -27,6 +27,7 @@ from apps.storefront_builder.services import template_preview_service
 from apps.storefront_builder.storefront_appearance.families import COMPONENT_FAMILIES
 from apps.storefront_builder.storefront_appearance.registry import get_component
 from apps.stores.models import Store, StoreDomain
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -47,7 +48,7 @@ class ReferenceTemplateRegistryTests(SimpleTestCase):
     def test_three_new_official_templates_extend_the_fifty_key_catalog(self):
         latest = {preset.key: preset for preset in lpr.list_ready_templates()}
         self.assertEqual(len(A8_READY_TEMPLATES), 50)
-        self.assertEqual(len(latest), 53)
+        self.assertEqual(len(latest), READY_TEMPLATE_COUNT)
         a8_keys = {preset.key for preset in A8_READY_TEMPLATES}
         for key, (label, *_rest) in REFERENCE_TEMPLATES.items():
             with self.subTest(key=key):
@@ -262,7 +263,7 @@ class ReferenceTemplateLifecycleTests(TestCase):
             draft, current_template_key=None, current_template_version=None,
         )
         by_key = {card["preset"].key: card for card in cards}
-        self.assertEqual(len(cards), 53)
+        self.assertEqual(len(cards), READY_TEMPLATE_COUNT)
         for key in REFERENCE_TEMPLATES:
             with self.subTest(key=key):
                 card = by_key[key]

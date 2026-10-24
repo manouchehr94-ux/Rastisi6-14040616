@@ -215,7 +215,7 @@ def _category_grid_context(store, section):
     # modes that explicitly need uncropped representative photography pay
     # for the extra per-category product lookup; every other category_grid
     # variant keeps reading ``category.image`` exactly as before.
-    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles"}:
+    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles", "label_tiles"}:
         for category in top_categories:
             category.representative_media = section_data_service.resolve_category_representative_media(category)
     # ``min_slots`` reserves visible positions: the positions without a category render as neutral empty slots.

@@ -42,6 +42,7 @@ class ShellGeometryProperty:
 _ALL = "*"
 _H = "stationery_search"
 _F = "stationery_dark"
+_FC = "floating_card"
 
 SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key): p for p in (
     ShellGeometryProperty("util_height", "header", "ارتفاع نوار بالایی (px)", "int", 24, 80, 40, "--gh-util-h", variants=(_H,)),
@@ -59,11 +60,17 @@ SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key
     ShellGeometryProperty("chip_fill", "header", "رنگ دکمه برجسته", "color", css_var="--gh-chip-fill", variants=(_H,)),
     ShellGeometryProperty("chip_fill_alt", "header", "رنگ دکمه برجسته دوم", "color", css_var="--gh-chip-fill-alt", variants=(_H,)),
     ShellGeometryProperty("chip_text", "header", "رنگ متن دکمه‌های برجسته", "color", css_var="--gh-chip-text", variants=(_H,)),
+    ShellGeometryProperty("card_height", "header", "حداقل ارتفاع کارت هدر (px)", "int", 60, 260, 110, "--gh-fc-card-h", variants=(_FC,)),
+    ShellGeometryProperty("card_padding", "header", "فاصلهٔ عمودیِ داخل کارت (px)", "int", 0, 60, 18, "--gh-fc-pad-y", variants=(_FC,)),
+    ShellGeometryProperty("card_radius", "header", "گردیِ کارت هدر (px)", "int", 0, 40, 12, "--gh-fc-radius", variants=(_FC,)),
+    ShellGeometryProperty("band_height", "header", "ارتفاع نوار رنگیِ پشت کارت (px)", "int", 0, 320, 150, "--gh-fc-band-h", variants=(_FC,)),
+    ShellGeometryProperty("band_fill", "header", "رنگ نوار پشت کارت", "color", css_var="--gh-fc-band", variants=(_FC,)),
+    ShellGeometryProperty("logo_height", "header", "حداکثر ارتفاع لوگو (px)", "int", 24, 220, 90, "--gh-fc-logo-h", variants=(_FC,)),
     # V5 announcement strip (every header variant): colours + the size of the small picture beside the text
     ShellGeometryProperty("announce_bg", "header", "رنگ پس‌زمینهٔ نوار اطلاعیه", "color", css_var="--gh-announce-bg", variants=(_ALL,)),
     ShellGeometryProperty("announce_fg", "header", "رنگ متن نوار اطلاعیه", "color", css_var="--gh-announce-fg", variants=(_ALL,)),
-    ShellGeometryProperty("announce_image_size", "header", "اندازهٔ تصویر کنار متن (px)", "int", 16, 40, 24, "--gh-announce-img", variants=(_ALL,)),
-    ShellGeometryProperty("announce_height", "header", "حداقل ارتفاع نوار (px)", "int", 32, 72, 32, "--gh-announce-h", variants=(_ALL,)),
+    ShellGeometryProperty("announce_image_size", "header", "اندازهٔ تصویر کنار متن (px)", "int", 16, 64, 24, "--gh-announce-img", variants=(_ALL,)),
+    ShellGeometryProperty("announce_height", "header", "حداقل ارتفاع نوار (px)", "int", 32, 120, 32, "--gh-announce-h", variants=(_ALL,)),
     ShellGeometryProperty("announce_padding", "header", "فاصلهٔ عمودیِ داخل نوار (px)", "int", 0, 16, 4, "--gh-announce-py", variants=(_ALL,)),
     ShellGeometryProperty("bar_height", "footer", "ارتفاع نوار پیوندها (px، ۰ = خودکار)", "int", 0, 200, 0, "--gf-bar-h", variants=(_F,)),
     ShellGeometryProperty("grid_min_height", "footer", "حداقل ارتفاع بلوک ستون‌ها (px)", "int", 0, 800, 440, "--gf-grid-h", variants=(_F,)),

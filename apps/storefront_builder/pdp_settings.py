@@ -81,6 +81,18 @@ PRODUCT_MAIN_CHOICES = (
         ("square", "تقریباً مربعی"),
         ("pill", "قرصی"),
     ), "rounded"),
+    # typography (V5 six-site kit): the product title and the price are the two type roles a product page tunes per brand
+    ("title_size", "اندازهٔ عنوان محصول", (
+        ("normal", "معمولی"),
+        ("large", "بزرگ"),
+        ("xlarge", "خیلی بزرگ"),
+    ), "normal"),
+    ("price_size", "اندازهٔ قیمت", (
+        ("small", "کوچک"),
+        ("normal", "معمولی"),
+        ("large", "بزرگ"),
+        ("xlarge", "خیلی بزرگ"),
+    ), "normal"),
 )
 
 #: ``(key, merchant label, default)`` — switches (all ``True``: everything the page showed before stays shown).
@@ -109,6 +121,8 @@ _PRODUCT_MAIN_ATTRIBUTE_NAMES = {
     "cta_width": "cta-width",
     "cta_size": "cta-size",
     "cta_shape": "cta-shape",
+    "title_size": "title-size",
+    "price_size": "price-size",
 }
 
 PRODUCT_MAIN_SETTING_KEYS = tuple(key for key, *_rest in PRODUCT_MAIN_CHOICES) + tuple(key for key, *_rest in PRODUCT_MAIN_SWITCHES)

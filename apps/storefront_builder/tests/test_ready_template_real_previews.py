@@ -39,6 +39,7 @@ from apps.storefront_builder.tests._gallery_support import (
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.services import template_preview_service as tps
 from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -58,7 +59,7 @@ class RealScreenshotResolverTests(TestCase):
 
     def test_original_eight_remain_a_subset_of_the_official_catalog(self):
         official_keys = {p.key for p in lpr.list_ready_templates()}
-        self.assertEqual(len(official_keys), 53)
+        self.assertEqual(len(official_keys), READY_TEMPLATE_COUNT)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset(official_keys))
 
     def test_missing_screenshot_falls_back_to_none(self):

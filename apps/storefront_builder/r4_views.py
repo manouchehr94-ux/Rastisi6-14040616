@@ -493,6 +493,7 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "density_choices": appearance_registry.DENSITY_CHOICES,
         "image_fit_choices": appearance_registry.IMAGE_FIT_CHOICES,
         "image_hover_choices": appearance_registry.IMAGE_HOVER_CHOICES,
+        "site_heading_style_choices": appearance_registry.SITE_HEADING_STYLE_CHOICES,
         "site_content_width_choices": appearance_registry.SITE_CONTENT_WIDTH_CHOICES,
         "site_grid_density_choices": appearance_registry.SITE_GRID_DENSITY_CHOICES,
         "site_card_shadow_choices": appearance_registry.SITE_CARD_SHADOW_CHOICES,

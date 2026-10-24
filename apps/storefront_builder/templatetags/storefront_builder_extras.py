@@ -300,10 +300,37 @@ def rs_featured(items, attr, current, count):
 
 _STUDIO_FONT_LABELS_FA = {
     "Vazirmatn": "وزیرمتن · خوانا و امروزی",
+    "Estedad": "استعداد · گرم و مدرن",
+    "Noto Sans Arabic": "نوتو سنس عربی · تمیز و خنثی",
+    "Lalezar": "لالزار · تیتر پررنگ",
     "Tahoma": "تاهوما · ساده و آشنا",
     "Arial": "آریال · بی‌پیرایه",
     "Georgia": "جورجیا · سریف و روایی",
 }
+
+
+@register.filter
+def first_social(links, icon_name):
+    """The first of the Store's own social links whose safe icon name is ``icon_name`` (``None`` when there is none)."""
+    for link in links or ():
+        if getattr(link, "effective_icon_name", "") == icon_name:
+            return link
+    return None
+
+
+_STUDIO_HEADING_STYLE_LABELS_FA = {
+    "default": "پیش‌فرض (نوار رنگی کنار عنوان)",
+    "centered": "وسط‌چین",
+    "centered_rule": "وسط‌چین با خطوط ظریف",
+    "underline": "زیرخط‌دار",
+    "plain": "ساده",
+}
+
+
+@register.filter
+def rs_heading_style_label(value):
+    """Merchant-facing Persian label for a section-heading style (display only; the stored value stays the key)."""
+    return _STUDIO_HEADING_STYLE_LABELS_FA.get(str(value), value)
 
 
 @register.filter
@@ -501,7 +528,7 @@ def announcement_view(context, header_config):
         size = 24
 
     # V5-UI-014 — the bar's own height / vertical padding (validated 32–72 / 0–16 by shell_geometry; absent = the strip's built-in size)
-    for key, var, low, high in (("announce_height", "--ann-h", 32, 72), ("announce_padding", "--ann-py", 0, 16)):
+    for key, var, low, high in (("announce_height", "--ann-h", 32, 120), ("announce_padding", "--ann-py", 0, 16)):
         try:
             value = int(geometry.get(key))
         except (TypeError, ValueError):
@@ -513,6 +540,6 @@ def announcement_view(context, header_config):
     return {
         "visible": visible, "extended": extended, "image_url": image_url,
         "image_alt": hc.get("announcement_image_alt") or "", "image_side": hc.get("announcement_image_side") or "start",
-        "image_size": max(16, min(40, size)), "url": link_url, "new_tab": bool(hc.get("announcement_link_new_tab")),
+        "image_size": max(16, min(64, size)), "url": link_url, "new_tab": bool(hc.get("announcement_link_new_tab")),
         "align": align, "style": ";".join(css),
     }

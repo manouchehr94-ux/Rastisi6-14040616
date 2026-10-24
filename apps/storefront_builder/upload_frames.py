@@ -25,7 +25,7 @@ _DESIGN_RATIO = {"square": (1, 1), "portrait": (3, 4), "landscape": (4, 3)}
 _DEFAULT_RATIO = {SQUARE: (1, 1), PORTRAIT: (3, 4), LANDSCAPE: (4, 3)}
 _STYLE_FIXED = {
     "compact": (1, 1.03), "editorial_minimal": (4, 5), "shelf_editorial": (3, 4), "beauty_glass": (1, 1), "paper_frame": (4, 5),
-    "portrait_round": (1, 1), "catalog_index": (4, 3), "chocolate_retail": (1, 1), "pastel_flat": (1, 1),
+    "portrait_round": (1, 1), "catalog_index": (4, 3), "chocolate_retail": (1, 1), "pastel_flat": (1, 1), "lifestyle_cart": (3, 4), "outline_plain": (3, 4),
 }
 _STYLE_BY_RATIO = {
     "beauty_retail": {SQUARE: (1.12, 1), PORTRAIT: (4, 5), LANDSCAPE: (1.12, 1)},
@@ -38,7 +38,7 @@ PRODUCT_SECTIONS = ("product_section", "newest_products", "best_sellers", "disco
 #: category_grid display modes → (ratio, shape, approx) of the picture frame (storefront_builder.css)
 _CATEGORY_CIRCLE = {"fashion_flat", "chocolate_story", "luxury_shortcuts", "grey_circles", "circular", "icon_tiles"}
 _CATEGORY_SQUARE = {"fashion_mosaic", "beauty_icons", "pastel_tiles"}
-_CATEGORY_RECT = {"chocolate_badges": (124, 98), "image_strip": (3, 2), "atelier_mosaic": (4, 5), "gradient_tiles": (1, 1)}
+_CATEGORY_RECT = {"chocolate_badges": (124, 98), "image_strip": (3, 2), "atelier_mosaic": (4, 5), "gradient_tiles": (1, 1), "label_tiles": (3, 2)}
 
 #: hero / banner frames: (label, ratio, approx)
 HERO_DESKTOP = (1053, 420)

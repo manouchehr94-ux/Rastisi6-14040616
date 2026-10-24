@@ -142,9 +142,9 @@ class HeightAndPaddingTests(_UI014Base):
         self._on()
         with self.assertRaises(r4_mutation_service.R4MutationError):
             self._header(geometry={"announce_height": "tall"})                                   # not a number: refused
-        for sent, stored in ((31, 32), (73, 72), (40, 40)):
+        for sent, stored in ((31, 32), (121, 120), (40, 40)):
             self._header(geometry={"announce_height": sent})
-            self.assertEqual(self._draft().header_config["geometry"]["announce_height"], stored)  # out of range: clamped to the allowed 32–72
+            self.assertEqual(self._draft().header_config["geometry"]["announce_height"], stored)  # out of range: clamped to the allowed 32–120 (V5 six-site kit raised the ceiling from 72 for tall campaign strips)
         for sent, stored in ((17, 16), (-1, 0), (8, 8)):
             self._header(geometry={"announce_padding": sent})
             self.assertEqual(self._draft().header_config["geometry"]["announce_padding"], stored)
