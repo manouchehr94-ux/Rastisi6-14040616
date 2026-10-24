@@ -38,7 +38,7 @@ PRODUCT_SECTIONS = ("product_section", "newest_products", "best_sellers", "disco
 #: category_grid display modes → (ratio, shape, approx) of the picture frame (storefront_builder.css)
 _CATEGORY_CIRCLE = {"fashion_flat", "chocolate_story", "luxury_shortcuts", "grey_circles", "circular", "icon_tiles"}
 _CATEGORY_SQUARE = {"fashion_mosaic", "beauty_icons", "pastel_tiles"}
-_CATEGORY_RECT = {"chocolate_badges": (124, 98), "image_strip": (3, 2), "atelier_mosaic": (4, 5), "gradient_tiles": (1, 1), "label_tiles": (3, 2)}
+_CATEGORY_RECT = {"chocolate_badges": (124, 98), "image_strip": (3, 2), "atelier_mosaic": (4, 5), "gradient_tiles": (1, 1), "label_tiles": (3, 2), "icon_rail": (1, 1), "ring_circles": (1, 1), "photo_cards": (1, 1)}
 
 #: hero / banner frames: (label, ratio, approx)
 HERO_DESKTOP = (1053, 420)

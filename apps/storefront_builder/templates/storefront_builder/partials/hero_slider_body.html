@@ -7,7 +7,7 @@ second fixed column, which lets the same block reproduce image-led commerce
 banners without introducing a preset-specific template.
 {% endcomment %}
 {% if hero_slides %}
-<section class="section hero{% if hero_variant_class %} {{ hero_variant_class }}{% endif %}">
+<section class="section hero{% if hero_variant_class %} {{ hero_variant_class }}{% endif %}{% if slider_settings.slider_width == "full" %} hero--full{% endif %}"{% if slider_settings.slider_ratio or slider_settings.slider_ratio_mobile %} style="{% if slider_settings.slider_ratio %}--hero-clean-ratio:{{ slider_settings.slider_ratio }}/1;{% endif %}{% if slider_settings.slider_ratio_mobile %}--hero-clean-ratio-m:{{ slider_settings.slider_ratio_mobile }}/1{% endif %}"{% endif %}>
   {% if hero_slides|length > 1 %}
   {% comment %}
   Phase 5 Task 5 (STRANS) — between-slide transition style. ``data-hero-transition``

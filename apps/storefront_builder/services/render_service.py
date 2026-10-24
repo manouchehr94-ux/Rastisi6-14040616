@@ -154,6 +154,8 @@ def _single_banner_context(store, section):
 def _linked_image_context(store, section):
     """V5 «عکس لینک‌دار» — ONLY this section's own picture row (no fallback to the store-wide banner pool, ever): a missing picture must show
     nothing, never a random / default store banner. ``banners`` is a 0-or-1 list so the shared empty-state plumbing and the template agree."""
+    if getattr(section, "pk", None) is None:  # an unsaved candidate (gallery live preview) has no picture row yet
+        return {"banners": []}
     banner = PromotionalBanner.objects.filter(
         store=store, section=section, is_active=True,
     ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id").first()
@@ -215,7 +217,7 @@ def _category_grid_context(store, section):
     # modes that explicitly need uncropped representative photography pay
     # for the extra per-category product lookup; every other category_grid
     # variant keeps reading ``category.image`` exactly as before.
-    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles", "label_tiles"}:
+    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles", "label_tiles", "icon_rail", "ring_circles", "photo_cards"}:
         for category in top_categories:
             category.representative_media = section_data_service.resolve_category_representative_media(category)
     # ``min_slots`` reserves visible positions: the positions without a category render as neutral empty slots.
@@ -508,23 +510,35 @@ def _video_section_context(store, section):
     ویدیویِ کالا استفاده می‌شود عبور می‌کند (نه بازنویسیِ دوباره) — یک
     نمونه‌ی موقتِ (ذخیره‌نشده‌یِ) ``ProductVideo`` فقط برایِ عبور از همان
     منطق ساخته می‌شود."""
-    video_url = (section.settings or {}).get("video_url") or ""
-    if not video_url:
-        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None}
-
     from apps.catalog.models import ProductVideo
     from apps.catalog.services import product_video_service
+
+    items = []
+    for row in (section.settings or {}).get("videos") or []:
+        try:
+            provider, _external_id = product_video_service.detect_provider_and_id(row.get("url", ""))
+        except product_video_service.ProductVideoError:
+            continue
+        temp = ProductVideo(provider=provider, url=row["url"])
+        if provider == ProductVideo.Provider.INSTAGRAM:
+            items.append({"title": row.get("title", ""), "embed_url": None, "permalink": product_video_service.instagram_permalink(temp)})
+        else:
+            items.append({"title": row.get("title", ""), "embed_url": product_video_service.embed_url(temp), "permalink": None})
+    video_url = (section.settings or {}).get("video_url") or ""
+    if not video_url:
+        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None, "video_items": items}
 
     try:
         provider, _external_id = product_video_service.detect_provider_and_id(video_url)
     except product_video_service.ProductVideoError:
-        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None}
+        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None, "video_items": items}
 
     temp_video = ProductVideo(provider=provider, url=video_url)
     if provider == ProductVideo.Provider.INSTAGRAM:
         return {"video_embed_url": None, "video_is_instagram": True,
-                "video_permalink": product_video_service.instagram_permalink(temp_video)}
-    return {"video_embed_url": product_video_service.embed_url(temp_video), "video_is_instagram": False, "video_permalink": None}
+                "video_permalink": product_video_service.instagram_permalink(temp_video), "video_items": items}
+    return {"video_embed_url": product_video_service.embed_url(temp_video), "video_is_instagram": False, "video_permalink": None,
+            "video_items": items}
 
 
 def _category_context_for_promo_cards(store, section):
@@ -591,7 +605,12 @@ def _product_section_context(store, section):
         resolved = resolve_destination_setting(store, destination)
         if resolved["url"]:
             view_all_url = resolved["url"]
-    return {"products": products, "view_all_url": view_all_url}
+    context = {"products": products, "view_all_url": view_all_url}
+    if (section.settings or {}).get("tabs_source"):
+        context["tabs"] = section_data_service.resolve_product_tabs(
+            store, section.settings or {}, availability=_availability_mode(section),
+        )
+    return context
 
 
 #: کلیدهایی که context builder‌شان به تنظیماتِ خودِ همان نمونه‌ی section
@@ -1060,8 +1079,10 @@ def _build_items_from_sections(
             render_section = copy(section)
             render_section.settings = effective_settings
 
+        # An unsaved candidate section (gallery live preview) has no pk: key it by identity so two instances of the same key
+        # (two banner rows, two product rows …) never share one cached context.
         cache_key = (
-            (section.section_key, section.pk)
+            (section.section_key, section.pk if section.pk is not None else id(section))
             if section.section_key in PER_INSTANCE_SECTION_KEYS
             else section.section_key
         )

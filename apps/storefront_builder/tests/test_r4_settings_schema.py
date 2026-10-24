@@ -398,6 +398,10 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "text_position",
                 # Phase 5 Task 5 (STRANS) — between-slide transition style.
                 "transition",
+                # V5 six-site kit — clean slider proportions / edge-to-edge width
+                "slider_ratio",
+                "slider_ratio_mobile",
+                "slider_width",
                 "appearance_overrides",
                 # R4-11 — the generic Design field (hero gained the image focal-point control)
                 "design",

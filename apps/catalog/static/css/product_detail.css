@@ -427,3 +427,19 @@
 .pdp-contact{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
 .pdp-contact-btn{display:flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:var(--brand-surface,#fff);font-size:13px;font-weight:600;color:var(--brand-text,#222)}
 .pdp-contact-btn:hover{border-color:var(--brand-primary,#c0138a);color:var(--brand-primary,#c0138a)}
+
+/* ---- V5 six-site kit: add-to-cart colour from a palette role (only when data-cta-tone is written, i.e. non-default) ---- */
+.pdp[data-cta-tone="secondary"] .pdp-actions .btn-primary,.pdp[data-cta-tone="secondary"] .pdp-satc-btn{background:var(--brand-secondary);border-color:var(--brand-secondary);color:var(--brand-secondary-fg,#fff)}
+.pdp[data-cta-tone="accent"] .pdp-actions .btn-primary,.pdp[data-cta-tone="accent"] .pdp-satc-btn{background:var(--brand-accent);border-color:var(--brand-accent);color:var(--brand-accent-fg,#fff)}
+
+/* ---- V5 six-site kit: gallery lightbox (rendered only when the product-main switch is on) ---- */
+.pdp-lb{position:fixed;inset:0;z-index:1400;display:grid;place-items:center;background:rgba(10,10,14,.92);padding:24px}
+.pdp-lb[x-cloak]{display:none}
+.pdp-lb-img{max-width:min(94vw,1200px);max-height:88vh;object-fit:var(--img-fit,contain);cursor:zoom-in;transition:transform .2s;touch-action:pan-y}
+.pdp-lb-img.is-zoomed{transform:scale(1.9);cursor:zoom-out}
+.pdp-lb-close,.pdp-lb-nav{position:absolute;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:28px;line-height:1;cursor:pointer}
+.pdp-lb-close{top:16px;inset-inline-end:16px}
+.pdp-lb-nav{top:50%;transform:translateY(-50%)}
+.pdp-lb-prev{inset-inline-start:16px}.pdp-lb-next{inset-inline-end:16px}
+.pdp-lb-nav:dir(rtl){transform:translateY(-50%) scaleX(-1)}
+.pdp-lb-close:focus-visible,.pdp-lb-nav:focus-visible{outline:2px solid #fff;outline-offset:2px}

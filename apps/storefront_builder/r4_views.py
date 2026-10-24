@@ -415,6 +415,7 @@ _HEADER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "cta": "دکمه فراخوان (متن + لینک)",
     "spacer": "فاصله‌گذار",
     "tagline": "شعار/تگ‌لاین",
+    "category_menu": "دکمهٔ منوی دسته‌بندی کالاها",
 }
 _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "custom_text": "متن دلخواه (عنوان + متن)",

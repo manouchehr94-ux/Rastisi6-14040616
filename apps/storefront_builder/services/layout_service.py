@@ -117,7 +117,7 @@ def _validate_shell_component_responsive(raw, allowed_keys: list[str]) -> dict:
 #: فروشگاه می‌خوانند (``SHOP_CONTACT_PHONE``/``SOCIAL_LINKS_HEADER`` —
 #: از پیش در context processorها موجود بودند، بدونِ مصرف‌کننده)، نه
 #: یک کپیِ تازه‌یِ آن داده در پیکربندیِ Draft.
-HEADER_EXTRA_BLOCK_TYPES = ("phone", "social", "cta", "spacer", "tagline")
+HEADER_EXTRA_BLOCK_TYPES = ("phone", "social", "cta", "spacer", "tagline", "category_menu")
 _MAX_HEADER_EXTRA_BLOCKS = 6
 _MAX_HEADER_CTA_LABEL_LENGTH = 30
 

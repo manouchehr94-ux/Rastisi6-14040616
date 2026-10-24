@@ -932,3 +932,41 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 .pcard.style-outline_plain .name{font-size:13.5px;font-weight:700;color:var(--brand-text,#27221c)}
 .pcard.style-outline_plain .price{margin-top:2px}
 .pcard.style-outline_plain .price .now{font-size:12.5px;font-weight:400;color:var(--theme-price,var(--brand-muted,#464136))}
+
+/* ---- V5 six-site vocabulary: gallery_pink / campaign_round / cocoa_gift (colours come from the semantic tokens) ---- */
+.pcard.style-gallery_pink{background:var(--brand-surface,#fff);border:0;border-radius:18px;box-shadow:0 2px 14px color-mix(in srgb,var(--brand-primary,#db2777) 14%,transparent);overflow:hidden;--pcard-pad:12px}
+.pcard.style-gallery_pink:hover{transform:translateY(-2px);box-shadow:0 6px 22px color-mix(in srgb,var(--brand-primary,#db2777) 22%,transparent)}
+.pcard.style-gallery_pink .img{background:var(--brand-surface,#fff)!important;aspect-ratio:1/1;border-radius:0}
+.pcard.style-gallery_pink .cover-photo,.pcard.style-gallery_pink .cover-photo-2{object-fit:var(--img-fit,contain)!important}
+.pcard.style-gallery_pink .body{padding:10px 16px 16px;text-align:start;display:grid;gap:4px}
+.pcard.style-gallery_pink .brand{order:-1;font-size:10.5px;font-weight:700;color:var(--brand-primary-text,var(--brand-primary,#db2777))}
+.pcard.style-gallery_pink .name{font-size:13px;font-weight:600;color:var(--brand-text,#0f172a);line-height:1.8}
+.pcard.style-gallery_pink .price .now{display:flex;flex-direction:column-reverse;align-items:flex-start;gap:1px;font-size:14.5px;font-weight:800;color:var(--theme-price,var(--brand-text,#0f172a))}
+.pcard.style-gallery_pink .price .old{font-size:11px;font-weight:400;color:var(--brand-muted,#94a3b8);text-decoration:line-through}
+.pcard.style-gallery_pink .badges{top:12px;right:12px}
+.pcard.style-gallery_pink .pill-disc{background:var(--brand-primary,#db2777);color:var(--brand-primary-fg,#fff);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800}
+.pcard.style-campaign_round{background:var(--brand-surface,#fff);border:1px solid var(--brand-border,#eee);border-radius:14px;box-shadow:0 1px 6px color-mix(in srgb,var(--brand-text,#222) 8%,transparent);overflow:hidden}
+.pcard.style-campaign_round:hover{transform:none;box-shadow:0 4px 14px color-mix(in srgb,var(--brand-text,#222) 14%,transparent)}
+.pcard.style-campaign_round .img{background:var(--brand-surface,#fff)!important;aspect-ratio:1/1;border-radius:0}
+.pcard.style-campaign_round .cover-photo,.pcard.style-campaign_round .cover-photo-2{object-fit:var(--img-fit,contain)!important}
+.pcard.style-campaign_round .body{padding:6px 12px 14px;text-align:center;display:grid;gap:5px;justify-items:center}
+.pcard.style-campaign_round .brand{display:none}
+.pcard.style-campaign_round .name{font-size:12.5px;font-weight:700;color:var(--brand-text,#222);line-height:1.8}
+.pcard.style-campaign_round .rate{justify-content:center}
+.pcard.style-campaign_round .price .now{font-size:13px;font-weight:800;color:var(--theme-price,var(--brand-text,#222));display:flex;gap:8px;align-items:baseline;justify-content:center;flex-wrap:wrap}
+.pcard.style-campaign_round .price .old{font-size:10.5px;font-weight:400;color:var(--brand-muted,#999);text-decoration:line-through}
+.pcard.style-campaign_round .badges{top:10px;left:10px;right:auto;align-items:flex-start}
+.pcard.style-campaign_round .pill-disc{display:grid;place-items:center;min-width:42px;height:42px;padding:0;border-radius:50%;background:var(--brand-accent,#ff6e1e);color:var(--brand-accent-fg,#fff);font-size:11.5px;font-weight:800}
+.pcard.style-cocoa_gift{background:var(--brand-surface,#fff);border:0;border-radius:18px;box-shadow:0 2px 10px color-mix(in srgb,var(--brand-text,#24170e) 8%,transparent);overflow:hidden;--pcard-pad:12px}
+.pcard.style-cocoa_gift:hover{transform:none;box-shadow:0 4px 16px color-mix(in srgb,var(--brand-text,#24170e) 14%,transparent)}
+.pcard.style-cocoa_gift .img{background:var(--brand-surface,#fff)!important;aspect-ratio:1/1;border-radius:0}
+.pcard.style-cocoa_gift .cover-photo,.pcard.style-cocoa_gift .cover-photo-2{object-fit:var(--img-fit,contain)!important}
+.pcard.style-cocoa_gift .body{padding:8px 14px 0;text-align:center;display:grid;gap:5px;justify-items:center}
+.pcard.style-cocoa_gift .brand{display:none}
+.pcard.style-cocoa_gift .name{font-size:13px;font-weight:700;color:var(--brand-text,#24170e);line-height:1.8}
+.pcard.style-cocoa_gift .price .now{font-size:15px;font-weight:800;color:var(--theme-price,var(--brand-primary,#704012));display:flex;gap:8px;align-items:baseline;justify-content:center;flex-wrap:wrap}
+.pcard.style-cocoa_gift .price .old{font-size:11px;font-weight:400;color:var(--brand-muted,#999);text-decoration:line-through}
+.pcard.style-cocoa_gift .badges{top:10px;right:10px}
+.pcard.style-cocoa_gift .pill-disc{background:var(--brand-accent,#f5224c);color:var(--brand-accent-fg,#fff);border-radius:999px;padding:3px 10px;font-weight:800}
+.pcard.style-cocoa_gift .pcard-cta{padding:0 14px 16px}
+.pcard.style-cocoa_gift .pcard-cta-btn{display:flex;width:100%;margin-top:6px;padding:10px 14px;border-radius:12px;background:var(--brand-primary,#704012);color:var(--brand-primary-fg,#fff);font-size:13px;font-weight:700}

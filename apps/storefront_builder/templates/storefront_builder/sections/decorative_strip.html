@@ -6,8 +6,10 @@ render service. Draws nothing when the strip is disabled. With ``link`` the whol
 {% endcomment %}
 {% if strip.enabled %}
 <section class="section decor-strip" style="{{ strip.style }}"{% if strip.pattern %} data-pattern="{{ strip.pattern }}"{% endif %}{% if strip.bleed %} data-bleed="1"{% endif %}{% if strip.hide %} data-hide="{{ strip.hide }}"{% endif %}{% if strip.link %} data-link="1"{% endif %}>
-  <span class="decor-strip-bg" aria-hidden="true"></span>
-  {% if strip.link and strip.text %}<a class="decor-strip-text decor-strip-link" href="{{ strip.link }}"{% if strip.link|slice:":4" == "http" %} target="_blank" rel="noopener noreferrer"{% endif %}>{% if strip.icon %}<span class="decor-strip-icon" aria-hidden="true">{% include "partials/social_icon.html" with icon=strip.icon %}</span>{% endif %}{{ strip.text }}</a>
+  <span class="decor-strip-bg" aria-hidden="true"{% if strip.gradient %} data-grad="1"{% endif %}></span>
+  {% if strip.button %}
+  <span class="decor-strip-cta"><span class="decor-strip-text">{{ strip.text }}</span><a class="decor-strip-btn" href="{{ strip.link }}"{% if strip.link|slice:":4" == "http" %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ strip.button }}</a></span>
+  {% elif strip.link and strip.text %}<a class="decor-strip-text decor-strip-link" href="{{ strip.link }}"{% if strip.link|slice:":4" == "http" %} target="_blank" rel="noopener noreferrer"{% endif %}>{% if strip.icon %}<span class="decor-strip-icon" aria-hidden="true">{% include "partials/social_icon.html" with icon=strip.icon %}</span>{% endif %}{{ strip.text }}</a>
   {% elif strip.text %}<span class="decor-strip-text">{% if strip.icon %}<span class="decor-strip-icon" aria-hidden="true">{% include "partials/social_icon.html" with icon=strip.icon %}</span>{% endif %}{{ strip.text }}</span>{% endif %}
 </section>
 {% endif %}

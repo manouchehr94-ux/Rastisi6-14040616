@@ -43,8 +43,12 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
          JSON.parse(document.getElementById('variant-selector-data').textContent),
          JSON.parse(document.getElementById('product-price-data').textContent)
        )">
-    <div class="gallery">
-      <div class="main">
+    <div class="gallery"{% if pdp.gallery_lightbox %} x-data="{ lb: false, zoomed: false, touchX: null,
+         urls() { return [...$root.querySelectorAll('.gallery .main [data-slide-url]')].map(e => e.dataset.slideUrl).filter(Boolean) },
+         go(d) { const n = this.urls().length; if (n > 1) { activeSlide = (activeSlide + d + n) % n; zoomed = false } },
+         swipeEnd(e) { if (this.touchX === null) return; const dx = e.changedTouches[0].clientX - this.touchX; this.touchX = null; if (Math.abs(dx) > 40) this.go(dx < 0 ? 1 : -1) } }"
+         @keydown.escape.window="lb = false" x-effect="document.body.style.overflow = lb ? 'hidden' : ''"{% endif %}>
+      <div class="main"{% if pdp.gallery_lightbox %} @touchstart.passive="touchX = $event.touches[0].clientX" @touchend="swipeEnd($event)"{% endif %}>
         {% for slide in gallery_slides %}
           {% if slide.type == "image" %}
           <img data-slide data-slide-url="{{ slide.url }}" data-cover="{% if slide.is_cover %}true{% else %}false{% endif %}" x-show="activeSlide === {{ forloop.counter0 }}" src="{{ slide.url }}" data-img-role="product" alt="{{ slide.alt }}">
@@ -54,7 +58,17 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           {% endif %}
         {% endfor %}
         {% if not pdp or pdp.show_discount_badge %}<span class="pill pill-disc" x-show="displayPrice.savings > 0" x-text="discountPercentText()"></span>{% endif %}
+        {% if pdp.gallery_lightbox %}<button type="button" class="zoom" @click="lb = true" aria-label="بزرگ‌نمایی تصویر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>{% endif %}
       </div>
+      {% if pdp.gallery_lightbox %}
+      <div class="pdp-lb" x-show="lb" x-cloak role="dialog" aria-modal="true" aria-label="نمایش بزرگ تصویر" @click.self="lb = false; zoomed = false"
+           @touchstart.passive="touchX = $event.touches[0].clientX" @touchend="swipeEnd($event)">
+        <button type="button" class="pdp-lb-close" @click="lb = false; zoomed = false" aria-label="بستن">×</button>
+        <button type="button" class="pdp-lb-nav pdp-lb-prev" @click="go(-1)" aria-label="تصویر قبلی" x-show="urls().length > 1">‹</button>
+        <img class="pdp-lb-img" :class="{ 'is-zoomed': zoomed }" :src="urls()[activeSlide]" alt="" @click="zoomed = !zoomed">
+        <button type="button" class="pdp-lb-nav pdp-lb-next" @click="go(1)" aria-label="تصویر بعدی" x-show="urls().length > 1">›</button>
+      </div>
+      {% endif %}
       <div class="thumbs">
         {% for slide in gallery_slides %}
         <button type="button" class="th" :class="{ active: activeSlide === {{ forloop.counter0 }} }" @click="activeSlide = {{ forloop.counter0 }}"

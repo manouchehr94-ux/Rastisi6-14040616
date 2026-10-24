@@ -38,6 +38,9 @@ def build_view(settings: dict | None, image_url: str | None = None) -> dict:
     else:
         mode_fill = background or ("var(--brand-tone-1)" if mode == "palette" else "var(--brand-surface)")
     css.append(f"--ds-bg:{mode_fill}")
+    gradient_to = semantic_color_css(cfg["gradient_to"]) if mode in ("solid", "palette") else ""
+    if gradient_to:
+        css.append(f"--ds-bg2:{gradient_to}")
     if mode == "image" and image_url:
         safe_url = image_url.replace("'", "%27").replace(")", "%29")
         css.append(f"--ds-img:url('{safe_url}')")
@@ -75,4 +78,6 @@ def build_view(settings: dict | None, image_url: str | None = None) -> dict:
         "link": cfg["link_url"],
         "icon": cfg["icon"],
         "text_size": int(cfg["text_size"]),
+        "button": cfg["button_label"] if cfg["link_url"] and cfg["optional_text"] else "",
+        "gradient": bool(gradient_to),
     }

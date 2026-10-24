@@ -43,13 +43,14 @@ _ALL = "*"
 _H = "stationery_search"
 _F = "stationery_dark"
 _FC = "floating_card"
+_B = "beauty_search_nav"
 
 SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key): p for p in (
     ShellGeometryProperty("util_height", "header", "ارتفاع نوار بالایی (px)", "int", 24, 80, 40, "--gh-util-h", variants=(_H,)),
-    ShellGeometryProperty("main_height", "header", "ارتفاع ردیف اصلی (px)", "int", 40, 140, 50, "--gh-main-h", variants=(_H,)),
-    ShellGeometryProperty("nav_height", "header", "ارتفاع ردیف ناوبری (px)", "int", 30, 120, 73, "--gh-nav-h", variants=(_H,)),
-    ShellGeometryProperty("search_max_width", "header", "حداکثر عرض جستجو (px)", "int", 240, 900, 655, "--gh-search-max", variants=(_H,)),
-    ShellGeometryProperty("search_height", "header", "ارتفاع کادر جستجو (px)", "int", 30, 64, 40, "--gh-search-h", variants=(_H,)),
+    ShellGeometryProperty("main_height", "header", "ارتفاع ردیف اصلی (px)", "int", 40, 140, 50, "--gh-main-h", variants=(_H, _B)),
+    ShellGeometryProperty("nav_height", "header", "ارتفاع ردیف ناوبری (px)", "int", 30, 120, 73, "--gh-nav-h", variants=(_H, _B)),
+    ShellGeometryProperty("search_max_width", "header", "حداکثر عرض جستجو (px)", "int", 240, 900, 655, "--gh-search-max", variants=(_H, _B)),
+    ShellGeometryProperty("search_height", "header", "ارتفاع کادر جستجو (px)", "int", 30, 64, 40, "--gh-search-h", variants=(_H, _B)),
     ShellGeometryProperty("row_gap", "header", "فاصله بین اجزای ردیف اصلی (px)", "int", 0, 40, 18, "--gh-row-gap", variants=(_H,)),
     ShellGeometryProperty("nav_gap", "header", "فاصله بین لینک‌های ناوبری (px)", "int", 0, 40, 8, "--gh-nav-gap", variants=(_H,)),
     ShellGeometryProperty("nav_item_limit", "header", "حداکثر لینک‌های ناوبری (۰ = همه)", "int", 0, 24, 0, "", unit="", variants=(_H,)),
@@ -65,7 +66,7 @@ SHELL_GEOMETRY: dict[tuple[str, str], ShellGeometryProperty] = {(p.region, p.key
     ShellGeometryProperty("card_radius", "header", "گردیِ کارت هدر (px)", "int", 0, 40, 12, "--gh-fc-radius", variants=(_FC,)),
     ShellGeometryProperty("band_height", "header", "ارتفاع نوار رنگیِ پشت کارت (px)", "int", 0, 320, 150, "--gh-fc-band-h", variants=(_FC,)),
     ShellGeometryProperty("band_fill", "header", "رنگ نوار پشت کارت", "color", css_var="--gh-fc-band", variants=(_FC,)),
-    ShellGeometryProperty("logo_height", "header", "حداکثر ارتفاع لوگو (px)", "int", 24, 220, 90, "--gh-fc-logo-h", variants=(_FC,)),
+    ShellGeometryProperty("logo_height", "header", "حداکثر ارتفاع لوگو (px)", "int", 24, 220, 90, "--gh-fc-logo-h", variants=(_FC, _B)),
     # V5 announcement strip (every header variant): colours + the size of the small picture beside the text
     ShellGeometryProperty("announce_bg", "header", "رنگ پس‌زمینهٔ نوار اطلاعیه", "color", css_var="--gh-announce-bg", variants=(_ALL,)),
     ShellGeometryProperty("announce_fg", "header", "رنگ متن نوار اطلاعیه", "color", css_var="--gh-announce-fg", variants=(_ALL,)),

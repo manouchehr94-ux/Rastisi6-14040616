@@ -325,3 +325,16 @@ class PurchaseSupportBlocksTests(_PdpBase):
         with self.assertRaises(r4_mutation_service.R4MutationError):
             self._update(self.main, {"show_low_stock_alert": "perhaps"})
         self.assertEqual(self._revision(), revision)
+
+
+class GalleryLightboxTests(_PdpBase):
+    """Zoom / full-screen view / swipe: absent by default, wired (and keyboard / touch aware) only when switched on."""
+
+    def test_off_by_default_and_on_when_switched_on(self):
+        html = self._preview()
+        for marker in ("pdp-lb", 'class="zoom"', "swipeEnd"):
+            self.assertNotIn(marker, html, marker)
+        self._update(self.main, {"gallery_lightbox": True})
+        html = self._preview()
+        for marker in ('class="pdp-lb"', 'class="zoom"', "swipeEnd", "@keydown.escape.window"):
+            self.assertIn(marker, html, marker)

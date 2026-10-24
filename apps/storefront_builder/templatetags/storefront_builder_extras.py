@@ -174,6 +174,14 @@ def icon_svg(icon_slug):
     return mark_safe(svg)
 
 
+@register.filter
+def engine_icon(key):
+    """SVG of an engine-registry decorative icon key (``icon_registry``); ``""`` for an unknown key (fail closed)."""
+    from .. import icon_registry
+
+    return icon_registry.icon_svg(key)
+
+
 @register.simple_tag
 def rs_icon(name):
     """R4 Design Studio stroke icon (see ``studio_icons``)."""

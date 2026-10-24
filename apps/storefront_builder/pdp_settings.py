@@ -81,6 +81,12 @@ PRODUCT_MAIN_CHOICES = (
         ("square", "تقریباً مربعی"),
         ("pill", "قرصی"),
     ), "rounded"),
+    # which palette role paints the add-to-cart button (the historical look is the brand's primary colour)
+    ("cta_tone", "رنگ دکمهٔ افزودن به سبد", (
+        ("primary", "رنگ اصلی برند"),
+        ("secondary", "رنگ ثانویه"),
+        ("accent", "رنگ تأکید"),
+    ), "primary"),
     # typography (V5 six-site kit): the product title and the price are the two type roles a product page tunes per brand
     ("title_size", "اندازهٔ عنوان محصول", (
         ("normal", "معمولی"),
@@ -110,6 +116,8 @@ PRODUCT_MAIN_SWITCHES = (
     ("show_low_stock_alert", "هشدار کمبود موجودی (وقتی موجودی واقعی ۱۰ عدد یا کمتر است)", False),
     ("show_free_shipping_notice", "پیام ارسال رایگان (وقتی قیمت کالا به آستانهٔ ارسال رایگان فروشگاه می‌رسد)", False),
     ("show_contact_buttons", "دکمه‌های مشاورهٔ تلفنی و واتساپ (از اطلاعات تماس فروشگاه)", False),
+    # Gallery: full-screen enlarged view (zoom button, arrows, Esc, tap-to-zoom) and swipe between pictures on touch screens.
+    ("gallery_lightbox", "بزرگ‌نمایی تصویر در پنجرهٔ تمام‌صفحه و کشیدن انگشتی بین تصاویر", False),
 )
 
 #: choice value -> data attribute name the stylesheet reads (the three that already exist keep their historical name)
@@ -126,6 +134,7 @@ _PRODUCT_MAIN_ATTRIBUTE_NAMES = {
     "cta_width": "cta-width",
     "cta_size": "cta-size",
     "cta_shape": "cta-shape",
+    "cta_tone": "cta-tone",
     "title_size": "title-size",
     "price_size": "price-size",
 }

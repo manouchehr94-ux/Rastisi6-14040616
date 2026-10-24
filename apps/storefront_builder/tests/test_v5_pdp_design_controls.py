@@ -111,9 +111,9 @@ class SettingsVocabularyTests(SimpleTestCase):
         # package-1 switches are all ON (everything the page showed stays shown); the three V5 six-site-kit purchase-support blocks are OFF
         # (an existing Store never gains them) and render nothing at all unless a merchant / recipe switches them on
         self.assertEqual({k for k, _l, default in pdp_settings.PRODUCT_MAIN_SWITCHES if default is not True},
-                         {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons"})
+                         {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox"})
         self.assertTrue(all(default is False for k, _l, default in pdp_settings.PRODUCT_MAIN_SWITCHES
-                            if k in {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons"}))
+                            if k in {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox"}))
         self.assertEqual({key: d for key, _l, _c, d in pdp_settings.PRODUCT_DESCRIPTION_CHOICES}["layout_mode"], "tabs")
 
     def test_schema_fields_mirror_the_vocabulary_exactly(self):
@@ -656,7 +656,7 @@ class StylesheetContractTests(SimpleTestCase):
                 if not part or part.startswith(("from", "to")):
                     continue
                 self.assertTrue(
-                    "[data-" in part or part.startswith((".pdp-lowstock", ".pdp-freeship", ".pdp-contact")) or part in (".qty[hidden]", ".pdp-sec-title", ".brand-panel", ".brand-panel .brand-logo", ".brand-panel h3",
+                    "[data-" in part or part.startswith((".pdp-lowstock", ".pdp-freeship", ".pdp-contact", ".pdp-lb")) or part in (".qty[hidden]", ".pdp-sec-title", ".brand-panel", ".brand-panel .brand-logo", ".brand-panel h3",
                                                  ".brand-panel h3 small", ".brand-panel p", ".brand-panel dl", ".brand-panel dt", ".brand-panel dd")
                     or "[data-enhanced]" in part,
                     f"unconditional rule would change the default rendering: {part}",

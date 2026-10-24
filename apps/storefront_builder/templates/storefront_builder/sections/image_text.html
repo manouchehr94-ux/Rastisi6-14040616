@@ -1,11 +1,18 @@
 {% load storefront_builder_extras %}
 {% with title=settings.title body=settings.body_html image_url=settings.image_url image_position=settings.image_position|default:"right" link=destination block_style=settings.block_style %}
-{% if title or body or image_url %}
+{% if title or body or image_url or settings.feature_items %}
 <section class="section{% if block_style == 'plain' %} imgtext-plain{% endif %}">
   <div class="cream" style="{% if image_position == 'left' %}flex-direction:row-reverse{% endif %}">
     <div>
       {% if title %}<h3>{{ title }}</h3>{% endif %}
       {% if body %}<div style="line-height:2">{{ body|sanitize_rich_text }}</div>{% endif %}
+      {% if settings.feature_items %}
+      <ul class="imgtext-features">
+        {% for item in settings.feature_items %}
+        <li>{% if item.icon %}<span class="imgtext-feature-icon">{{ item.icon|engine_icon }}</span>{% endif %}<span class="imgtext-feature-copy"><b>{{ item.title }}</b>{% if item.text %}<small>{{ item.text }}</small>{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
       {% if link.url %}
       <a class="btn btn-primary" href="{{ link.url }}" {% if link.open_new_tab %}target="_blank" rel="{{ link.rel }}"{% endif %}>مشاهده بیشتر</a>
       {% endif %}
