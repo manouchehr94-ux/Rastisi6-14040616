@@ -35,6 +35,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         from apps.catalog.models import Product
+        from apps.blog.services import published_posts_for_store
         from apps.content.models import ContentPage
         from apps.catalog.models import MerchantCollection
 
@@ -57,7 +58,9 @@ class Command(BaseCommand):
             )
             store.refresh_from_db()
 
-        urls = ["/", "/products/", "/products/?q=a", "/collections/", "/cart/"]
+        urls = ["/", "/products/", "/products/?q=a", "/collections/", "/cart/", "/journal/"]
+        urls += [f"/journal/{quote(slug)}/" for slug in
+                 published_posts_for_store(store).values_list("slug", flat=True)]
         urls += [f"/products/{quote(slug)}/" for slug in
                  Product.objects.filter(store=store).order_by("pk").values_list("slug", flat=True)[: opts["max_products"]]]
         urls += [f"/collections/{quote(slug)}/" for slug in

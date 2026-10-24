@@ -17,6 +17,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 from PIL import Image
 
+from apps.blog.models import BlogPost
 from apps.catalog.models import (
     Brand, Category, MerchantCollection, MerchantCollectionItem, Product, ProductImage, ProductOption,
     ProductOptionValue, ProductVariant, VariantOptionValue, Vendor,
@@ -142,6 +143,13 @@ def build_rich_store(slug: str, *, color: str = "#112233", product_count: int = 
     cache.clear()
     draft = layout_service.get_or_create_draft(store)
     _add_section(draft, "product_section", {"data_source": "manual", "product_ids": ids[::-1], "title": "WIP draft list"})
+    # Journal content is visible on the storefront and must survive demo import.
+    # Use distinct slugs because BlogPost.slug is globally unique.
+    BlogPost.objects.create(
+        store=store, title=f"Journal for {slug}", slug=f"journal-{slug}",
+        category_label="Style", excerpt=f"Editorial for {slug}",
+        body=f"Demo editorial belonging to {slug}", published_at=timezone.now(),
+    )
     return store
 
 

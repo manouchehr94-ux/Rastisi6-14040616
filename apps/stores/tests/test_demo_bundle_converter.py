@@ -16,6 +16,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
+from apps.blog.models import BlogPost
 from apps.catalog.models import Product, ProductVariant, VariantOptionValue
 from apps.content.models import HeroSlide, MediaAsset
 from apps.core.models import ShopSettings
@@ -142,6 +143,7 @@ class ConvertTests(ConverterBase):
             self.assertEqual(counts["storefront_builder.StorefrontPage"], 18)  # 3 versions x 6 page types
             self.assertEqual(counts["content.HeroSlide"], 1)
             self.assertEqual(counts["content.MediaAsset"], 2)
+            self.assertEqual(counts["blog.BlogPost"], 1)
             self.assertEqual(counts["core.ShopSettings"], 1)
             self.assertEqual(counts["content.FooterSettings"], 1)
             self.assertEqual(counts["content.Menu"], 2)
@@ -561,6 +563,30 @@ class ImportConvertedBundleTests(ConverterBase):
         again = self.import_both()
         self.assertEqual(snapshot(), first)
         self.assertTrue(all(s.pk for s in again))
+
+    def test_store_owned_journal_posts_are_imported_and_isolated(self):
+        from django.test import Client
+
+        v5, arch = self.import_both()
+        first = BlogPost.objects.get(store=v5)
+        second = BlogPost.objects.get(store=arch)
+        self.assertEqual(first.slug, "journal-alpha")
+        self.assertEqual(second.slug, "journal-beta")
+        self.assertEqual(second.body, "Demo editorial belonging to beta")
+        self.assertNotEqual(first.pk, second.pk)
+        client = Client()
+        for host, own_slug, own_title, foreign_slug in (
+            ("demo-v5.rastisi.ir", "journal-alpha", "Journal for alpha", "journal-beta"),
+            ("demo-arch02.rastisi.ir", "journal-beta", "Journal for beta", "journal-alpha"),
+        ):
+            listing = client.get("/journal/", HTTP_HOST=host, secure=True)
+            self.assertEqual(listing.status_code, 200)
+            self.assertIn(own_title, listing.content.decode("utf-8"))
+            own = client.get(f"/journal/{own_slug}/", HTTP_HOST=host, secure=True)
+            self.assertEqual(own.status_code, 200)
+            self.assertIn(own_title, own.content.decode("utf-8"))
+            foreign = client.get(f"/journal/{foreign_slug}/", HTTP_HOST=host, secure=True)
+            self.assertEqual(foreign.status_code, 404)
 
     def test_each_store_renders_only_its_own_data_from_its_studio_layout(self):
         from django.test import Client

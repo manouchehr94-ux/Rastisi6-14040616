@@ -74,6 +74,9 @@ MODEL_SPECS: tuple[ModelSpec, ...] = (
     _s("catalog.MerchantCollection"),
     _s("catalog.MerchantCollectionItem", "collection__store"),
     _s("content.ContentPage"),
+    # Store-owned Journal posts drive the homepage blog cards and /journal/ pages.
+    # They must travel with the store, or rendered source/import pages differ.
+    _s("blog.BlogPost"),
     _s("content.MediaAsset"),
     _s("content.Menu"),
     _s("content.MenuItem", "menu__store"),
