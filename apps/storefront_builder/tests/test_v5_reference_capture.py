@@ -66,8 +66,7 @@ class ReferenceCaptureTests(StaticLiveServerTestCase):
                                                        preset_key=preset or None, host=HOST)
                 print('SEEDED', len(products), flush=True)
                 pack = rc.PACKS[site]
-                # the reference product page shows a real discount for these four sites: capture a discounted demo product
-                at = next((i for i, row in enumerate(pack["products"]) if row.get("discount")), 0) if pack.get("pdp_discounted") else 0
+                at = rc.pdp_product_index(pack)
                 pdp = reverse("catalog:product-detail", args=[products[at].slug])
                 with rc.patched_best_sellers(products):
                     for name, path in (("home", "/"), ("product", pdp)):

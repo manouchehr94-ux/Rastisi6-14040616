@@ -65,7 +65,8 @@ _DECOR_PDP = (
         "show_mobile_sticky_bar": False,
         "price_layout": "plain", "qty_layout": "inline", "cta_width": "auto", "cta_shape": "square", "show_breadcrumb": False,
         "show_sku": False, "show_wishlist": False, "show_discount_badge": False, "thumbs_position": "below",
-        "title_size": "large", "price_size": "small", "show_topline": False,
+        "title_size": "xlarge", "price_size": "small", "show_topline": False,
+        "gallery_frame": "flush", "design": {"image_fit": "cover"},
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
         "layout_mode": "tabs_vertical", "panel_style": "boxed",
@@ -233,6 +234,7 @@ register_layout_preset(LayoutPresetDefinition(
         "geometry": {"main_height": 128, "nav_height": 56, "search_max_width": 960, "search_height": 40, "logo_height": 100},
     },
     footer={
+        "geometry": {"pad_y": 56, "text_size": 15},
         "show_about": True, "show_contact": True, "show_categories": True, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
         "show_newsletter": False, "show_copyright": True, "footer_variant": "marketplace_dense",
@@ -367,6 +369,7 @@ register_layout_preset(LayoutPresetDefinition(
                      "announce_height": 36},
     },
     footer={
+        "geometry": {"pad_y": 56, "text_size": 15},
         "show_about": True, "show_contact": True, "show_categories": False, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
         "show_newsletter": False, "show_copyright": True, "footer_variant": "marketplace_dense",
@@ -384,6 +387,7 @@ register_layout_preset(LayoutPresetDefinition(
                     {"icon": "◎", "title": "پرداخت امن", "subtitle": "درگاه فعال فروشگاه", "claim": "payment"},
                     {"icon": "⇢", "title": "ارسال سفارش", "subtitle": "روش‌های ارسال فروشگاه", "claim": "shipping"},
                     {"icon": "⌂", "title": "تحویل حضوری", "subtitle": "دریافت از فروشگاه", "claim": "pickup"},
+                    {"icon": "✓", "title": "ضمانت اصالت کالا", "subtitle": "پس از تأیید فروشنده نمایش داده می‌شود"},
                 ],
                 "spacing": _gap(30, size="small"), "design": {"width_pct": 84},
             }),
@@ -447,19 +451,22 @@ _HONEY_BAND = {"mode": "palette", "palette_role": "tone-1", "bleed": True}
 
 _HONEY_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
+        "gallery_frame": "flush", "title_size": "xlarge",
+        "show_spec_summary": True,
         "design": {"width_pct": 88},
         "price_layout": "plain", "qty_layout": "inline", "cta_width": "auto", "cta_shape": "rounded", "cta_size": "large",
-        "cta_tone": "secondary", "title_size": "large", "info_panel": "plain", "show_low_stock_alert": True, "show_free_shipping_notice": True,
+        "cta_tone": "secondary", "info_panel": "plain", "show_low_stock_alert": True, "show_free_shipping_notice": True,
         "show_contact_buttons": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "body_size": "large",
         "design": {"width_pct": 88},
         "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "underline", "tab_align": "start", "panel_style": "plain",
     }),
     # Merchant-authored questions only: the section renders nothing until the Store lists real Q&A in the Inspector (no invented answers).
     PresetSectionEntry("faq", semantic_slot_key="product.faq", settings={
-        "design": {"width_pct": 88},"title": "برخی سوالات شما", "items": []}),
+        "design": {"width_pct": 88},"title": "برخی سوالات شما", "items": [], "style": "cards"}),
     PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={
         "design": {"width_pct": 88},
         "title": "محصولات مشابه", "display_mode": "carousel", "carousel_navigation": "dots", "card": _HONEY_CARD,
@@ -490,9 +497,10 @@ register_layout_preset(LayoutPresetDefinition(
         "sticky": True, "announcement_enabled": True, "show_search": True,
         "show_account": True, "show_wishlist": False, "show_cart": True,
         "header_variant": "promo_search_nav",
-        "geometry": {"announce_bg": "token:tone-4", "announce_height": 44},
+        "geometry": {"announce_bg": "token:tone-4", "announce_height": 44, "mobile_search_icon": 1},
     },
     footer={
+        "geometry": {"pad_y": 56, "text_size": 15},
         "show_about": True, "show_contact": True, "show_categories": True, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
         "show_newsletter": False, "show_copyright": True, "footer_variant": "marketplace_dense",
@@ -526,11 +534,16 @@ register_layout_preset(LayoutPresetDefinition(
                 "title": "ویدیوهای فروشگاه", "background": _HONEY_BAND, "design": {"width_pct": 82},
                 "spacing": _gap(0, pad_top=48, pad_bottom=48),
             }),
+            PresetSectionEntry("image_text", settings={
+                "title": "درباره فروشگاه", "body_html": "<p>متن معرفی فروشگاه را از بخش تنظیمات این بلوک بنویسید.</p>",
+                "block_style": "plain", "image_position": "left", "design": {"width_pct": 82}, "spacing": _gap(40),
+            }),
             PresetSectionEntry("trust_features", settings={
                 "items": [
                     {"icon": "◎", "title": "پرداخت امن", "subtitle": "درگاه فعال فروشگاه", "claim": "payment"},
                     {"icon": "⇢", "title": "ارسال سفارش", "subtitle": "روش‌های ارسال فروشگاه", "claim": "shipping"},
                     {"icon": "⌂", "title": "تحویل حضوری", "subtitle": "دریافت از فروشگاه", "claim": "pickup"},
+                    {"icon": "✓", "title": "ضمانت اصالت کالا", "subtitle": "پس از تأیید فروشنده نمایش داده می‌شود"},
                 ],
                 "spacing": _gap(40, size="small"), "design": {"width_pct": 82},
             }),
@@ -539,7 +552,7 @@ register_layout_preset(LayoutPresetDefinition(
                 "spacing": _gap(40, pad_top=0, pad_bottom=40),
             }),
         ), ("hero", "categories_circles", "products_deals", "categories_tiles", "products_bestsellers", "banners",
-            "advisors", "products_new", "videos", "services", "journal")),
+            "advisors", "products_new", "videos", "about", "services", "journal")),
         **{**_u10_standard_non_home_pages(), "product_detail": _HONEY_PDP},
     },
 ))
@@ -587,7 +600,8 @@ def _cocoa_shelf(title: str, source: str, *, tabs: str = "", pills: bool = False
 
 _COCOA_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
-        "info_panel": "outlined", "gallery_position": "end", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "auto",
+        "show_spec_summary": True,
+        "info_panel": "outlined_tone", "option_size": "large", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "auto",
         "cta_shape": "rounded", "cta_size": "large", "option_shape": "square", "title_size": "large",
         "show_low_stock_alert": True, "show_free_shipping_notice": True, "show_mobile_sticky_bar": False,
     }),
@@ -608,7 +622,7 @@ register_layout_preset(LayoutPresetDefinition(
     store_appearance=_complete_store_appearance(
         header="chocolate_centered_search", hero="legacy_default", layout="quarters",
         product_view="legacy_default", card="legacy_default", badge="none", motion="subtle",
-        footer="chocolate_dark_columns", bottom_nav="four_item",
+        footer="chocolate_dark_columns", bottom_nav="five_item",
     ),
     label_fa="هدیه و ماگ کاکائویی",
     description_fa="فروشگاه ماگ، فلاسک و هدیه با هدر قهوه‌ای، ریل داستان، اسلایدر دوتایی، کاشی‌های بریده‌شدهٔ دسته‌بندی، موزاییک بنر و کارت‌های سفید با دکمهٔ قهوه‌ای.",
@@ -626,10 +640,11 @@ register_layout_preset(LayoutPresetDefinition(
         "header_variant": "chocolate_centered_search",
     },
     footer={
+        "geometry": {"pad_y": 48, "text_size": 15},
         "show_about": True, "show_contact": True, "show_categories": True, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
         "show_newsletter": False, "show_copyright": True, "footer_variant": "chocolate_dark_columns",
-        "floating_whatsapp": True, "floating_back_to_top": True, "mobile_nav_variant": "four_item",
+        "floating_whatsapp": True, "floating_back_to_top": True, "mobile_nav_variant": "five_item",
     },
     pages={
         "home": authored_legacy_home("cocoa_gift_shop", (
@@ -720,11 +735,13 @@ def _neon_shelf(title: str, source: str, *, subtitle: str = "") -> PresetSection
 
 _NEON_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
+        "gallery_frame": "flush", "title_size": "xlarge",
         "info_panel": "card", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "full",
-        "cta_shape": "rounded", "cta_size": "large", "title_size": "large", "price_size": "large",
+        "cta_shape": "rounded", "cta_size": "large", "price_size": "large",
         "show_discount_badge": True, "show_low_stock_alert": False, "show_desktop_sticky_bar": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "body_size": "large",
         "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "pills", "tab_align": "start", "panel_style": "soft",
     }),
@@ -757,8 +774,10 @@ register_layout_preset(LayoutPresetDefinition(
         "sticky": True, "announcement_enabled": False, "show_search": True,
         "show_account": True, "show_wishlist": True, "show_cart": True,
         "header_variant": "marketplace_search_first",
+        "geometry": {"mobile_search_icon": 1},
     },
     footer={
+        "geometry": {"pad_y": 56, "text_size": 15},
         "show_about": True, "show_contact": True, "show_categories": True, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
         "show_newsletter": False, "show_copyright": True, "footer_variant": "dark_tech",
@@ -767,7 +786,7 @@ register_layout_preset(LayoutPresetDefinition(
     pages={
         "home": authored_legacy_home("neon_digital_store", (
             PresetSectionEntry("hero_banner", settings={
-                "hero_style": "split", "text_position": "start", "autoplay": False, "show_arrows": False, "show_dots": False,
+                "hero_style": "split_open", "text_position": "start", "autoplay": False, "show_arrows": False, "show_dots": False,
                 "design": {"width_pct": 86}, "spacing": _gap(30, first=True),
             }),
             PresetSectionEntry("multi_banner", settings={
@@ -786,11 +805,12 @@ register_layout_preset(LayoutPresetDefinition(
             }),
             _neon_shelf("پیشنهاد فروشگاه", "discounted"),
             _neon_shelf("جدیدترین سرویس‌ها", "newest"),
+            _neon_shelf("پربازدیدترین‌ها", "most_viewed"),
             PresetSectionEntry("testimonials", settings={
-                "title": "نظرات مشتریان", "items": [], "design": {"width_pct": 86}, "spacing": _gap(40),
+                "title": "نظرات مشتریان", "items": [], "style": "card_row", "design": {"width_pct": 86}, "spacing": _gap(40),
             }),
         ), ("hero", "highlights", "products_latest_rows", "products_bestsellers", "categories_icons", "products_offers",
-            "products_new", "testimonials")),
+            "products_new", "products_viewed", "testimonials")),
         **{**_u10_standard_non_home_pages(), "product_detail": _NEON_PDP},
     },
 ))

@@ -95,6 +95,54 @@ class PdpRecipeAndCssContractTests(SimpleTestCase):
         self.assertNotRegex(css, r"(?m)^\.promo-grid--(duo-round|trio-round|people-4|mosaic-5|panel-4)\{grid-template-columns")
 
 
+class FidelityRoundPrimitiveTests(SimpleTestCase):
+    def test_testimonials_keep_a_valid_rating_and_style_only(self):
+        item = {"name": "الف", "quote": "متن", "role": "نقش", "rating": 5}
+        cleaned = sr._validate_testimonials_settings({"items": [item, {**item, "rating": 9}, {**item, "rating": "x"}], "style": "card_row"})
+        self.assertEqual([i.get("rating") for i in cleaned["items"]], [5, None, None])
+        self.assertEqual(cleaned["style"], "card_row")
+        self.assertNotIn("style", sr._validate_testimonials_settings({"items": [], "style": "bogus"}))
+
+    def test_faq_cards_style_is_written_only_when_chosen(self):
+        base = {"items": [{"question": "س", "answer": "ج"}]}
+        self.assertNotIn("style", sr._validate_faq_settings(base))
+        self.assertEqual(sr._validate_faq_settings({**base, "style": "cards"})["style"], "cards")
+        self.assertNotIn("style", sr._validate_faq_settings({**base, "style": "other"}))
+
+    def test_image_text_media_library_picture_is_validated_and_sparse(self):
+        self.assertNotIn("image_media_asset_id", sr._validate_image_text_settings({"title": "t"}))
+        self.assertEqual(sr._validate_image_text_settings({"title": "t", "image_media_asset_id": "12"})["image_media_asset_id"], 12)
+        for bad in ("x", 0, -3):
+            with self.assertRaises(ValueError):
+                sr._validate_image_text_settings({"title": "t", "image_media_asset_id": bad})
+
+    def test_hero_split_open_is_a_registered_variant_with_its_own_renderer(self):
+        self.assertIn("split_open", sr.HERO_STYLE_CHOICES)
+        variants = {v.key: v for v in sr.get_definition("hero_banner").variants}
+        self.assertEqual(variants["split_open"].renderer, "storefront_builder/sections/hero_banner_split_open.html")
+
+    def test_footer_and_header_geometry_are_sparse_and_bounded(self):
+        from apps.storefront_builder import shell_geometry
+
+        self.assertEqual(shell_geometry.validate_geometry({"pad_y": 400, "text_size": 3}, "footer"), {"pad_y": 160, "text_size": 11})
+        self.assertEqual(shell_geometry.validate_geometry({"mobile_search_icon": 1}, "header"), {"mobile_search_icon": 1})
+        self.assertEqual(shell_geometry.validate_geometry({}, "footer"), {})
+        self.assertEqual(shell_geometry.geometry_style({"pad_y": 56, "text_size": 15}, "footer"), "--gf-pad-y:56px;--gf-text:15px")
+
+    def test_the_new_recipe_choices_are_set_where_the_references_need_them(self):
+        main = lambda key: self._main(key)
+        self.assertEqual(main("cocoa_gift_shop").get("info_panel"), "outlined_tone")
+        self.assertNotIn("gallery_position", main("cocoa_gift_shop"), "the reference keeps the gallery at the start (right in RTL)")
+        self.assertEqual(lpr.get_layout_preset("cocoa_gift_shop").footer["mobile_nav_variant"], "five_item")
+        self.assertEqual(lpr.get_layout_preset("neon_digital_store").pages["home"][0].settings["hero_style"], "split_open")
+        for key in ("campaign_beauty_hub", "neon_digital_store"):
+            self.assertEqual(lpr.get_layout_preset(key).header["geometry"].get("mobile_search_icon"), 1, key)
+
+    @staticmethod
+    def _main(key):
+        return next(e for e in lpr.get_layout_preset(key).pages["product_detail"] if e.section_key == "product_main").settings
+
+
 class ProductSectionPrimitiveTests(SimpleTestCase):
     BASE = {"data_source": "newest", "item_limit": 8, "display_mode": "carousel"}
 

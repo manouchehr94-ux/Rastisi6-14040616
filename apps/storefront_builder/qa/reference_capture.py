@@ -72,13 +72,29 @@ def reference_images(site: str, exclude: str = "") -> dict[str, list[Path]]:
     return {"products": products, "wide": wide, "squares": squares}
 
 
+def reference_file(site: str, pattern: str) -> Path | None:
+    """The largest picture of the site's reference folder whose file name matches ``pattern`` (a regular expression), else ``None``.
+    QA-only: lets a content pack give a role (hero, banner, story picture) a picture of the same *kind* the reference shows."""
+    folder = REFERENCE_ROOT / site / "capture"
+    best, best_size = None, 0
+    for path in folder.iterdir():
+        if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"} or not re.search(pattern, path.name, re.I):
+            continue
+        if re.search(r"-\d+x\d+\.", path.name):
+            continue
+        size = path.stat().st_size
+        if size > best_size:
+            best, best_size = path, size
+    return best
+
+
 def uploaded(path: Path | None, name: str, *, size=(800, 800), label: str = "", color=(220, 214, 205), max_side: int = 1600,
-             keep_alpha: bool = False):
+             keep_alpha: bool = False, alpha_side: int = 600):
     """A ``SimpleUploadedFile`` from a reference picture, or a neutral placeholder when ``path`` is ``None``.
     ``keep_alpha`` keeps a PNG's transparency (line-art icons)."""
     if path is not None and keep_alpha and path.suffix.lower() == ".png":
         image = Image.open(path).convert("RGBA")
-        image.thumbnail((600, 600))
+        image.thumbnail((alpha_side, alpha_side))
         buffer = io.BytesIO()
         image.save(buffer, "PNG")
         return SimpleUploadedFile(name.rsplit(".", 1)[0] + ".png", buffer.getvalue(), content_type="image/png")
@@ -102,6 +118,37 @@ PACKS: dict[str, dict] = {}
 
 def register_pack(site: str, **pack) -> None:
     PACKS[site] = pack
+
+
+_NEUTRAL_SENTENCES = (
+    "این متن نمونهٔ آزمایشی است و فقط برای سنجش طول، ریتم و ساختار صفحه به‌کار می‌رود.",
+    "تیترها، بندها و فهرست‌ها همان قالب یک توضیح واقعی را دارند تا جای‌گیری بخش‌ها دقیق دیده شود.",
+    "مشخصات واقعی هر کالا را مدیر فروشگاه در بخش توضیحات محصول وارد می‌کند.",
+    "طول متن، تعداد بخش‌ها و فاصلهٔ آن‌ها از روی یک صفحهٔ محصول معمول در فروشگاه‌های مشابه تنظیم شده است.",
+    "در این بخش می‌توان روش استفاده، نکات نگهداری و توضیح گارانتی را نوشت.",
+)
+_NEUTRAL_BULLETS = (
+    "ویژگی نمونهٔ اول", "ویژگی نمونهٔ دوم", "ویژگی نمونهٔ سوم", "ویژگی نمونهٔ چهارم", "ویژگی نمونهٔ پنجم", "ویژگی نمونهٔ ششم",
+)
+
+
+def neutral_article(blocks: int, *, paragraphs: int = 2, bullets: int = 5) -> str:
+    """Neutral, invented article HTML (``blocks`` sections of heading + paragraphs + bullet list). QA only."""
+    parts = []
+    for block in range(blocks):
+        parts.append(f"<h2>عنوان بخش {block + 1}</h2>")
+        for para in range(paragraphs):
+            parts.append("<p>" + " ".join(_NEUTRAL_SENTENCES[(block + para + n) % len(_NEUTRAL_SENTENCES)] for n in range(3)) + "</p>")
+        if bullets:
+            parts.append("<ul>" + "".join(f"<li>{_NEUTRAL_BULLETS[n % len(_NEUTRAL_BULLETS)]}</li>" for n in range(bullets)) + "</ul>")
+    return "".join(parts)
+
+
+def pdp_product_index(pack: dict) -> int:
+    """Index of the demo product the product-page capture uses (a discounted one where the reference shows a discount)."""
+    if pack.get("pdp_discounted"):
+        return next((i for i, row in enumerate(pack["products"]) if row.get("discount")), 0)
+    return 0
 
 
 def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | None = None, host: str = "ref-capture.example.com"):
@@ -162,6 +209,15 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
     StoreDomain.objects.create(store=store, hostname=host, is_primary=True,
                                verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
 
+    # the real operational settings the trust claims are checked against (QA Store only): an active gateway and active shipping methods
+    from apps.orders.models import PaymentGateway, ShippingMethod
+
+    PaymentGateway.objects.create(store=store, name="پرداخت آنلاین", slug="cap-online", is_active=True)
+    ShippingMethod.objects.create(store=store, name="پست پیشتاز", slug="cap-post", method_type=ShippingMethod.MethodType.FLAT_RATE,
+                                  cost=60000, is_active=True, free_over=5_000_000)
+    ShippingMethod.objects.create(store=store, name="تحویل حضوری", slug="cap-pickup", method_type=ShippingMethod.MethodType.LOCAL_PICKUP,
+                                  cost=0, is_active=True)
+
     vendor = Vendor.objects.create(store=store, name=pack["store_name"], slug="cap-vendor")
     categories = []
     for index, (name, kind) in enumerate(pack["categories"]):
@@ -207,17 +263,52 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
                                                 size=(900, 1200)), alt=spec["name"])
         products.append(product)
 
+    pdp_fixture = pack.get("pdp")
+    if pdp_fixture:
+        from apps.catalog.models import Review, Specification
+        from apps.catalog.services.variant_service import create_variant
+        from apps.customers.models import Customer
+
+        target = products[pdp_product_index(pack)]
+        if pdp_fixture.get("article_blocks"):
+            target.description = neutral_article(pdp_fixture["article_blocks"], paragraphs=pdp_fixture.get("paragraphs", 2))
+            target.save(update_fields=["description"])
+        for order, (label, value) in enumerate(pdp_fixture.get("specs", ())):
+            Specification.objects.create(product=target, label=label, value=value, order=order)
+        for attribute, values in pdp_fixture.get("variants", ()):
+            for value_index, value in enumerate(values):
+                create_variant(target, attribute=attribute, value=value, stock=4 + value_index, is_active=True)
+        for number in range(pdp_fixture.get("reviews", 0)):
+            user = get_user_model().objects.create_user(username=f"09{abs(hash((site, number))) % 10**9:09d}", password="x12345678")
+            customer = Customer.objects.create(user=user, full_name=f"مشتری نمونه {number + 1}", phone=f"0912{abs(hash((site, number))) % 10**7:07d}")
+            Review.objects.create(product=target, customer=customer, rating=3 + number % 3,
+                                  text="این نظر نمونهٔ آزمایشی است و فقط برای سنجش چیدمان بخش نظرات ثبت شده است.", is_approved=True)
+
     for order, spec in enumerate(pack.get("hero", ())):
         slide = HeroSlide(store=store, title=spec.get("title", ""), subtitle=spec.get("subtitle", ""), display_order=order,
-                          is_active=True, show_button=bool(spec.get("button")), button_label=spec.get("button", ""))
-        slide.desktop_image = uploaded(pick("wide", order), f"hero-{order}.jpg", size=(1800, 800), max_side=2200)
-        slide.mobile_image = uploaded(pick("products", order), f"hero-m-{order}.jpg", size=(900, 1200))
+                          is_active=True, show_button=bool(spec.get("button")), button_label=spec.get("button", ""),
+                          destination_type="category", destination_category=categories[order % len(categories)])
+        desktop_file = reference_file(site, spec["desktop_file"]) if spec.get("desktop_file") and image_mode == "reference" else None
+        mobile_file = reference_file(site, spec["mobile_file"]) if spec.get("mobile_file") and image_mode == "reference" else None
+        if desktop_file is not None:       # the pack names the kind of picture the reference hero shows (e.g. a transparent mascot)
+            slide.desktop_image = uploaded(desktop_file, f"hero-{order}.jpg", max_side=2200, keep_alpha=True, alpha_side=1400)
+        else:
+            slide.desktop_image = uploaded(pick("wide", order), f"hero-{order}.jpg", size=(1800, 800), max_side=2200)
+        if mobile_file is not None:
+            slide.mobile_image = uploaded(mobile_file, f"hero-m-{order}.jpg", max_side=1400, keep_alpha=True, alpha_side=1000)
+        else:
+            slide.mobile_image = uploaded(pick("products", order), f"hero-m-{order}.jpg", size=(900, 1200))
         slide.save()
     for order, spec in enumerate(pack.get("banners", ())):
         banner = PromotionalBanner(store=store, title=spec.get("title", ""), description=spec.get("description", ""),
                                    display_order=order, is_active=True, show_button=bool(spec.get("button")),
-                                   button_label=spec.get("button", ""))
-        banner.desktop_image = uploaded(pick(spec.get("kind", "wide"), order), f"banner-{order}.jpg", size=(1200, 500))
+                                   button_label=spec.get("button", ""),
+                                   destination_type="category", destination_category=categories[order % len(categories)])
+        banner_file = reference_file(site, spec["file"]) if spec.get("file") and image_mode == "reference" else None
+        if banner_file is not None:
+            banner.desktop_image = uploaded(banner_file, f"banner-{order}.jpg", max_side=1600, keep_alpha=bool(spec.get("alpha")), alpha_side=500)
+        else:
+            banner.desktop_image = uploaded(pick(spec.get("kind", "wide"), order), f"banner-{order}.jpg", size=(1200, 500))
         banner.save()
     for order, category in enumerate(categories):
         item = StoryRailItem(store=store, title=category.name[:40], display_order=order, is_active=True)
@@ -252,6 +343,39 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
         header.update(pack.get("header", {}))
         draft.header_config = layout_service.validate_header_config(header)
         draft.save(update_fields=["header_config"])
+        from apps.content.models import MediaAsset
+
+        media_ids = []
+        for number, pattern in enumerate(pack.get("media_assets", ())):          # the Store's own media library (QA copies)
+            picture = reference_file(site, pattern) if image_mode == "reference" else None
+            asset = MediaAsset(store=store)
+            asset.image = uploaded(picture, f"media-{number}.jpg", max_side=1800, size=(1200, 800))
+            asset.save()
+            media_ids.append(asset.pk)
+
+        def _resolve(value):
+            if isinstance(value, str) and value.startswith("@media:"):
+                return media_ids[int(value[7:])]
+            if isinstance(value, dict):
+                return {k: _resolve(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_resolve(v) for v in value]
+            return value
+
+        for fixture in pack.get("section_fixtures", ()):
+            page = draft.get_page(fixture.get("page", "home"))
+            matching = [sec for sec in page.sections.all() if sec.section_key == fixture["section_key"]]
+            section = matching[fixture.get("nth", 0)]
+            section.settings = {**(section.settings or {}), **_resolve(fixture["settings"])}
+            section.save(update_fields=["settings"])
+        for spec in pack.get("banner_sections", ()):               # a picture row that belongs to ONE section (linked_image)
+            page = draft.get_page(spec.get("page", "home"))
+            section = next(sec for sec in page.sections.all() if sec.section_key == spec["section_key"])
+            banner = PromotionalBanner(store=store, section=section, title=spec.get("title", ""), display_order=0, is_active=True,
+                                       destination_type="category", destination_category=categories[0])
+            picture = reference_file(site, spec["file"]) if image_mode == "reference" else None
+            banner.desktop_image = uploaded(picture, "section-banner.jpg", max_side=1800, size=(1600, 400))
+            banner.save()
         layout_service.publish(store)
     return store, owner, products
 
