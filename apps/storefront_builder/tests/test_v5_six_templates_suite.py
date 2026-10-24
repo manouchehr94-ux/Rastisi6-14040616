@@ -259,3 +259,43 @@ class CandidatePreviewContextTests(TestCase):
         store, _owner, _products = rc.seed_store("AsalBanoo", image_mode="none", preset_key=None, host=HOST)
         items = render_service.build_candidate_render_items([StorefrontSection(section_key="linked_image", settings={})], store)
         self.assertEqual(list(items[0]["context"]["banners"]), [])
+
+
+from .test_r4_mutation_api import R4MutationApiTestCase  # noqa: E402
+from ._gallery_support import gallery_cards_by_key, studio_gallery_response  # noqa: E402
+
+
+class GalleryAndInspectorTests(R4MutationApiTestCase):
+    """The six templates are selectable in the Design Studio gallery and every Section they install is editable in the Inspector."""
+
+    def test_the_six_templates_are_gallery_cards(self):
+        response = studio_gallery_response(self.client)
+        self.assertEqual(response.status_code, 200)
+        cards = gallery_cards_by_key(response)
+        for key in SIX:
+            with self.subTest(key=key):
+                self.assertIn(key, cards)
+                self.assertTrue(cards[key]["preset"].label_fa)
+
+    def test_every_installed_section_opens_in_the_inspector_and_accepts_a_real_edit(self):
+        from apps.storefront_builder.models import StorefrontSection
+        from apps.storefront_builder.services import preset_service
+
+        for key in SIX:
+            with self.subTest(key=key):
+                preset_service.apply_preset(self.draft, lpr.get_layout_preset(key))
+                sections = list(StorefrontSection.objects.filter(page__version=self.draft).order_by("page__page_type", "order"))
+                self.assertGreater(len(sections), 3)
+                for section in sections:
+                    if not sr.get_definition(section.section_key).settings_schema:
+                        continue  # cart / listing system sections have no Inspector form by design
+                    response = self.client.get(reverse("dashboard:storefront-builder-r4-section-inspector", args=[section.pk]))
+                    self.assertEqual(response.status_code, 200, (key, section.section_key))
+                rows = [s for s in sections if s.section_key == "product_section"]
+                if rows:
+                    self.draft.refresh_from_db()
+                    response = self._post_json({"base_revision": self.draft.edit_revision, "mutation": {
+                        "type": "section.update_settings", "section_id": rows[0].pk, "patch": {"title": "عنوان ویرایش‌شده"}}})
+                    self.assertEqual(response.status_code, 200, (key, response.content))
+                    rows[0].refresh_from_db()
+                    self.assertEqual(rows[0].settings["title"], "عنوان ویرایش‌شده")

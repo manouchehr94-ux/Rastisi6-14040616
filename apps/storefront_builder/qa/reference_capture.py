@@ -233,6 +233,12 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
     for order, label in enumerate(pack.get("menu", ())):
         MenuItem.objects.create(menu=menu, title=label, display_order=order, is_active=True, destination_type="search")
 
+    for location, labels in (("footer_1", pack.get("footer_menu", ("درباره ما", "تماس با ما", "قوانین و مقررات"))),
+                             ("footer_2", pack.get("footer_menu_2", ("پیگیری سفارش", "سوالات متداول", "راهنمای خرید")))):
+        footer_menu, _ = Menu.objects.get_or_create(store=store, location=location, defaults={"title": {"footer_1": "لینک‌های مفید", "footer_2": "دسترسی سریع"}[location], "is_active": True})
+        for order, label in enumerate(labels):
+            MenuItem.objects.create(menu=footer_menu, title=label, display_order=order, is_active=True, destination_type="search")
+
     if preset_key:
         preset = lpr.get_layout_preset(preset_key)
         draft = layout_service.get_or_create_draft(store, user=owner)

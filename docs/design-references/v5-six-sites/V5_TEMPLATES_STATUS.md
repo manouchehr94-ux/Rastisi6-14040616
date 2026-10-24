@@ -8,8 +8,8 @@ header/footer variant, appearance token or palette that any Store can use and th
 |---|---|---|---|---|---|
 | 54 | `decor_sand_boutique` | Dize | `sand-olive` | `floating_card` | `centered_contact` |
 | 55 | `rose_beauty_store` | lilikacosmetics | `rose-cream` | `beauty_search_nav` (+ category-menu block, dark bar) | `marketplace_dense` |
-| 56 | `pink_beauty_gallery` | lilium-gallery | `fuchsia-gallery` | `beauty_search_nav` (fuchsia bar) | `premium_columns` |
-| 57 | `campaign_beauty_hub` | AsalBanoo | `honey-orange` | `promo_search_nav` | `premium_columns` |
+| 56 | `pink_beauty_gallery` | lilium-gallery | `fuchsia-gallery` | `beauty_search_nav` (fuchsia bar) | `marketplace_dense` |
+| 57 | `campaign_beauty_hub` | AsalBanoo | `honey-orange` | `promo_search_nav` | `marketplace_dense` |
 | 58 | `cocoa_gift_shop` | khanehshokolati | `cocoa-gold` | `chocolate_centered_search` | `chocolate_dark_columns` |
 | 59 | `neon_digital_store` | zhimunplus | `neon-navy` | `marketplace_search_first` | `dark_tech` |
 
@@ -18,7 +18,7 @@ header/footer variant, appearance token or palette that any Store can use and th
 Fonts (Estedad, Noto Sans Arabic, Lalezar — see `FONT_SUBSTITUTIONS.md`), wider content width (1800), global heading style, announcement
 strip geometry + colours + picture, floating WhatsApp / phone / back-to-top, floating-card header, centred-contact footer,
 category display modes `label_tiles` / `icon_rail` / `ring_circles` / `photo_cards` and category source `subcategories`, hero
-`clean_slider` with independent desktop / mobile ratio and an edge-to-edge width, product-row **tabs** (real categories, sub-categories or
+`clean_slider` / `duo_carousel` with independent desktop / mobile ratio and an edge-to-edge width, product-row **tabs** (real categories, sub-categories or
 sort orders; pills or underline), row glow, heading styles `plain_link` / `icon_chip`, "view all" below the items, call-to-action strip
 (button + two-colour fill), blog `editorial_cards` (date badge), image-text feature rows (registered icons), multi-banner layouts
 `duo-round` / `trio-round` / `people-4` (consultant cards) / `mosaic-5` / `panel-4` and an optional heading, several videos in one row,
@@ -52,8 +52,9 @@ copy are intentionally not shipped.
   / phone floating widgets are).
 * **AsalBanoo**: no swirl artwork on the orange bands, no product attribute bullet list beside the buy button, no FAQ block on the product
   page, branch / app-store badge footer is not reproduced, circular category rail uses the generic ring style.
-* **khanehshokolati**: wavy footer edge not built, hero shows one slide at a time (reference: two side by side), gold-bordered buy panel
-  uses the generic outlined panel, optional gift / packaging extras and the second (red) call-to-action are not built (commercial model).
+* **khanehshokolati**: the gold-bordered buy panel uses the generic outlined panel; optional gift / packaging extras and the second (red)
+  call-to-action are not built (commercial model). The hero is the generic two-up peeking slider (`duo_carousel`); the footer wave is the
+  existing `chocolate_dark_columns` wave.
 * **zhimunplus**: digital-goods facts (validity period, delivery method, licence) need catalogue / cart fields and are **not** faked; the
   illustration hero depends on the merchant's picture; testimonials are merchant-entered text (no avatar image).
 * **Evidence limit**: the saved reference HTML does not contain a usable product-page document for any site; product-page facts come from the

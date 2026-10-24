@@ -1835,7 +1835,7 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: section that doesn't read it. Keeping the key in one shared validator
 #: (rather than forking a second near-identical function) is the same
 #: reuse choice already made for every other slider-level field.
-HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide", "clean_slider")
+HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide", "clean_slider", "duo_carousel")
 
 #: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
 #: for the shared hero/image slider. ``cut`` is the historical, byte-identical
@@ -3393,6 +3393,10 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             VariantDefinition(
                 key="clean_slider", label_fa="اسلایدر تمیز (فلش و نقطه)",
                 renderer="storefront_builder/sections/hero_banner_clean.html",
+            ),
+            VariantDefinition(
+                key="duo_carousel", label_fa="اسلایدر دوتایی با نمایش اسلاید همسایه",
+                renderer="storefront_builder/sections/hero_banner_duo.html",
             ),
         ),
         default_variant="overlay", variant_setting_key="hero_style",

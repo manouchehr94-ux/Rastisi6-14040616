@@ -310,7 +310,7 @@ def _gallery_shelf(title: str, subtitle: str, source: str, limit: int = 8) -> Pr
 
 _GALLERY_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
-        "price_layout": "plain", "qty_layout": "inline", "cta_width": "auto", "cta_shape": "rounded", "cta_size": "large",
+        "price_layout": "plain", "qty_layout": "inline", "cta_width": "full", "cta_shape": "rounded", "cta_size": "large",
         "title_size": "large", "price_size": "xlarge", "info_panel": "plain",
         "show_low_stock_alert": True, "show_free_shipping_notice": True, "show_contact_buttons": True,
     }),
@@ -336,7 +336,7 @@ register_layout_preset(LayoutPresetDefinition(
     store_appearance=_complete_store_appearance(
         header="beauty_search_nav", hero="legacy_default", layout="quarters",
         product_view="carousel", card="legacy_default", badge="none", motion="subtle",
-        footer="premium_columns", bottom_nav="hidden",
+        footer="marketplace_dense", bottom_nav="hidden",
     ),
     label_fa="گالری فوشیا (زیبایی)",
     description_fa="گالری آنلاین زیبایی با هدر دو‌ردیفه و نوار ناوبری فوشیا، اسلایدر تمام‌عرض، ردیف مزایا، قفسه‌های محصول با درخشش ملایم و صفحهٔ محصول غنی با هشدار موجودی و دکمه‌های مشاوره.",
@@ -358,7 +358,7 @@ register_layout_preset(LayoutPresetDefinition(
     footer={
         "show_about": True, "show_contact": True, "show_categories": False, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
-        "show_newsletter": False, "show_copyright": True, "footer_variant": "premium_columns",
+        "show_newsletter": False, "show_copyright": True, "footer_variant": "marketplace_dense",
         "floating_whatsapp": True, "floating_back_to_top": True,
     },
     pages={
@@ -456,7 +456,7 @@ register_layout_preset(LayoutPresetDefinition(
     store_appearance=_complete_store_appearance(
         header="promo_search_nav", hero="legacy_default", layout="quarters",
         product_view="legacy_default", card="legacy_default", badge="none", motion="subtle",
-        footer="premium_columns", bottom_nav="hidden",
+        footer="marketplace_dense", bottom_nav="hidden",
     ),
     label_fa="هاب کمپینی عسلی (آرایشی)",
     description_fa="فروشگاه آرایشی کمپینی با نوار اعلان، دسته‌بندی‌های دایره‌ای، نوارهای نارنجی و عسلی، کارت‌های گرد، کارت مشاوران، ویدیو و مجله.",
@@ -477,7 +477,7 @@ register_layout_preset(LayoutPresetDefinition(
     footer={
         "show_about": True, "show_contact": True, "show_categories": True, "show_quick_links": True,
         "show_social": True, "show_trust_badges": True, "show_payment_logos": False,
-        "show_newsletter": False, "show_copyright": True, "footer_variant": "premium_columns",
+        "show_newsletter": False, "show_copyright": True, "footer_variant": "marketplace_dense",
     },
     pages={
         "home": authored_legacy_home("campaign_beauty_hub", (
@@ -569,7 +569,7 @@ def _cocoa_shelf(title: str, source: str, *, tabs: str = "", pills: bool = False
 
 _COCOA_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
-        "info_panel": "outlined", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "auto",
+        "info_panel": "outlined", "gallery_position": "end", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "auto",
         "cta_shape": "rounded", "cta_size": "large", "option_shape": "square", "title_size": "large",
         "show_low_stock_alert": True, "show_free_shipping_notice": True, "show_mobile_sticky_bar": True,
     }),
@@ -587,7 +587,7 @@ register_layout_preset(LayoutPresetDefinition(
     version="1",
     is_ready_template=True,
     store_appearance=_complete_store_appearance(
-        header="chocolate_centered_search", hero="chocolate_carousel", layout="quarters",
+        header="chocolate_centered_search", hero="legacy_default", layout="quarters",
         product_view="legacy_default", card="legacy_default", badge="none", motion="subtle",
         footer="chocolate_dark_columns", bottom_nav="four_item",
     ),
@@ -616,8 +616,8 @@ register_layout_preset(LayoutPresetDefinition(
         "home": authored_legacy_home("cocoa_gift_shop", (
             PresetSectionEntry("category_grid", settings={"title": "", "display_mode": "chocolate_story", "item_limit": 10}),
             PresetSectionEntry("hero_banner", settings={
-                "hero_style": "chocolate_carousel", "text_position": "center", "autoplay": True, "interval_ms": 4800,
-                "show_arrows": True, "show_dots": True,
+                "hero_style": "duo_carousel", "text_position": "center", "autoplay": False, "show_arrows": True, "show_dots": True,
+                "design": {"width_pct": 100},
             }),
             PresetSectionEntry("category_grid", settings={"title": "", "display_mode": "chocolate_badges", "item_limit": 12}),
             PresetSectionEntry("multi_banner", settings={
