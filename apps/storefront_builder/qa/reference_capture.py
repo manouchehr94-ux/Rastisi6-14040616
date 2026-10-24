@@ -42,12 +42,18 @@ def _read(path: Path, max_side: int = 1600, quality: int = 86) -> tuple[bytes, t
     return buffer.getvalue(), image.size
 
 
-def reference_images(site: str) -> dict[str, list[Path]]:
-    """Classify the reference capture images of a site into product-like, wide (hero/banner) and square pictures."""
+def reference_images(site: str, exclude: str = "") -> dict[str, list[Path]]:
+    """Classify the reference capture images of a site into product-like, wide (hero/banner) and square pictures.
+
+    ``exclude`` is an optional regular expression over file names that must never be used as product/hero/square pictures
+    (for instance the small line-art category icons of a site)."""
     base = REFERENCE_ROOT / site / "capture"
+    skip_extra = re.compile(exclude) if exclude else None
     products, wide, squares = [], [], []
     for path in sorted(base.rglob("*")):
         if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"} or _THUMB.search(path.name) or _SKIP.search(path.name):
+            continue
+        if skip_extra is not None and skip_extra.search(path.name):
             continue
         try:
             with Image.open(path) as image:
@@ -66,8 +72,16 @@ def reference_images(site: str) -> dict[str, list[Path]]:
     return {"products": products, "wide": wide, "squares": squares}
 
 
-def uploaded(path: Path | None, name: str, *, size=(800, 800), label: str = "", color=(220, 214, 205), max_side: int = 1600):
-    """A ``SimpleUploadedFile`` from a reference picture, or a neutral placeholder when ``path`` is ``None``."""
+def uploaded(path: Path | None, name: str, *, size=(800, 800), label: str = "", color=(220, 214, 205), max_side: int = 1600,
+             keep_alpha: bool = False):
+    """A ``SimpleUploadedFile`` from a reference picture, or a neutral placeholder when ``path`` is ``None``.
+    ``keep_alpha`` keeps a PNG's transparency (line-art icons)."""
+    if path is not None and keep_alpha and path.suffix.lower() == ".png":
+        image = Image.open(path).convert("RGBA")
+        image.thumbnail((600, 600))
+        buffer = io.BytesIO()
+        image.save(buffer, "PNG")
+        return SimpleUploadedFile(name.rsplit(".", 1)[0] + ".png", buffer.getvalue(), content_type="image/png")
     if path is not None:
         data, _ = _read(path, max_side=max_side)
         return SimpleUploadedFile(name, data, content_type="image/jpeg")
@@ -106,7 +120,8 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
     from apps.stores.services.platform_code_service import generate_unique_platform_code
 
     pack = PACKS[site]
-    images = reference_images(site) if image_mode == "reference" else {"products": [], "wide": [], "squares": []}
+    images = reference_images(site, pack.get("exclude_images", "")) if image_mode == "reference" \
+        else {"products": [], "wide": [], "squares": []}
 
     def pick(kind: str, index: int):
         pool = images.get(kind) or images["products"] or images["squares"] or images["wide"]
@@ -147,10 +162,19 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
     categories = []
     for index, (name, kind) in enumerate(pack["categories"]):
         category = Category.objects.create(store=store, name=name, slug=f"cap-cat-{index}", order=index, is_active=True)
-        path = pick(kind, index)
-        category.image = uploaded(path, f"cat-{index}.jpg", size=(640, 640), label=name)
+        path = (REFERENCE_ROOT / site / "capture" / kind[5:]) if kind.startswith("file:") and image_mode == "reference" else pick(kind, index)
+        category.image = uploaded(path, f"cat-{index}.jpg", size=(640, 640), label=name, keep_alpha=kind.startswith("file:"))
         category.save(update_fields=["image"])
         categories.append(category)
+    children: dict[int, list] = {}
+    for parent_index, rows in pack.get("children", {}).items():
+        for order, (name, kind) in enumerate(rows):
+            child = Category.objects.create(store=store, parent=categories[parent_index], name=name,
+                                            slug=f"cap-cat-{parent_index}-{order}", order=order, is_active=True)
+            path = (REFERENCE_ROOT / site / "capture" / kind[5:]) if kind.startswith("file:") and image_mode == "reference" else pick(kind, order)
+            child.image = uploaded(path, f"cat-{parent_index}-{order}.jpg", size=(640, 640), label=name, keep_alpha=kind.startswith("file:"))
+            child.save(update_fields=["image"])
+            children.setdefault(parent_index, []).append(child)
     brands = []
     for index, name in enumerate(pack.get("brands", ())):
         brand = Brand.objects.create(store=store, name=name, slug=f"cap-brand-{index}", sort_order=index, is_active=True,
@@ -162,6 +186,9 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
     products = []
     for index, spec in enumerate(pack["products"]):
         category = categories[spec.get("category", index) % len(categories)]
+        kids = children.get(spec.get("category", index) % len(categories))
+        if kids and spec.get("child") is not None:
+            category = kids[spec["child"] % len(kids)]
         product = Product.objects.create(
             store=store, vendor=vendor, category=category, brand=(brands[index % len(brands)] if brands else None),
             name=spec["name"], slug=f"cap-p-{index}", sku=f"CAP-{index:03d}", price=Decimal(spec["price"]),
@@ -192,6 +219,15 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
         item = StoryRailItem(store=store, title=category.name[:40], display_order=order, is_active=True)
         item.image = uploaded(pick("squares", order), f"story-{order}.jpg", size=(400, 400))
         item.save()
+
+    from apps.blog.models import BlogPost
+
+    for order, spec in enumerate(pack.get("posts", ())):
+        post = BlogPost(store=store, title=spec["title"], slug=f"cap-post-{site.lower()}-{order}", excerpt=spec.get("excerpt", ""),
+                        body=spec.get("body", "<p>متن مطلب.</p>"), category_label=spec.get("label", ""),
+                        published_at=timezone.now() - timezone.timedelta(days=order + 1))
+        post.cover_image = uploaded(pick(spec.get("kind", "squares"), order), f"post-{order}.jpg", size=(900, 600))
+        post.save()
 
     menu, _ = Menu.objects.get_or_create(store=store, location=Menu.Location.HEADER, defaults={"title": "منوی اصلی", "is_active": True})
     for order, label in enumerate(pack.get("menu", ())):

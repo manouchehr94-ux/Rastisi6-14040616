@@ -37,7 +37,7 @@ from apps.storefront_builder.storefront_appearance.persistence import (
     load_store_appearance_manifest,
 )
 from apps.stores.models import Store
-from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT, W4C_TOTAL_CELLS
 
 
 def _fake_exists(path_self, _orig=Path.exists):
@@ -481,8 +481,8 @@ class W4CControlFlowCardinalityTests(TestCase):
         tier2_invocations = len(self.command._planned_tier2_cells(all_keys))
         total_invocations = base_invocations + tier1_invocations + tier2_invocations
         total_cells = len(all_keys) * 12 + tier1_invocations * 1 + tier2_invocations * 1
-        self.assertEqual(total_invocations, 160)
-        self.assertEqual(total_cells, 743)
+        self.assertEqual(total_invocations, 2 * READY_TEMPLATE_COUNT + 54)  # 160 at 53 templates: two invocations per Ready Template + the fixed Tier-2/3 ones
+        self.assertEqual(total_cells, W4C_TOTAL_CELLS)
         self.assertNotEqual(total_invocations, total_cells)
 
     def test_20_w4c_functions_never_call_process_exit(self):
@@ -568,7 +568,7 @@ class W4CControlFlowCardinalityTests(TestCase):
             "_meta": {
                 "schema_version": r4_mod.W4C_MATRIX_SCHEMA_VERSION,
                 "certified_base_sha": r4_mod.W4C_CERTIFIED_BASE_SHA,
-                "total_cells_expected": 743,
+                "total_cells_expected": W4C_TOTAL_CELLS,
                 "duplicate_cells": [],
             },
             "templates": {},
@@ -576,7 +576,7 @@ class W4CControlFlowCardinalityTests(TestCase):
         aggregate = Command()._run_final_w4c_aggregator(matrix_path)
         aggregate["fail_count"] = 1
         campaign_complete = (
-            aggregate["total_cells_recorded"] == 743
+            aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS
             and not aggregate["missing_cells"]
             and not aggregate["duplicate_cells"]
         )
@@ -584,7 +584,7 @@ class W4CControlFlowCardinalityTests(TestCase):
         # the fail_count check on a full run -- assert the raising path
         # directly for a *complete* campaign with fail_count=1.
         aggregate2 = dict(aggregate)
-        aggregate2["total_cells_recorded"] = 743
+        aggregate2["total_cells_recorded"] = W4C_TOTAL_CELLS
         aggregate2["missing_cells"] = []
         aggregate2["duplicate_cells"] = []
         aggregate2["fail_count"] = 1
@@ -702,7 +702,7 @@ class W4CPartialBatchStatusTests(TestCase):
             "_meta": {
                 "schema_version": r4_mod.W4C_MATRIX_SCHEMA_VERSION,
                 "certified_base_sha": r4_mod.W4C_CERTIFIED_BASE_SHA,
-                "total_cells_expected": 743,
+                "total_cells_expected": W4C_TOTAL_CELLS,
                 "duplicate_cells": duplicate or [],
             },
             "templates": {},
@@ -714,14 +714,14 @@ class W4CPartialBatchStatusTests(TestCase):
         matrix_path = self._seeded_matrix(campaign_root, total_recorded=13, missing=["x"])
         aggregate = self.command._run_final_w4c_aggregator(matrix_path)
         campaign_complete = (
-            aggregate["total_cells_recorded"] == 743
+            aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS
             and not aggregate["missing_cells"]
             and not aggregate["duplicate_cells"]
         )
         self.assertFalse(campaign_complete)
         message = (
             f"W4C BATCH COMPLETE -- CAMPAIGN INCOMPLETE -- "
-            f"cumulative_total_cells_recorded={aggregate['total_cells_recorded']}/743"
+            f"cumulative_total_cells_recorded={aggregate['total_cells_recorded']}/{W4C_TOTAL_CELLS}"
         )
         self.assertIn("BATCH COMPLETE", message)
         self.assertIn("CAMPAIGN INCOMPLETE", message)
@@ -734,14 +734,14 @@ class W4CPartialBatchStatusTests(TestCase):
             aggregate = self.command._run_final_w4c_aggregator(matrix_path)
         except CommandError:
             self.fail("_run_final_w4c_aggregator must never itself raise for an incomplete matrix")
-        self.assertLess(aggregate["total_cells_recorded"], 743)
+        self.assertLess(aggregate["total_cells_recorded"], W4C_TOTAL_CELLS)
 
     def test_34_full_run_with_incomplete_matrix_raises_command_error(self):
         campaign_root = Path(tempfile.mkdtemp())
         matrix_path = self._seeded_matrix(campaign_root, total_recorded=13, missing=["x"])
         aggregate = self.command._run_final_w4c_aggregator(matrix_path)
         campaign_complete = (
-            aggregate["total_cells_recorded"] == 743
+            aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS
             and not aggregate["missing_cells"]
             and not aggregate["duplicate_cells"]
         )
@@ -780,10 +780,10 @@ class W4CPartialBatchStatusTests(TestCase):
                 matrix_path, key, version, occasion, intensity, viewport, "tier2", {"result": "PASS"},
             )
         aggregate = command._run_final_w4c_aggregator(matrix_path)
-        self.assertEqual(aggregate["total_cells_recorded"], 743)
+        self.assertEqual(aggregate["total_cells_recorded"], W4C_TOTAL_CELLS)
         self.assertEqual(aggregate["missing_cells"], [])
         campaign_complete = (
-            aggregate["total_cells_recorded"] == 743
+            aggregate["total_cells_recorded"] == W4C_TOTAL_CELLS
             and not aggregate["missing_cells"]
             and not aggregate["duplicate_cells"]
         )

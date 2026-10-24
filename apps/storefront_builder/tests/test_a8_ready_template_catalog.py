@@ -19,6 +19,11 @@ EXPECTED_REFERENCE_VERSIONS = {
     "pastel_kawaii_stationery": "1",
     # V5 six-site kit (54-59)
     "decor_sand_boutique": "1",
+    "rose_beauty_store": "1",
+    "pink_beauty_gallery": "1",
+    "campaign_beauty_hub": "1",
+    "cocoa_gift_shop": "1",
+    "neon_digital_store": "1",
 }
 
 EXPECTED_LATEST_VERSIONS = {
