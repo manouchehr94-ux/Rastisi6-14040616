@@ -235,8 +235,19 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         gated to the mobile breakpoint. ``x-cloak`` avoids a pre-boot flash;
         with no JS the CSS keeps it hidden (the in-flow form still works).
         {% endcomment %}
-        {% if not pdp or pdp.show_mobile_sticky_bar %}
-        <div class="pdp-satc" x-cloak aria-label="خرید سریع">
+        {% comment %}
+        V5 desktop sticky purchase bar (``show_desktop_sticky_bar``, default OFF): the SAME element/getters, shown on wide screens only
+        after the in-flow add-to-cart button has scrolled out above the viewport. ``data-satc`` is written only when the switch is on
+        (``md`` = mobile + desktop, ``d`` = desktop only) so every existing Store renders byte-identically.
+        {% endcomment %}
+        {% if not pdp or pdp.show_mobile_sticky_bar or pdp.show_desktop_sticky_bar %}
+        <div class="pdp-satc"{% if pdp.show_desktop_sticky_bar %} data-satc="{% if pdp.show_mobile_sticky_bar %}md{% else %}d{% endif %}" x-init="pdpSatcWatch($el)"{% endif %} x-cloak aria-label="خرید سریع">
+          {% if pdp.show_desktop_sticky_bar %}
+          <div class="pdp-satc-id">
+            {% with cover=gallery_slides.0 %}{% if cover and cover.type == "image" %}<img src="{{ cover.url }}" alt="" width="40" height="40" loading="lazy">{% endif %}{% endwith %}
+            <b>{{ product.name }}</b>
+          </div>
+          {% endif %}
           <div class="pdp-satc-price" aria-hidden="true">
             <span class="pdp-satc-now" x-text="formatToman(displayPrice.price)"></span>
             <span class="pdp-satc-old" x-show="displayPrice.savings > 0" x-text="formatToman(displayPrice.regular)"></span>
@@ -299,7 +310,16 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
   </div>
 </div>
 <script>
-document.addEventListener('alpine:init', () => {
+{% if pdp.show_desktop_sticky_bar %}/* desktop sticky purchase bar (only written when ``show_desktop_sticky_bar`` is on): show it while the in-flow add-to-cart button is above the viewport */
+window.pdpSatcWatch = function (el) {
+  const cta = el.closest('form').querySelector('button[type=submit]:not(.pdp-satc-btn)');
+  if (!cta || !('IntersectionObserver' in window)) { return; }
+  new IntersectionObserver((entries) => {
+    const e = entries[0];
+    el.classList.toggle('is-shown', !e.isIntersecting && e.boundingClientRect.top < 0);
+  }).observe(cta);
+};
+{% endif %}document.addEventListener('alpine:init', () => {
   Alpine.data('variantSelector', (selectorData, productData) => ({
     mode: selectorData.mode,
     axes: selectorData.axes,

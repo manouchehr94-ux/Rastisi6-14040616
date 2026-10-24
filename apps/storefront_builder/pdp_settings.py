@@ -116,6 +116,8 @@ PRODUCT_MAIN_SWITCHES = (
     ("show_low_stock_alert", "هشدار کمبود موجودی (وقتی موجودی واقعی ۱۰ عدد یا کمتر است)", False),
     ("show_free_shipping_notice", "پیام ارسال رایگان (وقتی قیمت کالا به آستانهٔ ارسال رایگان فروشگاه می‌رسد)", False),
     ("show_contact_buttons", "دکمه‌های مشاورهٔ تلفنی و واتساپ (از اطلاعات تماس فروشگاه)", False),
+    # Sticky purchase bar on wide screens: appears once the in-flow add-to-cart button has scrolled out of view (same price / stock / button state).
+    ("show_desktop_sticky_bar", "نوار خرید چسبان در دسکتاپ (پس از اسکرول از دکمهٔ خرید)", False),
     # Gallery: full-screen enlarged view (zoom button, arrows, Esc, tap-to-zoom) and swipe between pictures on touch screens.
     ("gallery_lightbox", "بزرگ‌نمایی تصویر در پنجرهٔ تمام‌صفحه و کشیدن انگشتی بین تصاویر", False),
 )
@@ -224,6 +226,11 @@ PRODUCT_DESCRIPTION_CHOICES = (
         ("boxed", "قاب با حاشیه"),
         ("soft", "زمینهٔ ملایم"),
     ), "plain"),
+    # how the tabs behave on a phone: the historical accordion, or the same horizontal tab row as on a desktop
+    ("mobile_layout", "نمایش تب‌ها در موبایل", (
+        ("accordion", "آکاردئون (پیش‌فرض)"),
+        ("tabs", "همان ردیف تب‌های افقی"),
+    ), "accordion"),
 )
 
 #: Sections the page can really supply. ``brand`` is real data too (``Product.brand``: name, name_en, logo, description, country,
@@ -251,6 +258,7 @@ _PRODUCT_DESCRIPTION_ATTRIBUTE_NAMES = {
     "tab_style": "tab-style",
     "tab_align": "tab-align",
     "panel_style": "panel-style",
+    "mobile_layout": "mobile",
 }
 
 

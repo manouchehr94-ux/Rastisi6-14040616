@@ -443,3 +443,32 @@
 .pdp-lb-prev{inset-inline-start:16px}.pdp-lb-next{inset-inline-end:16px}
 .pdp-lb-nav:dir(rtl){transform:translateY(-50%) scaleX(-1)}
 .pdp-lb-close:focus-visible,.pdp-lb-nav:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* ---- V5: the tab row stays a tab row on a phone (data-mobile="tabs"; the default is the historical accordion) ---- */
+@media(max-width:680px){
+  .pdp-tabs[data-mobile="tabs"]{flex-direction:row;flex-wrap:wrap;gap:0;margin:18px 0}
+  .pdp-tabs[data-mobile="tabs"]::after{display:block;order:1;flex:0 0 100%;margin-bottom:14px}
+  .pdp-tabs[data-mobile="tabs"] .pdp-acc-header{order:0;width:auto;display:block;border:0;border-bottom:2.5px solid transparent;border-radius:0;padding:12px 12px;background:transparent;white-space:normal;text-align:center}
+  .pdp-tabs[data-mobile="tabs"] .pdp-acc-header.active{background:transparent;border-color:var(--violet)}
+  .pdp-tabs[data-mobile="tabs"] .pdp-acc-header::after{display:none}
+  .pdp-tabs[data-mobile="tabs"] .pdp-tab-panel{order:2;flex:0 0 100%;padding:0}
+}
+
+/* V5 desktop sticky purchase bar — only when the switch writes data-satc (md / d). Hidden until the in-flow button scrolls out
+   above the viewport (JS toggles .is-shown); on phones the existing mobile rules apply and a desktop-only bar stays hidden. */
+@media(min-width:681px){
+  .pdp-satc[data-satc]{display:flex;align-items:center;justify-content:center;gap:28px;position:fixed;z-index:90;inset-inline:0;bottom:0;padding:12px 24px;background:var(--card,#fff);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(15,23,42,.10);direction:rtl;transform:translateY(110%);visibility:hidden;transition:transform .25s ease,visibility 0s linear .25s}
+  .pdp-satc[data-satc].is-shown{transform:none;visibility:visible;transition:transform .25s ease}
+  .pdp-satc[data-satc] .pdp-satc-id{display:flex;align-items:center;gap:10px;min-width:0;max-width:34%;margin-inline-end:auto}
+  .pdp-satc[data-satc] .pdp-satc-id img{width:40px;height:40px;border-radius:6px;object-fit:var(--img-fit,cover);flex:0 0 auto}
+  .pdp-satc[data-satc] .pdp-satc-id b{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pdp-satc[data-satc] .pdp-satc-price{display:flex;flex-direction:row;align-items:baseline;gap:10px}
+  .pdp-satc[data-satc] .pdp-satc-now{font-size:18px;font-weight:900;color:var(--ink)}
+  .pdp-satc[data-satc] .pdp-satc-old{font-size:13px;color:var(--muted);text-decoration:line-through}
+  .pdp-satc[data-satc] .pdp-satc-btn{flex:0 1 320px;height:46px;font-size:15px}
+  .pdp-satc[data-satc] .pdp-satc-btn:disabled{background:var(--disabled-bg,#e5e7eb);color:var(--disabled-ink,#6b7280);border-color:var(--disabled-bg,#e5e7eb);box-shadow:none;cursor:not-allowed}
+}
+@media(max-width:680px){
+  .pdp-satc[data-satc="d"]{display:none}
+  .pdp-satc[data-satc] .pdp-satc-id{display:none}
+}

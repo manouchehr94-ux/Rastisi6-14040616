@@ -111,9 +111,9 @@ class SettingsVocabularyTests(SimpleTestCase):
         # package-1 switches are all ON (everything the page showed stays shown); the three V5 six-site-kit purchase-support blocks are OFF
         # (an existing Store never gains them) and render nothing at all unless a merchant / recipe switches them on
         self.assertEqual({k for k, _l, default in pdp_settings.PRODUCT_MAIN_SWITCHES if default is not True},
-                         {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox"})
+                         {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox", "show_desktop_sticky_bar"})
         self.assertTrue(all(default is False for k, _l, default in pdp_settings.PRODUCT_MAIN_SWITCHES
-                            if k in {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox"}))
+                            if k in {"show_low_stock_alert", "show_free_shipping_notice", "show_contact_buttons", "gallery_lightbox", "show_desktop_sticky_bar"}))
         self.assertEqual({key: d for key, _l, _c, d in pdp_settings.PRODUCT_DESCRIPTION_CHOICES}["layout_mode"], "tabs")
 
     def test_schema_fields_mirror_the_vocabulary_exactly(self):
@@ -288,6 +288,20 @@ class ProductMainControlsTests(_PdpBase):
         self.assertRegex(html, r'<div class="qty" x-data="\{ qty: 1 \}" hidden>')
         self.assertIn("pdp-actions", html)
         self.assertIn('type="submit" class="btn btn-primary"', html)
+
+    def test_desktop_sticky_bar_is_off_by_default_and_reuses_the_one_form_when_on(self):
+        html = self._preview()
+        self.assertNotIn("data-satc", html)
+        self.assertIn('class="pdp-satc" x-cloak', html, "the historical mobile bar markup is unchanged")
+        self._update(self.main, {"show_desktop_sticky_bar": True})
+        html = self._preview()
+        self.assertIn('data-satc="md"', html)
+        self.assertEqual(html.count(f'hx-post="{reverse("cart:add", args=[self.product.slug])}"'), 1, "still one real add-to-cart form")
+        self._update(self.main, {"show_mobile_sticky_bar": False})
+        html = self._preview()
+        self.assertIn('data-satc="d"', html)
+        self._update(self.main, {"show_desktop_sticky_bar": False})
+        self.assertNotIn("pdp-satc", self._preview(), "both switches off renders no bar")
 
     def test_option_style_chips_switches_the_swatch_branch_off_for_colours(self):
         self._update(self.main, {"option_style": "chips"})
@@ -549,6 +563,13 @@ class ProductDescriptionModesTests(_PdpBase):
         self.assertEqual((attrs["tab-style"], attrs["tab-align"], attrs["panel-style"]), ("pills", "center", "boxed"))
         self._update(self.desc, {"tab_style": "underline", "tab_align": "start", "panel_style": "plain"})
         self.assertEqual(self._tabs(self._preview()).keys() & {"tab-style", "tab-align", "panel-style"}, set())
+
+    def test_mobile_layout_attribute_is_written_only_for_tabs_and_bad_values_fall_back(self):
+        self.assertNotIn("mobile", self._tabs(self._preview()))
+        self._update(self.desc, {"mobile_layout": "tabs"})
+        self.assertEqual(self._tabs(self._preview())["mobile"], "tabs")
+        self.assertEqual(pdp_settings.resolve_product_description_view({"mobile_layout": "nope"})["mobile_layout"], "accordion")
+        self.assertNotIn(("mobile", "accordion"), pdp_settings.resolve_product_description_view({})["attrs"])
 
     def test_one_revision_per_edit_undo_redo_and_refusal_of_bad_input(self):
         start = self._revision()
