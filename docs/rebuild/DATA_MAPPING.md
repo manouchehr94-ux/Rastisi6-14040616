@@ -96,6 +96,24 @@ bundle/
 7. **رسانه:** مسیرها نسبت به `MEDIA_ROOT` و با رد `..`/مطلق/backslash؛ هر فایل با sha256 بازبینی می‌شود؛ فایل موجود با محتوای متفاوت هرگز بازنویسی نمی‌شود (`media.conflict` → abort). تصاویر با Pillow decode می‌شوند.
 8. `save()` سفارشی مدل‌ها و signalهای قیمت‌گذاری در حالت خام اجرا نمی‌شوند (`LayoutVersion.save` در حالت عادی شش صفحه‌ی خودکار می‌سازد که با صفحات bundle هم‌پوشان می‌شد)؛ برای همین `apps/catalog/signals.py` اکنون `raw=True` را نادیده می‌گیرد (رفتار معمول `loaddata`، تغییری برای مسیر عادی ندارد).
 
+## ۴ب. دو دیتابیس مستقل با PK تکراری (`build_demo_bundle`)
+
+قاعده‌ی بند ۴-۱ («کلیدها حفظ می‌شوند») فقط برای یک دیتابیس منبع است. برای دو SQLite مستقل، مبدل قبل از ساخت bundle یک نگاشت **قطعی و یکنواخت** اعمال می‌کند:
+
+| عنصر | قاعده |
+|---|---|
+| منبع اول (`demo_v5`) | offset = 0 (کلیدها دقیقاً مثل اصل) |
+| منبع دوم (`demo_arch02`) | offset = `stride` ؛ `stride` = کوچک‌ترین توان ۱۰ بزرگ‌تر از بزرگ‌ترین کلید هر دو منبع و ≥ ۱٬۰۰۰٬۰۰۰ |
+| کلید اصلی هر ردیف | `pk + offset` |
+| FK به ردیف‌های bundle و M2M (`Product.tags`) | همان offset (FK به Store را importer به Store مقصد می‌برد) |
+| JSON صفحه‌ساز (`header/footer/appearance_config`، `template_provenance`، `template_baseline_snapshot`، `page_appearance_overrides`، `settings` Section/Container/Cell) | هر مقدارِ id: `product_ids`، `category_ids`، `brand_ids`، `collection_ids`، `menu_id`، `media_asset_id`، `image_media_asset_id`، `campaign_media_asset_id`، `desktop_asset_id`، `mobile_asset_id`، `image_asset_id`، `content_page_id`؛ `destination_id` فقط اگر `destination_type ∈ {category, product, brand, collection}`؛ `source_id` فقط اگر `data_source ∈ {category, brand, collection}` یا `auto_rule ∈ {by_category, by_brand, by_collection}`؛ `source.manual_ids` طبق `kind` |
+| `ProductVariant.combination_key` (مثلاً `"12-45"` = شناسه‌های مرتب‌شده‌ی گزینه‌ها) | از شناسه‌های جابه‌جا‌شده بازسازی می‌شود |
+| کلید ناشناسِ شبیه شناسه | توقف با مسیر دقیق؛ فقط با `--map-json-key` / `--map-json-list-key` / `--ignore-json-key` |
+| رسانه‌ی هم‌مسیر | همان بایت = مشترک؛ بایت متفاوت = تغییر نام `name--demo_arch02.ext` و بازنویسی ستون تصویر |
+| تاریخچه‌ی ویرایش Studio (`StorefrontEditHistoryEntry`، undo/redo نشست) | منتقل نمی‌شود؛ نسخه‌های draft/published/archived همگی منتقل می‌شوند |
+
+چرا offset یکنواخت؟ نگاشت به وجودِ ردیف مرجع وابسته نیست، پس ارجاعِ از قبل شکسته در منبع، شکسته می‌ماند (نه اینکه به ردیف دیگری اشاره کند). اثبات درستی: (۱) `assert_lossless` — هیچ فیلدی جز ستون‌های id تغییر نمی‌کند و شمارش ردیف‌ها ثابت است؛ (۲) تعداد ارجاع‌های JSON شکسته پیش/پس از نگاشت برابر است؛ (۳) validator؛ (۴) import دو‌باره‌ی scratch بدون تغییر؛ (۵) **رندر همه‌ی صفحات از منبع و از import برابر است**.
+
 ## ۵. آنچه عمداً منتقل نمی‌شود
 
 کاربران و رمزها، مشتریان، آدرس‌ها، سبدها، سفارش‌ها/پرداخت‌ها/مرجوعی، SMS/اعلان‌ها/کمپین، اشتراک و صورتحساب، لاگ‌های حسابرسی، تاریخچه‌ی ویرایش Studio (`StorefrontEditHistoryEntry`)، نشست‌ها. (دموها داده‌ی مشتری واقعی ندارند؛ با افزودن مدل‌ها به `contract.MODEL_SPECS` می‌توان دامنه را گسترش داد.)

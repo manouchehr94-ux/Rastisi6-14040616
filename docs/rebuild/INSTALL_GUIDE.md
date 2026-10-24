@@ -80,6 +80,8 @@ sudo -u rastisi bash /srv/rastisi/rebuild/deployment/scripts/healthcheck.sh
 
 ## ۸. ورود داده‌ی دو دمو (نیازمند bundle)
 
+bundle را قبلاً روی لپ‌تاپ با `build_demo_bundle` از دو SQLite و دو ZIP بسازید ([`OFFLINE_WINDOWS_GUIDE.md`](OFFLINE_WINDOWS_GUIDE.md)). فقط پوشه‌ی نهایی به سرور منتقل می‌شود؛ SQLite و ZIP اصلی لازم نیست روی سرور بروند.
+
 ```bash
 # bundle را به سرور منتقل کنید (scp/rsync)، سپس:
 sudo -u rastisi python /srv/rastisi/manage.py validate_demo_bundle /srv/rastisi_bundle     # باید PASS باشد

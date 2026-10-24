@@ -13,7 +13,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from . import contract
+from . import contract, remap
 from .files import UnsafeMediaPath, file_fields, model_for, safe_relative_media_path, sha256_file
 from .report import Report
 
@@ -36,22 +36,8 @@ def load_records(bundle_dir: Path, key: str) -> list[dict]:
 
 
 def _walk_json_refs(value, found):
-    if isinstance(value, dict):
-        for k, v in value.items():
-            target = contract.JSON_REFERENCE_KEYS.get(k)
-            if target is not None:
-                ids = v if isinstance(v, list) else [v]
-                for item in ids:
-                    if isinstance(item, bool):
-                        continue
-                    if isinstance(item, int) and item > 0:
-                        found.append((k, target, item))
-                    elif isinstance(item, str) and item.isdigit() and int(item) > 0:
-                        found.append((k, target, int(item)))
-            _walk_json_refs(v, found)
-    elif isinstance(value, list):
-        for item in value:
-            _walk_json_refs(item, found)
+    for key, target, pk in remap.json_refs(value):
+        found.append((key, target, pk))
 
 
 def validate_bundle(
@@ -60,6 +46,7 @@ def validate_bundle(
     targets: dict | None = None,
     strict_expected: bool = False,
     decode_images: bool = True,
+    strict_json_refs: bool = False,
 ) -> Report:
     bundle_dir = Path(bundle_dir)
     report = Report(f"bundle {bundle_dir}")
@@ -93,7 +80,7 @@ def validate_bundle(
     for key, entry in stores.items():
         pks_by_store[key] = _validate_store(
             bundle_dir, key, entry, report, targets=targets, strict_expected=strict_expected,
-            decode_images=decode_images,
+            decode_images=decode_images, strict_json_refs=strict_json_refs,
         )
 
     # Primary keys are preserved => they must not collide between stores of one bundle.
@@ -117,7 +104,7 @@ def validate_bundle(
     return report
 
 
-def _validate_store(bundle_dir, key, entry, report, *, targets, strict_expected, decode_images):
+def _validate_store(bundle_dir, key, entry, report, *, targets, strict_expected, decode_images, strict_json_refs=False):
     pks: dict[str, set] = defaultdict(set)
     data_path = bundle_dir / contract.STORES_DIR / key / contract.DATA_FILE
     if not data_path.is_file():
@@ -152,7 +139,7 @@ def _validate_store(bundle_dir, key, entry, report, *, targets, strict_expected,
     _check_secrets(key, by_label, report)
     _check_media(bundle_dir, key, entry, by_label, report, decode_images=decode_images)
     _check_fk_closure(key, by_label, pks, report)
-    _check_json_refs(key, by_label, pks, report)
+    _check_json_refs(key, by_label, pks, report, strict=strict_json_refs)
     _check_studio(key, by_label, report)
     _check_singletons(key, by_label, report)
     _check_expected(key, by_label, entry, targets, strict_expected, report)
@@ -172,6 +159,28 @@ def _check_secrets(key, by_label, report):
                         report.fail("secret.in_bundle", f"{label} pk={rec['pk']} carries credential field {name!r}", key)
     if not leaks:
         report.ok("secret.none", "no credential-bearing field carries a value", key)
+
+
+def dangling_json_refs(records: list[dict]) -> list[tuple[str, int, str, str, int]]:
+    """Known Studio JSON id references that do not resolve inside ``records``.
+
+    Returns ``(model label, pk, field, json key, referenced pk)`` tuples. Used by
+    the converter to prove a renumbering introduced no NEW broken reference
+    (a design that was already dangling in the source stays exactly as it was).
+    """
+    pks: dict[str, set] = defaultdict(set)
+    for rec in records:
+        pks[_canonical(rec["model"])].add(rec["pk"])
+    out = []
+    for rec in records:
+        label = _canonical(rec["model"])
+        for fname in _JSON_CONFIG_FIELDS.get(label, ()):
+            found: list = []
+            _walk_json_refs(rec["fields"].get(fname), found)
+            for jkey, target, pk in found:
+                if pk not in pks[target]:
+                    out.append((label, rec["pk"], fname, jkey, pk))
+    return out
 
 
 def _canonical(label: str) -> str:
@@ -273,7 +282,8 @@ def _check_fk_closure(key, by_label, pks, report):
         report.ok("fk.closed", "every foreign key points to a row of the same store", key)
 
 
-def _check_json_refs(key, by_label, pks, report):
+def _check_json_refs(key, by_label, pks, report, strict=False):
+    emit = report.fail if strict else report.warn
     missing = 0
     for label, fields in _JSON_CONFIG_FIELDS.items():
         for rec in by_label.get(label, []):
@@ -284,13 +294,13 @@ def _check_json_refs(key, by_label, pks, report):
                     if pk not in pks[target]:
                         missing += 1
                         if missing <= 20:
-                            report.warn(
+                            emit(
                                 "json.ref_missing",
                                 f"{label} pk={rec['pk']}.{fname}[{jkey}] -> {target} pk={pk} not in this store (fails closed at render time)",
                                 key,
                             )
     if missing:
-        report.warn("json.ref_missing.total", f"{missing} Studio JSON reference(s) do not resolve", key)
+        emit("json.ref_missing.total", f"{missing} Studio JSON reference(s) do not resolve", key)
     else:
         report.ok("json.refs", "all Studio JSON id references resolve inside the store", key)
 

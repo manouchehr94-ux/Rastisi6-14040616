@@ -13,13 +13,23 @@ from django.apps import apps
 from django.db import models
 
 
+def long_path(path: Path) -> Path:
+    """On Windows, lift the 260-character MAX_PATH limit (Persian file names get long) with the ``\\\\?\\`` prefix."""
+    if os.name != "nt":
+        return Path(path)
+    resolved = str(Path(path).resolve())
+    if resolved.startswith("\\\\?\\"):
+        return Path(resolved)
+    return Path("\\\\?\\" + resolved)
+
+
 class UnsafeMediaPath(ValueError):
     pass
 
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
-    with open(path, "rb") as handle:
+    with open(long_path(path), "rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -50,6 +60,7 @@ def model_for(label: str):
 
 
 def copy_atomic(src: Path, dst: Path) -> None:
+    src, dst = long_path(src), long_path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(dst.parent), prefix=".bundle-")
     os.close(fd)

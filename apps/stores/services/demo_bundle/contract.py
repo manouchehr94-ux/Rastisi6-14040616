@@ -96,18 +96,8 @@ MODEL_SPECS: tuple[ModelSpec, ...] = (
 
 SPEC_BY_LABEL = {spec.label: spec for spec in MODEL_SPECS}
 
-#: Keys inside any Studio JSON blob (section/header/footer/appearance settings)
-#: that hold primary keys of other bundle rows, and the model they point at.
-JSON_REFERENCE_KEYS: dict[str, str] = {
-    "product_ids": "catalog.Product",
-    "category_ids": "catalog.Category",
-    "brand_ids": "catalog.Brand",
-    "collection_ids": "catalog.MerchantCollection",
-    "menu_id": "content.Menu",
-    "media_asset_id": "content.MediaAsset",
-    "image_media_asset_id": "content.MediaAsset",
-    "campaign_media_asset_id": "content.MediaAsset",
-}
+# Id-bearing keys inside Studio JSON are defined once, in remap.py (used by the
+# converter to rewrite them and by the validator to resolve them).
 
 #: The six Studio page types the demos must provide (see storefront_builder).
 REQUIRED_PAGE_TYPES = ("home", "product_detail", "listing", "collection", "search", "cart")

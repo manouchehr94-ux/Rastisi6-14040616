@@ -74,10 +74,33 @@
 4. هیچ endpoint سلامت وجود نداشت ← `rastisi_healthcheck` + `healthcheck.sh`.
 5. nginx: `http2 on;` در nginx 1.24 (Ubuntu 24.04) ناشناخته است ← `listen 443 ssl http2;`. و نبودِ `include mime.types` در پیکربندیِ آزمایشی باعث `text/plain` برای webp شد → در راهنما/اسکریپت تست لحاظ شد.
 
+## F. افزوده‌ی دوم: مبدل آفلاین دو SQLite مستقل + دو ZIP رسانه (`build_demo_bundle`)
+
+ورودی: چهار فایل مالک پروژه (`demo_v5.sqlite3` + `demo_v5_media.zip`، `demo_arch02.sqlite3` + `demo_arch02_media.zip`) — **در دسترس من نیستند ⇒ اجرای واقعی BLOCKED**. همه‌ی ردیف‌های زیر روی **داده‌ی ساختگیِ هم‌ساختار با PKهای عمداً تکراری** اجرا شده‌اند و ثابت می‌کنند ابزار درست است، نه اینکه دموی واقعی درست است.
+
+| # | بررسی | وضعیت | دستور | مدرک / محدودیت |
+|---|---|---|---|---|
+| F1 | تست‌های مبدل (SQLite) | **PASS** | `manage.py test apps.stores.tests.test_demo_bundle_converter` | `Ran 58 tests … OK`: دو SQLite مستقل با PK تکراری (تست `test_fixture_sources_really_collide`)، تبدیل، import، idempotency، رسانه، صفحه‌ی محصول، Studio |
+| F2 | همان‌ها روی PostgreSQL | **PASS (محدود)** | `DATABASE_URL=… manage.py test …converter` | `Ran 130 (با test_demo_bundle) … OK (skipped=39)`؛ ۳۹ تستی که منبع را با dump دیتابیس تست SQLite می‌سازند روی PG عمداً skip می‌شوند؛ مسیر import روی PG جدا در F8 اجرا شد |
+| F3 | همه‌ی انواع ارجاع بازنویسی می‌شوند | **PASS** | `test_every_reference_kind_is_rewritten_in_every_version` | `product_ids, source_id, category_ids, brand_ids, collection_ids, menu_id, media_asset_id, destination_id` در هر سه نسخه‌ی Studio (archived/published/draft)؛ FK محصول→دسته/برند، HeroSlide→asset/product؛ `combination_key` بازسازی می‌شود |
+| F4 | هیچ نسخه/قالب/برندینگ/رسانه حذف نمی‌شود | **PASS** | `test_nothing_is_dropped`، `test_imported_files_match_the_sources_byte_for_byte` | ۳ نسخه‌ی Studio، ۱۸ صفحه، HeroSlide، ۲ MediaAsset، ShopSettings/FooterSettings، ۲ منو، واریانت‌ها؛ فایل‌های import‌شده بایت‌به‌بایت برابر ZIP |
+| F5 | تضاد مسیر رسانه | **PASS** | `test_same_path_different_bytes_is_renamed_and_rewritten`، `test_identical_file_in_both_sources_is_shared_not_duplicated` | مسیر یکسان + بایت متفاوت ⇒ `shared-banner--demo_arch02.png` و ستون بازنویسی؛ بایت یکسان ⇒ یک فایل |
+| F6 | ZIP: wrapper، `\`، NFD، رمزگذاری قدیمی OEM، junk، امنیت | **PASS** | `ConvertMediaTests`، `MediaZipUnitTests` (۷) | zip-slip/مسیر مطلق/درایو/symlink رد؛ ZIP ناقص ⇒ **BLOCKED** و هیچ bundleای ساخته نمی‌شود |
+| F7 | امنیت و پاکیزگی | **PASS** | `test_convert_passes_and_originals_are_untouched`، `test_project_database_is_never_queried`، `test_secrets_never_reach_the_bundle` | sha256 چهار فایل ورودی قبل=بعد؛ **۰ query** روی دیتابیس پروژه؛ اسرار در bundle نیست |
+| F8 | PostgreSQL E2E با bundle تبدیل‌شده | **PASS** | `migrate` → `import_demo_bundle` ×۲ → `verify_demo_integrity --http` روی PG 16 | هر دو فروشگاه (offset 1٬۰۰۰٬۰۰۰ برای دوم): ۱۴۷۵+۱۴۵۷ ردیف؛ import دوم `media_copied=0`؛ verify **PASS** (۵۵ URL پاسخ ۲۰۰ برای هر فروشگاه) |
+| F9 | **E2E واقعی‌نما:** دو SQLite مستقل از seed مخزن (قالب‌های `warm_boutique` و `premium_leather`، PKهای یکسان، ZIP با/بدون wrapper) | **PASS** | `make_sample_sources.py` ← `build_demo_bundle` (بررسی کامل) | exit 0. فروشگاه دوم: ۱۴۵۷ ردیف، ۲٬۶۲۷ FK، ۳۶ ارجاع JSON، ۲۰۶ `combination_key` بازنگاشت شد. بررسی scratch: import دوم بدون تغییر؛ integrity PASS؛ **۶۱ صفحه برای هر فروشگاه از دیتابیس اصلی و از bundle import‌شده عیناً برابر** (متن، لینک، تصویر، CSS تم، ساختار) |
+| F10 | قطعی‌بودن | **PASS** | دو بار اجرای مستقل (venv تازه) | `data.json` هر دو فروشگاه، همه‌ی رسانه و manifest (بدون زمان) بایت‌به‌بایت یکسان |
+| F11 | حساسیت تست‌ها (mutation) | **PASS** | تخریب عمدی remap | حذف بازنویسی JSON ⇒ ۳۰ تست FAIL و مبدل خودش `remap.dangling_changed` می‌دهد؛ حذف بازسازی `combination_key` ⇒ ۲ تست FAIL |
+| F12 | کلید ناشناس، منبع قدیمی‌تر، migration ناشناخته، چند فروشگاه | **PASS** | `ConvertSourceTests` (۱۱) | کلید `*_id` ناشناس ⇒ FAIL با مسیر (و `extra_scalar_keys`/`ignore_keys` اعمال می‌شود)؛ دیتابیس قدیمی‌تر ⇒ migration فقط روی **کپی** و اصل بی‌تغییر؛ migration ناشناخته ⇒ رد؛ دو فروشگاه دارای محصول ⇒ نیازمند slug صریح |
+| F13 | راه‌انداز یک‌دستوری با venv تازه | **PASS (Linux)** | `build_bundle_offline.py --venv <جدید> …` | venv ساخته، requirements نصب، اجرا، `BUNDLE READY`؛ ≈ ۲ دقیقه |
+| F14 | **اجرا روی Windows** (`.ps1`، `.bat`، مسیرهای طولانی/فارسی، کنسول cp1252) | **BLOCKED** | — | Windows و PowerShell در دسترس نیست: اسکریپت‌ها اجرا/syntax-check نشدند. منطق اصلی پایتونِ مستقل از OS است و فقط روی Linux تست شده؛ پیشوند `\\?\` و `reconfigure(errors="replace")` طراحی شده ولی روی Windows تأییدنشده |
+| F15 | مصرف داده‌ی واقعی مالک | **BLOCKED – MISSING INPUT** | — | چهار فایل واقعی در محیط نیست |
+
 ## E. آنچه BLOCKED است (فهرست صریح)
 
 | مورد | علت |
 |---|---|
+| اجرای مبدل روی چهار فایل واقعی (SQLite + ZIP) و `.ps1`/`.bat` روی Windows | فایل‌ها و Windows در دسترس نیستند (F14/F15) |
 | وجود/تعداد ۱۰۰ محصول، ۳۰۱ تصویر، ۱۲۶ صفحه، ۳۳۵ فایل رسانه‌ی واقعی دو دمو | داده‌ی اصلی در Git نیست |
 | تطابق بصری با دموهای اصلی | همان |
 | ShopSettings/برندینگ/لوگو/رنگِ اصلی هر دمو | همان |

@@ -6,6 +6,12 @@
 - bundle داده (خارج از Git) نیز بدون اسرار است: ستون‌های اعتبارنامه‌ی پیامک (`melipayamak_*`, `kavenegar_api_key`, `smsrasti_device_token`) از `ShopSettings` در export حذف می‌شوند و validator هر bundle حاوی مقدار غیرخالی چنین فیلدی را رد می‌کند (تست: `test_credentials_on_shopsettings_are_dropped_at_export`، `test_validator_rejects_a_bundle_that_carries_credentials`).
   - این یافته در حین کار کشف شد: `ShopSettings` ستون‌های اعتبارنامه‌ی پیامک را (به‌صورت متن ساده) دارد. در نصب تازه باید دوباره از پنل وارد شوند.
 
+### داده‌ی خصوصی ورودی/خروجی مبدل
+- SQLite و ZIP رسانه‌ی اصلی، پوشه‌ی کاری و bundle **هیچ‌وقت** نباید commit شوند؛ `.gitignore` الگوهای `*.sqlite3`، `*_media.zip`، `rastisi-demo-bundle/`، `rebuild-out/` را می‌بندد. ZIP نهایی (`build_release_zip.py`) فقط فایل‌های ردیابی‌شده‌ی Git را می‌گیرد و bundle را جدا (`--bundle`) و پس از اعتبارسنجی می‌افزاید.
+- مبدل: فایل‌های اصلی فقط‌خواندنی‌اند (snapshot + migrate روی کپی)؛ دیتابیس پروژه‌ی `db.sqlite3` لمس نمی‌شود (تست: صفر query روی دیتابیس پیش‌فرض)؛ اسرار (`melipayamak_*`، `kavenegar_api_key`، `smsrasti_device_token` و هر ستون با نام شامل `password|secret|token|api_key|credential`) نه خوانده می‌شود نه می‌نویسد؛ کاربران/مشتریان/سفارش‌ها خوانده نمی‌شود؛ هیچ رمزی ساخته نمی‌شود.
+- ZIP رسانه: zip-slip، مسیر مطلق/درایو، symlink، عضو رمزگذاری‌شده، بمب فشرده‌سازی (نسبت > ۱۰۰۰ برای عضو > ۵۰MB) و بیش از ۴۰۰٬۰۰۰ عضو/۱۶GB رد می‌شود.
+- بررسی کامل فقط در پوشه‌ی کاریِ موقت و با `DJANGO_SQLITE_PATH` اجرا می‌شود؛ پرچم `--scratch-copy-confirmed` در `render_store_signatures` فقط روی snapshot موقت منبع استفاده می‌شود.
+
 ## ۲. دو حساب نصب (تنها دو حساب)
 | حساب | نقش | دسترسی |
 |---|---|---|

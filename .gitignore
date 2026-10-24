@@ -68,3 +68,9 @@ semantic-review/
 # committed reusable runner is tools/storefront_builder_r4_qa/w3_design_lab_qa.mjs)
 _w3_qa_setup.py
 _w3_run_browser_qa.sh
+
+# Private source data and conversion outputs: NEVER commit
+*_media.zip
+rebuild-out/
+rastisi-demo-bundle/
+.venv-rebuild/
