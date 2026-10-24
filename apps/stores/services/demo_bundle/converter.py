@@ -107,6 +107,44 @@ def _rewrite_file_values(records: list[dict], rename: dict[str, str]) -> None:
                 rec["fields"][name] = rename[value]
 
 
+MISSING_BLOG_COVERS_FILE = "MISSING_SOURCE_BLOG_COVERS.json"
+
+
+def _omit_unavailable_blog_covers(
+    records: list[dict], refs: list[tuple[str, str, int, str]], reasons: dict[str, str],
+) -> list[dict]:
+    """Omit ONLY broken blog-cover pointers from the portable bundle.
+
+    The original SQLite is never edited.  BlogPost.has_available_cover already
+    hides these missing files in the source UI, so the destination keeps the
+    same fallback rendering without inventing pictures. A path is eligible only
+    if EVERY reference to it is a BlogPost.cover_image; other missing media
+    remain BLOCKED. Originals supplied through --extra-media-dir are recovered
+    before this function and are therefore never omitted.
+    """
+    owners: dict[str, list[tuple[str, int, str]]] = {}
+    for rel, label, pk, field_name in refs:
+        owners.setdefault(rel, []).append((label, pk, field_name))
+    eligible = {
+        rel for rel in reasons
+        if owners.get(rel) and all(label.lower() == "blog.blogpost" and field == "cover_image"
+                                   for label, _, field in owners[rel])
+    }
+    audit = []
+    for rec in records:
+        if rec["model"].lower() != "blog.blogpost":
+            continue
+        rel = rec["fields"].get("cover_image")
+        if rel in eligible:
+            rec["fields"]["cover_image"] = None
+            audit.append({
+                "model": "blog.BlogPost", "pk": rec["pk"], "field": "cover_image",
+                "original_missing_path": rel, "source_recovery_error": reasons[rel],
+                "action": "cleared_unavailable_reference_in_export_only",
+            })
+    return audit
+
+
 def convert(
     sources: list[SourceSpec],
     out_dir: Path,
@@ -223,6 +261,7 @@ def convert(
         missing: dict[str, list[dict]] = {}
         conversion_notes: dict[str, dict] = {}
         provenance: dict[str, list[dict]] = {}
+        omitted_blog_covers: dict[str, list[dict]] = {}
         for key in keys:
             zf = zips[key]
             refs = collected[key].file_refs
@@ -238,6 +277,23 @@ def convert(
                 wanted += [rel for rel in sorted(rooted) if rel not in set(wanted)]
             absent = sorted(rel for rel in referenced if zf.info_for(rel) is None)
             recovered, reasons = _recover_missing(zf, collected[key].records, refs, absent, options)
+            # A legacy article may point to an uploaded cover whose bytes were
+            # ALREADY missing from the source. Preserve the article and source
+            # database, remove only the unrenderable pointer from exported data,
+            # and write a per-file audit. This is not a global validator bypass.
+            omitted = _omit_unavailable_blog_covers(remapped[key], refs, reasons)
+            omitted_blog_covers[key] = omitted
+            if omitted:
+                omitted_paths = {row["original_missing_path"] for row in omitted}
+                refs = [row for row in refs if row[0] not in omitted_paths]
+                referenced = {rel for rel, *_ in refs}
+                wanted = [rel for rel in wanted if rel not in omitted_paths]
+                reasons = {rel: reason for rel, reason in reasons.items() if rel not in omitted_paths}
+                report.warn(
+                    "media.missing_blog_covers_omitted",
+                    f"{len(omitted)} missing legacy BlogPost cover reference(s) cleared from export only; "
+                    f"article content retained; see {MISSING_BLOG_COVERS_FILE}", key,
+                )
             log(f"[{key}] media recovery: {len(recovered)} recovered/regenerated, {len(reasons)} unrecoverable")
             missing_refs = set(reasons)
             for rel, label, pk, fname in refs:
@@ -290,6 +346,13 @@ def convert(
                 report.warn("media.missing_in_zip", f"{len(missing_refs)} referenced file(s) are not in the ZIP", key)
             result.sources[key]["rename_map"] = rename
 
+        if any(omitted_blog_covers.values()):
+            (staging / MISSING_BLOG_COVERS_FILE).write_text(
+                json.dumps({
+                    "policy": "only missing legacy blog covers; source databases untouched; no replacement image",
+                    "stores": omitted_blog_covers,
+                }, ensure_ascii=False, indent=2), encoding="utf-8",
+            )
         _report_provenance(report, provenance)
         (staging / PROVENANCE_FILE).write_text(
             json.dumps(provenance_document(provenance), ensure_ascii=False, indent=1), encoding="utf-8")
