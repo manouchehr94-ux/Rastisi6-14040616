@@ -121,6 +121,9 @@ class CapabilityRegistryIsTheSourceOfTruthTests(SimpleTestCase):
             "hero_banner": 1, "image_slider": 1, "multi_banner": 1, "image_text": 2,
             # V5 «عکس لینک‌دار»: border / radius / shadow / spacing + the image fit and focal point (no background, no copy)
             "linked_image": 12,
+            # V5 PDP package 1: the two product-page sections reuse the Design Block (frame / text / buttons / price / gap / image
+            # controls on product_main; frame / text on product_description) — no surface colour, their markup has no surface marker
+            "product_main": 21, "product_description": 13,
         }
         actual = {d.key: len(design_block.applicable_properties(d.key)) for d in _design_capable()}
         self.assertEqual(actual, expected)

@@ -322,7 +322,11 @@ def _clean_field_value(field: SettingsField, raw_value: object) -> object:
 
     if field.field_type == "choice":
         allowed_values = {value for value, _label in field.choices}
-        if raw_value not in allowed_values:
+        try:
+            is_allowed = raw_value in allowed_values
+        except TypeError:   # an unhashable value (list / object) can never be one of the closed choices — refuse it, never crash
+            is_allowed = False
+        if not is_allowed:
             raise SettingsSchemaError(
                 f"{field.key!r} must be one of {sorted(allowed_values)!r} (got {raw_value!r})",
                 merchant_message=f"مقدار انتخاب‌شده برای «{field.label}» معتبر نیست.",

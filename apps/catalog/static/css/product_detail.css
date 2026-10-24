@@ -280,3 +280,131 @@
      its own (does not add document height), hence the padding above. */
   html:has(.pdp-satc){scroll-padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
 }
+
+
+/* ========================================================================
+   V5 — PDP design controls (بستهٔ ۱): ``product_main`` + ``product_description``
+   ------------------------------------------------------------------------
+   Everything below is keyed ONLY on generic data attributes written by the shared renderer (``pdp_settings``) and on the shared
+   Design Block flags (``.rsec[data-d~="…"]`` + ``--d-*``). An attribute is written only when a Section's value differs from its
+   default, so a Store that never touched these controls matches NONE of these selectors and renders exactly as before. No rule here
+   names a Store, a Ready Template or a brand. Colours come from the palette tokens / the Design Block, never from a literal brand.
+   ======================================================================== */
+
+/* ---- product_main · gallery ---- */
+.qty[hidden]{display:none}
+@media(min-width:1001px){
+  .pdp[data-gallery-pos="end"] .gallery{order:2}
+  .pdp[data-gallery-split="gallery_wide"]{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+  .pdp[data-gallery-split="info_wide"]{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+  .pdp[data-gallery-pos="end"][data-gallery-split="gallery_wide"]{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+  .pdp[data-gallery-pos="end"][data-gallery-split="info_wide"]{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+}
+.pdp[data-gallery-sticky="off"] .gallery{position:static}
+.pdp[data-thumbs="hidden"] .gallery .thumbs{display:none}
+.pdp[data-thumbs="side"] .gallery{display:flex;gap:14px}
+.pdp[data-thumbs="side"] .gallery .main{flex:1;order:2}
+.pdp[data-thumbs="side"] .gallery .thumbs{order:1;flex-direction:column;margin-top:0;flex:0 0 auto}
+.pdp[data-thumbs="side"] .gallery .thumbs .th{width:64px;height:64px;border-radius:10px}
+.pdp[data-pdp-layout="fashion"][data-thumbs="below"] .gallery{display:block}
+.pdp[data-pdp-layout="fashion"][data-thumbs="below"] .gallery .thumbs{flex-direction:row;margin-top:12px}
+.pdp[data-pdp-layout="fashion"][data-thumbs="below"] .gallery .thumbs .th{width:74px;height:74px;border-radius:14px}
+@media(max-width:1000px){
+  .pdp[data-thumbs="side"] .gallery{flex-direction:column}
+  .pdp[data-thumbs="side"] .gallery .thumbs{flex-direction:row;order:2;margin-top:10px}
+  .pdp[data-thumbs="side"] .gallery .main{order:1}
+}
+
+/* ---- product_main · info panel, price, quantity, options, CTA ---- */
+.pdp[data-info-panel="card"] .pinfo{background:var(--card,#fff);border:1px solid var(--line);border-radius:18px;padding:22px}
+.pdp[data-info-panel="outlined"] .pinfo{background:var(--card,#fff);border:2px solid var(--brand-primary,var(--violet));border-radius:22px;padding:22px}
+.pdp[data-price-layout="plain"] .pricebox{background:transparent;border:0;padding:0}
+.pdp[data-price-pos="before_options"] .pinfo form,
+.pdp[data-qty-layout="inline"] .pinfo form{display:grid;grid-template-columns:auto minmax(0,1fr)}
+.pdp[data-price-pos="before_options"] .pinfo form>*,
+.pdp[data-qty-layout="inline"] .pinfo form>*{grid-column:1/-1}
+.pdp[data-price-pos="before_options"] .pinfo form>.pricebox{order:-1}
+.pdp[data-qty-layout="inline"] .pinfo form>.qty{grid-column:1;margin-inline-end:12px}
+.pdp[data-qty-layout="inline"] .pinfo form>.pdp-actions{grid-column:2}
+.pdp[data-qty-layout="inline"] .qty .lbl{display:none}
+.pdp[data-qty-layout="inline"] .stepper :is(button,input){height:calc(var(--pdp-cta-h,50px) - 3px)}
+.pdp[data-option-shape="square"] .size{border-radius:4px}
+.pdp[data-option-shape="square"] .swatch,.pdp[data-option-shape="square"] .swatch.unavailable::after{border-radius:6px}
+.pdp[data-option-shape="pill"] .size{border-radius:999px}
+.pdp[data-cta-width="auto"] .pdp-actions .btn-primary{flex:0 1 auto;padding-inline:30px}
+.pdp[data-cta-size="compact"]{--pdp-cta-h:42px}
+.pdp[data-cta-size="large"]{--pdp-cta-h:58px}
+.pdp[data-cta-size="compact"] .pdp-actions .btn-primary,.pdp[data-cta-size="large"] .pdp-actions .btn-primary{height:var(--pdp-cta-h)}
+.pdp[data-cta-size="compact"] .pdp-actions .btn-primary{font-size:13.5px}
+.pdp[data-cta-size="large"] .pdp-actions .btn-primary{font-size:16px}
+.pdp[data-cta-shape="square"] .pdp-actions .btn-primary,.pdp[data-cta-shape="square"] .pdp-satc-btn{border-radius:4px}
+.pdp[data-cta-shape="pill"] .pdp-actions .btn-primary,.pdp[data-cta-shape="pill"] .pdp-satc-btn{border-radius:999px}
+
+/* ---- product_main · Design Block consumers (frame / border / radius / shadow / spacing / background act on the section wrapper) ---- */
+.rsec[data-d~="ratio"] .pdp .gallery .main{aspect-ratio:var(--d-ratio)}
+.rsec[data-d~="gap"] .pdp{gap:var(--d-gap)}
+.rsec[data-d~="heading"] .pdp .pinfo h1{color:var(--d-heading)}
+.rsec[data-d~="text"] .pdp .pinfo :is(h1,.opt-block .lbl,.qty .lbl,.pricebox .now){color:var(--d-text)}
+.rsec[data-d~="accent"] .pdp :is(.size.active){border-color:var(--d-accent);color:var(--d-accent)}
+.rsec[data-d~="accent"] .pdp .swatch.active{box-shadow:0 0 0 2px var(--d-accent)}
+.rsec[data-d~="accent"] .pdp .gallery .thumbs .th.active{border-color:var(--d-accent)}
+.rsec[data-d~="price"] .pdp :is(.pricebox .now,.pdp-satc-now){color:var(--d-price)}
+.rsec[data-d~="surface"] .pdp:not([data-price-layout="plain"]) .pricebox,
+.rsec[data-d~="surface"] .pdp[data-info-panel] .pinfo,
+.rsec[data-d~="surface"] .pdp .gallery .main{background:var(--d-surface);color:var(--d-surface-fg)}
+.rsec[data-d~="btnfill"] .pdp :is(.pdp-actions .btn-primary,.pdp-satc-btn):not(:disabled){background:var(--d-btn-bg);color:var(--d-btn-fg,var(--brand-primary-fg,#fff))}
+.rsec[data-d~="btntext"] .pdp :is(.pdp-actions .btn-primary,.pdp-satc-btn):not(:disabled){color:var(--d-btn-fg)}
+.rsec[data-d~="btnborder"] .pdp :is(.pdp-actions .btn-primary,.pdp-satc-btn):not(:disabled){border:1px solid var(--d-btn-bd)}
+
+/* ---- product_description · presentation modes ----------------------------------------------------------------------------
+   The DOM is the same accessible header→panel pairs in every mode (see product_description.html). ``tabs`` (default) is the rules
+   above; the modes below only re-arrange / re-skin it. Vertical tabs need the JS-set ``data-enhanced`` flag: without JavaScript
+   every panel is simply visible under its own header, so nothing ever overlaps or hides. */
+.pdp-sec-title{font-size:18px;font-weight:800;margin:0 0 12px;line-height:1.6}
+.pdp-tabs[data-tabs-mode="stacked"]{display:block}
+.pdp-tabs[data-tabs-mode="stacked"]::after{display:none}
+.pdp-tabs[data-tabs-mode="stacked"] .pdp-sec-panel{margin-bottom:28px}
+.brand-panel{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.brand-panel .brand-logo{width:96px;height:96px;border:1px solid var(--line);border-radius:14px;padding:8px;background:#fff}
+.brand-panel h3{font-size:16px;font-weight:800;margin:0 0 6px}
+.brand-panel h3 small{font-size:12px;font-weight:600;color:var(--muted);margin-inline-start:8px}
+.brand-panel p{font-size:13.5px;line-height:2;color:#4b4560;margin:0 0 8px;max-width:760px}
+.brand-panel dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:0}
+.brand-panel dt{color:var(--muted);font-weight:600}
+.brand-panel dd{margin:0}
+.pdp-tabs[data-panel-style="boxed"] .pdp-tab-panel{border:1px solid var(--line);border-radius:16px;padding:20px}
+.pdp-tabs[data-panel-style="soft"] .pdp-tab-panel{background:var(--violet-softer);border-radius:16px;padding:20px}
+.rsec[data-d~="surface"] .pdp-tabs .pdp-tab-panel{background:var(--d-surface);color:var(--d-surface-fg);border-radius:16px;padding:20px}
+.rsec[data-d~="heading"] .pdp-sec-title,.rsec[data-d~="heading"] .brand-panel h3{color:var(--d-heading)}
+.rsec[data-d~="text"] .pdp-tab-panel :is(.desc-text,.review p,.spec-table td,.brand-panel p){color:var(--d-text)}
+.rsec[data-d~="accent"] .pdp-acc-header.active{color:var(--d-accent);border-color:var(--d-accent)}
+@media(min-width:681px){
+  .pdp-tabs[data-tab-align="center"]{justify-content:center}
+  .pdp-tabs[data-tab-align="stretch"] .pdp-acc-header{flex:1 1 0;text-align:center}
+  .pdp-tabs[data-tab-style="pills"]::after,.pdp-tabs[data-tab-style="boxed"]::after{display:none}
+  .pdp-tabs[data-tab-style="pills"],.pdp-tabs[data-tab-style="boxed"]{row-gap:14px}
+  .pdp-tabs[data-tab-style="pills"] .pdp-acc-header{border:0;border-radius:999px;padding:9px 20px;background:var(--violet-softer)}
+  .pdp-tabs[data-tab-style="pills"] .pdp-acc-header.active{background:var(--brand-primary,var(--violet));color:var(--brand-primary-fg,#fff)}
+  .pdp-tabs[data-tab-style="boxed"] .pdp-acc-header{border:1px solid var(--line);border-radius:8px;padding:11px 18px}
+  .pdp-tabs[data-tab-style="boxed"] .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+  .rsec[data-d~="accent"] .pdp-tabs[data-tab-style="pills"] .pdp-acc-header.active{background:var(--d-accent);color:#fff}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced]{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);grid-template-rows:repeat(var(--pdp-tab-count,3),max-content) 1fr;gap:8px 26px;align-items:start}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced]::after{display:none}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced] .pdp-acc-header{grid-column:1;width:100%;text-align:start;white-space:normal;border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced] .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced] .pdp-tab-panel{grid-column:2;grid-row:1 / -1}
+}
+/* accordion at EVERY width: the same rules the mobile block applies below the mobile breakpoint */
+.pdp-tabs[data-tabs-mode="accordion"]{flex-direction:column;gap:8px;margin:24px 0}
+.pdp-tabs[data-tabs-mode="accordion"]::after{display:none}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header{
+  order:0;width:100%;text-align:start;border:1px solid var(--line);border-radius:8px;
+  padding:14px 16px;display:flex;align-items:center;justify-content:space-between;margin:0;
+}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header::after{content:"▾";margin-inline-start:auto;transition:transform .2s ease}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header.active::after{transform:rotate(180deg)}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-tab-panel{order:0;flex:0 0 auto;padding:4px 4px 8px}
+@media (prefers-reduced-motion: reduce){
+  .pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header::after{transition:none}
+}

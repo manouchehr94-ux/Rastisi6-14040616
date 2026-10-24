@@ -20,7 +20,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
-from . import design_block, icon_registry
+from . import design_block, icon_registry, pdp_settings
 from .services.category_selection import CATEGORY_SOURCE_MODES
 from . import resource_source as resource_source_module
 from .settings_schema import (
@@ -2978,6 +2978,44 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 ))
 
 
+# ---------------------------------------------------------------- V5 — کنترل‌های طراحی صفحهٔ محصول (بستهٔ ۱)
+# هر دو بخش یک Sectionِ یکپارچه می‌مانند؛ فقط «چینش و ظاهر» داده‌های واقعی را تنظیم می‌کنند. جدولِ گزینه‌ها، مقدارِ پیش‌فرض
+# (= رفتارِ پیش از این کنترل‌ها) و پاک‌سازی در ``pdp_settings`` است؛ اینجا فقط به schema/Inspector تبدیل می‌شود.
+PRODUCT_MAIN_SCHEMA = SettingsSchema(fields=(
+    *(
+        SettingsField(key, label, "choice", "basic", default=default, choices=choices)
+        for key, label, choices, default in pdp_settings.PRODUCT_MAIN_CHOICES
+    ),
+    *(
+        SettingsField(key, label, "boolean", "basic", default=default)
+        for key, label, default in pdp_settings.PRODUCT_MAIN_SWITCHES
+    ),
+))
+
+PRODUCT_DESCRIPTION_SCHEMA = SettingsSchema(fields=(
+    *(
+        SettingsField(key, label, "choice", "basic", default=default, choices=choices)
+        for key, label, choices, default in pdp_settings.PRODUCT_DESCRIPTION_CHOICES
+    ),
+    SettingsField(
+        "sections", "ترتیب، عنوان و نمایش بخش‌ها", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=pdp_settings.PRODUCT_DESCRIPTION_MAX_ITEMS,
+        repeater_item_fields=(
+            SettingsField(
+                "key", "بخش", "choice", "basic", default="desc",
+                choices=pdp_settings.PRODUCT_DESCRIPTION_SECTION_CHOICE_LABELS,
+            ),
+            SettingsField(
+                "label", "عنوان دلخواه (خالی = عنوان پیش‌فرض)", "text", "basic", default="",
+                max_length=pdp_settings.PRODUCT_DESCRIPTION_MAX_LABEL,
+            ),
+            SettingsField("visible", "نمایش داده شود", "boolean", "basic", default=True),
+        ),
+    ),
+))
+
+
 # ---------------------------------------------------------------- ثبت انواع بخش
 
 #: Task 6 (Group C) — the U1A finding above (R1 §9) is now RESOLVED into
@@ -3585,9 +3623,19 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # ``render_service._CONTEXT_AWARE_BUILDERS``.
     "product_main": SectionDefinition(
         key="product_main", label_fa="گالری و خرید محصول", icon="shopping-bag",
-        capabilities=frozenset(),
+        # V5 (PDP بستهٔ ۱) — کنترل‌های طراحیِ عمومی: چینشِ گالری/اطلاعات، ظاهرِ تنوع/تعداد/دکمه در ``PRODUCT_MAIN_SCHEMA`` و
+        # قاب، رنگ، «رنگ سطح» (پنل اطلاعات/کادر قیمت/قابِ گالری، با رنگِ نوشتهٔ خوانا)، فاصله، نسبت و جاگیریِ تصویر از همان Design
+        # Block / Spacingِ مشترک. قیمت، موجودی، تنوع و فرمِ خرید هیچ‌کدام از settings خوانده نمی‌شوند (همچنان از page_context).
+        # عمداً ``background`` ندارد: product_main از sectionهای حیاتیِ محافظت‌شده است (spec §59، ``test_protected_context_sections_excluded``)
+        # — پس‌زمینهٔ دلخواهِ کلِ بخش می‌تواند نوشته‌های خریدِ ثابت را ناخوانا کند؛ رنگ سطحِ داخلی (``internal_surface``) هم عمداً نیست: مارکاپِ این بخش نشانگرِ ``data-sfb-card-surface`` ندارد و ظرفیت باید با مارکاپ یکی باشد.
+        # «فاصله‌ها» (padding/margin) را همان ``design_frame`` می‌دهد؛ ظرفیت ``spacing`` عمداً نیست چون با ``background`` یک allowlist است
+        # (``test_background_and_spacing_share_exactly_the_same_allowlist``).
+        capabilities=frozenset({
+            "design_frame", "design_text", "design_buttons", "design_price",
+            "design_gap", "design_image_ratio", "design_image_fit", "design_image_position"}),
         template_name="storefront_builder/sections/product_main.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=pdp_settings.clean_product_main_settings, default_settings=_empty_defaults,
+        settings_schema=PRODUCT_MAIN_SCHEMA,
         # گالری/قیمت/انتخابِ تنوع/افزودن‌به‌سبد یک کامپوننتِ Alpine واحد
         # است (``x-data="variantSelector(...)"``) — تجزیه‌ی آن به
         # section‌های کوچک‌تر اسکوپِ آن کامپوننت را می‌شکست؛ حذفِ کاملِ آن
@@ -3598,11 +3646,15 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "product_description": SectionDefinition(
         key="product_description", label_fa="توضیحات، مشخصات و نظرات", icon="text",
+        # V5 (PDP بستهٔ ۱) — حالتِ تب/آکاردئون/پشت‌سرهم، ترتیب/عنوان/نمایشِ بخش‌های واقعی و ظاهر در ``PRODUCT_DESCRIPTION_SCHEMA``؛
+        # قاب، رنگ متن/تأکید و سطح از Design Blockِ مشترک. منابعِ داده (توضیح، مشخصات، نظرات، برند) همچنان از page_context.
         capabilities=frozenset({
-            "background", "spacing",
+            "background", "spacing", "design_frame", "design_text",
         }),
         template_name="storefront_builder/sections/product_description.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=pdp_settings.clean_product_description_settings, default_settings=_empty_defaults,
+        settings_schema=PRODUCT_DESCRIPTION_SCHEMA,
+        inspector_projection=pdp_settings.project_description_sections_for_inspector,
         # سه‌تب (توضیحات/مشخصات/نظرات) یک کامپوننتِ Alpine مشترک
         # (``x-data="{ tab: 'desc' }"``) هستند — طبقِ الزامِ صریحِ کار
         # («prefer sensible compositional primitives... may remain one

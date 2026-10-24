@@ -23,7 +23,7 @@ from apps.catalog.services.promotion_service import active_discount_q, earliest_
 from apps.content.models import HeroSlide, PromotionalBanner
 from apps.orders.services import best_seller_service
 
-from .. import appearance_registry, decorative_strip, design_block, semantic_colors
+from .. import appearance_registry, decorative_strip, design_block, pdp_settings, semantic_colors
 from ..section_registry import (
     UnknownSectionTypeError,
     default_brand_carousel_settings,
@@ -656,13 +656,37 @@ def _product_main_context(store, section, page_context):
         "gift_wrap": page_context.get("gift_wrap"),
         "gallery_slides": page_context.get("gallery_slides"),
         "review_count": page_context.get("review_count", 0),
+        # V5 (PDP بستهٔ ۱) — فقط «چینش و ظاهر»: همین‌جا از settings ی همین Section حل می‌شود (lenient، هرگز exception نمی‌دهد)؛
+        # قیمت/موجودی/تنوع/فرم خرید همچنان از page_context بالا می‌آیند، نه از این view.
+        "pdp": pdp_settings.resolve_product_main_view(getattr(section, "settings", None)),
     }
+
+
+def _brand_panel_view(brand, product=None):
+    """The real, Store-owned brand data the optional «برند» section can show — ``None`` when the product has no brand, the brand
+    belongs to another Store, or it carries nothing to say (no empty / decorative panel is ever rendered). Only an http(s)
+    website is ever linked."""
+    if brand is None:
+        return None
+    if product is not None and getattr(brand, "store_id", None) != getattr(product, "store_id", None):
+        return None
+    try:
+        logo_url = brand.logo.url if brand.logo else ""
+    except Exception:  # a missing / unreadable file simply means «no logo» — never a broken page
+        logo_url = ""
+    view = {
+        "name": brand.name, "name_en": brand.name_en, "logo_url": logo_url,
+        "description": brand.description, "country": brand.country,
+        "website": brand.website if str(brand.website or "").lower().startswith(("http://", "https://")) else "",
+    }
+    return view if any(view[key] for key in ("logo_url", "description", "country", "website")) else None
 
 
 def _product_description_context(store, section, page_context):
     product = page_context.get("product")
     if product is None:
         return {}
+    brand_panel = _brand_panel_view(getattr(product, "brand", None), product)
     return {
         "product": product,
         "spec_variant_summary": page_context.get("spec_variant_summary", {}),
@@ -670,6 +694,10 @@ def _product_description_context(store, section, page_context):
         "review_count": page_context.get("review_count", 0),
         "rating_breakdown": page_context.get("rating_breakdown", []),
         "can_review": page_context.get("can_review", False),
+        "brand_panel": brand_panel,
+        "pdd": pdp_settings.resolve_product_description_view(
+            getattr(section, "settings", None), brand_available=brand_panel is not None,
+        ),
     }
 
 
