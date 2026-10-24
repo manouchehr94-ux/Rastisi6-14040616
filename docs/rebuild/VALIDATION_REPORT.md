@@ -84,7 +84,7 @@
 
 | # | بررسی | وضعیت | دستور | مدرک / محدودیت |
 |---|---|---|---|---|
-| F1 | تست‌های مبدل (SQLite) | **PASS** | `manage.py test apps.stores.tests.test_demo_bundle_converter` | `Ran 58 tests … OK`: دو SQLite مستقل با PK تکراری (تست `test_fixture_sources_really_collide`)، تبدیل، import، idempotency، رسانه، صفحه‌ی محصول، Studio |
+| F1 | تست‌های مبدل (SQLite) | **PASS** | `manage.py test apps.stores.tests.test_demo_bundle_converter` | `Ran 67 tests … OK` (۵۸ اولیه + ۹ رگرسیون کلید رسانه): دو SQLite مستقل با PK تکراری (تست `test_fixture_sources_really_collide`)، تبدیل، import، idempotency، رسانه، صفحه‌ی محصول، Studio |
 | F2 | همان‌ها روی PostgreSQL | **PASS (محدود)** | `DATABASE_URL=… manage.py test …converter` | `Ran 130 (با test_demo_bundle) … OK (skipped=39)`؛ ۳۹ تستی که منبع را با dump دیتابیس تست SQLite می‌سازند روی PG عمداً skip می‌شوند؛ مسیر import روی PG جدا در F8 اجرا شد |
 | F3 | همه‌ی انواع ارجاع بازنویسی می‌شوند | **PASS** | `test_every_reference_kind_is_rewritten_in_every_version` | `product_ids, source_id, category_ids, brand_ids, collection_ids, menu_id, media_asset_id, destination_id` در هر سه نسخه‌ی Studio (archived/published/draft)؛ FK محصول→دسته/برند، HeroSlide→asset/product؛ `combination_key` بازسازی می‌شود |
 | F4 | هیچ نسخه/قالب/برندینگ/رسانه حذف نمی‌شود | **PASS** | `test_nothing_is_dropped`، `test_imported_files_match_the_sources_byte_for_byte` | ۳ نسخه‌ی Studio، ۱۸ صفحه، HeroSlide، ۲ MediaAsset، ShopSettings/FooterSettings، ۲ منو، واریانت‌ها؛ فایل‌های import‌شده بایت‌به‌بایت برابر ZIP |
@@ -98,6 +98,7 @@
 | F12 | کلید ناشناس، منبع قدیمی‌تر، migration ناشناخته، چند فروشگاه | **PASS** | `ConvertSourceTests` (۱۱) | کلید `*_id` ناشناس ⇒ FAIL با مسیر (و `extra_scalar_keys`/`ignore_keys` اعمال می‌شود)؛ دیتابیس قدیمی‌تر ⇒ migration فقط روی **کپی** و اصل بی‌تغییر؛ migration ناشناخته ⇒ رد؛ دو فروشگاه دارای محصول ⇒ نیازمند slug صریح |
 | F13 | راه‌انداز یک‌دستوری با venv تازه | **PASS (Linux)** | `build_bundle_offline.py --venv <جدید> …` | venv ساخته، requirements نصب، اجرا، `BUNDLE READY`؛ ≈ ۲ دقیقه |
 | F14 | **اجرا روی Windows** (`.ps1`، `.bat`، مسیرهای طولانی/فارسی، کنسول cp1252) | **BLOCKED** | — | Windows و PowerShell در دسترس نیست: اسکریپت‌ها اجرا/syntax-check نشدند. منطق اصلی پایتونِ مستقل از OS است و فقط روی Linux تست شده؛ پیشوند `\\?\` و `reconfigure(errors="replace")` طراحی شده ولی روی Windows تأییدنشده |
+| F14b | **رگرسیون اجرای واقعی:** `remap.unmapped_json_key … header_config.announcement_image_asset_id = 22` | **PASS** (ابزار) | `ConvertSourceTests` (۴ تست تازه)، `RemapUnitTests` (۵ تست تازه) | کلید در کد فعلی وجود ندارد (نسخه‌ی دیگری از page builder نوشته بود)؛ اکنون هر `*asset_id(s)` و هر کلید رسانه‌ای (`logo/banner/image/…_id`) با همان offset بازنگاشت و در validator به MediaAsset حل می‌شود؛ بعد از import به MediaAsset همان فروشگاه اشاره می‌کند؛ ارجاع از قبل شکسته شکسته می‌ماند و خطا نمی‌دهد؛ `ignore_keys` اولویت دارد؛ تست «drift guard» همه‌ی literalهای `*_id(s)` کد page-builder/content را پویش و الزام می‌کند هر کدام بازنگاشت‌شونده یا صراحتاً غیرذخیره‌ای باشد. حساسیت: غیرفعال‌کردن قاعده ⇒ ۵ تست FAIL |
 | F15 | مصرف داده‌ی واقعی مالک | **BLOCKED – MISSING INPUT** | — | چهار فایل واقعی در محیط نیست |
 
 ## E. آنچه BLOCKED است (فهرست صریح)

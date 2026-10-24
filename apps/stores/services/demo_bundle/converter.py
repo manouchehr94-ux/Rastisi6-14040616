@@ -176,6 +176,12 @@ def convert(
                 report.fail("remap.dangling_changed", f"Studio JSON dangling references changed {before} -> {after}", key)
             for w in st.warnings[:20]:
                 report.warn("remap.note", w, key)
+            if st.pattern_keys:
+                report.warn(
+                    "remap.pattern_key",
+                    "media reference key(s) not used by this revision of the page builder were renumbered by the "
+                    f"media-name rule (…asset_id / image|logo|banner|… ids): {st.pattern_keys}", key,
+                )
             if before:
                 report.warn("source.dangling_json_refs", f"{before} Studio JSON reference(s) were already dangling in the source (kept as is)", key)
             remapped[key], stats[key] = new_records, st

@@ -51,6 +51,25 @@ TYPED_SOURCE_KINDS = frozenset({"product", "brand", "category", "collection"})
 
 _ID_LIKE = re.compile(r"(^|_)ids?$")
 
+#: Newer/other revisions of the page builder store media references under many names
+#: (``announcement_image_asset_id``, ``header_logo_asset_id``, ``background_media_asset_id`` ...).
+#: Rule 1 - any key ending in ``asset_id`` / ``asset_ids`` is a MediaAsset reference.
+ASSET_KEY = re.compile(r"(^|_)asset_ids?$")
+#: Rule 2 - a key that names a media-like thing and ends in ``id``/``ids`` is a media reference whose
+#: target model is not known (MediaAsset, ProductImage ...). Every bundle row is shifted by the same
+#: offset, so shifting is correct whichever bundle model it points at; such keys are reported, not validated.
+_MEDIA_WORDS = "image|photo|picture|logo|banner|poster|thumbnail|thumb|cover|icon|favicon|media|background"
+MEDIA_FAMILY_KEY = re.compile(rf"(^|_)({_MEDIA_WORDS})(_[a-z0-9]+)*_ids?$")
+
+
+def _is_list_key(key: str) -> bool:
+    return key.endswith("_ids")
+
+
+def media_reference_target(key: str) -> str | None:
+    """MediaAsset for ``*asset_id(s)`` keys; ``None`` for other media-family keys."""
+    return "content.MediaAsset" if ASSET_KEY.search(key) else None
+
 #: Models/fields whose JSON is Studio configuration and is therefore remapped.
 JSON_FIELDS: dict[str, tuple[str, ...]] = {
     "storefront_builder.storefrontlayoutversion": (
@@ -93,6 +112,8 @@ class RemapStats:
     fk_values: int = 0
     m2m_values: int = 0
     json_refs: dict[str, int] = field(default_factory=dict)
+    #: keys handled by the media-name rules rather than the explicit tables
+    pattern_keys: dict[str, int] = field(default_factory=dict)
     combination_keys: int = 0
     warnings: list[str] = field(default_factory=list)
 
@@ -157,6 +178,8 @@ def json_refs(node, ancestors: tuple = ()):
                         break
         elif key == "manual_ids" and node.get("kind") in TYPED_SOURCE_KINDS:
             target = _TYPE_TARGET[node["kind"]]
+        elif media_reference_target(key) is not None:
+            target = media_reference_target(key)
         if target is not None:
             for item in ids:
                 if _is_id_int(item):
@@ -240,6 +263,15 @@ class _JsonRemapper:
             new = _shift_list(value, self.offset)
             if new != value:
                 self._count("manual_ids", len(value) if isinstance(value, list) else 1)
+            return new
+        is_idish = _is_id_int(value) or (isinstance(value, list) and any(_is_id_int(v) for v in value)) or (
+            isinstance(value, str) and value.isdigit() and int(value) > 0
+        )
+        if is_idish and (ASSET_KEY.search(key) or MEDIA_FAMILY_KEY.search(key)):
+            new = _shift_list(value, self.offset) if (_is_list_key(key) or isinstance(value, list)) else _shift_scalar(value, self.offset)
+            if new != value:
+                self._count(key, len(value) if isinstance(value, list) else 1)
+                self.stats.pattern_keys[key] = self.stats.pattern_keys.get(key, 0) + 1
             return new
         if _ID_LIKE.search(key) and (
             _is_id_int(value) or (isinstance(value, list) and any(_is_id_int(v) for v in value))

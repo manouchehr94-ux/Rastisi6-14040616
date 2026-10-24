@@ -337,7 +337,7 @@ class ConvertSourceTests(ConverterBase):
         result = self.run_convert(specs)
         self.assertEqual(result.report.status, PASS, result.report.to_text())
 
-    def _poisoned_copy(self, key="logo_id"):
+    def _poisoned_copy(self, key="thing_id"):
         import sqlite3
 
         poisoned = self.work / "poisoned.sqlite3"
@@ -349,30 +349,103 @@ class ConvertSourceTests(ConverterBase):
         con.close()
         return poisoned
 
+    def _set_header_key(self, name, value_sql, source=None):
+        import sqlite3
+
+        path = self.work / f"hdr_{name}.sqlite3"
+        shutil.copy(source or self.sqlite_b, path)
+        con = sqlite3.connect(str(path))
+        con.execute(
+            "UPDATE storefront_builder_storefrontlayoutversion SET header_config = json_set(header_config, ?, "
+            + value_sql + ") WHERE status = 'published'", (f"$.{name}",))
+        con.commit()
+        con.close()
+        return path
+
+    def _first_asset_pk(self, path=None):
+        import sqlite3
+
+        con = sqlite3.connect(str(path or self.sqlite_b))
+        try:
+            return con.execute("SELECT min(id) FROM content_mediaasset WHERE store_id = (select id from stores_store where slug='beta')").fetchone()[0]
+        finally:
+            con.close()
+
+    def test_header_announcement_image_asset_id_is_remapped(self):
+        """Regression (real run): header_config.announcement_image_asset_id = <MediaAsset pk>."""
+        asset = self._first_asset_pk()
+        poisoned = self._set_header_key("announcement_image_asset_id", str(asset))
+        result = self.run_convert(self.specs(sqlite_b=poisoned))
+        self.assertEqual(result.report.status, PASS, result.report.to_text())
+        headers = [r["fields"]["header_config"] for r in self.data("demo_arch02")
+                   if r["model"] == "storefront_builder.storefrontlayoutversion" and "announcement_image_asset_id" in r["fields"]["header_config"]]
+        self.assertEqual([h["announcement_image_asset_id"] for h in headers], [asset + result.stride])
+        assets = {r["pk"] for r in self.data("demo_arch02") if r["model"] == "content.mediaasset"}
+        self.assertIn(asset + result.stride, assets, "the shifted reference must resolve to the shifted MediaAsset")
+        self.assertIn("remap.pattern_key", [f.code for f in result.report.findings])
+        self.assertIn("json.refs", [f.code for f in result.report.findings])
+
+    def test_header_asset_reference_resolves_in_the_database_after_import(self):
+        from apps.content.models import MediaAsset as MA
+
+        poisoned = self._set_header_key("announcement_image_asset_id", str(self._first_asset_pk()))
+        self.assertEqual(self.run_convert(self.specs(sqlite_b=poisoned)).report.status, PASS)
+        dst = self.work / "dst"
+        dst.mkdir()
+        with override_settings(MEDIA_ROOT=str(dst)):
+            arch = import_store(self.out, "demo_arch02", TARGET_ARCH, media_root=dst).store
+            version = StorefrontLayoutVersion.objects.get(layout__store=arch, status="published")
+            self.assertTrue(MA.objects.filter(pk=version.header_config["announcement_image_asset_id"], store=arch).exists())
+
+    def test_other_media_reference_spellings_in_header_footer_and_sections_are_remapped(self):
+        asset = self._first_asset_pk()
+        path = self._set_header_key("logo_media_id", str(asset))
+        path = self._set_header_key("header_banner_asset_ids", f"json('[{asset}]')", source=path)
+        import sqlite3
+
+        con = sqlite3.connect(str(path))
+        con.execute("UPDATE storefront_builder_storefrontlayoutversion SET footer_config = json_set(footer_config, "
+                    f"'$.footer_badge.thumbnail_id', {asset}) WHERE status = 'published'")
+        con.commit()
+        con.close()
+        result = self.run_convert(self.specs(sqlite_b=path))
+        self.assertEqual(result.report.status, PASS, result.report.to_text())
+        v = [r["fields"] for r in self.data("demo_arch02")
+             if r["model"] == "storefront_builder.storefrontlayoutversion" and r["fields"]["status"] == "published"][0]
+        self.assertEqual(v["header_config"]["logo_media_id"], asset + result.stride)
+        self.assertEqual(v["header_config"]["header_banner_asset_ids"], [asset + result.stride])
+        self.assertEqual(v["footer_config"]["footer_badge"]["thumbnail_id"], asset + result.stride)
+
+    def test_an_asset_reference_that_was_already_dangling_stays_dangling_without_failing(self):
+        poisoned = self._set_header_key("announcement_image_asset_id", "999999")
+        result = self.run_convert(self.specs(sqlite_b=poisoned))
+        self.assertEqual(result.report.status, PASS, result.report.to_text())
+        self.assertIn("source.dangling_json_refs", [f.code for f in result.report.findings])
+
     def test_unknown_id_like_json_key_fails_instead_of_staying_stale(self):
         result = self.run_convert(self.specs(sqlite_b=self._poisoned_copy()))
         self.assertEqual(result.report.status, FAIL)
         self.assertIn("remap.unmapped_json_key", [f.code for f in result.report.findings])
-        self.assertIn("logo_id", result.report.to_text())
+        self.assertIn("thing_id", result.report.to_text())
         self.assertFalse(self.out.exists())
 
     def test_operator_can_declare_the_unknown_key(self):
         result = self.run_convert(
             self.specs(sqlite_b=self._poisoned_copy()),
-            remap=RemapOptions(extra_scalar_keys=frozenset({"logo_id"})),
+            remap=RemapOptions(extra_scalar_keys=frozenset({"thing_id"})),
         )
         self.assertEqual(result.report.status, PASS, result.report.to_text())
-        shifted = [r["fields"]["settings"]["logo_id"] for r in self.data("demo_arch02")
-                   if r["model"] == "storefront_builder.storefrontsection" and "logo_id" in r["fields"]["settings"]]
+        shifted = [r["fields"]["settings"]["thing_id"] for r in self.data("demo_arch02")
+                   if r["model"] == "storefront_builder.storefrontsection" and "thing_id" in r["fields"]["settings"]]
         self.assertEqual(shifted, [7 + result.stride])
 
     def test_operator_can_ignore_a_non_reference_key(self):
         result = self.run_convert(
-            self.specs(sqlite_b=self._poisoned_copy()), remap=RemapOptions(ignore_keys=frozenset({"logo_id"})),
+            self.specs(sqlite_b=self._poisoned_copy()), remap=RemapOptions(ignore_keys=frozenset({"thing_id"})),
         )
         self.assertEqual(result.report.status, PASS, result.report.to_text())
-        kept = [r["fields"]["settings"]["logo_id"] for r in self.data("demo_arch02")
-                if r["model"] == "storefront_builder.storefrontsection" and "logo_id" in r["fields"]["settings"]]
+        kept = [r["fields"]["settings"]["thing_id"] for r in self.data("demo_arch02")
+                if r["model"] == "storefront_builder.storefrontsection" and "thing_id" in r["fields"]["settings"]]
         self.assertEqual(kept, [7])
 
     def test_a_dangling_reference_already_in_the_source_stays_dangling(self):
@@ -539,6 +612,78 @@ class ImportConvertedBundleTests(ConverterBase):
 
 class RemapUnitTests(TestCase):
     """Pure remap rules (no files)."""
+
+    def test_media_reference_spellings_all_shift(self):
+        s, _, stats = self.remap({
+            "announcement_image_asset_id": 22, "header_logo_asset_id": "5", "hero_asset_ids": [1, 2],
+            "logo_id": 3, "banner_media_id": 4, "thumbnail_ids": [6], "footer": {"badge_image_id": 8, "asset_id": 9},
+            "background_media_asset_id": 10,
+        })
+        self.assertEqual(s["announcement_image_asset_id"], 1022)
+        self.assertEqual(s["header_logo_asset_id"], "1005")
+        self.assertEqual(s["hero_asset_ids"], [1001, 1002])
+        self.assertEqual((s["logo_id"], s["banner_media_id"], s["thumbnail_ids"]), (1003, 1004, [1006]))
+        self.assertEqual((s["footer"]["badge_image_id"], s["footer"]["asset_id"], s["background_media_asset_id"]), (1008, 1009, 1010))
+        self.assertIn("announcement_image_asset_id", stats.pattern_keys)
+
+    def test_media_names_do_not_swallow_unrelated_numbers_or_strings(self):
+        s, _, _ = self.remap({"image_fit": "cover", "image_hover": "zoom", "media_type": "image", "radius": 18,
+                              "icon_key": "star", "logo_url": "/x.png", "cover_height": 300, "announcement_image_asset_id": None,
+                              "banner_id": 0, "photo_id": "abc"})
+        self.assertEqual(s, {"image_fit": "cover", "image_hover": "zoom", "media_type": "image", "radius": 18,
+                             "icon_key": "star", "logo_url": "/x.png", "cover_height": 300, "announcement_image_asset_id": None,
+                             "banner_id": 0, "photo_id": "abc"})
+
+    def test_operator_ignore_wins_over_the_media_rule(self):
+        from apps.stores.services.demo_bundle.remap import RemapOptions, remap_records
+
+        rec = {"model": "storefront_builder.storefrontlayoutversion", "pk": 1,
+               "fields": {"layout": 1, "header_config": {"announcement_image_asset_id": 22}, "footer_config": {},
+                          "appearance_config": {}, "template_provenance": {}, "template_baseline_snapshot": {}}}
+        out, _ = remap_records([rec], 1000, RemapOptions(ignore_keys=frozenset({"announcement_image_asset_id"})))
+        self.assertEqual(out[0]["fields"]["header_config"]["announcement_image_asset_id"], 22)
+
+    def test_asset_keys_are_resolved_against_media_assets_when_validating(self):
+        from apps.stores.services.demo_bundle.remap import json_refs
+
+        refs = list(json_refs({"header": {"announcement_image_asset_id": 22, "x_asset_ids": [1, 2]}, "logo_id": 5}))
+        self.assertEqual(sorted(refs), [("announcement_image_asset_id", "content.MediaAsset", 22),
+                                        ("x_asset_ids", "content.MediaAsset", 1), ("x_asset_ids", "content.MediaAsset", 2)])
+
+    def test_every_id_literal_used_by_the_page_builder_code_is_classified(self):
+        """Drift guard: scan the page-builder/content source for ``*_id`` / ``*_ids`` literals. Each one must be
+        (a) remapped by the converter or (b) explicitly known NOT to be a value stored in Studio JSON.
+        A new key that is neither makes this test fail, forcing a decision before real data hits it."""
+        import re
+        from pathlib import Path
+
+        from apps.stores.services.demo_bundle import remap
+
+        root = Path(__file__).resolve().parents[2]
+        literal = re.compile(r"[\"']([a-z0-9_]*_ids?)[\"']")
+        found = set()
+        for sub in ("storefront_builder", "content"):
+            for path in (root / sub).rglob("*"):
+                if path.suffix not in (".py", ".html", ".js") or {"tests", "qa", "management", "migrations", "vendor"} & set(path.parts):
+                    continue
+                found |= set(literal.findall(path.read_text(encoding="utf-8", errors="ignore")))
+        contextual = {"destination_id", "source_id", "manual_ids"}
+
+        def handled(key):
+            return (key in remap.SCALAR_ID_KEYS or key in remap.LIST_ID_KEYS or key in contextual
+                    or remap.ASSET_KEY.search(key) or remap.MEDIA_FAMILY_KEY.search(key))
+
+        not_stored = {  # API/ORM names in the editor, never persisted inside Studio JSON
+            "base_draft_id", "current_draft_id", "draft_id", "invalid_cell_id", "invalid_container_id", "invalid_draft_id",
+            "invalid_section_id", "cell_id", "container_id", "section_id", "section_stable_id", "stable_id", "store_id",
+            "version_id", "published_version_id", "page_id", "variant_id", "item_ids",
+            # HeroSlide/PromotionalBanner/StoryRailItem foreign-key attribute names: real columns, shifted as FKs
+            "destination_brand_id", "destination_category_id", "destination_collection_id", "destination_product_id",
+        }
+        unclassified = sorted(k for k in found if not handled(k) and k not in not_stored)
+        self.assertEqual(unclassified, [], f"classify these id keys in remap.py (or not_stored here): {unclassified}")
+        media_like = sorted(k for k in found if "asset" in k or "media" in k or "image" in k)
+        self.assertTrue(media_like and all(handled(k) for k in media_like), media_like)
 
     def remap(self, settings, offset=1000):
         from apps.stores.services.demo_bundle.remap import remap_records
