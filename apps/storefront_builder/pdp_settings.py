@@ -244,6 +244,7 @@ PRODUCT_DESCRIPTION_CHOICES = (
     ("body_size", "اندازهٔ متن توضیحات", (
         ("normal", "معمولی"),
         ("large", "درشت"),
+        ("xlarge", "خیلی درشت"),
     ), "normal"),
     # how the tabs behave on a phone: the historical accordion, or the same horizontal tab row as on a desktop
     ("mobile_layout", "نمایش تب‌ها در موبایل", (

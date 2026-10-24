@@ -451,7 +451,7 @@ _HONEY_BAND = {"mode": "palette", "palette_role": "tone-1", "bleed": True}
 
 _HONEY_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
-        "gallery_frame": "flush", "title_size": "xlarge",
+        "gallery_frame": "flush", "title_size": "xlarge", "price_size": "xlarge",
         "show_spec_summary": True,
         "design": {"width_pct": 88},
         "price_layout": "plain", "qty_layout": "inline", "cta_width": "auto", "cta_shape": "rounded", "cta_size": "large",
@@ -459,7 +459,7 @@ _HONEY_PDP = (
         "show_contact_buttons": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
-        "body_size": "large",
+        "body_size": "xlarge",
         "design": {"width_pct": 88},
         "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "underline", "tab_align": "start", "panel_style": "plain",
@@ -741,7 +741,7 @@ _NEON_PDP = (
         "show_discount_badge": True, "show_low_stock_alert": False, "show_desktop_sticky_bar": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
-        "body_size": "large",
+        "body_size": "xlarge",
         "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "pills", "tab_align": "start", "panel_style": "soft",
     }),

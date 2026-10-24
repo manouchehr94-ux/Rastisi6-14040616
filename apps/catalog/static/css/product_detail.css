@@ -485,3 +485,4 @@
 .pdp[data-info-panel="outlined_tone"] .pinfo{background:color-mix(in srgb,var(--brand-tone-2,var(--brand-primary,#c0138a)) 6%,var(--card,#fff));border:3px solid var(--brand-tone-2,var(--brand-primary,#c0138a));border-radius:30px;padding:28px}
 .pdp[data-option-size="large"] .size{min-width:92px;height:46px;font-size:15px}
 .pdp[data-option-size="large"] .sizes{gap:12px}
+.pdp-tabs[data-body-size="xlarge"] .pdp-tab-panel{font-size:19px;line-height:2.25}
