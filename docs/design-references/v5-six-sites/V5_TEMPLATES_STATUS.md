@@ -24,10 +24,10 @@ sort orders; pills or underline), row glow, heading styles `plain_link` / `icon_
 `duo-round` / `trio-round` / `people-4` (consultant cards) / `mosaic-5` / `panel-4` and an optional heading, several videos in one row,
 three product cards (`gallery_pink`, `campaign_round`, `cocoa_gift`) plus `lifestyle_cart` / `outline_plain`, header geometry for the
 beauty header, a header `category_menu` block, and product-page controls: low-stock alert, free-shipping notice, phone / WhatsApp
-buttons (all from the Store's real data), add-to-cart colour role, title / price size, gallery lightbox + swipe.
+buttons (all from the Store's real data), add-to-cart colour role, title / price size, gallery lightbox + swipe, a desktop sticky purchase bar (`show_desktop_sticky_bar`) and a mobile tab-row layout for the description tabs (`mobile_layout`).
 
 Fixed engine defects found on the way: two unsaved candidate sections of one key shared one cached context in the gallery live preview;
-an unsaved `linked_image` crashed the candidate preview.
+an unsaved `linked_image` crashed the candidate preview; the multi-banner variant column rules (`duo-round`, `trio-round`, `people-4`, `mosaic-5`, `panel-4`) were out-ranked by the shared grid rule and rendered in four columns.
 
 ## What was compared with the reference pictures
 
@@ -38,22 +38,23 @@ overflow or a JavaScript error. Each was compared **visually, side by side with 
 widths, spacing, card anatomy, header/footer shape); this is not a numeric pixel diff, because the reference photographs, logos and
 copy are intentionally not shipped.
 
-## Real remaining differences (honest list)
+## Real remaining differences (honest list — the per-output analysis is in `V5_CAPTURE_EVIDENCE.md`)
 
 * **Photography / logo / copy**: reference pictures, logos and marketing text are never shipped; a merchant supplies their own. A template
   therefore looks structurally like its reference but not photographically identical.
 * **Fonts**: commercial reference fonts are substituted (`FONT_SUBSTITUTIONS.md`).
-* **Dize**: announcement is one colour (reference has two); the "extra" checkbox (packaging fee) is not built — it needs a commercial add-on
-  price model.
-* **lilikacosmetics**: the story block's picture is the section's external image URL (no media-library picker on `image_text`); no desktop
-  sticky bar (a mobile sticky bar exists); review form is the platform's own.
+* **Dize**: announcement is one colour (reference has two). The "extra" checkbox is the platform's existing **Gift Wrap** service (see `V5_CAPTURE_EVIDENCE.md` §E):
+  it appears on the product page once the merchant enables it in settings — it is not part of a recipe.
+* **lilikacosmetics**: the story block's picture is the section's external image URL (no media-library picker on `image_text`); the desktop sticky
+  purchase bar is built (`show_desktop_sticky_bar`); review form is the platform's own.
 * **lilium-gallery**: the trust strip shows only claims the Store really backs (payment / shipping / pickup) so it is empty on a Store without
   them; nav links are right-aligned (reference centred); live-chat "AI support" bubble is a third-party service and is not built (WhatsApp
   / phone floating widgets are).
-* **AsalBanoo**: no swirl artwork on the orange bands, no product attribute bullet list beside the buy button, no FAQ block on the product
-  page, branch / app-store badge footer is not reproduced, circular category rail uses the generic ring style.
-* **khanehshokolati**: the gold-bordered buy panel uses the generic outlined panel; optional gift / packaging extras and the second (red)
-  call-to-action are not built (commercial model). The hero is the generic two-up peeking slider (`duo_carousel`); the footer wave is the
+* **AsalBanoo**: no swirl artwork on the orange bands, no product attribute bullet list beside the buy button, the product-page FAQ is a
+  merchant-authored section (empty until the Store lists real questions; no per-product FAQ field exists), branch / app-store badge footer is not
+  reproduced, circular category rail uses the generic ring style.
+* **khanehshokolati**: the gold-bordered buy panel uses the generic outlined panel; the gift extra is the existing Gift Wrap service (enabled in the
+  Store settings); the second (red) call-to-action is not built (commercial decision). The hero is the generic two-up peeking slider (`duo_carousel`); the footer wave is the
   existing `chocolate_dark_columns` wave.
 * **zhimunplus**: digital-goods facts (validity period, delivery method, licence) need catalogue / cart fields and are **not** faked; the
   illustration hero depends on the merchant's picture; testimonials are merchant-entered text (no avatar image).

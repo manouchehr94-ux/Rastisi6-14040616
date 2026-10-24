@@ -135,6 +135,10 @@ def seed_store(site: str, *, image_mode: str = "reference", preset_key: str | No
     shop.name = pack["store_name"]
     shop.tagline = pack.get("tagline", "")
     shop.contact_phone = pack.get("phone", "")
+    if pack.get("gift_wrap_price"):                # the merchant switches the existing Gift Wrap service on in its own settings
+        shop.gift_wrap_available = True
+        shop.gift_wrap_price = pack["gift_wrap_price"]
+        shop.gift_wrap_title = pack.get("gift_wrap_title", shop.gift_wrap_title)
     if pack.get("logo_file"):                      # local comparison only: a picture from the reference kit, never shipped
         shop.logo = uploaded(REFERENCE_ROOT / site / "capture" / pack["logo_file"], "logo.jpg", max_side=900)
     shop.save()
@@ -280,6 +284,9 @@ VIEWPORTS = {
     "mobile": {"width": 487, "height": 900},
 }
 
+#: the two reference sets whose screenshots are not exactly 1847 / 487 px wide (measured from the saved pictures)
+SITE_VIEWPORT_WIDTHS = {("zhimunplus", "desktop"): 1858, ("lilium-gallery", "mobile"): 503}
+
 SETTLE_JS = """
 async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -295,9 +302,11 @@ async () => {
 """
 
 
-def capture_page(browser, base_url: str, host: str, path: str, viewport: str, out: Path) -> dict:
+def capture_page(browser, base_url: str, host: str, path: str, viewport: str, out: Path, site: str = "") -> dict:
     """Full-page screenshot of ``path`` at the named viewport. Returns basic geometry for the report."""
-    context = browser.new_context(viewport=VIEWPORTS[viewport], locale="fa-IR",
+    size = dict(VIEWPORTS[viewport])
+    size["width"] = SITE_VIEWPORT_WIDTHS.get((site, viewport), size["width"])
+    context = browser.new_context(viewport=size, locale="fa-IR",
                                   device_scale_factor=1, is_mobile=(viewport == "mobile"), has_touch=(viewport == "mobile"))
     page = context.new_page()
     page.set_default_timeout(60000)

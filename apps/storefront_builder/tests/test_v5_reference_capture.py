@@ -38,8 +38,8 @@ class ReferenceCaptureTests(StaticLiveServerTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.pw = sync_playwright().start()
-        launch = {"args": ["--no-sandbox", f"--host-resolver-rules=MAP {HOST} 127.0.0.1"],
-                  "ignore_default_args": ["--hide-scrollbars"]}
+        # overlay scrollbars (``--hide-scrollbars`` is Playwright's default): the reference pictures are exactly the viewport wide
+        launch = {"args": ["--no-sandbox", f"--host-resolver-rules=MAP {HOST} 127.0.0.1"]}
         path = _browser_path()
         if path:
             launch["executable_path"] = path
@@ -65,9 +65,12 @@ class ReferenceCaptureTests(StaticLiveServerTestCase):
                 store, owner, products = rc.seed_store(site, image_mode=os.environ.get("SFB_IMAGE_MODE", "reference"),
                                                        preset_key=preset or None, host=HOST)
                 print('SEEDED', len(products), flush=True)
-                pdp = reverse("catalog:product-detail", args=[products[0].slug])
+                pack = rc.PACKS[site]
+                # the reference product page shows a real discount for these four sites: capture a discounted demo product
+                at = next((i for i, row in enumerate(pack["products"]) if row.get("discount")), 0) if pack.get("pdp_discounted") else 0
+                pdp = reverse("catalog:product-detail", args=[products[at].slug])
                 with rc.patched_best_sellers(products):
                     for name, path in (("home", "/"), ("product", pdp)):
                         for viewport in ("desktop", "mobile"):
-                            geometry = rc.capture_page(self.browser, base, HOST, path, viewport, out / site / f"{name}-{viewport}.png")
+                            geometry = rc.capture_page(self.browser, base, HOST, path, viewport, out / site / f"{name}-{viewport}.png", site=site)
                             print(f"CAPTURE {site} {name}-{viewport} {geometry}")

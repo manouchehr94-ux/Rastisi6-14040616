@@ -62,6 +62,7 @@ _DECOR_GRID_CARD = {
 
 _DECOR_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
+        "show_mobile_sticky_bar": False,
         "price_layout": "plain", "qty_layout": "inline", "cta_width": "auto", "cta_shape": "square", "show_breadcrumb": False,
         "show_sku": False, "show_wishlist": False, "show_discount_badge": False, "thumbs_position": "below",
         "title_size": "large", "price_size": "small", "show_topline": False,
@@ -170,14 +171,19 @@ _ROSE_WIDTH = {"width_pct": 81}
 
 _ROSE_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
+        "design": {"width_pct": 88},
+        "show_desktop_sticky_bar": True, "show_mobile_sticky_bar": False,
         "info_panel": "card", "gallery_split": "info_wide", "price_layout": "plain", "qty_layout": "inline",
         "cta_width": "auto", "cta_shape": "square", "cta_size": "normal", "title_size": "normal", "price_size": "large",
         "show_sku": False, "show_discount_badge": False, "show_topline": False, "thumbs_position": "below",
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "design": {"width_pct": 88},
+        "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "underline", "tab_align": "start", "panel_style": "plain",
     }),
     PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={
+        "design": {"width_pct": 88},
         "title": "محصولات مشابه", "display_mode": "carousel", "carousel_navigation": "dots", "card": _ROSE_CARD,
         "responsive": {"desktop_columns": 5, "tablet_columns": 3, "mobile_columns": 2},
     }),
@@ -310,11 +316,15 @@ def _gallery_shelf(title: str, subtitle: str, source: str, limit: int = 8) -> Pr
 
 _GALLERY_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
+        "design": {"width_pct": 92},
+        "show_mobile_sticky_bar": False,
         "price_layout": "plain", "qty_layout": "inline", "cta_width": "full", "cta_shape": "rounded", "cta_size": "large",
         "title_size": "large", "price_size": "xlarge", "info_panel": "plain",
         "show_low_stock_alert": True, "show_free_shipping_notice": True, "show_contact_buttons": True,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "design": {"width_pct": 92},
+        "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "underline", "tab_align": "start", "panel_style": "plain",
         "sections": [
             {"key": "desc", "label": "توضیحات", "visible": True},
@@ -324,6 +334,7 @@ _GALLERY_PDP = (
         ],
     }),
     PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={
+        "design": {"width_pct": 92},
         "title": "محصولات مرتبط", "display_mode": "carousel", "carousel_navigation": "arrows", "card": _GALLERY_CARD,
         "responsive": {"desktop_columns": 4, "tablet_columns": 3, "mobile_columns": 2},
     }),
@@ -436,14 +447,21 @@ _HONEY_BAND = {"mode": "palette", "palette_role": "tone-1", "bleed": True}
 
 _HONEY_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
+        "design": {"width_pct": 88},
         "price_layout": "plain", "qty_layout": "inline", "cta_width": "auto", "cta_shape": "rounded", "cta_size": "large",
         "cta_tone": "secondary", "title_size": "large", "info_panel": "plain", "show_low_stock_alert": True, "show_free_shipping_notice": True,
-        "show_contact_buttons": True, "show_mobile_sticky_bar": True,
+        "show_contact_buttons": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "design": {"width_pct": 88},
+        "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "underline", "tab_align": "start", "panel_style": "plain",
     }),
+    # Merchant-authored questions only: the section renders nothing until the Store lists real Q&A in the Inspector (no invented answers).
+    PresetSectionEntry("faq", semantic_slot_key="product.faq", settings={
+        "design": {"width_pct": 88},"title": "برخی سوالات شما", "items": []}),
     PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={
+        "design": {"width_pct": 88},
         "title": "محصولات مشابه", "display_mode": "carousel", "carousel_navigation": "dots", "card": _HONEY_CARD,
         "responsive": {"desktop_columns": 5, "tablet_columns": 3, "mobile_columns": 2},
     }),
@@ -571,9 +589,10 @@ _COCOA_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
         "info_panel": "outlined", "gallery_position": "end", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "auto",
         "cta_shape": "rounded", "cta_size": "large", "option_shape": "square", "title_size": "large",
-        "show_low_stock_alert": True, "show_free_shipping_notice": True, "show_mobile_sticky_bar": True,
+        "show_low_stock_alert": True, "show_free_shipping_notice": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "boxed", "tab_align": "start", "panel_style": "boxed",
     }),
     PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={
@@ -633,13 +652,26 @@ register_layout_preset(LayoutPresetDefinition(
                 "design": {"width_pct": 90}, "background": {"mode": "surface"}, "spacing": _gap(30, pad_top=26, pad_bottom=26),
                 "responsive": {"desktop_columns": 4, "tablet_columns": 3, "mobile_columns": 2},
             }),
+            PresetSectionEntry("multi_banner", settings={
+                "item_limit": 2, "offset": 6, "layout_variant": "duo-round", "design": {"width_pct": 90}, "spacing": _gap(30),
+            }),
+            _cocoa_shelf("پرفروش‌ترین‌ها", "best_sellers"),
+            PresetSectionEntry("multi_banner", settings={
+                "item_limit": 5, "offset": 8, "layout_variant": "mosaic-5", "design": {"width_pct": 90}, "spacing": _gap(30),
+            }),
+            PresetSectionEntry("multi_banner", settings={
+                "item_limit": 2, "offset": 13, "layout_variant": "duo-round", "design": {"width_pct": 90}, "spacing": _gap(30),
+            }),
             _cocoa_shelf("جدیدترین محصولات", "newest", tabs="sorts", pills=True),
+            PresetSectionEntry("multi_banner", settings={
+                "item_limit": 4, "offset": 15, "layout_variant": "mini-4", "design": {"width_pct": 90}, "spacing": _gap(30),
+            }),
             PresetSectionEntry("blog_posts", settings={
                 "title": "مجله اینترنتی فروشگاه", "item_limit": 3, "style": "editorial_cards", "design": {"width_pct": 90},
                 "spacing": _gap(30, pad_top=0, pad_bottom=30),
             }),
         ), ("categories_story", "hero", "categories_cutouts", "banner_wide", "products_tabs", "banner_mosaic", "products_offers",
-            "products_sorts", "journal")),
+            "banner_duo", "products_best", "banner_mosaic_more", "banner_duo_more", "products_sorts", "banner_strip", "journal")),
         **{**_u10_standard_non_home_pages(), "product_detail": _COCOA_PDP},
     },
 ))
@@ -690,9 +722,10 @@ _NEON_PDP = (
     PresetSectionEntry("product_main", semantic_slot_key="product.main", settings={
         "info_panel": "card", "gallery_split": "equal", "price_layout": "box", "qty_layout": "inline", "cta_width": "full",
         "cta_shape": "rounded", "cta_size": "large", "title_size": "large", "price_size": "large",
-        "show_discount_badge": True, "show_low_stock_alert": False, "show_mobile_sticky_bar": True,
+        "show_discount_badge": True, "show_low_stock_alert": False, "show_desktop_sticky_bar": True, "show_mobile_sticky_bar": False,
     }),
     PresetSectionEntry("product_description", semantic_slot_key="product.description", settings={
+        "mobile_layout": "tabs",
         "layout_mode": "tabs", "tab_style": "pills", "tab_align": "start", "panel_style": "soft",
     }),
     PresetSectionEntry("related_products", semantic_slot_key="product.related", settings={

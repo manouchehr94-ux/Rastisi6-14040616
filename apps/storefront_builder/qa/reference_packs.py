@@ -11,6 +11,7 @@ _DECOR_NAMES = (
 
 register_pack(
     "Dize",
+    gift_wrap_price=98_000, gift_wrap_title="بسته‌بندی هدیه",
     logo_file="logonomy-1721942993137.png",
     header={
         "announcement_text": "در کانال ما همراه باشید و از تخفیف‌های جذاب زودتر باخبر بشید!",
@@ -70,6 +71,7 @@ _GALLERY_NAMES = (
 
 register_pack(
     "lilium-gallery",
+    pdp_discounted=True,
     logo_file="",
     exclude_images=r"logo|icon",
     header={
@@ -100,6 +102,7 @@ _HONEY_NAMES = (
 
 register_pack(
     "AsalBanoo",
+    pdp_discounted=True,
     logo_file="",
     exclude_images=r"logo|icon|badge",
     header={"announcement_text": "ارسال رایگان به سراسر کشور برای خریدهای بالای ۲ میلیون تومان", "announcement_show_phone": False},
@@ -138,6 +141,8 @@ _COCOA_NAMES = (
 
 register_pack(
     "khanehshokolati",
+    gift_wrap_price=98_000, gift_wrap_title="میخواهم سفارشم کادو شود",
+    pdp_discounted=True,
     logo_file="",
     exclude_images=r"logo|icon|badge|34tyyyy|3R34TTT|min-|11zon",
     header={},
@@ -156,7 +161,7 @@ register_pack(
     ],
     hero=[{"title": "تراول ماگ", "button": "لیست محصولات"}, {"title": "دیزنی لند", "button": "لیست محصولات"},
           {"title": "فلاسک", "button": "لیست محصولات"}],
-    banners=[{"title": ""}, {"title": ""}, {"title": ""}, {"title": ""}, {"title": ""}, {"title": ""}],
+    banners=[{"title": ""} for _ in range(19)],
     posts=[
         {"title": "طرز تهیه کافه لاته در خانه", "kind": "wide"},
         {"title": "چطور محصولات استنلی را قبل از استفاده آماده کنیم؟", "kind": "wide"},
@@ -172,6 +177,7 @@ _NEON_NAMES = (
 
 register_pack(
     "zhimunplus",
+    pdp_discounted=True,
     logo_file="",
     exclude_images=r"logo|icon|badge|avatar",
     header={},

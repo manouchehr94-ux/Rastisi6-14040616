@@ -7,6 +7,7 @@ add-to-cart colour role and the three new product cards. Templates: each of the 
 be installed on a Store through the canonical path, published and rendered (Home and product page) without touching Store data."""
 
 from decimal import Decimal
+from pathlib import Path
 
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
@@ -53,6 +54,45 @@ class RegistrationTests(SimpleTestCase):
             blob = repr(preset.pages)
             for forbidden in ("L'OREAL", "LOREAL", "Stanley", "STANLEY", "SHEGLAM", "ChatGPT", "http"):
                 self.assertNotIn(forbidden, blob, f"{key}: {forbidden}")
+
+
+class PdpRecipeAndCssContractTests(SimpleTestCase):
+    def _pdp_settings(self, key, section_key):
+        entries = lpr.get_layout_preset(key).pages["product_detail"]
+        return next(e for e in entries if e.section_key == section_key).settings
+
+    def test_none_of_the_six_carries_the_mobile_floating_bar_and_two_carry_the_desktop_bar(self):
+        for key in SIX:
+            with self.subTest(key=key):
+                self.assertIs(self._pdp_settings(key, "product_main")["show_mobile_sticky_bar"], False)
+        with_desktop = {k for k in SIX if self._pdp_settings(k, "product_main").get("show_desktop_sticky_bar")}
+        self.assertEqual(with_desktop, {"rose_beauty_store", "neon_digital_store"})
+
+    def test_the_description_tabs_keep_a_tab_row_on_phones_where_the_references_do(self):
+        tabbed = {k for k in SIX if self._pdp_settings(k, "product_description").get("mobile_layout") == "tabs"}
+        self.assertEqual(tabbed, set(SIX) - {"decor_sand_boutique"})
+
+    def test_the_honey_recipe_ships_an_empty_merchant_authored_faq_slot_only(self):
+        entries = lpr.get_layout_preset("campaign_beauty_hub").pages["product_detail"]
+        faq = [e for e in entries if e.section_key == "faq"]
+        self.assertEqual(len(faq), 1)
+        self.assertEqual(faq[0].settings["items"], [], "no invented question or answer")
+        self.assertEqual(faq[0].semantic_slot_key, "product.faq")
+
+    def test_the_khane_home_recipe_has_the_extra_banner_groups_and_the_banner_pool_covers_them(self):
+        home = lpr.get_layout_preset("cocoa_gift_shop").pages["home"]
+        variants = [e.settings.get("layout_variant") for e in home if e.section_key == "multi_banner"]
+        self.assertEqual(variants, ["wide-single", "mosaic-5", "duo-round", "mosaic-5", "duo-round", "mini-4"])
+        used = max(e.settings["offset"] + e.settings["item_limit"] for e in home if e.section_key == "multi_banner")
+        self.assertEqual(used, 19)
+        self.assertEqual(len(rc.PACKS["khanehshokolati"]["banners"]), used)
+
+    def test_banner_variant_column_rules_out_rank_the_shared_grid_rule(self):
+        css = (Path(sr.__file__).parent / "static" / "css" / "storefront_builder.css").read_text(encoding="utf-8")
+        for variant in ("duo-round", "trio-round", "people-4", "mosaic-5", "panel-4"):
+            self.assertRegex(css, r"\.grid\.rsec-cols\.promo-grid--%s\{grid-template-columns" % variant, variant)
+        # the shared product rule is (0,2,0); an unprefixed variant rule (0,1,0) would lose to it and render four equal columns
+        self.assertNotRegex(css, r"(?m)^\.promo-grid--(duo-round|trio-round|people-4|mosaic-5|panel-4)\{grid-template-columns")
 
 
 class ProductSectionPrimitiveTests(SimpleTestCase):
