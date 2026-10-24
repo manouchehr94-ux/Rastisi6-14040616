@@ -457,7 +457,20 @@ class NoDeadProductSectionControlTests(_CampaignBase):
             return MediaAsset.objects.create(store=self.store, image=_png(f"{field.key}.png")).pk
         return self.ALTERNATIVES[field.field_type](current)
 
+    def _seed_categories_with_products(self):
+        """Tabs are built from the Store's REAL categories: give the Store two, each with a product, so the control has data to show."""
+        from decimal import Decimal
+
+        from apps.catalog.models import Category, Product, Vendor
+
+        vendor = Vendor.objects.create(store=self.store, name="فروشنده تب", slug="tabs-vendor")
+        for index in range(2):
+            category = Category.objects.create(store=self.store, name=f"دستهٔ تب {index}", slug=f"tabs-cat-{index}", order=index, is_active=True)
+            Product.objects.create(store=self.store, vendor=vendor, category=category, name=f"کالای تب {index}", slug=f"tabs-p-{index}",
+                                   sku=f"TAB-{index}", price=Decimal("100000"), stock=5, status=Product.Status.ACTIVE)
+
     def test_every_visible_control_changes_the_render(self):
+        self._seed_categories_with_products()
         for mode in ("carousel", "grid", "campaign_band", "catalog_grid"):
             self.assertEqual(self._patch({"display_mode": mode, "carousel_autoplay": False}).status_code, 200)
             self.band.refresh_from_db()

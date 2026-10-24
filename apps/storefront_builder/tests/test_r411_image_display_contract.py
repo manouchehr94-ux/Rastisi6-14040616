@@ -9,6 +9,7 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 from apps.storefront_builder import design_block, image_display, section_registry
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 APPS = Path(__file__).resolve().parents[2]
 BUILDER_CSS = (APPS / "storefront_builder" / "static" / "css" / "storefront_builder.css").read_text(encoding="utf-8")
@@ -133,6 +134,6 @@ class EveryReadyTemplateRendersOnlyContractImagesTests(MediaContractBase):
                         problems.append((preset.key, item["section"].section_key, tag[:100]))
                     if re.search(r"object-fit", tag):
                         problems.append((preset.key, item["section"].section_key, "inline object-fit"))
-        self.assertEqual(len(templates), 53)
+        self.assertEqual(len(templates), READY_TEMPLATE_COUNT)
         self.assertGreater(imgs, 100, "the check must really have rendered pictures")
         self.assertEqual(problems, [])

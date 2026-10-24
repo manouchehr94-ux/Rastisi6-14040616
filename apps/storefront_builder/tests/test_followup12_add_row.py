@@ -41,9 +41,11 @@ class AddRowMarkupTests(_BandBase):
         tpl = tpl[:tpl.index("</template>")]
         offered = re.findall(r'name="rs_row_layout" value="(\w+)"', tpl)
         expected = [k for k, widths in container_service.LAYOUT_PRESETS.items() if len(widths) == 2]
-        self.assertEqual(offered, expected)
+        # V5-LAYOUT-001: after the registry two-cell presets, exactly the two reference three-section patterns (each mapped, server-side,
+        # onto an EXISTING engine preset by its widths — see test_v5_layout_patterns)
+        self.assertEqual(offered, expected + ["thirds_equal", "big_right_two_left"])
         self.assertNotIn("thirds", offered)
-        self.assertEqual(len(re.findall(r'<optgroup label=', tpl)) % 2, 0)   # the section picker appears once per column
+        self.assertEqual(len(re.findall(r'<optgroup label=', tpl)) % 3, 0)   # the section picker appears once per slot (first/second/third)
         self.assertIn("data-rs-add-row-first", tpl)
         self.assertIn("data-rs-add-row-second", tpl)
 
@@ -69,7 +71,9 @@ class AddRowJsContractTests(_BandBase):
         self.assertNotIn("publish", body.lower())
 
     def test_studio_dialog_calls_the_chain_and_never_publishes(self):
-        self.assertIn("R4.addTwoColumnRow(", STUDIO_JS)
+        # V5-LAYOUT-ATOMIC: the Studio form builds with ONE container.add; the legacy chain helper stays available in r4_editor.js untouched.
+        self.assertIn("type: 'container.add'", STUDIO_JS)
+        self.assertIn("R4.addTwoColumnRow = function", Path(__file__).resolve().parents[1].joinpath("static/storefront_builder/r4_editor.js").read_text(encoding="utf-8"))
         self.assertIn("case 'add-row': openModal('add-row')", STUDIO_JS)
         submit = STUDIO_JS[STUDIO_JS.index("data-rs-add-row-form]"):][:1400]
         self.assertNotIn("publish", submit.lower().replace("منتشر", ""))

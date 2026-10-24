@@ -18,9 +18,10 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from typing import Callable
 
-from . import design_block, icon_registry
+from . import design_block, icon_registry, pdp_settings
 from .services.category_selection import CATEGORY_SOURCE_MODES
 from . import resource_source as resource_source_module
 from .settings_schema import (
@@ -300,7 +301,7 @@ def _clean_positive_int_list(raw_list, *, max_len: int, error_cls=None, error_me
 
 #: ``default`` keeps each context's own heading look; ``plain_outline`` = plain title + outlined "view all" pill;
 #: ``underlined`` = plain title + pill with an accent rule under the heading block.
-PRODUCT_SECTION_HEADING_STYLES = ("default", "plain_outline", "underlined")
+PRODUCT_SECTION_HEADING_STYLES = ("default", "plain_outline", "underlined", "plain_link", "icon_chip")
 
 #: Generic presentation contract of a product section's item row. Every key is optional and written only
 #: when it differs from the default, so existing sections keep their stored shape and look.
@@ -400,6 +401,8 @@ def pin_campaign_copy(raw_patch: dict, current_settings: dict) -> dict:
             pinned[own] = current_settings.get(followed, "")
     return pinned
 _PRODUCT_SECTION_MAX_GAP = 60
+#: ``""`` = no tabs (historical). ``categories`` = the Store's own top-level categories; ``sorts`` = newest / best sellers / discounted.
+PRODUCT_SECTION_TABS_SOURCES = ("", "categories", "subcategories", "sorts")
 
 
 def _validate_product_section_settings(raw: dict) -> dict:
@@ -488,6 +491,28 @@ def _validate_product_section_settings(raw: dict) -> dict:
     # Optional presentation (written only when non-default): how the section heading is drawn.
     if heading_style in PRODUCT_SECTION_HEADING_STYLES[1:]:
         cleaned["heading_style"] = heading_style
+    # Icon beside the heading (``icon_chip`` heading style): a registered engine icon key.
+    if icon_registry.is_valid_icon_key(raw.get("heading_icon")):
+        cleaned["heading_icon"] = raw["heading_icon"]
+    # V5 six-site kit: where the «مشاهده همه» action sits — in the heading (historical) or as a centred link below the items.
+    if raw.get("view_all_placement") == "bottom":
+        cleaned["view_all_placement"] = "bottom"
+    # V5 six-site kit: a soft accent glow behind the row of cards (written only when on).
+    if raw.get("row_backdrop") == "glow":
+        cleaned["row_backdrop"] = "glow"
+    # V5 six-site kit: tabs beside the heading that switch between real category / sort rows (written only when on). The two tab
+    # companions are stored whenever they are valid and non-default (dormant, like the other row controls, until tabs are on).
+    if raw.get("tabs_source") in PRODUCT_SECTION_TABS_SOURCES[1:]:
+        cleaned["tabs_source"] = raw["tabs_source"]
+    try:
+        tabs_count = int(raw.get("tabs_count", 4))
+    except (TypeError, ValueError):
+        tabs_count = 4
+    tabs_count = max(2, min(6, tabs_count))
+    if tabs_count != 4:
+        cleaned["tabs_count"] = tabs_count
+    if raw.get("tabs_style") == "pills":
+        cleaned["tabs_style"] = "pills"
     # Item-row presentation contract (all optional; written only when non-default).
     if raw.get("desktop_layout") in PRODUCT_SECTION_DESKTOP_LAYOUTS[1:]:
         cleaned["desktop_layout"] = raw["desktop_layout"]
@@ -587,8 +612,31 @@ PRODUCT_SECTION_SCHEMA = SettingsSchema(fields=(
         choices=(("above", "بالای بخش"), ("inside", "داخل بخش")),
     ),
     SettingsField(
+        "view_all_placement", "جای دکمه «مشاهده همه»", "choice", "advanced", default="heading",
+        choices=(("heading", "کنار عنوان"), ("bottom", "لینک وسط‌چین زیر کالاها")),
+    ),
+    SettingsField(
         "heading_style", "سبک عنوان", "choice", "advanced", default="default",
-        choices=(("default", "پیش‌فرض"), ("plain_outline", "عنوان ساده + دکمه خط‌دار"), ("underlined", "عنوان ساده + خط تأکید")),
+        choices=(("default", "پیش‌فرض"), ("plain_outline", "عنوان ساده + دکمه خط‌دار"), ("underlined", "عنوان ساده + خط تأکید"),
+                 ("plain_link", "عنوان، زیرعنوان و پیوند «مشاهده همه»"), ("icon_chip", "نشان آیکنی کنار عنوان")),
+    ),
+    SettingsField(
+        "heading_icon", "آیکن کنار عنوان", "choice", "advanced", default="",
+        choices=(("", "بدون آیکن"),) + icon_registry.icon_choices(),
+        visible_when=(("heading_style", ("icon_chip",)),),
+    ),
+    SettingsField(
+        "row_backdrop", "پس‌زمینهٔ ردیف کارت‌ها", "choice", "advanced", default="",
+        choices=(("", "ساده"), ("glow", "درخشش ملایم رنگ تأکید")),
+    ),
+    SettingsField(
+        "tabs_source", "زبانه‌های کنار عنوان", "choice", "advanced", default="",
+        choices=(("", "بدون زبانه"), ("categories", "دسته‌بندی‌های فروشگاه"), ("subcategories", "زیردسته‌های اولین دسته"), ("sorts", "مرتب‌سازی: پرفروش، تخفیف‌دار، تازه‌ها")),
+    ),
+    SettingsField("tabs_count", "حداکثر تعداد زبانه‌ها", "integer", "advanced", default=4, min_value=2, max_value=6),
+    SettingsField(
+        "tabs_style", "ظاهر زبانه‌ها", "choice", "advanced", default="",
+        choices=(("", "عنوان راست و خط زیر زبانه"), ("pills", "عنوان وسط‌چین و زبانهٔ قرصی")),
     ),
     SettingsField(
         "desktop_layout", "چیدمان از تبلت به بالا", "choice", "advanced", default="inherit",
@@ -676,6 +724,11 @@ PRODUCT_SECTION_VISIBLE_WHEN = {
     "show_scrollbar": _PS_ROW + (("overflow_mode", ("scroll",)),),
     "header_position": (("display_mode", ("carousel", "grid")),),
     "heading_style": (("display_mode", ("carousel", "grid")),),
+    "view_all_placement": (("show_view_all", ("true",)), ("display_mode", ("carousel", "grid"))),
+    "row_backdrop": (("display_mode", ("carousel", "grid")),),
+    "tabs_source": (("display_mode", ("carousel", "grid")),),
+    "tabs_count": (("display_mode", ("carousel", "grid")), ("tabs_source", ("categories", "subcategories", "sorts"))),
+    "tabs_style": (("display_mode", ("carousel", "grid")), ("tabs_source", ("categories", "subcategories", "sorts"))),
     "desktop_columns": _PS_GRIDDED,
     "tablet_columns": _PS_GRIDDED,
     "mobile_columns": _PS_GRIDDED,
@@ -1136,6 +1189,9 @@ CARD_STYLE_CHOICES = (
     # Reference-fidelity vocabulary (templates 51/53): a centred card with a
     # quantity stepper + cart action, and a flat card over a pastel tile.
     "center_stepper", "pastel_flat",
+    # V5 six-site vocabulary (templates 54-59): quiet photo-first card with the cart action below, and a bordered plain card.
+    "lifestyle_cart", "outline_plain",
+    "gallery_pink", "campaign_round", "cocoa_gift",
 )
 
 BADGE_TREATMENT_CHOICES = ("none", "sale")
@@ -1419,7 +1475,7 @@ def _with_design(capabilities: frozenset, validate_fn, default_fn):
     Only for sections that declare applicable design properties. The block is never
     materialised by default: it is written only when it holds at least one non-neutral value,
     so sections without it stay byte-identical."""
-    applicable = design_block.properties_for_capabilities(capabilities)
+    applicable = design_block.all_properties_for_capabilities(capabilities)
     if not applicable:
         return validate_fn, default_fn
 
@@ -1779,7 +1835,7 @@ _SLIDER_DEFAULT_INTERVAL_MS = 4500
 #: section that doesn't read it. Keeping the key in one shared validator
 #: (rather than forking a second near-identical function) is the same
 #: reuse choice already made for every other slider-level field.
-HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide")
+HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carousel", "atelier_triptych", "luxury_showcase", "poster_wide", "clean_slider")
 
 #: Phase 5 Task 5 (STRANS) — the CLOSED enum of between-slide transition styles
 #: for the shared hero/image slider. ``cut`` is the historical, byte-identical
@@ -1790,6 +1846,12 @@ HERO_STYLE_CHOICES = ("overlay", "split", "beauty_editorial", "chocolate_carouse
 #: not motion). ``prefers-reduced-motion: reduce`` collapses fade/slide to an
 #: effectively instant cut at the CSS layer without changing slide state.
 SLIDER_TRANSITION_CHOICES = ("cut", "fade", "slide")
+
+
+#: Desktop width:height of the ``clean_slider`` canvas ("" = the historical 2.18:1).
+HERO_SLIDER_RATIOS = ("", "1.33", "1.78", "2.18", "2.5", "2.76", "3.2", "4")
+#: Phone width:height of the same canvas ("" = the historical 0.64:1 portrait). Independent of the desktop ratio.
+HERO_SLIDER_RATIOS_MOBILE = ("", "0.64", "1.0", "1.33", "1.78", "2.18")
 
 
 def _validate_slider_settings(raw: dict) -> dict:
@@ -1844,12 +1906,21 @@ def _validate_slider_settings(raw: dict) -> dict:
     if transition not in SLIDER_TRANSITION_CHOICES:
         transition = "cut"
 
-    return {
+    cleaned = {
         "autoplay": autoplay, "interval_ms": interval_ms,
         "show_arrows": show_arrows, "show_dots": show_dots, "loop": loop,
         "text_position": text_position, "hero_style": hero_style,
         "transition": transition,
     }
+    # V5 six-site kit: desktop picture proportion of the clean slider. Sparse — written only when it differs from the default.
+    if str(raw.get("slider_ratio", "")) in HERO_SLIDER_RATIOS[1:]:
+        cleaned["slider_ratio"] = str(raw["slider_ratio"])
+    if str(raw.get("slider_ratio_mobile", "")) in HERO_SLIDER_RATIOS_MOBILE[1:]:
+        cleaned["slider_ratio_mobile"] = str(raw["slider_ratio_mobile"])
+    # Edge-to-edge slider: spans the whole canvas (small side gutter) and sits flush against the block above it.
+    if raw.get("slider_width") == "full":
+        cleaned["slider_width"] = "full"
+    return cleaned
 
 
 def default_slider_settings() -> dict:
@@ -1913,6 +1984,23 @@ HERO_BANNER_SCHEMA = SettingsSchema(fields=(
         "transition", "جلوه‌ی جابه‌جایی اسلاید", "choice", "advanced",
         default="cut",
         choices=(("cut", "بدون جلوه (برش)"), ("fade", "محو تدریجی"), ("slide", "لغزش")),
+    ),
+    SettingsField(
+        "slider_ratio", "نسبت تصویر اسلایدر (دسکتاپ)", "choice", "advanced", default="",
+        choices=(("", "پیش‌فرض (۲٫۱۸ به ۱)"), ("1.33", "۴ به ۳"), ("1.78", "۱۶ به ۹"), ("2.18", "۲٫۱۸ به ۱"),
+                 ("2.5", "۲٫۵ به ۱"), ("2.76", "۲٫۷۶ به ۱"), ("3.2", "۳٫۲ به ۱"), ("4", "۴ به ۱")),
+        visible_when=(("hero_style", ("clean_slider",)),),
+    ),
+    SettingsField(
+        "slider_ratio_mobile", "نسبت تصویر اسلایدر (موبایل)", "choice", "advanced", default="",
+        choices=(("", "پیش‌فرض (عمودی ۰٫۶۴ به ۱)"), ("0.64", "عمودی ۰٫۶۴ به ۱"), ("1.0", "مربع"), ("1.33", "۴ به ۳"),
+                 ("1.78", "۱۶ به ۹"), ("2.18", "۲٫۱۸ به ۱")),
+        visible_when=(("hero_style", ("clean_slider",)),),
+    ),
+    SettingsField(
+        "slider_width", "عرض اسلایدر", "choice", "advanced", default="",
+        choices=(("", "هم‌عرض محتوای صفحه"), ("full", "تمام‌عرض و چسبیده به بخش بالا")),
+        visible_when=(("hero_style", ("clean_slider",)),),
     ),
     SettingsField(
         "appearance_overrides", "تایپوگرافی این بخش", "appearance_override", "advanced",
@@ -1991,7 +2079,7 @@ _MAX_SECTION_TITLE_LENGTH = 60
 #: compact flat rail (small image, short label, no card chrome) distinct
 #: from ``image_strip``'s own CSS (which ``dense_marketplace`` already
 #: uses) so that template's rendering stays completely untouched.
-CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles")
+CATEGORY_GRID_DISPLAY_MODES = ("grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles", "label_tiles", "icon_rail", "ring_circles", "photo_cards")
 
 
 def _validate_category_grid_settings(raw: dict) -> dict:
@@ -2071,6 +2159,7 @@ CATEGORY_GRID_SCHEMA = SettingsSchema(fields=(
             ("top_then_descendants", "ابتدا سطح اول، سپس زیردسته‌ها"),
             ("all", "همه دسته‌ها به ترتیب درختی"),
             ("leaf", "فقط دسته‌های نهایی (بدون زیردسته)"),
+            ("subcategories", "زیردسته‌های اولین دسته"),
         ),
     ),
 ))
@@ -2252,8 +2341,8 @@ def validate_blog_posts_settings(raw: dict) -> dict:
         cleaned["min_slots"] = max(_MIN_BLOG_POST_ITEMS, min(_MAX_BLOG_POST_ITEMS, min_slots))
     # Optional presentation (written only when non-default): ``panel_carousel`` = one surface panel holding a
     # single row of square-image cards with a category badge and an action pill.
-    if raw.get("style") == "panel_carousel":
-        cleaned["style"] = "panel_carousel"
+    if raw.get("style") in ("panel_carousel", "editorial_cards"):
+        cleaned["style"] = raw["style"]
     return cleaned
 
 
@@ -2274,7 +2363,7 @@ BLOG_POSTS_SCHEMA = SettingsSchema(fields=(
     ),
     SettingsField(
         "style", "نوع نمایش", "choice", "basic", default="grid",
-        choices=(("grid", "گرید"), ("panel_carousel", "پنل با ردیف کارت")),
+        choices=(("grid", "گرید"), ("panel_carousel", "پنل با ردیف کارت"), ("editorial_cards", "کارت‌های تحریریه با نشان تاریخ")),
     ),
     SettingsField(
         "min_slots", "حداقل جایگاه‌های نمایشی", "integer", "advanced",
@@ -2588,7 +2677,27 @@ def _validate_video_section_settings(raw: dict) -> dict:
         except ProductVideoError as exc:
             raise VideoSectionSettingsError(str(exc)) from exc
 
-    return {"title": title, "video_url": video_url, "caption": caption}
+    cleaned = {"title": title, "video_url": video_url, "caption": caption}
+    # Optional: several videos in one row (each validated by the same provider detector). Written only when non-empty.
+    extra = raw.get("videos")
+    if isinstance(extra, (list, tuple)) and extra:
+        from apps.catalog.services.product_video_service import ProductVideoError, detect_provider_and_id
+
+        rows = []
+        for item in extra[:4]:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url", "")).strip()
+            if not url:
+                continue
+            try:
+                detect_provider_and_id(url)
+            except ProductVideoError as exc:
+                raise VideoSectionSettingsError(str(exc)) from exc
+            rows.append({"url": url, "title": str(item.get("title", "")).strip()[:_MAX_VIDEO_CAPTION_LENGTH]})
+        if rows:
+            cleaned["videos"] = rows
+    return cleaned
 
 
 def default_video_section_settings() -> dict:
@@ -2605,6 +2714,13 @@ VIDEO_SECTION_SCHEMA = SettingsSchema(fields=(
     SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
     SettingsField("video_url", "آدرس ویدیو", "text", "basic", default=""),
     SettingsField("caption", "زیرنویس", "text", "advanced", default="", max_length=_MAX_VIDEO_CAPTION_LENGTH),
+    SettingsField(
+        "videos", "ویدیوهای بیشتر در یک ردیف (حداکثر ۴)", "repeater", "advanced", default=[], min_value=0, max_value=4,
+        repeater_item_fields=(
+            SettingsField("url", "آدرس ویدیو", "text", "basic", default=""),
+            SettingsField("title", "عنوان", "text", "basic", default="", max_length=_MAX_VIDEO_CAPTION_LENGTH),
+        ),
+    ),
 ))
 
 
@@ -2633,6 +2749,37 @@ def _validate_newsletter_settings(raw: dict) -> dict:
 
 def default_newsletter_settings() -> dict:
     return {"title": "عضویت در خبرنامه", "subtitle": "", "button_label": "عضویت"}
+
+
+def _validate_related_products_settings(raw: dict) -> dict:
+    """V5 — ``related_products`` keeps its historical passthrough shape and gains three OPTIONAL presentation keys (written only when
+    non-default): a heading, ``carousel`` instead of the grid, and the carousel navigation. The related items themselves still come from
+    the product page context (same category), never from settings."""
+    cleaned = dict(raw) if isinstance(raw, dict) else {}
+    title = str(cleaned.get("title", "") or "").strip()[:_MAX_PRODUCT_SECTION_TITLE_LENGTH]
+    if title:
+        cleaned["title"] = title
+    else:
+        cleaned.pop("title", None)
+    if cleaned.get("display_mode") != "carousel":
+        cleaned.pop("display_mode", None)
+    if cleaned.get("carousel_navigation") not in PRODUCT_SECTION_CAROUSEL_NAVIGATION[1:]:
+        cleaned.pop("carousel_navigation", None)
+    return cleaned
+
+
+RELATED_PRODUCTS_SCHEMA = SettingsSchema(fields=(
+    SettingsField("title", "عنوان بخش", "text", "basic", default="", max_length=_MAX_PRODUCT_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "display_mode", "نوع نمایش", "choice", "basic", default="grid",
+        choices=(("grid", "گرید"), ("carousel", "کاروسل")),
+    ),
+    SettingsField(
+        "carousel_navigation", "ناوبری کاروسل", "choice", "advanced", default="none",
+        choices=(("none", "بدون ناوبری"), ("arrows", "فلش‌ها"), ("dots", "نقطه‌ها")),
+        visible_when=(("display_mode", ("carousel",)),),
+    ),
+))
 
 
 class SurfacePanelSettingsError(ValueError):
@@ -2688,13 +2835,21 @@ _DECORATIVE_STRIP_DEFAULTS = {
     "radius": 8, "border_width": 0, "border_color": "", "shadow_enabled": False, "shadow_color": "",
     "shadow_blur": 12, "bleed": False, "alignment": "center", "optional_text": "",
     "visible_desktop": True, "visible_tablet": True, "visible_mobile": True,
+    # V5 six-site kit: the strip may be ONE link (a call-to-action bar) with an optional leading icon and a text size.
+    "link_url": "", "icon": "", "text_size": 18,
+    # Call-to-action composition: a button label turns the link into a real button next to the text, and ``gradient_to``
+    # fades the fill into a second colour (fill sits on the end side, ``gradient_to`` on the start side).
+    "button_label": "", "gradient_to": "",
 }
-_DECORATIVE_STRIP_COLOR_KEYS = ("background_color", "foreground_color", "overlay_color", "border_color", "shadow_color")
+DECORATIVE_STRIP_ICONS = ("", "instagram", "whatsapp", "telegram", "youtube", "x", "facebook", "linkedin", "aparat")
+_DECORATIVE_STRIP_URL_RE = re.compile(r"^(#[\w-]*|/(?!/)[^\s]*|https?://[^\s]+)$")
+_DECORATIVE_STRIP_COLOR_KEYS = ("background_color", "foreground_color", "overlay_color", "border_color", "shadow_color", "gradient_to")
 _DECORATIVE_STRIP_BOOL_KEYS = ("enabled", "shadow_enabled", "bleed", "visible_desktop", "visible_tablet", "visible_mobile")
 _DECORATIVE_STRIP_INT_LIMITS = {
     "desktop_height": _DECORATIVE_STRIP_HEIGHT_LIMITS, "tablet_height": _DECORATIVE_STRIP_HEIGHT_LIMITS,
     "mobile_height": _DECORATIVE_STRIP_HEIGHT_LIMITS, "image_position_x": (0, 100), "image_position_y": (0, 100),
     "overlay_opacity": (0, 100), "radius": (0, 40), "border_width": (0, 8), "shadow_blur": (0, 60),
+    "text_size": (11, 48),
 }
 _MAX_DECORATIVE_STRIP_TEXT_LENGTH = 120
 
@@ -2748,8 +2903,14 @@ def _validate_decorative_strip_settings(raw: dict) -> dict:
                     raise DecorativeStripSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است") from None
                 if value <= 0:
                     raise DecorativeStripSettingsError("رسانه‌ی انتخاب‌شده نامعتبر است")
-        elif key == "optional_text":
-            value = str(value or "").strip()[:_MAX_DECORATIVE_STRIP_TEXT_LENGTH]
+        elif key in ("optional_text", "button_label"):
+            value = str(value or "").strip()[:_MAX_DECORATIVE_STRIP_TEXT_LENGTH if key == "optional_text" else 40]
+        elif key == "icon":
+            value = value if value in DECORATIVE_STRIP_ICONS else default
+        elif key == "link_url":
+            value = str(value or "").strip()[:500]
+            if value and not _DECORATIVE_STRIP_URL_RE.match(value):
+                raise DecorativeStripSettingsError("نشانی لینک نوار باید با # ، / ، http:// یا https:// شروع شود")
         if value != default:
             cleaned[key] = value
     # A tablet/mobile height that equals its own default is not stored, but an explicit desktop height always is.
@@ -2802,6 +2963,13 @@ def _decorative_strip_schema_fields() -> tuple:
             choices=(("start", "ابتدا"), ("center", "وسط"), ("end", "انتها")),
         ),
         SettingsField("optional_text", "متن اختیاری", "text", "advanced", default="", max_length=_MAX_DECORATIVE_STRIP_TEXT_LENGTH),
+        SettingsField("link_url", "لینک نوار (اختیاری)", "text", "advanced", default="", max_length=500),
+        SettingsField(
+            "icon", "آیکن کنار متن", "choice", "advanced", default="",
+            choices=(("", "بدون آیکن"), ("instagram", "اینستاگرام"), ("whatsapp", "واتساپ"), ("telegram", "تلگرام"),
+                     ("youtube", "یوتیوب"), ("x", "ایکس"), ("facebook", "فیس‌بوک"), ("linkedin", "لینکدین"), ("aparat", "آپارات")),
+        ),
+        SettingsField("text_size", "اندازهٔ متن (px)", "integer", "advanced", default=_DECORATIVE_STRIP_DEFAULTS["text_size"], min_value=11, max_value=48),
         SettingsField("visible_desktop", "نمایش در دسکتاپ", "boolean", "advanced", default=True),
         SettingsField("visible_tablet", "نمایش در تبلت", "boolean", "advanced", default=True),
         SettingsField("visible_mobile", "نمایش در موبایل", "boolean", "advanced", default=True),
@@ -2839,6 +3007,15 @@ IMAGE_TEXT_SCHEMA = SettingsSchema(fields=(
         "image_position", "جای تصویر", "choice", "advanced",
         default="right", choices=(("right", "سمت راست"), ("left", "سمت چپ")),
     ),
+    SettingsField(
+        "feature_items", "فهرست ویژگی‌ها (آیکن، عنوان، توضیح)", "repeater", "advanced",
+        default=[], min_value=0, max_value=4,
+        repeater_item_fields=(
+            SettingsField("icon", "آیکن", "choice", "basic", default="", choices=(("", "بدون آیکن"),) + icon_registry.icon_choices()),
+            SettingsField("title", "عنوان", "text", "basic", default="", max_length=60),
+            SettingsField("text", "توضیح", "text", "basic", default="", max_length=200),
+        ),
+    ),
 ))
 
 
@@ -2863,6 +3040,18 @@ def _validate_image_text_settings(raw: dict) -> dict:
     # of the cream card. Written only when non-default so existing sections stay byte-identical.
     if raw.get("block_style") == "plain":
         cleaned["block_style"] = "plain"
+    # Optional icon + title + text rows shown under the body (written only when at least one row has a title).
+    rows = []
+    for item in (raw.get("feature_items") or [])[:4] if isinstance(raw.get("feature_items"), (list, tuple)) else []:
+        if not isinstance(item, dict):
+            continue
+        item_title = str(item.get("title", "")).strip()[:60]
+        if not item_title:
+            continue
+        icon = item.get("icon") if icon_registry.is_valid_icon_key(item.get("icon")) else ""
+        rows.append({"icon": icon, "title": item_title, "text": str(item.get("text", "")).strip()[:200]})
+    if rows:
+        cleaned["feature_items"] = rows
     return cleaned
 
 
@@ -2978,6 +3167,44 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 ))
 
 
+# ---------------------------------------------------------------- V5 — کنترل‌های طراحی صفحهٔ محصول (بستهٔ ۱)
+# هر دو بخش یک Sectionِ یکپارچه می‌مانند؛ فقط «چینش و ظاهر» داده‌های واقعی را تنظیم می‌کنند. جدولِ گزینه‌ها، مقدارِ پیش‌فرض
+# (= رفتارِ پیش از این کنترل‌ها) و پاک‌سازی در ``pdp_settings`` است؛ اینجا فقط به schema/Inspector تبدیل می‌شود.
+PRODUCT_MAIN_SCHEMA = SettingsSchema(fields=(
+    *(
+        SettingsField(key, label, "choice", "basic", default=default, choices=choices)
+        for key, label, choices, default in pdp_settings.PRODUCT_MAIN_CHOICES
+    ),
+    *(
+        SettingsField(key, label, "boolean", "basic", default=default)
+        for key, label, default in pdp_settings.PRODUCT_MAIN_SWITCHES
+    ),
+))
+
+PRODUCT_DESCRIPTION_SCHEMA = SettingsSchema(fields=(
+    *(
+        SettingsField(key, label, "choice", "basic", default=default, choices=choices)
+        for key, label, choices, default in pdp_settings.PRODUCT_DESCRIPTION_CHOICES
+    ),
+    SettingsField(
+        "sections", "ترتیب، عنوان و نمایش بخش‌ها", "repeater", "basic",
+        default=[],
+        min_value=0, max_value=pdp_settings.PRODUCT_DESCRIPTION_MAX_ITEMS,
+        repeater_item_fields=(
+            SettingsField(
+                "key", "بخش", "choice", "basic", default="desc",
+                choices=pdp_settings.PRODUCT_DESCRIPTION_SECTION_CHOICE_LABELS,
+            ),
+            SettingsField(
+                "label", "عنوان دلخواه (خالی = عنوان پیش‌فرض)", "text", "basic", default="",
+                max_length=pdp_settings.PRODUCT_DESCRIPTION_MAX_LABEL,
+            ),
+            SettingsField("visible", "نمایش داده شود", "boolean", "basic", default=True),
+        ),
+    ),
+))
+
+
 # ---------------------------------------------------------------- ثبت انواع بخش
 
 #: Task 6 (Group C) — the U1A finding above (R1 §9) is now RESOLVED into
@@ -2993,7 +3220,7 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 #: state — Django's ``|default:'default'`` template filter treats an
 #: empty string exactly like an absent key, so this is byte-identical to
 #: today's un-set behaviour, never a new "promo-4" default).
-MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide", "tile-4")
+MULTI_BANNER_KNOWN_LAYOUT_VARIANTS = ("promo-4", "wide-single", "mini-4", "strip", "atelier-duo", "atelier-wide", "tile-4", "duo-round", "trio-round", "people-4", "mosaic-5", "panel-4")
 #: Merchant-facing names for the closed enum above (display only; the stored
 #: value stays the enum key).
 MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
@@ -3004,6 +3231,11 @@ MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA = {
     "atelier-duo": "دو قاب آتلیه",
     "atelier-wide": "قاب عریض آتلیه",
     "tile-4": "چهار کاشی تبلیغاتی (تقریباً مربع)",
+    "duo-round": "دو بنر گرد کنار هم",
+    "trio-round": "سه بنر گرد کنار هم",
+    "people-4": "چهار کارت پرتره با نام، نقش و دکمه (مشاوران/تیم)",
+    "mosaic-5": "موزاییک پنج‌تایی (یک بنر بلند و چهار بنر)",
+    "panel-4": "چهار پنل رنگی متن‌محور (عنوان، توضیح و تصویر کوچک)",
 }
 
 
@@ -3044,7 +3276,14 @@ def _validate_multi_banner_settings(raw: dict) -> dict:
     if layout_variant not in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS:
         layout_variant = ""
 
-    return {"item_limit": item_limit, "offset": offset, "layout_variant": layout_variant}
+    cleaned = {"item_limit": item_limit, "offset": offset, "layout_variant": layout_variant}
+    # Optional heading above the row (+ a registered icon in a round chip). Written only when set.
+    title = str(raw.get("title", "")).strip()[:_MAX_SECTION_TITLE_LENGTH]
+    if title:
+        cleaned["title"] = title
+    if icon_registry.is_valid_icon_key(raw.get("heading_icon")):
+        cleaned["heading_icon"] = raw["heading_icon"]
+    return cleaned
 
 
 def default_multi_banner_settings() -> dict:
@@ -3064,6 +3303,11 @@ MULTI_BANNER_SCHEMA = SettingsSchema(fields=(
         choices=(("", "پیش‌فرض (بدون قالبِ خاص)"),) + tuple(
             (x, MULTI_BANNER_LAYOUT_VARIANT_LABELS_FA[x]) for x in MULTI_BANNER_KNOWN_LAYOUT_VARIANTS
         ),
+    ),
+    SettingsField("title", "عنوان بالای ردیف (اختیاری)", "text", "basic", default="", max_length=_MAX_SECTION_TITLE_LENGTH),
+    SettingsField(
+        "heading_icon", "آیکن کنار عنوان", "choice", "advanced", default="",
+        choices=(("", "بدون آیکن"),) + icon_registry.icon_choices(),
     ),
     SettingsField(
         "item_limit", "حداکثر تعداد بنر", "integer", "advanced",
@@ -3145,6 +3389,11 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
                 key="poster_wide", label_fa="پوستر عریض",
                 renderer="storefront_builder/sections/hero_banner_poster.html",
             ),
+            # Clean image slider: contained image-only canvas, edge chevrons, round dots (no text over the picture).
+            VariantDefinition(
+                key="clean_slider", label_fa="اسلایدر تمیز (فلش و نقطه)",
+                renderer="storefront_builder/sections/hero_banner_clean.html",
+            ),
         ),
         default_variant="overlay", variant_setting_key="hero_style",
         settings_schema=HERO_BANNER_SCHEMA,
@@ -3196,6 +3445,21 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         # disposition rather than an unclassified placeholder.
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         duplicable=True, removable=True, category_fa="تصاویر و تبلیغات",
+    ),
+    "linked_image": SectionDefinition(
+        key="linked_image", label_fa="عکس لینک‌دار", icon="image",
+        # V5 — ONE independent picture with an optional link: no title, no copy, no button, no promo frame. Its picture is the ONE
+        # section-scoped PromotionalBanner row of THIS Section (the canonical media CRUD / MediaAsset authority — so Draft copy, duplicate,
+        # history and ownership already apply) and the link is that same row's DestinationMixin. It NEVER falls back to the store-wide banner
+        # pool (``_linked_image_context``): an empty section shows nothing in Published and a clear placeholder in the Studio.
+        # Presentation = the shared Design Block («نحوه جاگیری تصویر», «کانون تصویر», radius / frame / spacing) + the V5 Visual Resize contract.
+        capabilities=frozenset({
+            "layout_width", "motion", "design_frame", "design_image_fit", "design_image_position"}),
+        template_name="storefront_builder/sections/linked_image.html",
+        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        duplicable=True, removable=True, has_settings_form=True, category_fa="تصاویر و تبلیغات",
+        description_fa="فقط یک تصویر، با لینک اختیاری؛ بدون عنوان، متن و دکمه. مناسب خانه‌های کوچک و بزرگ چیدمان.",
+        settings_schema=SettingsSchema(fields=()),
     ),
     "multi_banner": SectionDefinition(
         key="multi_banner", label_fa="ردیف چند بنری", icon="layout-grid",
@@ -3263,6 +3527,11 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             # Brand-colour rounded squares carrying the category glyph (monochrome),
             # label below — the icon-shortcut rail of beauty/retail storefronts.
             VariantDefinition(key="icon_tiles", label_fa="کاشی‌های آیکنی"),
+            # Photo-first tiles: a solid brand-colour label bar over a landscape picture (quiet decor / lifestyle discovery).
+            VariantDefinition(key="label_tiles", label_fa="کاشی‌های تصویری با نوار عنوان"),
+            VariantDefinition(key="icon_rail", label_fa="ردیف آیکن بدون قاب"),
+            VariantDefinition(key="ring_circles", label_fa="دایره‌های حلقه‌دار"),
+            VariantDefinition(key="photo_cards", label_fa="کارت‌های عکس بزرگ با برچسب"),
             # Large gradient editorial tiles: bold category name + representative
             # media anchored to the bottom edge.
             VariantDefinition(key="gradient_tiles", label_fa="کاشی‌های گرادیانی بزرگ"),
@@ -3381,7 +3650,7 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         capabilities=frozenset({
             "design_align", "design_buttons", "design_columns", "design_frame", "design_gap", "design_image_fit",
             "design_image_ratio", "design_min_height", "design_text", "design_visibility",
-            "internal_surface",
+            "internal_surface", "background", "spacing",
         }),
         template_name="storefront_builder/sections/blog_posts.html",
         validate_settings=validate_blog_posts_settings, default_settings=default_blog_posts_settings,
@@ -3570,9 +3839,19 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     # ``render_service._CONTEXT_AWARE_BUILDERS``.
     "product_main": SectionDefinition(
         key="product_main", label_fa="گالری و خرید محصول", icon="shopping-bag",
-        capabilities=frozenset(),
+        # V5 (PDP بستهٔ ۱) — کنترل‌های طراحیِ عمومی: چینشِ گالری/اطلاعات، ظاهرِ تنوع/تعداد/دکمه در ``PRODUCT_MAIN_SCHEMA`` و
+        # قاب، رنگ، «رنگ سطح» (پنل اطلاعات/کادر قیمت/قابِ گالری، با رنگِ نوشتهٔ خوانا)، فاصله، نسبت و جاگیریِ تصویر از همان Design
+        # Block / Spacingِ مشترک. قیمت، موجودی، تنوع و فرمِ خرید هیچ‌کدام از settings خوانده نمی‌شوند (همچنان از page_context).
+        # عمداً ``background`` ندارد: product_main از sectionهای حیاتیِ محافظت‌شده است (spec §59، ``test_protected_context_sections_excluded``)
+        # — پس‌زمینهٔ دلخواهِ کلِ بخش می‌تواند نوشته‌های خریدِ ثابت را ناخوانا کند؛ رنگ سطحِ داخلی (``internal_surface``) هم عمداً نیست: مارکاپِ این بخش نشانگرِ ``data-sfb-card-surface`` ندارد و ظرفیت باید با مارکاپ یکی باشد.
+        # «فاصله‌ها» (padding/margin) را همان ``design_frame`` می‌دهد؛ ظرفیت ``spacing`` عمداً نیست چون با ``background`` یک allowlist است
+        # (``test_background_and_spacing_share_exactly_the_same_allowlist``).
+        capabilities=frozenset({
+            "design_frame", "design_text", "design_buttons", "design_price",
+            "design_gap", "design_image_ratio", "design_image_fit", "design_image_position"}),
         template_name="storefront_builder/sections/product_main.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=pdp_settings.clean_product_main_settings, default_settings=_empty_defaults,
+        settings_schema=PRODUCT_MAIN_SCHEMA,
         # گالری/قیمت/انتخابِ تنوع/افزودن‌به‌سبد یک کامپوننتِ Alpine واحد
         # است (``x-data="variantSelector(...)"``) — تجزیه‌ی آن به
         # section‌های کوچک‌تر اسکوپِ آن کامپوننت را می‌شکست؛ حذفِ کاملِ آن
@@ -3583,11 +3862,15 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
     ),
     "product_description": SectionDefinition(
         key="product_description", label_fa="توضیحات، مشخصات و نظرات", icon="text",
+        # V5 (PDP بستهٔ ۱) — حالتِ تب/آکاردئون/پشت‌سرهم، ترتیب/عنوان/نمایشِ بخش‌های واقعی و ظاهر در ``PRODUCT_DESCRIPTION_SCHEMA``؛
+        # قاب، رنگ متن/تأکید و سطح از Design Blockِ مشترک. منابعِ داده (توضیح، مشخصات، نظرات، برند) همچنان از page_context.
         capabilities=frozenset({
-            "background", "spacing",
+            "background", "spacing", "design_frame", "design_text",
         }),
         template_name="storefront_builder/sections/product_description.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=pdp_settings.clean_product_description_settings, default_settings=_empty_defaults,
+        settings_schema=PRODUCT_DESCRIPTION_SCHEMA,
+        inspector_projection=pdp_settings.project_description_sections_for_inspector,
         # سه‌تب (توضیحات/مشخصات/نظرات) یک کامپوننتِ Alpine مشترک
         # (``x-data="{ tab: 'desc' }"``) هستند — طبقِ الزامِ صریحِ کار
         # («prefer sensible compositional primitives... may remain one
@@ -3611,7 +3894,8 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             "appearance_override", "background", "card", "columns", "columns_visual", "spacing",
         }),
         template_name="storefront_builder/sections/related_products.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_related_products_settings, default_settings=_empty_defaults,
+        settings_schema=RELATED_PRODUCTS_SCHEMA,
         max_instances=1, duplicable=False, removable=True, category_fa="محصولات",
         page_types=frozenset({PAGE_TYPE_PRODUCT_DETAIL}),
     ),
@@ -3758,7 +4042,7 @@ def _finalize_registry(base: dict[str, SectionDefinition]) -> dict[str, SectionD
     finalized = {}
     for key, definition in base.items():
         validate_variants(definition.variants, default_variant=definition.default_variant)
-        capabilities = definition.capabilities | {"responsive"}
+        capabilities = definition.capabilities | {"responsive", "canvas_size"}
         unknown = capabilities - KNOWN_CAPABILITIES
         if unknown:
             raise ValueError(f"{key}: unknown capability {sorted(unknown)!r}")

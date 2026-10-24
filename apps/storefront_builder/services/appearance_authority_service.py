@@ -65,7 +65,10 @@ from . import layout_service
 # same 5-key set ``layout_service.validate_page_appearance_overrides``
 # already uses as its own canonical allowlist — no new field, no schema
 # change, single source of truth.
-_MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS) | layout_service.PAGE_APPEARANCE_KEYS
+#: V5 — ``heading_style`` is a sparse managed key too (written only when it differs from the historical heading); choosing the default
+#: again REMOVES it so the stored shape returns to exactly what it was before the merchant touched it.
+_SPARSE_RESETTABLE_KEYS = frozenset({"heading_style"})
+_MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS) | layout_service.PAGE_APPEARANCE_KEYS | _SPARSE_RESETTABLE_KEYS
 
 # Legacy-selector registry-reference prefixes, reused from the persistence
 # adapter's own conventions. We do not maintain a second component-key map.
@@ -107,6 +110,8 @@ def _merge_appearance_config(
     for key in _MANAGED_APPEARANCE_KEYS:
         if key in validated_managed:
             merged[key] = validated_managed[key]
+        elif key in _SPARSE_RESETTABLE_KEYS and key in patch:
+            merged.pop(key, None)
     return merged
 
 

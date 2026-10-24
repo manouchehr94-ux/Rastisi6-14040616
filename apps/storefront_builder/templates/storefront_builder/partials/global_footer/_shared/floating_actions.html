@@ -1,0 +1,25 @@
+{% comment %}
+V5 floating widgets (WhatsApp / phone / back-to-top), switched on by the SPARSE ``footer_config.floating_*`` keys. No data of their own:
+WhatsApp = the Store's active WhatsApp social link, phone = the Store's own contact phone. Renders nothing when none is on.
+Context: ``footer_config`` (every shell include passes it).
+{% endcomment %}
+{% load storefront_builder_extras %}
+{% if footer_config.floating_whatsapp or footer_config.floating_phone or footer_config.floating_back_to_top %}
+<div class="sfb-floating{% if footer_config.floating_position == 'start' %} sfb-floating--start{% endif %}{% if mobile_bottom_nav_template %} sfb-floating--lift{% endif %}" x-data="{ top: false }"
+     @scroll.window.passive="top = window.scrollY > 500">
+  {% if footer_config.floating_back_to_top %}
+  <button type="button" class="sfb-floating-btn sfb-floating-top" x-show="top" x-cloak aria-label="بازگشت به بالای صفحه"
+          @click="window.scrollTo({ top: 0, behavior: 'smooth' })">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+  </button>
+  {% endif %}
+  {% if footer_config.floating_phone %}{% if FOOTER_SETTINGS.phone or SHOP_CONTACT_PHONE %}
+  <a class="sfb-floating-btn sfb-floating-phone" href="tel:{{ FOOTER_SETTINGS.phone|default:SHOP_CONTACT_PHONE }}" aria-label="تماس تلفنی">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.6a1 1 0 01-.25 1z"/></svg>
+  </a>
+  {% endif %}{% endif %}
+  {% if footer_config.floating_whatsapp %}{% with wa=SOCIAL_LINKS_FOOTER|first_social:"whatsapp" %}{% if wa %}
+  <a class="sfb-floating-btn sfb-floating-whatsapp" href="{{ wa.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ wa.title|default:'واتساپ' }}">{% include "partials/social_icon.html" with icon="whatsapp" %}</a>
+  {% endif %}{% endwith %}{% endif %}
+</div>
+{% endif %}

@@ -29,6 +29,13 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
   <div class="rs-app">
     <header class="app-top">
       <a class="brand" href="{% url 'dashboard:dashboard' %}" title="بازگشت به پنل مدیریت"><i class="brand-mark">r</i><strong class="rs-brand-name">راستی‌سی<small>DESIGN STUDIO</small></strong></a>
+      <div class="project-title">
+        <div class="project-avatar">{% rs_icon "bag" %}</div>
+        <div>
+          <h1>{{ studio.store_name }} <span class="pill {% if studio.draft_changed %}amber{% else %}green{% endif %}" data-rs-status-pill>{% if studio.draft_changed %}منتشرنشده{% else %}همگام با سایت{% endif %}</span></h1>
+          <p data-rs-project-sub>قالب: {% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% if studio.current_template_is_historical %} · نسخهٔ {{ studio.current_template.preset.version|fa_number }}{% endif %}{% elif studio.current_template_unresolved %}قالبِ اعمال‌شده (نسخهٔ آن در فهرست نیست){% else %}بدون قالب آماده{% endif %}{% if studio.has_published %} · آخرین انتشار: {{ studio.published_at|jalali:"%Y/%m/%d" }}{% else %} · هنوز منتشر نشده{% endif %}</p>
+        </div>
+      </div>
       <nav class="top-nav" aria-label="محیط طراحی">
         {% comment %}Top-level Studio actions. The page structure and global design open as temporary floating drawers; section settings
         open the large workspace. Nothing here is docked: with every overlay closed the Preview owns the whole canvas.{% endcomment %}
@@ -38,20 +45,6 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
         <button type="button" id="r4GlobalDesignToggle" data-rastisi-action="global" aria-pressed="false" aria-expanded="false" aria-controls="rsStructureDrawer" title="طراحی سراسری">{% rs_icon "sliders" %}<span class="nav-label">طراحی سراسری</span></button>
         {% if design_lab.families %}<button type="button" data-rastisi-action="lab" aria-pressed="false" title="آزمایشگاه">{% rs_icon "spark" %}<span class="nav-label">آزمایشگاه</span></button>{% endif %}
       </nav>
-      <div class="user-menu">
-        <button type="button" data-rastisi-action="help" aria-label="راهنمای استودیو">{% rs_icon "help" %}راهنما</button>
-        <button type="button" id="r4SidebarToggle" class="avatar" title="{{ studio.user_display_name }} · منوی پنل مدیریت" aria-label="منوی پنل مدیریت ({{ studio.user_display_name }})" aria-expanded="false">{{ studio.user_initial }}</button>
-      </div>
-    </header>
-
-    <div class="project-bar">
-      <div class="project-title">
-        <div class="project-avatar">{% rs_icon "bag" %}</div>
-        <div>
-          <h1>{{ studio.store_name }} <span class="pill {% if studio.draft_changed %}amber{% else %}green{% endif %}" data-rs-status-pill>{% if studio.draft_changed %}منتشرنشده{% else %}همگام با سایت{% endif %}</span></h1>
-          <p data-rs-project-sub>قالب: {% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% if studio.current_template_is_historical %} · نسخهٔ {{ studio.current_template.preset.version|fa_number }}{% endif %}{% elif studio.current_template_unresolved %}قالبِ اعمال‌شده (نسخهٔ آن در فهرست نیست){% else %}بدون قالب آماده{% endif %}{% if studio.has_published %} · آخرین انتشار: {{ studio.published_at|jalali:"%Y/%m/%d" }}{% else %} · هنوز منتشر نشده{% endif %}</p>
-        </div>
-      </div>
       <div class="project-actions">
         <div class="save-feedback saved" data-rs-save-feedback role="status" aria-live="polite">{% rs_icon "check" %}<span id="r4SaveState">پیش‌نویس ذخیره شد</span></div>
         <div class="history-buttons">
@@ -59,11 +52,30 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
           <button type="button" id="r4RedoButton" data-rastisi-action="redo" class="icon-btn" title="ازنو انجام{% if history.redo_label %}: {{ history.redo_label }}{% endif %}" aria-label="بازگردانی" {% if not history.can_redo %}disabled{% endif %}>{% rs_icon "redo" %}</button>
           <button type="button" data-rastisi-action="history" class="icon-btn" title="تاریخچه ویرایش" aria-label="تاریخچه ویرایش">{% rs_icon "history" %}</button>
         </div>
-        <button type="button" data-rastisi-action="public-preview" class="outline" aria-label="نمای عمومی" {% if not studio.public_url %}disabled title="نشانی عمومی فروشگاه هنوز فعال نیست"{% endif %} data-rs-public-url="{{ studio.public_url|default:'' }}">{% rs_icon "external" %}<span class="hide-medium">نمای عمومی</span></button>
+        <button type="button" data-rastisi-action="public-preview" class="outline" aria-label="پیش‌نمایش تغییرات (پیش‌نویس، بدون انتشار)" title="نمای مشتری از آخرین تغییرات ذخیره‌شده — بدون انتشار" data-rs-public-url="{{ studio.public_url|default:'' }}" data-rs-draft-url="{% url 'dashboard:storefront-builder-draft-preview' %}">{% rs_icon "eye" %}<span class="hide-medium">پیش‌نمایش</span></button>
+        <button type="button" data-rastisi-action="view-published" class="outline icon-btn" aria-label="مشاهدهٔ فروشگاه منتشرشده" {% if not studio.public_url %}disabled title="نشانی عمومی فروشگاه هنوز فعال نیست"{% else %}title="مشاهدهٔ فروشگاه منتشرشده (نسخهٔ فعلی مشتریان)"{% endif %}>{% rs_icon "external" %}</button>
         <button type="button" id="r4PublishButton" data-rastisi-action="publish" class="primary">{% rs_icon "globe" %}انتشار</button>
       </div>
-    </div>
+      <div class="user-menu">
+        <button type="button" data-rastisi-action="help" aria-label="راهنمای استودیو">{% rs_icon "help" %}راهنما</button>
+        <button type="button" id="r4SidebarToggle" class="avatar" title="{{ studio.user_display_name }} · منوی پنل مدیریت" aria-label="منوی پنل مدیریت ({{ studio.user_display_name }})" aria-expanded="false">{{ studio.user_initial }}</button>
+      </div>
+    </header>
 
+    <div class="rs-body">
+      <aside class="rs-rail" aria-label="ابزارهای استودیو">
+        {% comment %}V5 tool rail: every button reuses an EXISTING Studio action (r4_studio.js delegation -> the existing modals/drawers, which
+        in turn call the R4 owners in r4_editor.js). No new write path lives here; "دو ستون" opens the existing add-row dialog.{% endcomment %}
+        <button type="button" class="rail-btn rail-primary" data-rastisi-action="open-add-section" title="افزودن بخش به این صفحه">{% rs_icon "plus" %}<span>افزودن بخش</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="add-row" title="ساخت ردیف دو‌ستونه">{% rs_icon "columns" %}<span>دو ستون</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="global" data-rs-global-focus="header" title="ظاهر مشترک سربرگ">{% rs_icon "header" %}<span>هدر</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="global" data-rs-global-focus="footer" title="ظاهر مشترک پایین صفحه">{% rs_icon "footer" %}<span>فوتر</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="structure" title="ساختار صفحه و لایه‌ها">{% rs_icon "layers" %}<span>لایه‌ها</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="templates" title="قالب‌های آماده">{% rs_icon "grid" %}<span>قالب‌ها</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="global" title="رنگ، نوشتار و تم فروشگاه">{% rs_icon "palette" %}<span>تم‌ها</span></button>
+        <button type="button" class="rail-btn" data-rastisi-action="help" title="راهنمای استودیو">{% rs_icon "help" %}<span>راهنما</span></button>
+      </aside>
+      <div class="rs-main">
     <div class="studio-layout">
       <main class="stage">
         <div class="stage-toolbar">
@@ -194,6 +206,12 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
       </section>
       {% endif %}
     </div>
+        <div class="rs-float-bar" role="group" aria-label="میان‌بر ساخت صفحه">
+          <button type="button" class="float-primary" data-rastisi-action="open-add-section">{% rs_icon "plus" %}افزودن بخش</button>
+          <button type="button" data-rastisi-action="structure" aria-label="لایه‌ها و ساختار صفحه">{% rs_icon "layers" %}لایه‌ها</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   {% comment %}---- Settings WORKSPACE: a large overlay ABOVE the Studio (position:fixed — it never takes layout width from the
@@ -230,4 +248,6 @@ single shared #r4PreviewFrame renderer. r4_studio.js holds UI-only state
 <script src="{% static_v 'storefront_builder/r4_editor.js' %}"></script>
 <script src="{% static_v 'storefront_builder/r4_color_picker.js' %}"></script>
 <script src="{% static_v 'storefront_builder/r4_studio.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_resize.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_announcement.js' %}"></script>
 {% endblock %}

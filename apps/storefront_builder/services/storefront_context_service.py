@@ -159,6 +159,18 @@ def _build_published_shell_context(
     }
 
 
+def build_draft_preview_context(request, store, version, page_type: str, page_context: dict | None = None) -> dict:
+    """The SAME public shell + page-body context as ``build_universal_storefront_context``, fed from ``version`` (the Store's
+    current Draft) instead of the Published version — the read-only «customer view» of unpublished changes (staff preview only).
+
+    It is the public assembly (``_build_published_shell_context``), not a second renderer: header / footer / announcement / appearance and
+    every section go through the identical resolvers and templates, with no builder instrumentation. Nothing is written."""
+    page = version.pages.filter(page_type=page_type).first()
+    if page is None:  # an unknown ``page_type`` is a programming error, never a silent fallback to another body
+        raise ValueError(f"unknown storefront page type {page_type!r}")
+    return _build_published_shell_context(request, store, version, page=page, page_type=page_type, page_context=page_context)
+
+
 def render_domain_page(request, template_name: str, context: dict | None = None, *, page_type: str = "domain_page"):
     """Render a DOMAIN-OWNED storefront page (checkout, payment result, customer account …) inside the engine shell.
 

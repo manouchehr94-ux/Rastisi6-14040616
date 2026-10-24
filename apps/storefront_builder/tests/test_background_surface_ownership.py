@@ -119,6 +119,11 @@ class CapabilityRegistryIsTheSourceOfTruthTests(SimpleTestCase):
             # R4-11: sections that show merchant images now offer the image controls (fit / position / ratio, R4-13 zoom) and nothing else
             "best_sellers": 4, "newest_products": 4, "discounted_products": 4, "collection_tiles": 3,
             "hero_banner": 1, "image_slider": 1, "multi_banner": 1, "image_text": 2,
+            # V5 «عکس لینک‌دار»: border / radius / shadow / spacing + the image fit and focal point (no background, no copy)
+            "linked_image": 12,
+            # V5 PDP package 1: the two product-page sections reuse the Design Block (frame / text / buttons / price / gap / image
+            # controls on product_main; frame / text on product_description) — no surface colour, their markup has no surface marker
+            "product_main": 21, "product_description": 13,
         }
         actual = {d.key: len(design_block.applicable_properties(d.key)) for d in _design_capable()}
         self.assertEqual(actual, expected)

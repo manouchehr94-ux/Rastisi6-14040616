@@ -1,13 +1,13 @@
-{% load storefront_builder_extras %}
+{% load storefront_builder_extras persian %}
 {% for composition in render_containers %}
 {% with container=composition.container csettings=composition.settings %}
 <div class="rcontainer{% if is_preview %} sfb-builder-container{% endif %}"
-     style="--container-gap:{{ csettings.gap }}px{% if csettings.background_color %};background-color:{{ csettings.background_color }}{% endif %}"
+     style="--container-gap:{{ csettings.gap }}px{% if csettings.background_color %};background-color:{{ csettings.background_color }}{% endif %}{% if csettings.stack_split %};--stack-top:{{ csettings.stack_top }}fr;--stack-bottom:{{ csettings.stack_bottom }}fr{% endif %}"
      data-layout="{{ container.layout_key }}"
      data-mobile-mode="{{ csettings.mobile_mode }}"
      data-content-width="{{ csettings.content_width }}"
      data-vertical-align="{{ csettings.vertical_align }}"
-     data-height-mode="{{ csettings.height_mode }}"
+     data-height-mode="{{ csettings.height_mode }}"{% if csettings.stack_split %} data-stack-split="{{ csettings.stack_split }}"{% endif %}
      {% if csettings.background_mode != "transparent" %}data-container-bg="{{ csettings.background_mode }}"{% endif %}
      {% if csettings.background_mode == "pattern" and csettings.background_pattern %}data-container-pattern="{{ csettings.background_pattern }}"{% endif %}
      {% if is_preview %}data-container-id="{{ container.pk }}" data-container-locked="{% if container.is_locked %}1{% else %}0{% endif %}"{% endif %}>
@@ -41,8 +41,8 @@
       {% endwith %}
       {% endfor %}
       {% if is_preview %}
-      <button type="button" class="sfb-cell-add-more" data-cell-add="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن کامپوننت دیگر به این ستون">
-        <span aria-hidden="true">＋</span><span>افزودن کامپوننت</span>
+      <button type="button" class="sfb-cell-add-more" data-cell-add="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن بخش به همین خانه">
+        <span aria-hidden="true">＋</span><span>افزودن بخش به همین خانه</span>
       </button>
       {% endif %}
     {% elif is_preview and blocks %}
@@ -70,13 +70,17 @@
         </div>
       </div>
       {% endwith %}
-      <button type="button" class="sfb-cell-add-more" data-cell-add="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن کامپوننت دیگر به این ستون">
-        <span aria-hidden="true">＋</span><span>افزودن کامپوننت</span>
+      <button type="button" class="sfb-cell-add-more" data-cell-add="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن بخش به همین خانه">
+        <span aria-hidden="true">＋</span><span>افزودن بخش به همین خانه</span>
       </button>
+      {% comment %}V5-UI-006/007: a framed, labelled empty Cell (builder only — this branch exists for is_preview). One term everywhere:
+      «افزودن بخش». The tag says which Cell it is (1 = right in RTL) and its real width share; the button fills the Cell and opens the
+      add dialog for THIS Cell only (cell.add_section).{% endcomment %}
     {% elif is_preview %}
-      <button type="button" class="sfb-empty-cell-add" data-empty-cell="{{ cell.pk }}" data-container-id="{{ container.pk }}">
-        <span>＋</span><strong>افزودن محتوا</strong><small>{{ cell.span }}/12</small>
+      <button type="button" class="sfb-empty-cell-add" data-empty-cell="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن بخش به خانه {{ forloop.counter }} از {{ composition.cells|length }}">
+        <span aria-hidden="true">＋</span><strong>افزودن بخش به این خانه</strong><small>خانه {{ forloop.counter|fa_number }} · {{ cell.span|fa_number }} از ۱۲ ستون</small>
       </button>
+      {% if forloop.first and not composition.has_placement %}<button type="button" class="sfb-empty-cell-remove" data-container-remove="{{ container.pk }}" aria-label="حذف این چیدمان خالی">🗑 حذف چیدمان خالی</button>{% endif %}
     {% endif %}
   </div>
   {% endwith %}

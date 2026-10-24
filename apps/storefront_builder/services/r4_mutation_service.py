@@ -85,6 +85,10 @@ _MUTATION_HISTORY_LABELS = {
     "section.toggle_active": "نمایش/مخفی کردن بخش",
     "section.toggle_locked": "قفل/بازکردن بخش",
     "container.change_layout": "تغییر چیدمان",
+    "container.add": "افزودن چیدمان",
+    "container.remove": "حذف چیدمان",
+    "section.resize": "تغییر اندازه بخش",
+    "container.resize": "تغییر اندازه ستون‌ها",
     "cell.add_section": "افزودن بخش به خانه",
     "section.move_to_cell": "انتقال بخش به خانه دیگر",
     "container.update_settings": "ویرایش تنظیمات چیدمان",
@@ -336,6 +340,43 @@ R4_ERROR_MESSAGES_FA = {
     "invalid_preset": "این بازنشانی انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "baseline_reset_error": "بازنشانی به قالب انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "no_active_draft": "پیش‌نویس فعالی وجود ندارد؛ صفحه را دوباره بارگذاری کنید.",
+    # V5-QA-FIX-01 (V5-FUNC-002) — structural refusals are legitimate, protective server decisions (nothing was written).
+    # Without a Persian ``message`` the Studio could only show the generic «ذخیره ناموفق»; with one, the client's existing
+    # known-refusal path keeps the saved state and tells the merchant exactly why the move/duplicate/remove did not happen.
+    "move_boundary": "این بخش در همان جهت جای دیگری برای رفتن ندارد.",
+    "section_locked": "این بخش قفل است؛ برای جابه‌جایی یا تغییر، ابتدا قفل آن را باز کنید. هیچ تغییری ذخیره نشد.",
+    "target_locked": "بخش مجاور قفل است و جابه‌جایی از روی آن ممکن نیست؛ قفل آن را باز کنید یا جای دیگری امتحان کنید. هیچ تغییری ذخیره نشد.",
+    "container_locked": "ردیفی که این بخش در آن است قفل شده؛ هیچ تغییری ذخیره نشد.",
+    "target_container_locked": "ردیف مجاور قفل شده و جابه‌جایی از روی آن ممکن نیست؛ هیچ تغییری ذخیره نشد.",
+    "row_layout_invalid": (
+        "این جابه‌جایی چیدمان یک ردیف چندبخشی را به‌هم می‌ریزد؛ بخش را بعد از کل آن ردیف قرار دهید. "
+        "هیچ تغییری ذخیره نشد."
+    ),
+    "unsupported_placement": "جایگاه این بخش با این جابه‌جایی سازگار نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_placement": "جایگاه انتخاب‌شده برای این بخش معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "section_not_placed": "این بخش هنوز در چیدمان صفحه جایگاهی ندارد؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "section_not_found": "این بخش دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "cell_not_found": "این خانه دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "container_not_found": "این ردیف دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "section_not_removable": "این بخش برای صفحه ضروری است و حذف نمی‌شود.",
+    "section_not_duplicable": "از این بخش فقط یک نمونه می‌تواند در صفحه باشد.",
+    "max_instances_exceeded": "به حداکثر تعداد مجاز این بخش در صفحه رسیده‌اید.",
+    "min_instances_violation": "تعداد لازم از این بخش باید در صفحه بماند؛ حذف آن ممکن نیست.",
+    "row_member": "این بخش عضو یک ردیف چندبخشی است و از اینجا حذف نمی‌شود؛ هیچ تغییری ذخیره نشد.",
+    # V5-LAYOUT-ATOMIC — container.add / cell.add_section refusals (the whole build is rolled back; nothing was saved)
+    "invalid_section_key": "یکی از بخش‌های انتخاب‌شده معتبر نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "section_not_allowed_on_page": "یکی از بخش‌های انتخاب‌شده روی این صفحه مجاز نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "section_hidden_from_library": "یکی از بخش‌های انتخاب‌شده دیگر در کتابخانه نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "invalid_container_layout": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_layout_key": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_cells": "انتخاب بخش‌های چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_page_type": "نوع صفحه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    # V5-LAYOUT-011 — container.remove refusals (nothing was changed)
+    "container_has_locked_section": "یکی از بخش‌های این چیدمان قفل است؛ ابتدا قفل آن را باز کنید. چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
+    "invalid_resize_value": "اندازهٔ واردشده معتبر نیست یا خارج از محدودهٔ مجاز است؛ هیچ تغییری ذخیره نشد.",
+    "invalid_resize_layout": "این چیدمان با این تغییر اندازه سازگار نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_announcement_image": "تصویر نوار اطلاعیه متعلق به این فروشگاه نیست یا وجود ندارد؛ هیچ تغییری ذخیره نشد.",
+    "container_has_row_member": "یکی از بخش‌های این چیدمان عضو یک ردیف چندبخشی قدیمی است؛ چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
 }
 
 
@@ -488,6 +529,89 @@ def _apply_container_change_layout(*, draft: StorefrontLayoutVersion, mutation: 
         raise R4MutationError(exc.code) from exc
 
 
+def _apply_container_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-LAYOUT-ATOMIC — one new Container (layout preset) with EMPTY or pre-filled Cells, all-or-nothing inside this mutation's
+    single transaction. Shape checks here; every legality rule is the existing service code (see ``add_container``)."""
+    page_type = mutation.get("page_type")
+    layout_key = mutation.get("layout_key")
+    cells = mutation.get("cells")
+    if not isinstance(layout_key, str) or not layout_key:
+        raise R4MutationError("invalid_layout_key")
+    if cells is not None and not isinstance(cells, list):
+        raise R4MutationError("invalid_cells")
+    try:
+        section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+_SECTION_RESIZE_FIELDS = {"height": (0, 1600), "width": (30, 100)}
+_SECTION_RESIZE_ALIGN = ("start", "center", "end")
+
+
+def _apply_section_resize(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-RESIZE — one drag = one mutation. Payload: ``section_id`` plus any of ``height`` (px, floor), ``width`` (% of the Cell),
+    ``align`` (start/center/end); a key present with ``null`` returns that dimension to Auto, an absent key leaves it untouched.
+    Nothing else is accepted, so the mutation can only ever write the three size keys of the design block."""
+    section_id = mutation.get("section_id")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    unknown = set(mutation) - {"type", "section_id", *section_structure_service.RESIZE_DIMENSIONS}
+    changes = {k: mutation[k] for k in section_structure_service.RESIZE_DIMENSIONS if k in mutation}
+    if unknown or not changes:
+        raise R4MutationError("invalid_resize_value")
+    for dimension, value in changes.items():
+        if value is None:
+            continue
+        if dimension == "align":
+            if value not in _SECTION_RESIZE_ALIGN:
+                raise R4MutationError("invalid_resize_value")
+            continue
+        low, high = _SECTION_RESIZE_FIELDS[dimension]
+        if not _is_strict_int(value) or not low <= value <= high:
+            raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.resize_section(draft=draft, section_id=section_id, changes=changes)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_resize(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-RESIZE — column widths (``spans``: one int per Cell, the existing ``Cell.span`` truth) and/or the stacked layout's height split
+    (``stack_split``: the top small Cell's share in %, ``null`` = Auto). One drag = one mutation."""
+    container_id = mutation.get("container_id")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    unknown = set(mutation) - {"type", "container_id", "spans", "stack_split"}
+    if unknown or not ({"spans", "stack_split"} & set(mutation)):
+        raise R4MutationError("invalid_resize_value")
+    spans = mutation.get("spans")
+    if "spans" in mutation and (not isinstance(spans, list) or not all(_is_strict_int(v) for v in spans)):
+        raise R4MutationError("invalid_resize_value")
+    split = mutation.get("stack_split")
+    if "stack_split" in mutation and split is not None and not _is_strict_int(split):
+        raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.resize_container(
+            draft=draft, container_id=container_id, spans=spans if "spans" in mutation else None,
+            stack_split=split, set_split="stack_split" in mutation,
+        )
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_remove(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-LAYOUT-011 — remove one Container; content is always preserved (an empty Container is deleted, a filled one is dissolved into
+    independent rows). No payload option can delete a Section: the only accepted fields are ``type`` and ``container_id``."""
+    container_id = mutation.get("container_id")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    try:
+        section_structure_service.remove_container(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
 def _apply_cell_add_section(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     section_key = mutation.get("section_key")
     cell_id = mutation.get("cell_id")
@@ -575,7 +699,7 @@ _APPEARANCE_UPDATE_ALLOWED_PATCH_KEYS = frozenset({
     "template_slug", "palette_slug", "font", "type_scale", "motion", "button_style",
     "radius", "button_radius", "density",
     "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
-    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
     "color_overrides", "theme_overrides",
     # explicit, labelled merchant action: drop EVERY global colour / region-colour override (never a side effect of anything else)
     "clear_global_color_overrides",
@@ -1012,7 +1136,7 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # ``new_template is None`` either.
     for field in (
         "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
-        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
     ):
         if field in patch:
             candidate[field] = patch[field]
@@ -1067,6 +1191,9 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # can be a semantic no-op (for example, boutique keeps the default motion),
     # but template-owned fields such as template_slug/font still changed and
     # must be visible to record_change(), which reloads the Draft from the DB.
+    if patch.get("heading_style") == "default":
+        # the sparse key is absent from ``cleaned`` when it is the default; tell the authority merge to REMOVE the stored one
+        cleaned = {**cleaned, "heading_style": "default"}
     appearance_authority_service.apply_appearance_patch(version=draft, patch=cleaned)
     if "motion" in patch or new_template is not None:
         _sync_manifest_from_live_selectors(draft=draft)
@@ -1103,8 +1230,17 @@ _HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
     {
         "header_variant", "announcement_text", "announcement_show_phone",
         "announcement_links", "extra_blocks", "responsive", "geometry",
+        # V5 — the announcement bar's picture / link / alignment / page scope (sparse extension of the SAME header_config)
+        "announcement_image_asset_id", "announcement_image_alt", "announcement_image_side",
+        "announcement_link_url", "announcement_link_new_tab", "announcement_align", "announcement_pages",
     }
     | set(HEADER_TOGGLE_FIELDS)
+)
+
+
+_ANNOUNCEMENT_EXTRA_KEYS = (
+    "announcement_image_asset_id", "announcement_image_alt", "announcement_image_side",
+    "announcement_link_url", "announcement_link_new_tab", "announcement_align", "announcement_pages",
 )
 
 
@@ -1127,6 +1263,9 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["announcement_show_phone"] = patch["announcement_show_phone"]
     if "announcement_links" in patch:
         candidate["announcement_links"] = patch["announcement_links"]
+    for key in _ANNOUNCEMENT_EXTRA_KEYS:
+        if key in patch:
+            candidate[key] = patch[key]
     if "extra_blocks" in patch:
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
@@ -1137,7 +1276,15 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     try:
         cleaned = layout_service.validate_header_config(candidate)
     except layout_service.HeaderConfigValidationError as exc:
-        raise R4MutationError("invalid_header_config") from exc
+        # the validator's own Persian sentence names the control and the rule («لینک نوار اعلان…»), so the merchant sees WHY nothing was saved
+        raise R4MutationError("invalid_header_config", payload={"message": f"{exc}؛ هیچ تغییری ذخیره نشد."}) from exc
+    # V5 — the announcement picture must be a MediaAsset of THIS Draft's store (never another tenant's, never a made-up id)
+    asset_id = cleaned.get("announcement_image_asset_id")
+    if asset_id is not None:
+        from apps.content.models import MediaAsset
+
+        if not MediaAsset.objects.filter(pk=asset_id, store_id=draft.layout.store_id).exists():
+            raise R4MutationError("invalid_announcement_image")
 
     # Persist the full validated header config first (toggles/announcement/
     # content preserved), then delegate the typed manifest header selection
@@ -1164,7 +1311,8 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 #: JSON and was already validated/synced on every save — it simply could
 #: never be CHANGED by a merchant through R4 before this.
 _FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry"} | set(FOOTER_TOGGLE_FIELDS)
+    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry",
+     "floating_whatsapp", "floating_phone", "floating_back_to_top", "floating_position"} | set(FOOTER_TOGGLE_FIELDS)
 )
 
 
@@ -1189,6 +1337,9 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
     if "geometry" in patch:
         candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
+    for field in (*layout_service.FLOATING_ACTION_KEYS, "floating_position"):
+        if field in patch:
+            candidate[field] = patch[field]
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)
@@ -1240,6 +1391,18 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "container.change_layout":
         _apply_container_change_layout(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.add":
+        _apply_container_add(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.remove":
+        _apply_container_remove(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.resize":
+        _apply_section_resize(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.resize":
+        _apply_container_resize(draft=draft, mutation=mutation)
         return
     if mutation_type == "cell.add_section":
         _apply_cell_add_section(draft=draft, mutation=mutation)

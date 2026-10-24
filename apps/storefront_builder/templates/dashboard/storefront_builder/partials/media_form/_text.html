@@ -1,5 +1,12 @@
 {% load storefront_builder_extras %}
 {# Media form field group — item text (title + the kind's text field). Shared by the legacy linear form and the R4 modal's "محتوا" tab. #}
+{% if config.image_only %}
+<div class="form-group">
+  <label for="id_title">{{ config.title_label }}</label>
+  <input type="text" name="title" id="id_title" class="form-input" maxlength="200" value="{{ item.title|default:'' }}">
+  <p class="field-help">متنی کوتاه که تصویر را برای نابینایان و موتورهای جست‌وجو توصیف می‌کند.</p>
+</div>
+{% else %}
 {% if config.text_field != "title" %}
 <div class="form-group">
   <label for="id_title">عنوان</label>
@@ -11,3 +18,4 @@
   <input type="text" name="{{ config.text_field }}" id="id_text_field" class="form-input" maxlength="300"
          value="{% if item %}{{ item|getattribute:config.text_field|default:'' }}{% endif %}">
 </div>
+{% endif %}

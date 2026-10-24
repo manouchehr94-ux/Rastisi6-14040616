@@ -175,6 +175,7 @@ def shop_settings(request):
         shop_image_hover = global_config.get("image_hover", "zoom")
         shop_card_image_crossfade = global_config.get("card_image_crossfade", False)
         shop_card_image_zoom = global_config.get("card_image_zoom", True)
+        shop_heading_style = global_config.get("heading_style") or "default"
     else:
         shop_font = _default_template.font
         shop_radius = _default_template.radius
@@ -186,6 +187,7 @@ def shop_settings(request):
         shop_image_hover = "zoom"
         shop_card_image_crossfade = False
         shop_card_image_zoom = True
+        shop_heading_style = "default"
 
     # ساختارِ *صفحه‌ی اصلی* (عرضِ محتوا/تعدادِ ستون/سبکِ هیرو/سایه و
     # هاورِ کارت/تراکم) — عمداً محدود به صفحاتِ Builder-aware می‌ماند؛
@@ -412,6 +414,7 @@ def shop_settings(request):
         "SHOP_HERO_STYLE": shop_hero_style,
         "SHOP_IMAGE_FIT": shop_image_fit,
         "SHOP_IMAGE_HOVER": shop_image_hover,
+        "SHOP_HEADING_STYLE": shop_heading_style,
         "SHOP_CARD_IMAGE_CROSSFADE": "1" if shop_card_image_crossfade else "",
         "SHOP_CARD_IMAGE_ZOOM": "1" if shop_card_image_zoom else "",
         # P5-W2 — occasion Theme overlay projection (platform-owned; drives the

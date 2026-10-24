@@ -1,7 +1,7 @@
 {% load persian catalog_extras %}
 {% comment %}
 Phase 5 Task 5 (PDT) — accessible Product-Detail tabs (desktop) / REAL
-accordion (mobile) over the EXISTING canonical PDP content. Same three content
+accordion (mobile) over the EXISTING canonical PDP content. Same content
 sources as before — description (product.description), specifications
 (spec_variant_summary + category/brand/sku/stock), reviews (approved_reviews/
 rating_breakdown) — fed by render_service._product_description_context; NO
@@ -11,7 +11,7 @@ mobile content duplication).
 Structure: the markup is accordion-native — each header button is IMMEDIATELY
 followed by its OWN panel (header→panel, header→panel, header→panel). On mobile
 this is a genuine accordion (each control sits directly above its content). On
-desktop, CSS ``order`` lifts the three headers into a single tablist row and the
+desktop, CSS ``order`` lifts the headers into a single tablist row and the
 panels fill the width below — the classic accordion-markup → CSS-tabs pattern —
 so the desktop keeps real ARIA tablist semantics (roving tabindex + Arrow/Home/
 End keys) while the same DOM is a real accordion on mobile.
@@ -22,21 +22,32 @@ Single-open. Progressive enhancement: without JS every panel is visible (the
 initializes), so all content stays reachable with no JS. IDs are namespaced by
 the product pk so multiple PDPs on a page can never collide. RTL-safe (logical
 CSS).
+
+V5 (PDP بستهٔ ۱) — ``pdd`` is the lenient, validated view of THIS section's presentation settings
+(``pdp_settings.resolve_product_description_view``): which REAL sections are shown, in what order, under what label, and in which
+mode (``tabs`` — the default and the historical behaviour —, ``tabs_vertical``, ``accordion``, ``stacked``). The same ONE content
+chain below renders every mode; only the header element and the panel attributes differ. ``stacked`` is a plain list of headings with
+their content (no tab semantics, nothing to click, nothing hidden). The optional «برند» section exists only when the product has a
+brand that carries real data (``brand_panel``) — an empty or decorative panel is never rendered. Data attributes are written only when
+they differ from the default.
 {% endcomment %}
-{% if product %}
+{% if product and pdd.sections %}
 {% with pid=product.pk %}
 <div class="wrap">
-  <div class="pdp-tabs"
-       role="tablist" aria-label="اطلاعات محصول"
+  <div class="pdp-tabs"{% for name, value in pdd.attrs %} data-{{ name }}="{{ value }}"{% endfor %}
+       {% if pdd.stacked %}aria-label="اطلاعات محصول" role="group"
+       {% else %}role="tablist" aria-label="اطلاعات محصول"{% if pdd.layout_mode == 'tabs_vertical' %} aria-orientation="vertical"{% endif %}
+       style="--pdp-tab-count:{{ pdd.count }}"
+       x-init="$el.setAttribute('data-enhanced', '')"
        x-data="{
-         tab: 'desc',
-         tabs: ['desc', 'spec', 'review'],
+         tab: '{{ pdd.first_key }}',
+         tabs: {{ pdd.keys_js|safe }},
          select(t) { this.tab = t; },
          onKey(e, i) {
            const last = this.tabs.length - 1;
            let n = i;
-           if (e.key === 'ArrowRight') n = (i + 1) % this.tabs.length;
-           else if (e.key === 'ArrowLeft') n = (i - 1 + this.tabs.length) % this.tabs.length;
+           if (e.key === 'ArrowRight'{% if pdd.layout_mode == 'tabs_vertical' or pdd.layout_mode == 'accordion' %} || e.key === 'ArrowDown'{% endif %}) n = (i + 1) % this.tabs.length;
+           else if (e.key === 'ArrowLeft'{% if pdd.layout_mode == 'tabs_vertical' or pdd.layout_mode == 'accordion' %} || e.key === 'ArrowUp'{% endif %}) n = (i - 1 + this.tabs.length) % this.tabs.length;
            else if (e.key === 'Home') n = 0;
            else if (e.key === 'End') n = last;
            else return;
@@ -44,39 +55,36 @@ CSS).
            this.tab = this.tabs[n];
            this.$refs['tab_' + this.tabs[n]].focus();
          }
-       }">
+       }"{% endif %}>
     {% comment %}
     Static aria-selected/aria-expanded/tabindex give the correct deterministic
-    INITIAL (and no-JS) state — the first control (desc) is selected/open.
+    INITIAL (and no-JS) state — the first control is selected/open.
     Alpine's dynamic bindings then keep them in sync once it initializes. Each
     header is a role="tab" (desktop tablist) AND carries aria-expanded so the
     mobile accordion presentation is also correctly conveyed; every panel is
     role="tabpanel", labelled by its own header, and sits directly after it.
     {% endcomment %}
-
-    <button type="button" class="t pdp-acc-header active" role="tab" id="pdp-tab-desc-{{ pid }}"
-            x-ref="tab_desc" aria-controls="pdp-panel-desc-{{ pid }}"
-            aria-selected="true" aria-expanded="true" tabindex="0"
-            :aria-selected="tab === 'desc' ? 'true' : 'false'" :aria-expanded="tab === 'desc' ? 'true' : 'false'"
-            :tabindex="tab === 'desc' ? '0' : '-1'"
-            :class="{ active: tab === 'desc' }" @click="select('desc')" @keydown="onKey($event, 0)">توضیحات محصول</button>
-    <div class="tabpane pdp-tab-panel" id="pdp-panel-desc-{{ pid }}" role="tabpanel"
-         aria-labelledby="pdp-tab-desc-{{ pid }}" tabindex="0"
-         :class="{ active: tab === 'desc' }" x-show="tab === 'desc'">
+    {% for sec in pdd.sections %}
+    {% if pdd.stacked %}
+    <h2 class="pdp-sec-title" id="pdp-tab-{{ sec.key }}-{{ pid }}">{{ sec.label }}</h2>
+    <div class="pdp-tab-panel pdp-sec-panel" id="pdp-panel-{{ sec.key }}-{{ pid }}" role="region"
+         aria-labelledby="pdp-tab-{{ sec.key }}-{{ pid }}">
+    {% else %}
+    <button type="button" class="t pdp-acc-header{% if forloop.first %} active{% endif %}" role="tab" id="pdp-tab-{{ sec.key }}-{{ pid }}"
+            x-ref="tab_{{ sec.key }}" aria-controls="pdp-panel-{{ sec.key }}-{{ pid }}"
+            {% if forloop.first %}aria-selected="true" aria-expanded="true" tabindex="0"{% else %}aria-selected="false" aria-expanded="false" tabindex="-1"{% endif %}
+            :aria-selected="tab === '{{ sec.key }}' ? 'true' : 'false'" :aria-expanded="tab === '{{ sec.key }}' ? 'true' : 'false'"
+            :tabindex="tab === '{{ sec.key }}' ? '0' : '-1'"
+            :class="{ active: tab === '{{ sec.key }}' }" @click="select('{{ sec.key }}')" @keydown="onKey($event, {{ forloop.counter0 }})">{{ sec.label }}</button>
+    <div class="tabpane pdp-tab-panel" id="pdp-panel-{{ sec.key }}-{{ pid }}" role="tabpanel"
+         aria-labelledby="pdp-tab-{{ sec.key }}-{{ pid }}" tabindex="0"
+         :class="{ active: tab === '{{ sec.key }}' }" x-show="tab === '{{ sec.key }}'">
+    {% endif %}
+      {% if sec.key == 'desc' %}
       <div class="desc-text">
         {% if product.description %}{{ product.description|product_description_html }}{% else %}<p>توضیحاتی برای این کالا ثبت نشده است.</p>{% endif %}
       </div>
-    </div>
-
-    <button type="button" class="t pdp-acc-header" role="tab" id="pdp-tab-spec-{{ pid }}"
-            x-ref="tab_spec" aria-controls="pdp-panel-spec-{{ pid }}"
-            aria-selected="false" aria-expanded="false" tabindex="-1"
-            :aria-selected="tab === 'spec' ? 'true' : 'false'" :aria-expanded="tab === 'spec' ? 'true' : 'false'"
-            :tabindex="tab === 'spec' ? '0' : '-1'"
-            :class="{ active: tab === 'spec' }" @click="select('spec')" @keydown="onKey($event, 1)">مشخصات فنی</button>
-    <div class="tabpane pdp-tab-panel" id="pdp-panel-spec-{{ pid }}" role="tabpanel"
-         aria-labelledby="pdp-tab-spec-{{ pid }}" tabindex="0"
-         :class="{ active: tab === 'spec' }" x-show="tab === 'spec'">
+      {% elif sec.key == 'spec' %}
       <table class="spec-table">
         <tr><td>دسته‌بندی</td><td>{{ product.category.name }}</td></tr>
         {% if product.brand %}<tr><td>برند</td><td>{{ product.brand.name }}</td></tr>{% endif %}
@@ -87,17 +95,7 @@ CSS).
         <tr><td>وضعیت موجودی</td><td>{% if product.stock > 0 %}موجود ({{ product.stock|fa_number }} عدد){% else %}ناموجود{% endif %}</td></tr>
         <tr><td>تاریخ افزودن</td><td>{{ product.created_at|jalali }}</td></tr>
       </table>
-    </div>
-
-    <button type="button" class="t pdp-acc-header" role="tab" id="pdp-tab-review-{{ pid }}"
-            x-ref="tab_review" aria-controls="pdp-panel-review-{{ pid }}"
-            aria-selected="false" aria-expanded="false" tabindex="-1"
-            :aria-selected="tab === 'review' ? 'true' : 'false'" :aria-expanded="tab === 'review' ? 'true' : 'false'"
-            :tabindex="tab === 'review' ? '0' : '-1'"
-            :class="{ active: tab === 'review' }" @click="select('review')" @keydown="onKey($event, 2)">نظرات کاربران</button>
-    <div class="tabpane pdp-tab-panel" id="pdp-panel-review-{{ pid }}" role="tabpanel"
-         aria-labelledby="pdp-tab-review-{{ pid }}" tabindex="0"
-         :class="{ active: tab === 'review' }" x-show="tab === 'review'">
+      {% elif sec.key == 'review' %}
       <div class="review-sum">
         <div class="big">
           <b>{{ product.rating|floatformat:1|fa_number }}</b>
@@ -131,7 +129,23 @@ CSS).
       <div id="review-form-container">
         {% include "catalog/partials/review_form.html" %}
       </div>
+      {% elif sec.key == 'brand' and brand_panel %}
+      {% comment %}Real Store-owned brand data only (Brand.name / name_en / logo / description / country / website). Rendered only when the
+      product HAS a brand carrying at least one of them — see ``render_service._brand_panel_view``.{% endcomment %}
+      <div class="brand-panel">
+        {% if brand_panel.logo_url %}<img class="brand-logo" src="{{ brand_panel.logo_url }}" alt="لوگوی {{ brand_panel.name }}" width="96" height="96" loading="lazy" data-img-role="logo">{% endif %}
+        <div>
+          <h3>{{ brand_panel.name }}{% if brand_panel.name_en %}<small dir="ltr">{{ brand_panel.name_en }}</small>{% endif %}</h3>
+          {% if brand_panel.description %}<p>{{ brand_panel.description }}</p>{% endif %}
+          <dl>
+            {% if brand_panel.country %}<dt>کشور سازنده</dt><dd>{{ brand_panel.country }}</dd>{% endif %}
+            {% if brand_panel.website %}<dt>وب‌سایت</dt><dd dir="ltr"><a href="{{ brand_panel.website }}" rel="noopener noreferrer nofollow" target="_blank">{{ brand_panel.website }}</a></dd>{% endif %}
+          </dl>
+        </div>
+      </div>
+      {% endif %}
     </div>
+    {% endfor %}
   </div>
 </div>
 {% endwith %}

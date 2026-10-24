@@ -48,6 +48,8 @@ _ALIGN_CHOICES = (("", "پیش‌فرض"), ("start", "ابتدا"), ("center", "
 _VISIBILITY_CHOICES = (("", "نمایش داده شود"), ("hidden", "مخفی باشد"))
 _RATIO_CHOICES = (("", "خودکار (مناسب این بخش)"), ("square", "مربع"), ("portrait", "عمودی"), ("landscape", "افقی"))
 _FIT_CHOICES = (("", "خودکار (مناسب این بخش)"), ("contain", "نمایش کامل تصویر"), ("cover", "پر کردن قاب"))
+#: V5-RESIZE — where a section narrower than its Cell sits inside it (RTL: «راست» = the inline start).
+_WIDTH_ALIGN_CHOICES = (("", "وسط"), ("start", "راست"), ("center", "وسط"), ("end", "چپ"))
 _ZOOM_CHOICES = (("", "بدون بزرگ‌نمایی"), ("110", "۱۱۰٪"), ("125", "۱۲۵٪"), ("150", "۱۵۰٪"), ("175", "۱۷۵٪"))
 _POSITION_CHOICES = (
     ("", "خودکار (وسط)"), ("center", "وسط"), ("top", "بالا"), ("bottom", "پایین"), ("left", "چپ"), ("right", "راست"),
@@ -69,7 +71,8 @@ DESIGN_PROPERTIES: dict[str, DesignProperty] = {p.key: p for p in (
     DesignProperty("padding_bottom", "فاصله داخلی پایین (px)", "int", "spacing", 0, 200),
     DesignProperty("margin_top", "فاصله بیرونی بالا (px)", "int", "spacing", 0, 200),
     DesignProperty("margin_bottom", "فاصله بیرونی پایین (px)", "int", "spacing", 0, 200),
-    DesignProperty("min_height", "حداقل ارتفاع (px)", "int", "layout", 0, 800),
+    DesignProperty("min_height", "حداقل ارتفاع (px)", "int", "layout", 0, 1600,
+                   hint_fa="خالی = ارتفاع خودکار. این مقدار «حداقل» است: اگر محتوا بیشتر جا بخواهد، بخش بلندتر می‌شود و هیچ چیز بریده نمی‌شود."),
     DesignProperty("align", "تراز عنوان/محتوا", "choice", "layout", choices=_ALIGN_CHOICES),
     DesignProperty("gap", "فاصله بین آیتم‌ها (px)", "int", "layout", 0, 60),
     DesignProperty("columns_desktop", "ستون‌ها در دسکتاپ", "int", "layout", 1, 8),
@@ -92,6 +95,16 @@ DESIGN_PROPERTIES: dict[str, DesignProperty] = {p.key: p for p in (
     DesignProperty("button_text", "رنگ متن دکمه", "color", "actions"),
     DesignProperty("button_border", "رنگ حاشیه دکمه", "color", "actions"),
 )}
+
+#: V5-RESIZE — properties driven ON THE CANVAS (drag handles) only: validated, stored and rendered like every design key, but never listed in
+#: the Inspector's «ظاهر و استایل» panel, so ``DESIGN_PROPERTIES`` (the Inspector contract) is unchanged.
+CANVAS_PROPERTIES: dict[str, DesignProperty] = {p.key: p for p in (
+    DesignProperty("width_pct", "عرض بخش (٪ از عرض خانه)", "int", "layout", 30, 100,
+                   hint_fa="خالی = عرض کامل خانه. فقط عرض خودِ بخش را درون خانهٔ خودش تغییر می‌دهد؛ عرض ستون‌ها را مرز بین خانه‌ها تعیین می‌کند."),
+    DesignProperty("width_align", "جایگاه بخش در خانه", "choice", "layout", choices=_WIDTH_ALIGN_CHOICES,
+                   hint_fa="وقتی عرض بخش کمتر از خانه است، بخش کجای خانه قرار بگیرد."),
+)}
+_ALL_PROPERTIES: dict[str, DesignProperty] = {**DESIGN_PROPERTIES, **CANVAS_PROPERTIES}
 
 DESIGN_GROUP_LABELS_FA = {
     "colors": "رنگ‌ها", "border": "حاشیه و گوشه", "shadow": "سایه", "spacing": "فاصله‌ها",
@@ -140,11 +153,29 @@ DESIGN_CAPABILITIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "design_price": (("price_color",), ()),
 }
 
+#: V5-RESIZE — the universal visual-resize contract (height / width / placement). Granted to EVERY section type by
+#: ``section_registry._finalize_registry`` (the same way ``responsive`` is). Canvas-only: it grants storage / validation / rendering of the size
+#: keys but no Inspector control, so ``DESIGN_CAPABILITIES`` and the Inspector surface are exactly what they were.
+CANVAS_CAPABILITIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "canvas_size": (("min_height", "width_pct", "width_align"), ()),
+}
+
+
+def all_properties_for_capabilities(capabilities) -> tuple[str, ...]:
+    """EVERY design property a section with these capabilities may carry (Inspector set + canvas-only keys): the validator, the renderer and the
+    resize mutation use this."""
+    table = {**DESIGN_CAPABILITIES, **CANVAS_CAPABILITIES}
+    granted = {prop for name in capabilities if name in table for prop in table[name][0]}
+    return tuple(key for key in _ALL_PROPERTIES if key in granted)
+
 
 def properties_for_capabilities(capabilities) -> tuple[str, ...]:
-    """The design properties a section with these registered capabilities consumes, in canonical order."""
+    """The Inspector-visible design properties a section with these registered capabilities consumes, in canonical order."""
     granted = {prop for name in capabilities if name in DESIGN_CAPABILITIES for prop in DESIGN_CAPABILITIES[name][0]}
     return tuple(key for key in DESIGN_PROPERTIES if key in granted)
+
+
+inspector_properties_for_capabilities = properties_for_capabilities
 
 
 def display_modes_for_capabilities(capabilities) -> dict[str, tuple[str, ...]]:
@@ -166,7 +197,7 @@ def display_modes_for_capabilities(capabilities) -> dict[str, tuple[str, ...]]:
 
 
 def design_capability_names() -> frozenset[str]:
-    return frozenset(DESIGN_CAPABILITIES)
+    return frozenset(DESIGN_CAPABILITIES) | frozenset(CANVAS_CAPABILITIES)
 
 
 def _registered_capabilities(section_key: str) -> frozenset[str]:
@@ -179,12 +210,24 @@ def _registered_capabilities(section_key: str) -> frozenset[str]:
 
 
 def applicable_properties(section_key: str) -> tuple[str, ...]:
-    """Properties for a REGISTERED section type — read from its ``SectionDefinition.capabilities``."""
+    """Inspector-visible properties for a REGISTERED section type — read from its ``SectionDefinition.capabilities`` (canvas-only size keys
+    excluded; see ``all_properties``)."""
+    return properties_for_capabilities(_registered_capabilities(section_key))
+
+
+def all_properties(section_key: str) -> tuple[str, ...]:
+    """EVERY property a section's wrapper may carry — the Inspector set plus the canvas-only size keys. Rendering and the resize
+    mutation use this; ``applicable_properties`` stays the Inspector contract."""
+    return all_properties_for_capabilities(_registered_capabilities(section_key))
+
+
+def inspector_properties(section_key: str) -> tuple[str, ...]:
+    """Properties the Inspector offers for a REGISTERED section type (``applicable_properties`` minus the canvas-only size keys)."""
     return properties_for_capabilities(_registered_capabilities(section_key))
 
 
 def design_capable_section_keys() -> tuple[str, ...]:
-    """Every registered section type that registers at least one design capability."""
+    """Every registered section type that registers at least one Inspector-visible design capability."""
     from . import section_registry
 
     return tuple(key for key, definition in section_registry.SECTION_REGISTRY.items()
@@ -203,7 +246,7 @@ def validate_design_settings(raw: object, applicable: tuple[str, ...]) -> dict:
         raise DesignSettingsError("تنظیمات ظاهر باید یک شیء باشد")
     cleaned: dict = {}
     for key, value in raw.items():
-        prop = DESIGN_PROPERTIES.get(key)
+        prop = _ALL_PROPERTIES.get(key)
         if prop is None or key not in applicable:
             raise DesignSettingsError(f"ویژگی «{key}» برای این بخش قابل‌تنظیم نیست")
         if value is None or value == "":
@@ -239,7 +282,7 @@ def dormant_design_keys(stored: object, applicable: tuple[str, ...]) -> dict:
     ``validate_design_settings`` exactly as before."""
     if not isinstance(stored, dict):
         return {}
-    return {key: value for key, value in stored.items() if key in DESIGN_PROPERTIES and key not in applicable}
+    return {key: value for key, value in stored.items() if key in _ALL_PROPERTIES and key not in applicable}
 
 
 def split_resubmitted_dormant(design: object, dormant: dict) -> object:
@@ -341,6 +384,10 @@ def render_attributes(design: object, applicable: tuple[str, ...] | None = None)
     if "min_height" in design:
         flags.append("minh")
         put("minh", f"{design['min_height']}px")
+    if "width_pct" in design and int(design["width_pct"]) < 100:
+        flags.append("w")
+        put("w", f"{design['width_pct']}%")
+        flags.append("wa-" + (design.get("width_align") or "center"))
     if design.get("align") in _ALIGN_CSS:
         flags.append("align")
         put("align", _ALIGN_CSS[design["align"]])
@@ -402,7 +449,7 @@ BOX_PROPERTIES = frozenset({"border_color", "border_width", "radius", "shadow", 
 def serialize_registry_for_inspector(section_key: str) -> list[dict]:
     """Ordered, JSON-safe control metadata for the Inspector widget of ``section_key``."""
     capabilities = _registered_capabilities(section_key)
-    props = [DESIGN_PROPERTIES[k] for k in properties_for_capabilities(capabilities)]
+    props = [DESIGN_PROPERTIES[k] for k in inspector_properties_for_capabilities(capabilities)]
     modes_by_property = display_modes_for_capabilities(capabilities)
     out = []
     for group in DESIGN_GROUP_ORDER:

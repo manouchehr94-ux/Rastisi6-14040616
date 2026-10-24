@@ -6,6 +6,8 @@ from django.contrib.staticfiles import finders
 from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
+from ..semantic_colors import semantic_color_css, semantic_foreground_css
+
 register = template.Library()
 
 
@@ -172,6 +174,14 @@ def icon_svg(icon_slug):
     return mark_safe(svg)
 
 
+@register.filter
+def engine_icon(key):
+    """SVG of an engine-registry decorative icon key (``icon_registry``); ``""`` for an unknown key (fail closed)."""
+    from .. import icon_registry
+
+    return icon_registry.icon_svg(key)
+
+
 @register.simple_tag
 def rs_icon(name):
     """R4 Design Studio stroke icon (see ``studio_icons``)."""
@@ -212,6 +222,75 @@ def rs_section_icon(section_key):
 
 
 @register.simple_tag
+def rs_section_description(section_key):
+    """Merchant-facing one-liner of a section type for the Studio block library — read straight from the registry
+    (``SectionDefinition.description_fa``); empty when the registry declares none. Presentation only, never a second source."""
+    from apps.storefront_builder import section_registry
+
+    try:
+        return section_registry.get_definition(str(section_key or "")).description_fa or ""
+    except ValueError:
+        return ""
+
+
+#: Abstract wireframe family per section type (a schematic glyph for the library card, NOT a rendering of the section):
+#: grid = several tiles, wide = one wide banner, cards = banner cards, split = media + text, lines = text, strip = thin band.
+_LIBRARY_WIRE = {
+    "featured_products": "grid", "newest_products": "grid", "best_sellers": "grid", "discounted_products": "grid",
+    "amazing_offers": "grid", "product_section": "grid", "catalog_product_wall": "grid", "category_grid": "grid",
+    "collection_tiles": "grid", "brand_carousel": "grid",
+    "hero_banner": "wide", "fashion_lifestyle_hero": "wide", "image_slider": "wide", "single_banner": "wide", "linked_image": "wide",
+    "multi_banner": "cards", "promo_cards": "cards",
+    "image_text": "split", "video_section": "split",
+    "rich_text": "lines", "blog_posts": "lines", "faq": "lines", "testimonials": "lines", "newsletter": "lines",
+    "quick_links": "strip", "story_rail": "strip", "decorative_strip": "strip", "trust_features": "strip",
+    "surface_panel": "strip",
+}
+
+
+@register.simple_tag
+def rs_section_wire(section_key):
+    """CSS class suffix of the schematic glyph for a library card (``lines`` for an unknown type)."""
+    return _LIBRARY_WIRE.get(str(section_key or ""), "lines")
+
+
+def _layout_key_for(widths):
+    from apps.storefront_builder.services import container_service
+
+    return next((key for key, value in container_service.LAYOUT_PRESETS.items() if tuple(value) == tuple(widths)), None)
+
+
+def _stacked_layout_key_for(spans):
+    from apps.storefront_builder.services import container_service
+
+    return next((key for key, value in container_service.STACKED_LAYOUT_PRESETS.items() if tuple(value) == tuple(spans)), None)
+
+
+@register.simple_tag
+def rs_three_cell_patterns():
+    """The two three-slot patterns of the reference, expressed ONLY through engine presets that already exist (looked up by their
+    widths, so a registry change can only remove a pattern, never invent one): three equal columns (``LAYOUT_PRESETS`` 4,4,4), and —
+    V5-LAYOUT-011 — one big column + two small stacked Cells (``STACKED_LAYOUT_PRESETS`` 8,4,4: THREE real Cells, so each of the
+    big / top-small / bottom-small slots exists, fills and reorders independently even while empty). ``cells`` maps each chosen
+    section to the Cell index that receives it."""
+    thirds = _layout_key_for((4, 4, 4))
+    big_small = _stacked_layout_key_for((8, 4, 4))
+    patterns = []
+    if thirds:
+        patterns.append({
+            "key": "thirds_equal", "engine": thirds, "widths": (4, 4, 4), "stacked": False, "name": "سه ستون مساوی",
+            "cells": "0,1,2", "slot_labels": "بخش ستون اول (راست)|بخش ستون دوم (وسط)|بخش ستون سوم (چپ)",
+        })
+    if big_small:
+        patterns.append({
+            "key": "big_right_two_left", "engine": big_small, "widths": (8, 4), "stacked": True,
+            "name": "بزرگ راست + دو کوچک چپ", "cells": "0,1,2",
+            "slot_labels": "بخش بزرگ (راست)|بخش کوچک بالا (چپ)|بخش کوچک پایین (چپ)",
+        })
+    return patterns
+
+
+@register.simple_tag
 def rs_featured(items, attr, current, count):
     """Split a real choice list for the Design Studio: the current choice
     first plus the next ones up to ``count`` stay visible, the rest go into a
@@ -229,10 +308,37 @@ def rs_featured(items, attr, current, count):
 
 _STUDIO_FONT_LABELS_FA = {
     "Vazirmatn": "وزیرمتن · خوانا و امروزی",
+    "Estedad": "استعداد · گرم و مدرن",
+    "Noto Sans Arabic": "نوتو سنس عربی · تمیز و خنثی",
+    "Lalezar": "لالزار · تیتر پررنگ",
     "Tahoma": "تاهوما · ساده و آشنا",
     "Arial": "آریال · بی‌پیرایه",
     "Georgia": "جورجیا · سریف و روایی",
 }
+
+
+@register.filter
+def first_social(links, icon_name):
+    """The first of the Store's own social links whose safe icon name is ``icon_name`` (``None`` when there is none)."""
+    for link in links or ():
+        if getattr(link, "effective_icon_name", "") == icon_name:
+            return link
+    return None
+
+
+_STUDIO_HEADING_STYLE_LABELS_FA = {
+    "default": "پیش‌فرض (نوار رنگی کنار عنوان)",
+    "centered": "وسط‌چین",
+    "centered_rule": "وسط‌چین با خطوط ظریف",
+    "underline": "زیرخط‌دار",
+    "plain": "ساده",
+}
+
+
+@register.filter
+def rs_heading_style_label(value):
+    """Merchant-facing Persian label for a section-heading style (display only; the stored value stays the key)."""
+    return _STUDIO_HEADING_STYLE_LABELS_FA.get(str(value), value)
 
 
 @register.filter
@@ -273,7 +379,8 @@ def media_default_state(section, config):
     from ..services import media_defaults_service
 
     model = config.get("model") if hasattr(config, "get") else None
-    if model is None:
+    if model is None or config.get("no_defaults"):
+        # a section type that owns exactly its own picture (V5 «عکس لینک‌دار») never shows / adopts the store-wide default rows
         return media_defaults_service.DefaultMediaState()
     return media_defaults_service.default_media_state(section, model)
 
@@ -380,3 +487,67 @@ def static_v(path):
             cached = (mtime, hashlib.sha1(handle.read()).hexdigest()[:10])
         _STATIC_VERSION_CACHE[absolute] = cached
     return f"{url}?v={cached[1]}"
+
+
+@register.simple_tag(takes_context=True)
+def announcement_view(context, header_config):
+    """V5 — the ONE read model of the header's announcement strip (every header variant + the legacy shell read it through the shared
+    ``_shared/announcement_content.html``). Pure projection of ``header_config`` (single source); ``extended`` is False for a header that never
+    used the V5 keys, so those render the historical markup byte-for-byte.
+
+    * ``visible`` — the page scope (``announcement_pages``: all pages (default) or the home page only);
+    * ``image_url`` — the small picture, resolved ONLY from a ``MediaAsset`` of the current store (fail-closed: a foreign / deleted id shows nothing);
+    * ``style`` — merchant colours (``geometry.announce_bg`` / ``announce_fg``, semantic colours resolved + contrast-safe foreground)."""
+    hc = header_config if isinstance(header_config, dict) else {}
+    request = context.get("request")
+    page_type = context.get("page_type")
+    on_home = (page_type == "home") if page_type else bool(
+        getattr(getattr(request, "resolver_match", None), "url_name", "") == "home"
+    )
+    visible = hc.get("announcement_pages", "all") != "home" or on_home
+
+    image_url = ""
+    asset_id = hc.get("announcement_image_asset_id")
+    if asset_id:
+        store = context.get("store") or getattr(request, "store", None)
+        if store is not None:
+            from apps.content.models import MediaAsset
+
+            asset = MediaAsset.objects.filter(pk=asset_id, store=store).first()
+            if asset is not None and getattr(asset, "image", None):
+                try:
+                    image_url = asset.image.url
+                except ValueError:
+                    image_url = ""
+
+    geometry = hc.get("geometry") if isinstance(hc.get("geometry"), dict) else {}
+    css = []
+    background = semantic_color_css(geometry.get("announce_bg")) if geometry.get("announce_bg") else ""
+    foreground = semantic_color_css(geometry.get("announce_fg")) if geometry.get("announce_fg") else ""
+    if background:
+        css.append(f"background:{background}")
+        if not foreground:
+            foreground = semantic_foreground_css(geometry["announce_bg"])
+    if foreground:
+        css.append(f"color:{foreground}")
+    try:
+        size = int(geometry.get("announce_image_size") or 24)
+    except (TypeError, ValueError):
+        size = 24
+
+    # V5-UI-014 — the bar's own height / vertical padding (validated 32–72 / 0–16 by shell_geometry; absent = the strip's built-in size)
+    for key, var, low, high in (("announce_height", "--ann-h", 32, 120), ("announce_padding", "--ann-py", 0, 16)):
+        try:
+            value = int(geometry.get(key))
+        except (TypeError, ValueError):
+            continue
+        css.append(f"{var}:{max(low, min(high, value))}px")
+    link_url = hc.get("announcement_link_url") or ""
+    align = hc.get("announcement_align") or ""
+    extended = bool(image_url or link_url or align or css)
+    return {
+        "visible": visible, "extended": extended, "image_url": image_url,
+        "image_alt": hc.get("announcement_image_alt") or "", "image_side": hc.get("announcement_image_side") or "start",
+        "image_size": max(16, min(64, size)), "url": link_url, "new_tab": bool(hc.get("announcement_link_new_tab")),
+        "align": align, "style": ";".join(css),
+    }

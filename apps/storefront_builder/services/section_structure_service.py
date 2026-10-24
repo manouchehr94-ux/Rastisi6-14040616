@@ -119,6 +119,56 @@ def add_section(*, draft, section_key: str, page_type: str) -> StorefrontSection
     return new_section
 
 
+#: V5-LAYOUT-ATOMIC — bounds of one ``add_container`` request (a layout has at most ``container_service.MAX_CELLS`` cells).
+MAX_BLOCKS_PER_CELL = 4
+MAX_BLOCKS_PER_CONTAINER = 8
+
+
+def add_container(*, draft, page_type: str, layout_key: str, cells=None) -> StorefrontContainer:
+    """V5-LAYOUT-ATOMIC — create ONE new Container (at the end of the page) with the Cells of an EXISTING layout preset, optionally
+    with initial Blocks per Cell. Everything runs inside the caller's single ``apply_mutation`` transaction, so a refusal in ANY
+    Block (page/type legality, single-instance limit, ...) rolls the whole build back: no half-built layout, one Revision, one
+    history step. Reuses only existing primitives — ``create_empty_container`` for the layout and ``add_section_to_cell`` for each
+    Block, i.e. every per-Block validation (page type, hidden-from-library, max instances, container lock, draft scoping) is the
+    SAME code path as ``cell.add_section``; nothing is re-implemented or relaxed here.
+
+    ``cells`` is optional: ``None``/``[]``/empty lists create fully EMPTY Cells (the merchant fills them later through
+    ``cell.add_section``). Otherwise it is a list (at most one entry per Cell of the preset) of lists of section keys; a Cell with
+    two keys becomes a multi-block Cell whose Blocks are independent Sections (own id, own settings)."""
+    if page_type not in StorefrontPage.PageType.values:
+        raise SectionStructureError("invalid_page_type")
+    spans = container_service.layout_spans(layout_key)
+    if spans is None or len(spans) < 2:
+        raise SectionStructureError("invalid_container_layout")
+
+    if cells is None:
+        cells = []
+    if not isinstance(cells, (list, tuple)) or len(cells) > len(spans):
+        raise SectionStructureError("invalid_cells")
+    plan = []
+    total = 0
+    for entry in cells:
+        keys = list(entry) if isinstance(entry, (list, tuple)) else None
+        if keys is None or len(keys) > MAX_BLOCKS_PER_CELL or any(not isinstance(k, str) or not k for k in keys):
+            raise SectionStructureError("invalid_cells")
+        total += len(keys)
+        plan.append(keys)
+    if total > MAX_BLOCKS_PER_CONTAINER:
+        raise SectionStructureError("invalid_cells")
+
+    page = draft.get_page(page_type)
+    container_service.ensure_page_containers(page)
+    try:
+        container = container_service.create_empty_container(page, layout_key)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_container_layout") from exc
+    created_cells = list(container.cells.order_by("order", "id"))
+    for cell, keys in zip(created_cells, plan):
+        for section_key in keys:
+            add_section_to_cell(draft=draft, section_key=section_key, cell_id=cell.pk)
+    return container
+
+
 def _scoped_cell(draft, cell_id) -> StorefrontCell:
     """Same strict scoping rule as ``_scoped_section`` above, for a Cell
     id instead of a Section id."""
@@ -302,6 +352,90 @@ def change_container_layout(*, draft, container_id: int, layout_key: str) -> Sto
         return container_service.change_container_layout(container, layout_key)
     except container_service.ContainerLayoutError as exc:
         raise SectionStructureError("invalid_container_layout") from exc
+
+
+#: V5-RESIZE — the section size dimensions a visual drag may change, and the ``settings["design"]`` key each one is stored under. «Auto» =
+#: the key is ABSENT (every legacy section is Auto); a dimension passed as ``None`` (or its neutral value) removes the key again.
+RESIZE_DIMENSIONS = {"height": "min_height", "width": "width_pct", "align": "width_align"}
+
+
+def resize_section(*, draft, section_id: int, changes: dict) -> StorefrontSection:
+    """V5-RESIZE — set / clear a Section's manual size. One central contract for EVERY section type: the three values live in the existing
+    sparse ``settings["design"]`` block (``min_height`` = a floor, never a clip; ``width_pct`` = share of the Cell; ``width_align``), are
+    merged INTO it (every other design key is kept) and validated by ``design_block.validate_design_settings`` against the section's registered capabilities — the same validator every
+    settings write goes through; no other setting of the Section is read back or rewritten. Refused with no change for a locked Section or a Section in a locked Container."""
+    from .. import design_block
+
+    section = _scoped_section(draft, section_id)
+    if section.is_locked:
+        raise SectionStructureError("section_locked")
+    container_service.ensure_page_containers(section.page)
+    section.refresh_from_db()
+    cell = find_placement_cell(section)
+    if cell is not None and cell.container.is_locked:
+        raise SectionStructureError("container_locked")
+    definition = _get_definition(section.section_key)
+    if definition is None:
+        raise SectionStructureError("section_not_found")
+
+    current = dict(section.settings or {})
+    design = dict(current.get("design") or {})
+    for dimension, value in changes.items():
+        key = RESIZE_DIMENSIONS[dimension]
+        neutral = value is None or (dimension == "height" and value == 0) or (dimension == "width" and value == 100) \
+            or (dimension == "align" and value in ("", "center"))
+        if neutral:
+            design.pop(key, None)
+            if dimension == "width":
+                design.pop("width_align", None)          # a section at full width has no placement to remember
+        else:
+            design[key] = value
+    applicable = design_block.all_properties_for_capabilities(definition.capabilities)
+    dormant = design_block.dormant_design_keys(current.get("design"), applicable)
+    try:
+        cleaned = design_block.validate_design_settings(design_block.split_resubmitted_dormant(design, dormant), applicable)
+    except ValueError as exc:
+        raise SectionStructureError("invalid_resize_value") from exc
+    final_design = design_block.restore_dormant(cleaned, dormant)
+    # ONLY the design block is rewritten: every content value of the Section stays exactly as the merchant left it
+    if final_design:
+        current["design"] = final_design
+    else:
+        current.pop("design", None)
+    section.settings = current
+    section.save(update_fields=["settings", "updated_at"])
+    return section
+
+
+def remove_container(*, draft, container_id: int) -> None:
+    """V5-LAYOUT-011 — remove a Container (see ``container_service.remove_container``): an empty one is deleted; one with content is
+    dissolved into independent single-Cell rows, never deleting a Section. Refused WITHOUT any change when the Container is locked, when
+    any of its Blocks is locked, or when a Block is a legacy row member (same guards as ``section.move_to_cell``)."""
+    container = _scoped_container(draft, container_id)
+    if container.is_locked:
+        raise SectionStructureError("container_locked")
+    cells = list(container.cells.order_by("order", "id"))
+    for cell in cells:
+        for block in container_service.get_cell_blocks(cell):
+            if block.is_locked:
+                raise SectionStructureError("container_has_locked_section")
+            if row_service.is_row_member(block):
+                raise SectionStructureError("container_has_row_member")
+    try:
+        container_service.remove_container(container)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_placement") from exc
+
+
+def resize_container(*, draft, container_id: int, spans=None, stack_split=None, set_split: bool = False) -> StorefrontContainer:
+    """V5-RESIZE — scoped wrapper over ``container_service.resize_container`` (column widths / stacked height split)."""
+    container = _scoped_container(draft, container_id)
+    try:
+        return container_service.resize_container(container, spans=spans, stack_split=stack_split, set_split=set_split)
+    except container_service.ContainerResizeError as exc:
+        raise SectionStructureError(exc.code) from exc
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_resize_layout") from exc
 
 
 def build_structure_projection(page) -> list[dict]:

@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_GET, require_POST
 
@@ -262,6 +263,34 @@ def storefront_preview(request):
         "is_preview": True,
         "top_level_categories": top_level_categories,
     })
+
+
+@never_cache
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_draft_preview(request):
+    """«پیش‌نمایش» — the customer view of the Store's current DRAFT (unpublished changes), for a manager of THIS store only.
+
+    Read-only: it renders the Draft through the public pipeline (``build_draft_preview_context`` → the same shell, appearance and section
+    renderers as the live storefront, no builder markers, no overlays) and never writes or publishes. ``?page=`` selects the page type the
+    Studio is on. ``never_cache`` so a refresh always shows the latest saved Draft. A Store with no Draft has no unpublished changes: the page
+    says so explicitly and shows the current published layout (never silently)."""
+    from .models import StorefrontLayout
+    from .services.storefront_context_service import build_draft_preview_context
+
+    store = _resolve_store(request)
+    page_type = _resolve_page_type(request.GET.get("page"))
+    layout = StorefrontLayout.objects.filter(store=store).select_related("draft_version", "published_version").first()
+    version = layout.draft_version if layout is not None else None
+    is_draft = version is not None
+    if version is None:
+        version = layout_service.ensure_default_published_layout(store).published_version
+    context = build_draft_preview_context(
+        request, store, version, page_type, page_context=_preview_page_context(request, store, page_type),
+    )
+    context.update({"store": store, "is_draft_preview": True, "draft_preview_is_draft": is_draft})
+    return render(request, "storefront_builder/draft_preview.html", context)
 
 
 def render_preview_fragment(request, store, draft, *, section_id=None, container_id=None):

@@ -398,6 +398,10 @@ class HeroBannerSchemaRegistrationTests(SimpleTestCase):
                 "text_position",
                 # Phase 5 Task 5 (STRANS) — between-slide transition style.
                 "transition",
+                # V5 six-site kit — clean slider proportions / edge-to-edge width
+                "slider_ratio",
+                "slider_ratio_mobile",
+                "slider_width",
                 "appearance_overrides",
                 # R4-11 — the generic Design field (hero gained the image focal-point control)
                 "design",
@@ -521,6 +525,12 @@ class SchemaEnablementRegistryGuardTests(SimpleTestCase):
         "testimonials",
         "surface_panel",
         "decorative_strip",
+        "linked_image",
+        # V5 (PDP بستهٔ ۱) — the two PDP sections gained a generic presentation schema (``pdp_settings``); they stay single Sections
+        "product_main",
+        "product_description",
+        # V5 six-site kit — ``related_products`` gained a small presentation schema (title / grid-or-carousel / carousel navigation)
+        "related_products",
     })
 
     def test_every_registered_section_key_matches_its_expected_schema_state(self):
@@ -1146,9 +1156,10 @@ class BackgroundCapabilityProjectionTests(SimpleTestCase):
         # These 8 background-aware sections are context/media-only (no schema)
         # — the documented exception. They must remain schema-less so the
         # projection correctly skips them.
+        # (``product_description`` left this set in V5 PDP بستهٔ ۱ and ``related_products`` in the six-site kit: both now have a schema — the generic ``background`` field is projected onto them)
         documented_non_schema = {
             "catalog_product_wall", "collection_header", "featured_products",
-            "product_description", "product_video", "related_products",
+            "product_video",
             "single_banner", "story_rail",
         }
         for key in documented_non_schema:

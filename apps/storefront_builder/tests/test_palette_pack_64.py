@@ -11,7 +11,9 @@ class Palette64RegistryContractTests(SimpleTestCase):
     def test_public_palette_library_has_the_release_palettes(self):
         # 64 release palettes + the three reference-template palettes
         # (``spectrum-stationery`` 51, ``orchid-retail`` 52, ``pastel-lilac`` 53).
-        self.assertEqual(len(appearance_registry.list_palettes()), 67)
+        from apps.storefront_builder.tests._catalog_count import PALETTE_COUNT
+
+        self.assertEqual(len(appearance_registry.list_palettes()), PALETTE_COUNT)
         for slug in ("spectrum-stationery", "orchid-retail", "pastel-lilac"):
             self.assertIsNotNone(appearance_registry.get_palette(slug))
 

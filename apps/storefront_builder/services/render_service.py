@@ -23,7 +23,7 @@ from apps.catalog.services.promotion_service import active_discount_q, earliest_
 from apps.content.models import HeroSlide, PromotionalBanner
 from apps.orders.services import best_seller_service
 
-from .. import appearance_registry, decorative_strip, design_block, semantic_colors
+from .. import appearance_registry, decorative_strip, design_block, pdp_settings, semantic_colors
 from ..section_registry import (
     UnknownSectionTypeError,
     default_brand_carousel_settings,
@@ -151,6 +151,17 @@ def _single_banner_context(store, section):
     return {"banners": _scoped_banners(store, section)[:1]}
 
 
+def _linked_image_context(store, section):
+    """V5 «عکس لینک‌دار» — ONLY this section's own picture row (no fallback to the store-wide banner pool, ever): a missing picture must show
+    nothing, never a random / default store banner. ``banners`` is a 0-or-1 list so the shared empty-state plumbing and the template agree."""
+    if getattr(section, "pk", None) is None:  # an unsaved candidate (gallery live preview) has no picture row yet
+        return {"banners": []}
+    banner = PromotionalBanner.objects.filter(
+        store=store, section=section, is_active=True,
+    ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id").first()
+    return {"banners": [banner] if banner is not None else []}
+
+
 def _multi_banner_context(store, section):
     """Resolve a reusable slice of active promotional banners.
 
@@ -206,7 +217,7 @@ def _category_grid_context(store, section):
     # modes that explicitly need uncropped representative photography pay
     # for the extra per-category product lookup; every other category_grid
     # variant keeps reading ``category.image`` exactly as before.
-    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles"}:
+    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles", "label_tiles", "icon_rail", "ring_circles", "photo_cards"}:
         for category in top_categories:
             category.representative_media = section_data_service.resolve_category_representative_media(category)
     # ``min_slots`` reserves visible positions: the positions without a category render as neutral empty slots.
@@ -499,23 +510,35 @@ def _video_section_context(store, section):
     ویدیویِ کالا استفاده می‌شود عبور می‌کند (نه بازنویسیِ دوباره) — یک
     نمونه‌ی موقتِ (ذخیره‌نشده‌یِ) ``ProductVideo`` فقط برایِ عبور از همان
     منطق ساخته می‌شود."""
-    video_url = (section.settings or {}).get("video_url") or ""
-    if not video_url:
-        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None}
-
     from apps.catalog.models import ProductVideo
     from apps.catalog.services import product_video_service
+
+    items = []
+    for row in (section.settings or {}).get("videos") or []:
+        try:
+            provider, _external_id = product_video_service.detect_provider_and_id(row.get("url", ""))
+        except product_video_service.ProductVideoError:
+            continue
+        temp = ProductVideo(provider=provider, url=row["url"])
+        if provider == ProductVideo.Provider.INSTAGRAM:
+            items.append({"title": row.get("title", ""), "embed_url": None, "permalink": product_video_service.instagram_permalink(temp)})
+        else:
+            items.append({"title": row.get("title", ""), "embed_url": product_video_service.embed_url(temp), "permalink": None})
+    video_url = (section.settings or {}).get("video_url") or ""
+    if not video_url:
+        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None, "video_items": items}
 
     try:
         provider, _external_id = product_video_service.detect_provider_and_id(video_url)
     except product_video_service.ProductVideoError:
-        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None}
+        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None, "video_items": items}
 
     temp_video = ProductVideo(provider=provider, url=video_url)
     if provider == ProductVideo.Provider.INSTAGRAM:
         return {"video_embed_url": None, "video_is_instagram": True,
-                "video_permalink": product_video_service.instagram_permalink(temp_video)}
-    return {"video_embed_url": product_video_service.embed_url(temp_video), "video_is_instagram": False, "video_permalink": None}
+                "video_permalink": product_video_service.instagram_permalink(temp_video), "video_items": items}
+    return {"video_embed_url": product_video_service.embed_url(temp_video), "video_is_instagram": False, "video_permalink": None,
+            "video_items": items}
 
 
 def _category_context_for_promo_cards(store, section):
@@ -582,7 +605,12 @@ def _product_section_context(store, section):
         resolved = resolve_destination_setting(store, destination)
         if resolved["url"]:
             view_all_url = resolved["url"]
-    return {"products": products, "view_all_url": view_all_url}
+    context = {"products": products, "view_all_url": view_all_url}
+    if (section.settings or {}).get("tabs_source"):
+        context["tabs"] = section_data_service.resolve_product_tabs(
+            store, section.settings or {}, availability=_availability_mode(section),
+        )
+    return context
 
 
 #: کلیدهایی که context builder‌شان به تنظیماتِ خودِ همان نمونه‌ی section
@@ -591,7 +619,7 @@ def _product_section_context(store, section):
 #: تکرارشده (duplicable) با تنظیماتِ متفاوت (مثلاً دو کالکشنِ متفاوت)
 #: محتوایِ یکسان (نمونه‌ی اول) نشان می‌دهند.
 PER_INSTANCE_SECTION_KEYS = {
-    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "multi_banner",
+    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "linked_image", "multi_banner",
     "category_grid", "brand_carousel", "collection_tiles", "quick_links", "video_section", "story_rail",
     #: Part 2D — same reason as ``product_section``/``category_grid``
     #: above: this builder's output depends on the section's own
@@ -647,13 +675,37 @@ def _product_main_context(store, section, page_context):
         "gift_wrap": page_context.get("gift_wrap"),
         "gallery_slides": page_context.get("gallery_slides"),
         "review_count": page_context.get("review_count", 0),
+        # V5 (PDP بستهٔ ۱) — فقط «چینش و ظاهر»: همین‌جا از settings ی همین Section حل می‌شود (lenient، هرگز exception نمی‌دهد)؛
+        # قیمت/موجودی/تنوع/فرم خرید همچنان از page_context بالا می‌آیند، نه از این view.
+        "pdp": pdp_settings.resolve_product_main_view(getattr(section, "settings", None)),
     }
+
+
+def _brand_panel_view(brand, product=None):
+    """The real, Store-owned brand data the optional «برند» section can show — ``None`` when the product has no brand, the brand
+    belongs to another Store, or it carries nothing to say (no empty / decorative panel is ever rendered). Only an http(s)
+    website is ever linked."""
+    if brand is None:
+        return None
+    if product is not None and getattr(brand, "store_id", None) != getattr(product, "store_id", None):
+        return None
+    try:
+        logo_url = brand.logo.url if brand.logo else ""
+    except Exception:  # a missing / unreadable file simply means «no logo» — never a broken page
+        logo_url = ""
+    view = {
+        "name": brand.name, "name_en": brand.name_en, "logo_url": logo_url,
+        "description": brand.description, "country": brand.country,
+        "website": brand.website if str(brand.website or "").lower().startswith(("http://", "https://")) else "",
+    }
+    return view if any(view[key] for key in ("logo_url", "description", "country", "website")) else None
 
 
 def _product_description_context(store, section, page_context):
     product = page_context.get("product")
     if product is None:
         return {}
+    brand_panel = _brand_panel_view(getattr(product, "brand", None), product)
     return {
         "product": product,
         "spec_variant_summary": page_context.get("spec_variant_summary", {}),
@@ -661,6 +713,10 @@ def _product_description_context(store, section, page_context):
         "review_count": page_context.get("review_count", 0),
         "rating_breakdown": page_context.get("rating_breakdown", []),
         "can_review": page_context.get("can_review", False),
+        "brand_panel": brand_panel,
+        "pdd": pdp_settings.resolve_product_description_view(
+            getattr(section, "settings", None), brand_available=brand_panel is not None,
+        ),
     }
 
 
@@ -750,6 +806,7 @@ _CONTEXT_BUILDERS = {
     "hero_banner": _hero_banner_context,
     "image_slider": _image_slider_context,
     "single_banner": _single_banner_context,
+    "linked_image": _linked_image_context,
     "multi_banner": _multi_banner_context,
     "category_grid": _category_grid_context,
     "featured_products": _featured_products_context,
@@ -1022,8 +1079,10 @@ def _build_items_from_sections(
             render_section = copy(section)
             render_section.settings = effective_settings
 
+        # An unsaved candidate section (gallery live preview) has no pk: key it by identity so two instances of the same key
+        # (two banner rows, two product rows …) never share one cached context.
         cache_key = (
-            (section.section_key, section.pk)
+            (section.section_key, section.pk if section.pk is not None else id(section))
             if section.section_key in PER_INSTANCE_SECTION_KEYS
             else section.section_key
         )
@@ -1075,7 +1134,7 @@ def _build_items_from_sections(
             context["campaign"] = _campaign_panel_view(store, context["settings"])
         # Sparse ``design`` block -> data-d flags + --d-* custom properties for the wrapper.
         context["design_attrs"] = design_block.render_attributes(
-            context["settings"].get("design"), design_block.applicable_properties(section.section_key),
+            context["settings"].get("design"), design_block.all_properties(section.section_key),
         )
         # Column counts: the section's own ``*_columns`` (product-section contract) win over the shared
         # ``responsive`` block; a ``design`` block may still override them through ``--cols-*``.

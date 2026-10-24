@@ -42,6 +42,7 @@ from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.storefront_builder.tests._catalog_count import LAYOUT_PRESET_COUNT, READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -170,18 +171,18 @@ class ReadyTemplateGallerySeparationTests(TestCase):
         "روایت‌محور", also ``editorial_story``'s label), which would make a
         naive text-absence check false-fail without indicating any real
         separation bug."""
-        self.assertEqual(len(lpr.list_ready_templates()), 53)
+        self.assertEqual(len(lpr.list_ready_templates()), READY_TEMPLATE_COUNT)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset({p.key for p in lpr.list_ready_templates()}))
         response = studio_gallery_response(self.admin_client)
         cards = response.context["studio"]["template_cards"]
-        self.assertEqual(len(cards), 53)
+        self.assertEqual(len(cards), READY_TEMPLATE_COUNT)
         self.assertTrue(set(READY_TEMPLATE_KEYS).issubset({c["preset"].key for c in cards}))
         labels = {t["label"] for t in gallery_client_templates(response)}
         for key in READY_TEMPLATE_KEYS:
             self.assertIn(lpr.get_layout_preset(key).label_fa, labels)
 
     def test_b_historical_presets_remain_registered_and_directly_applicable(self):
-        self.assertEqual(len(lpr.list_layout_presets()), 58)
+        self.assertEqual(len(lpr.list_layout_presets()), LAYOUT_PRESET_COUNT)
         for key in HISTORICAL_KEYS:
             preset = lpr.get_layout_preset(key)
             self.assertIsNotNone(preset, key)

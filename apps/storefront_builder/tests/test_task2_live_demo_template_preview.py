@@ -50,6 +50,7 @@ from apps.storefront_builder.storefront_appearance.rendering import (
 from apps.storefront_builder.views import RASTI_MODE_DEMO_STORE_SLUG
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -474,7 +475,7 @@ class GalleryStillHasFiftyTemplatesTests(LiveDemoTemplatePreviewTestCase):
     def test_gallery_still_lists_exactly_fifty_ready_templates(self):
         response = studio_gallery_response(self.admin_client)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(gallery_cards(response)), 53)
+        self.assertEqual(len(gallery_cards(response)), READY_TEMPLATE_COUNT)
 
     def test_gallery_cards_link_to_the_new_live_preview_route(self):
         response = studio_gallery_response(self.admin_client)
