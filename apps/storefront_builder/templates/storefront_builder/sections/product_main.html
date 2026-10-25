@@ -322,7 +322,38 @@ window.pdpSatcWatch = function (el) {
     el.classList.toggle('is-shown', !e.isIntersecting && e.boundingClientRect.top < 0);
   }).observe(cta);
 };
-{% endif %}document.addEventListener('alpine:init', () => {
+{% endif %}(function () {
+  /* phone quick-buy bar: step aside while an in-flow buy control (price, options, quantity, add-to-cart) sits in the strip the bar covers,
+     so the bar never hides what the shopper is about to use; it comes back as soon as those controls are clear of that strip */
+  function init() {
+    var bar = document.querySelector('.pdp-satc');
+    if (!bar || !window.matchMedia) { return; }
+    var scope = bar.closest('.pdp') || document;
+    var phone = window.matchMedia('(max-width:680px)');
+    var queued = false;
+    function check() {
+      queued = false;
+      if (!phone.matches) { bar.classList.remove('is-away'); return; }
+      var offset = parseFloat(getComputedStyle(bar).bottom) || 0;
+      var floor = window.innerHeight - offset;
+      var ceiling = floor - bar.offsetHeight;
+      var away = false;
+      scope.querySelectorAll('.pricebox, .opt-block, .qty, .pdp-actions').forEach(function (el) {
+        if (el.hidden || bar.contains(el)) { return; }
+        var r = el.getBoundingClientRect();
+        if (r.height > 0 && r.bottom > ceiling && r.top < floor) { away = true; }
+      });
+      bar.classList.toggle('is-away', away);
+    }
+    function queue() { if (!queued) { queued = true; window.requestAnimationFrame(check); } }
+    window.addEventListener('scroll', queue, { passive: true });
+    window.addEventListener('resize', queue);
+    if (phone.addEventListener) { phone.addEventListener('change', queue); }
+    check();
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
+})();
+document.addEventListener('alpine:init', () => {
   Alpine.data('variantSelector', (selectorData, productData) => ({
     mode: selectorData.mode,
     axes: selectorData.axes,

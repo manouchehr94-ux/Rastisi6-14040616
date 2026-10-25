@@ -149,6 +149,7 @@ class PhoneLayoutTests(_LabBase):
         container = self.build_container("half", [["rich_text"], ["linked_image"]])
         self.mutate({"type": "container.update_settings", "container_id": container.pk, "patch": {"mobile_order": "reverse"}})
         self.assertIn('data-mobile-order="reverse"', self.home_preview())
+        self.assertIn("--cell-i:2", self.home_preview(), "a reversed row numbers its cells so a phone slider can swipe in the opposite order")
         self.mutate({"type": "container.update_settings", "container_id": container.pk, "patch": {"mobile_mode": "slider"}})
         html = self.home_preview()
         self.assertIn('data-mobile-mode="slider"', html)
@@ -208,6 +209,15 @@ class ProductPageCompositionTests(_LabBase):
         self.assertEqual(_data_attrs(_pdp_tag(self._preview()))["info-order"], "custom")
         self._update(self.main, {"info_order": [{"key": k} for k in pdp_settings.PRODUCT_INFO_BLOCK_KEYS]})
         self.assertNotIn("info_order", self._stored(self.main))
+
+    def test_the_phone_quick_buy_bar_steps_aside_instead_of_covering_buy_controls(self):
+        from pathlib import Path
+
+        css = (Path(pdp_settings.__file__).resolve().parents[2] / "apps" / "catalog" / "static" / "css" / "product_detail.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"@media\(max-width:680px\)\{\s*\.pdp-satc\.is-away\{transform:translateY\(130%\);visibility:hidden")
+        html = self._preview()
+        self.assertIn("classList.toggle('is-away', away)", html)
+        self.assertIn(".pricebox, .opt-block, .qty, .pdp-actions", html)
 
     def test_info_order_ignores_unknown_and_duplicate_blocks_and_keeps_every_block(self):
         self.assertEqual(pdp_settings.effective_info_order(["trust", "bogus", "trust", "price"]),

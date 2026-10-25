@@ -3310,6 +3310,8 @@ html[data-sfb-density] .promo-grid.promo-grid--tile-4{gap:20px}
   .rcontainer[data-mobile-mode="slider"]{display:flex!important;grid-template-columns:none!important;grid-template-rows:none!important;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;gap:var(--container-gap,14px)}
   .rcontainer[data-mobile-mode="slider"]::-webkit-scrollbar{display:none}
   .rcontainer[data-mobile-mode="slider"]>.rcontainer-cell{flex:0 0 86%;scroll-snap-align:center;grid-row:auto!important;grid-column:auto!important}
+  /* a reversed row that is a slider swipes through its cells in the opposite order too (the index is only written when the order is reversed) */
+  .rcontainer[data-mobile-order="reverse"][data-mobile-mode="slider"]>.rcontainer-cell{order:calc(10 - var(--cell-i,1))}
 }
 /* -- footer column count / gap / order for every grid footer variant (applies only when the property is set) -- */
 .gf[style*="--gf-cols"] :is(.gf-dense-grid,.gf-premium-grid,.gf-beauty-grid,.gf-chocolate-grid,.gf-dark-grid,.gf-promo-grid){grid-template-columns:repeat(var(--gf-cols),minmax(0,1fr))}

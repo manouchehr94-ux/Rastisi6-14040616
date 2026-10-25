@@ -22,7 +22,7 @@
   {% for cell_entry in composition.cells %}
   {% with cell=cell_entry.cell items=cell_entry.items blocks=cell_entry.blocks %}
   <div class="rcontainer-cell{% if is_preview and not blocks %} sfb-empty-cell{% endif %}"
-       style="--cell-span:{{ cell.span }}"
+       style="--cell-span:{{ cell.span }}{% if csettings.mobile_order == "reverse" %};--cell-i:{{ forloop.counter }}{% endif %}"
        {% if is_preview %}data-cell-id="{{ cell.pk }}" data-container-id="{{ container.pk }}"{% endif %}>
     {% if items %}
       {% comment %}
