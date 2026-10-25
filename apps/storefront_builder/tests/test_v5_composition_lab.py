@@ -214,9 +214,9 @@ class ProductPageCompositionTests(_LabBase):
         from pathlib import Path
 
         css = (Path(pdp_settings.__file__).resolve().parents[2] / "apps" / "catalog" / "static" / "css" / "product_detail.css").read_text(encoding="utf-8")
-        self.assertRegex(css, r"@media\(max-width:680px\)\{\s*\.pdp-satc\.is-away\{transform:translateY\(130%\);visibility:hidden")
+        self.assertRegex(css, r"@media\(max-width:680px\)\{\s*\.pdp-satc\[data-away\]\{transform:translateY\(130%\);visibility:hidden")
         html = self._preview()
-        self.assertIn("classList.toggle('is-away', away)", html)
+        self.assertIn("toggleAttribute('data-away', away)", html)
         self.assertIn(".pricebox, .opt-block, .qty, .pdp-actions", html)
 
     def test_info_order_ignores_unknown_and_duplicate_blocks_and_keeps_every_block(self):

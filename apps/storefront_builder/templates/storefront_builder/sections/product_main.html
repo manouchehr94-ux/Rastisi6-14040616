@@ -322,7 +322,7 @@ window.pdpSatcWatch = function (el) {
     el.classList.toggle('is-shown', !e.isIntersecting && e.boundingClientRect.top < 0);
   }).observe(cta);
 };
-{% endif %}(function () {
+{% endif %}{% if not pdp or pdp.show_mobile_sticky_bar or pdp.show_desktop_sticky_bar %}(function () {
   /* phone quick-buy bar: step aside while an in-flow buy control (price, options, quantity, add-to-cart) sits in the strip the bar covers,
      so the bar never hides what the shopper is about to use; it comes back as soon as those controls are clear of that strip */
   function init() {
@@ -333,7 +333,7 @@ window.pdpSatcWatch = function (el) {
     var queued = false;
     function check() {
       queued = false;
-      if (!phone.matches) { bar.classList.remove('is-away'); return; }
+      if (!phone.matches) { bar.removeAttribute('data-away'); return; }
       var offset = parseFloat(getComputedStyle(bar).bottom) || 0;
       var floor = window.innerHeight - offset;
       var ceiling = floor - bar.offsetHeight;
@@ -343,7 +343,7 @@ window.pdpSatcWatch = function (el) {
         var r = el.getBoundingClientRect();
         if (r.height > 0 && r.bottom > ceiling && r.top < floor) { away = true; }
       });
-      bar.classList.toggle('is-away', away);
+      bar.toggleAttribute('data-away', away);
     }
     function queue() { if (!queued) { queued = true; window.requestAnimationFrame(check); } }
     window.addEventListener('scroll', queue, { passive: true });
@@ -353,7 +353,7 @@ window.pdpSatcWatch = function (el) {
   }
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
 })();
-document.addEventListener('alpine:init', () => {
+{% endif %}document.addEventListener('alpine:init', () => {
   Alpine.data('variantSelector', (selectorData, productData) => ({
     mode: selectorData.mode,
     axes: selectorData.axes,

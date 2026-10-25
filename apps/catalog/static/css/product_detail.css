@@ -469,7 +469,7 @@
   .pdp-satc[data-satc] .pdp-satc-btn:disabled{background:var(--disabled-bg,#e5e7eb);color:var(--disabled-ink,#6b7280);border-color:var(--disabled-bg,#e5e7eb);box-shadow:none;cursor:not-allowed}
 }
 @media(max-width:680px){
-  .pdp-satc.is-away{transform:translateY(130%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  .pdp-satc[data-away]{transform:translateY(130%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
   .pdp-satc[data-satc="d"]{display:none}
   .pdp-satc[data-satc] .pdp-satc-id{display:none}
 }
