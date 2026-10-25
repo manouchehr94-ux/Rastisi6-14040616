@@ -65,8 +65,8 @@ class Lab:
         layout_service.publish(self.store)
 
 
-def build(name: str, store, owner, *, picture=None):
-    """``picture(section)`` (optional) attaches a QA picture row to a ``linked_image`` Section."""
+def build(name: str, store, owner, *, picture=None, publish: bool = True):
+    """``picture(section)`` (optional) attaches a QA picture row to a ``linked_image`` Section. ``publish=False`` leaves the result in the Draft."""
     lab = Lab(store, owner)
     attach = picture or (lambda section: None)
 
@@ -130,5 +130,6 @@ def build(name: str, store, owner, *, picture=None):
                          "info_order": [{"key": k} for k in ("price", "trust", "options", "actions", "specs")]})
     else:
         raise ValueError(name)
-    lab.publish()
+    if publish:
+        lab.publish()
     return lab

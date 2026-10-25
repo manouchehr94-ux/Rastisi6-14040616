@@ -18,6 +18,8 @@
 ## اثبات
 * `apps/storefront_builder/tests/test_v5_composition_lab.py` — هر سناریو فقط با Mutationهای Inspector ساخته می‌شود و در Preview، Publish، Undo/Redo
   بررسی می‌شود (کاشی‌های متناوب، هیرو + پنل‌ها، اسلایدر/ترتیب موبایل، فوتر، گالری + info_order).
+* `apps/storefront_builder/tests/test_v5_composition_lab_matrix.py` — هر پنج آزمایش QA (`lab_tiles`, `lab_hero_panels`, `lab_advisors`, `lab_seventh`, `lab_pdp`) کل زنجیره را طی می‌کند:
+  Mutation واقعی ← Draft (صفحهٔ عمومی هنوز دست‌نخورده) ← Preview ← Undo/Redo آخرین ویرایش ← Publish (صفحهٔ عمومی).
 * `apps/storefront_builder/tests/test_v5_composition_primitives.py` — اعتبارسنجی و پیش‌فرض‌های بدون‌تغییر هر قابلیت.
 * اثبات بصری: `apps/storefront_builder/qa/composition_lab.py` (فقط QA؛ عکس‌ها در زمان اجرا از پوشهٔ مرجع محلی خوانده می‌شوند و Commit نمی‌شوند):
   `SFB_REFERENCE_CAPTURE="khanehshokolati:lab_tiles|lab_hero_panels|lab_advisors|lab_seventh|lab_pdp"`.
