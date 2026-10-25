@@ -36,3 +36,6 @@
 ## نکات اجرا
 * تست‌های محلی: `DJANGO_MEDIA_ROOT` و `DJANGO_PRIVATE_MEDIA_ROOT` ایزوله؛ venv در `/tmp/claude-0/-home-user-Rastisi6-14040616/dcd3e3c2-3881-52c2-a73d-f1546e95622e/scratchpad/venv`.
 * معماری R4 حفظ شده: هر تغییر = یک Mutation = یک Revision؛ هیچ رندر/ذخیرهٔ موازی نیست.
+
+## تحدیث پس از پایان Regression #۲ (full_run13.log)
+۱۱٬۴۷۹ تست؛ ۴۴ شکست/خطا. نسبت به Baseline هفت مورد جدید بود که همه اصلاح و تک‌تک سبز شد (Pinهای شل استودیو: تعداد دکمه‌های ریل ۱۰→۱۲، اسکریپت‌ها ۶→۷، اکشن‌های مجاز، نوع Mutationهای لایهٔ resize و ترتیب نوار ابزار؛ opacity دکمهٔ غیرفعال؛ regex تست رندر). بقیهٔ شکست‌ها = Baseline (از جمله `test_phase28_canvas_first_ux...three_column_contract`). Regression کامل سوم اجرا نشد؛ فقط ماژول‌های مرتبط بعد از اصلاح اجرا شدند.
