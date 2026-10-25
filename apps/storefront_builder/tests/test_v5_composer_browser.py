@@ -43,7 +43,7 @@ class _Steps:
     def add_simple_row(self, page):
         """The rail's «ردیف ساده»; returns how many leaf cells the page had before (our row's leaves come after them)."""
         before = self.leaf_count(page)
-        page.click('[data-rs-composer="add-row"]')
+        page.click('[data-rastisi-action="composer-add-row"]')
         self._until(page, f"()=>[...document.querySelectorAll('.rcontainer-cell[data-cell-id]')].length >= {before + 1}", "the simple row")
         page.wait_for_timeout(1200)
         return before
@@ -437,7 +437,7 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             page.wait_for_function("()=>{const d=document.getElementById('rsGlobalHeader'); return !!d && d.open}", timeout=10000)
             self._close_drawer(page)
             # the layers tree lists the same three regions in the same order and opens the same editors
-            page.click('[data-rs-composer="panel"]')
+            page.click('[data-rastisi-action="composer-panel"]')
             page.wait_for_selector('[data-cmp-node="header:0"]')
             nodes = page.evaluate("()=>[...document.querySelectorAll('[data-cmp-panel] [data-cmp-node]')].map(e=>e.dataset.cmpNode.split(':')[0])")
             self.assertEqual((nodes[0], nodes[-1]), ("header", "footer"))
@@ -528,7 +528,7 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             self._until(page, "()=>{const r=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return r && !!r.querySelector('.rsec[data-section-key=\"product_section\"]')}", "Redo")
             self.settle(page)
             # delete with content asks first; cancelling changes nothing, confirming removes it, Undo gives it all back
-            page.click('[data-rs-composer="panel"]')
+            page.click('[data-rastisi-action="composer-panel"]')
             page.click('[data-cmp-tab="layers"]')
             page.locator('[data-cmp-panel] [data-cmp-node^="group:"]').last.click()
             page.wait_for_selector("[data-cmp-toolbar]:not([hidden])")

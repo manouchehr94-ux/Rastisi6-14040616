@@ -24,7 +24,7 @@ class GroupRenderTests(_GroupBase):
         self.assertIn('data-axis="vertical"', html)
         self.assertEqual(len(re.findall(r'--cell-span:6', html[html.index('rcontainer--nested'):])) >= 2, True)
         # the nested rcontainer sits INSIDE a cell of the parent row
-        self.assertRegex(html, rf'data-cell-id="{self.cells(row)[0].pk}"[^>]*>\s*<div class="rcontainer[^"]*rcontainer--nested')
+        self.assertRegex(html, rf'(?s)data-cell-id="{self.cells(row)[0].pk}"[^>]*>(?:(?!data-cell-id=).)*?rcontainer--nested')
         self.publish_and_probe(lambda page: "rcontainer--nested" in page and 'data-axis="vertical"' in page)
 
     def test_group_presentation_is_rendered_on_a_frame_and_survives_undo_redo(self):

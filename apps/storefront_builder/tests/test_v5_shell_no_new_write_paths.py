@@ -7,7 +7,7 @@ import unittest
 from ._v5_shell_support import EDITOR_HTML, STUDIO_JS, rail_and_float_markup, v5_layer
 
 #: Studio actions the rail and the floating bar are allowed to trigger (all pre-existing).
-ALLOWED_SHELL_ACTIONS = {"open-add-section", "add-row", "global", "structure", "templates", "help"}
+ALLOWED_SHELL_ACTIONS = {"open-add-section", "add-row", "global", "structure", "templates", "help", "composer-add-row", "composer-panel"}   # V5 Composer: UI-only openers; every write still goes through the one mutation queue
 
 
 class V5ShellNoNewWritePathsTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class V5ShellNoNewWritePathsTests(unittest.TestCase):
             self.assertFalse(forbidden in markup, forbidden)
 
     def test_template_gained_no_inline_script_or_form(self):
-        self.assertEqual(len(re.findall(r"<script\b", EDITOR_HTML)), 6)          # the six asset scripts (V5-RESIZE adds r4_resize.js, V5 announcement adds r4_announcement.js); data is json_script tags
+        self.assertEqual(len(re.findall(r"<script\b", EDITOR_HTML)), 7)          # the seven asset scripts (V5-RESIZE adds r4_resize.js, V5 announcement adds r4_announcement.js, V5 Composer adds r4_composer.js); data is json_script tags
         self.assertNotIn("<form", EDITOR_HTML)
 
     def test_v5_layer_has_no_behaviour(self):

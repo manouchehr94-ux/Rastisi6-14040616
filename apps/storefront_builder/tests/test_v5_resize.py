@@ -368,7 +368,7 @@ class ResizeClientContractTests(_ResizeBase):
     def test_every_write_goes_through_the_one_mutation_queue(self):
         self.assertGreaterEqual(self.JS.count("R4.enqueueStructuralMutation("), 1)
         for mutation_type in re.findall(r"type: '([a-z_.]+)'", self.JS):
-            self.assertIn(mutation_type, {"section.resize", "container.resize", "container.change_layout"})
+            self.assertIn(mutation_type, {"section.resize", "container.resize", "container.change_layout", "container.set_layout"})
 
     def test_a_drag_sends_only_when_it_finishes_and_escape_restores_without_sending(self):
         move = self.JS[self.JS.index("function moveDrag"):self.JS.index("function endDrag")]
@@ -401,6 +401,6 @@ class ResizeClientContractTests(_ResizeBase):
 
     def test_toolbar_order_and_real_actions(self):
         order = [m for m in re.findall(r"tbButton\('([a-z]+)'", self.JS)]
-        self.assertEqual(order, ["edit", "duplicate", "up", "down", "remove", "close"])
-        for action in ("S.edit(", "S.command(id, 'duplicate')", "S.command(id, 'up')", "S.command(id, 'down')", "S.askRemove(", "S.clearSelection()"):
+        self.assertEqual(order, ["edit", "layout", "duplicate", "up", "down", "remove", "close"])      # V5 Composer: «چیدمان» sits next to «ویرایش»
+        for action in ("S.edit(", "R4.composer.layoutOfSection(id)", "S.command(id, 'duplicate')", "S.command(id, 'up')", "S.command(id, 'down')", "S.askRemove(", "S.clearSelection()"):
             self.assertIn(action, self.JS, action)

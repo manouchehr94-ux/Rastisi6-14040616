@@ -615,7 +615,7 @@
 
   function renderAll() { renderPanel(); schedule(); railState(); if (S.resizeLayer && S.resizeLayer.render) window.setTimeout(S.resizeLayer.render, 30); }
   function railState() {
-    Array.prototype.forEach.call(root.querySelectorAll('[data-rs-composer="panel"]'), function (b) { b.setAttribute('aria-pressed', st.panel ? 'true' : 'false'); b.classList.toggle('on', st.panel); });
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rastisi-action="composer-panel"]'), function (b) { b.setAttribute('aria-pressed', st.panel ? 'true' : 'false'); b.classList.toggle('on', st.panel); });
   }
 
   // ---- panel + toolbar events ---------------------------------------------------------------------------------------------------------
@@ -802,14 +802,6 @@
   });
 
   // ---- rail buttons + state sources ---------------------------------------------------------------------------------------------------------
-  root.addEventListener('click', function (evt) {
-    var b = evt.target.closest ? evt.target.closest('[data-rs-composer]') : null;
-    if (!b) return;
-    var action = b.getAttribute('data-rs-composer');
-    if (action === 'add-row') addRow();
-    else if (action === 'panel') { st.panel = !st.panel; if (st.panel && !st.loaded) loadTree().then(renderAll); renderAll(); }
-  });
-
   root.addEventListener('r4:section-selected', function () {
     if (selfChange) return;
     if (S.selectedId() && st.sel) { st.sel = null; st.menu = false; renderAll(); }
@@ -847,6 +839,8 @@
     tree: function () { return st.tree; },
     reload: function () { return loadTree().then(function (d) { renderAll(); return d; }); },
     selection: function () { return st.sel; },
+    addRow: addRow,
+    togglePanel: function () { st.panel = !st.panel; if (st.panel && !st.loaded) loadTree().then(renderAll); renderAll(); },
   };
 
   loadTree().then(renderAll);

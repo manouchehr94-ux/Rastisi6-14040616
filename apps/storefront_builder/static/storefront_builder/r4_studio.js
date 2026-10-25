@@ -1279,6 +1279,8 @@
         $all('[data-rs-add-pane]', modalRoot).forEach(function (pane) { pane.hidden = pane.getAttribute('data-rs-add-pane') !== tabName; });
         break;
       }
+      case 'composer-add-row': if (R4.composer) R4.composer.addRow(); break;
+      case 'composer-panel': if (R4.composer) R4.composer.togglePanel(); break;
       case 'cell-add': {
         // V5-LAYOUT-ATOMIC: a library card inside the «add content to this Cell» dialog -> the existing cell.add_section for THAT Cell.
         var cellKey = el.getAttribute('data-rs-library-key');

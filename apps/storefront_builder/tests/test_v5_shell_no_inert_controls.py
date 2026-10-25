@@ -22,7 +22,7 @@ class V5ShellNoInertControlsTests(unittest.TestCase):
     def test_every_rail_and_float_button_is_a_real_button_with_label_and_action(self):
         markup = rail_and_float_markup()
         buttons = re.findall(r"<button\b[^>]*>.*?</button>", markup, flags=re.S)
-        self.assertEqual(len(buttons), 10)                                 # 8 rail tools (incl. help) + 2 floating shortcuts
+        self.assertEqual(len(buttons), 12)                                 # 10 rail tools (incl. help; V5 Composer adds «ردیف ساده» and «گروه‌ها») + 2 floating shortcuts
         for button in buttons:
             self.assertIn('type="button"', button)
             self.assertRegex(button, r'data-rastisi-action="[a-z-]+"')
