@@ -92,6 +92,17 @@ _MUTATION_HISTORY_LABELS = {
     "cell.add_section": "افزودن بخش به خانه",
     "section.move_to_cell": "انتقال بخش به خانه دیگر",
     "container.update_settings": "ویرایش تنظیمات چیدمان",
+    # V5 Groups (free nested layout)
+    "row.add": "افزودن ردیف ساده",
+    "cell.split": "تقسیم خانه",
+    "container.set_layout": "تغییر چیدمان گروه",
+    "container.add_cell": "افزودن خانه به گروه",
+    "cell.remove": "حذف خانه",
+    "container.remove_group": "حذف گروه",
+    "cell.duplicate": "کپی خانه",
+    "container.duplicate": "کپی ردیف",
+    "cell.move": "جابه‌جایی خانه",
+    "container.move": "جابه‌جایی ردیف",
     "section.reset_to_baseline": "بازنشانی بخش به قالب",
     "section.reset_setting_to_baseline": "بازنشانی فیلد بخش به قالب",
     "appearance.reset_setting_to_baseline": "بازنشانی تنظیم ظاهر به قالب",
@@ -377,6 +388,21 @@ R4_ERROR_MESSAGES_FA = {
     "invalid_resize_layout": "این چیدمان با این تغییر اندازه سازگار نیست؛ هیچ تغییری ذخیره نشد.",
     "invalid_announcement_image": "تصویر نوار اطلاعیه متعلق به این فروشگاه نیست یا وجود ندارد؛ هیچ تغییری ذخیره نشد.",
     "container_has_row_member": "یکی از بخش‌های این چیدمان عضو یک ردیف چندبخشی قدیمی است؛ چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
+    # V5 Groups — nested layout refusals (nothing was saved)
+    "invalid_axis": "جهت تقسیم نامعتبر است؛ هیچ تغییری ذخیره نشد.",
+    "invalid_split_count": "تعداد قسمت‌ها معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "block_locked": "یکی از بخش‌های این خانه قفل است؛ ابتدا قفل آن را باز کنید. هیچ تغییری ذخیره نشد.",
+    "group_depth_limit": "گروه‌ها بیش از این تودرتو نمی‌شوند؛ یک گروه بالاتر را تقسیم کنید. هیچ تغییری ذخیره نشد.",
+    "page_cell_limit": "تعداد خانه‌های این صفحه به سقف مجاز رسیده است؛ هیچ تغییری ذخیره نشد.",
+    "cell_limit": "هر گروه حداکثر ۶ خانه دارد؛ برای خانهٔ بیشتر یکی از خانه‌ها را دوباره تقسیم کنید. هیچ تغییری ذخیره نشد.",
+    "group_has_children": "برای کم‌کردن خانه‌ها، ابتدا گروه‌های داخل خانه‌های حذفی را جابه‌جا یا حذف کنید؛ هیچ تغییری ذخیره نشد.",
+    "last_cell": "آخرین خانهٔ یک گروه جدا حذف نمی‌شود؛ خودِ گروه را حذف کنید. هیچ تغییری ذخیره نشد.",
+    "cell_not_empty": "خانهٔ دارای محتوا مستقیماً حذف نمی‌شود؛ هیچ تغییری ذخیره نشد.",
+    "not_top_level": "این عملیات فقط برای ردیف‌های سطح صفحه است؛ هیچ تغییری ذخیره نشد.",
+    "not_group_cell": "این خانه جزو یک گروه تقسیم‌شده نیست؛ ابتدا آن را تقسیم کنید. هیچ تغییری ذخیره نشد.",
+    "cell_hosts_group": "این خانه یک گروه تودرتو دارد؛ بخش را داخل یکی از خانه‌های همان گروه اضافه کنید. هیچ تغییری ذخیره نشد.",
+    "invalid_group_settings": "تنظیمات گروه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_direction": "جهت جابه‌جایی نامعتبر است؛ هیچ تغییری ذخیره نشد.",
 }
 
 
@@ -657,6 +683,8 @@ def _apply_section_move_to_cell(*, draft: StorefrontLayoutVersion, mutation: dic
 _CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS = frozenset({
     "gap", "mobile_mode", "mobile_order", "vertical_align", "height_mode",
     "background_mode", "background_color", "background_pattern",
+    # V5 Groups: title / description / presentation of a Group and the two extra background modes (gradient / picture)
+    "title", "description", "title_visible", "style", "background_color2", "background_media_asset_id",
 })
 
 
@@ -670,7 +698,7 @@ def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation
     if set(patch) - _CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS:
         raise R4MutationError("invalid_container_settings_patch")
     try:
-        container = StorefrontContainer.objects.select_for_update().get(
+        container = StorefrontContainer.all_objects.select_for_update().get(
             pk=container_id, page__version=draft,
         )
     except StorefrontContainer.DoesNotExist:
@@ -678,8 +706,30 @@ def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation
     if container.is_locked:
         raise R4MutationError("container_locked")
 
+    from .. import group_style
+
     current = container_service.effective_container_settings(container.settings)
     candidate = dict(current)
+    patch = dict(patch)
+    try:
+        if "style" in patch:
+            # a PARTIAL style patch merges onto the stored one (None / "" clears a key) and is validated strictly: a bad value refuses the whole edit
+            patch["style"] = group_style.validate_style(group_style.merge_style_patch(current.get("style"), patch["style"]))
+        if "title" in patch:
+            patch["title"] = group_style.clean_text(patch["title"], group_style.MAX_TITLE_LENGTH, "عنوان گروه")
+        if "description" in patch:
+            patch["description"] = group_style.clean_text(patch["description"], group_style.MAX_DESCRIPTION_LENGTH, "توضیح گروه")
+        if "title_visible" in patch and not isinstance(patch["title_visible"], bool):
+            raise group_style.GroupStyleError("نمایش عنوان باید روشن/خاموش باشد")
+    except group_style.GroupStyleError as exc:
+        raise R4MutationError("invalid_group_settings", payload={"message": str(exc)}) from exc
+    for key in ("title", "description", "style", "background_color2", "background_media_asset_id"):
+        if key in patch and patch[key] in ("", None, {}):
+            candidate.pop(key, None)
+            patch.pop(key)
+    if patch.get("title_visible") is True:
+        candidate.pop("title_visible", None)
+        patch.pop("title_visible")
     candidate.update(patch)
     # content_width is preserved unconditionally — same restraint as the
     # legacy view, never settable via this patch even if posted (the
@@ -688,6 +738,106 @@ def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation
     candidate["content_width"] = current["content_width"]
     container.settings = container_service.effective_container_settings(candidate)
     container.save(update_fields=["settings", "updated_at"])
+
+
+def _group_error(exc) -> "R4MutationError":
+    return R4MutationError(exc.code)
+
+
+def _int_field(mutation: dict, key: str, error: str) -> int:
+    value = mutation.get(key)
+    if not _is_strict_int(value):
+        raise R4MutationError(error)
+    return value
+
+
+def _apply_row_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    try:
+        section_structure_service.add_row(draft=draft, page_type=mutation.get("page_type"))
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_split(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    count = mutation.get("count")
+    if not _is_strict_int(count):
+        raise R4MutationError("invalid_split_count")
+    if mutation.get("axis") not in container_service.GROUP_AXES:
+        raise R4MutationError("invalid_axis")
+    try:
+        section_structure_service.split_cell(draft=draft, cell_id=cell_id, axis=mutation["axis"], count=count)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_set_layout(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    count = mutation.get("count")
+    if not _is_strict_int(count):
+        raise R4MutationError("invalid_split_count")
+    if mutation.get("axis") not in container_service.GROUP_AXES:
+        raise R4MutationError("invalid_axis")
+    try:
+        section_structure_service.set_group_layout(draft=draft, container_id=container_id, axis=mutation["axis"], count=count)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_add_cell(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.add_group_cell(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_remove(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    try:
+        section_structure_service.remove_cell(draft=draft, cell_id=cell_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_remove_group(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.remove_group(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_duplicate(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    try:
+        section_structure_service.duplicate_cell(draft=draft, cell_id=cell_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_duplicate(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.duplicate_container(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_move(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    try:
+        section_structure_service.move_cell(draft=draft, cell_id=cell_id, direction=mutation.get("direction"))
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_move(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.move_container(draft=draft, container_id=container_id, direction=mutation.get("direction"))
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
 
 
 #: Pre-Task-10 remediation (field-parity closure) — widened from the
@@ -1416,6 +1566,16 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
     if mutation_type == "container.update_settings":
         _apply_container_update_settings(draft=draft, mutation=mutation)
         return
+    # V5 Groups — the free nested layout (each is ONE mutation = one Revision = one Undo step)
+    for _type, _handler in (
+        ("row.add", _apply_row_add), ("cell.split", _apply_cell_split), ("container.set_layout", _apply_container_set_layout),
+        ("container.add_cell", _apply_container_add_cell), ("cell.remove", _apply_cell_remove),
+        ("container.remove_group", _apply_container_remove_group), ("cell.duplicate", _apply_cell_duplicate),
+        ("container.duplicate", _apply_container_duplicate), ("cell.move", _apply_cell_move), ("container.move", _apply_container_move),
+    ):
+        if mutation_type == _type:
+            _handler(draft=draft, mutation=mutation)
+            return
     if mutation_type == "section.reset_to_baseline":
         _apply_section_reset_to_baseline(draft=draft, mutation=mutation)
         return
