@@ -723,3 +723,9 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 .rs-studio .r4-announce-image-row button:hover:not(:disabled),.rs-studio .r4-announce-entry button:hover{background:#f4f6f1}
 .rs-studio .r4-announce-image-row button:disabled{color:#9aa3a0;background:#f4f5f3;cursor:not-allowed}
 .rs-studio .r4-announce-image[aria-busy="true"] button{pointer-events:none;color:var(--disabled-ink)}
+
+/* «افزودن چیدمان» — group headings + ready-made samples (2–4 columns) */
+.rs-studio .rs-add-row-layouts .rs-layout-group{grid-column:1/-1;margin:6px 0 0;padding-top:8px;border-top:1px solid #e7ecf0;font-size:12.5px;font-weight:800;color:#456}
+.rs-studio .rs-add-row-layouts .rs-layout-group:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.rs-studio .rs-layout-sample{grid-column:span 2}
+.rs-studio .rs-layout-hint{font-size:11.5px;line-height:1.7;color:#5b6b7a;text-align:center}

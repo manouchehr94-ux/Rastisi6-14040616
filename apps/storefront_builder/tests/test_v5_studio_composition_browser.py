@@ -505,3 +505,181 @@ class StudioCompositionBrowserTests(_StudioFixture):
                     self._shot(public, "published_pdp_desktop")
             finally:
                 ctx.close()
+
+    # ------------------------------------------------------------------------------------------ «افزودن چیدمان» (۲ تا ۴ ستون + نمونه‌ها)
+    def _open_layout_dialog(self, page):
+        self._open_structure(page)
+        page.click("[data-rs-add-row-top]")
+        page.wait_for_selector("[data-rs-add-row-form]")
+        page.wait_for_timeout(400)
+
+    def _pick_layout(self, page, key):
+        page.locator(f'input[name="rs_row_layout"][value="{key}"]').check(force=True)
+        page.wait_for_timeout(300)
+
+    def _four_cell_row(self, page):
+        return next((r for r in self._rows(page) if len(r["spans"]) == 4), None)
+
+    def _sample_assets(self, section_ids):
+        """Screenshot-only content (after every assertion): neutral pictures + a line of text, so the four tiles look like tiles."""
+        from apps.storefront_builder.models import StorefrontSection
+        from apps.storefront_builder.qa import reference_capture as rc
+
+        for number, section in enumerate(StorefrontSection.objects.filter(pk__in=section_ids).order_by("pk")):
+            if section.section_key == "rich_text":
+                section.settings = {**(section.settings or {}), "body_html": "<h3>عنوان کاشی</h3><p>توضیح کوتاه این کاشی</p>",
+                                    "design": {"min_height": 240, "valign": "center", "align": "center", "radius": 16},
+                                    "background": {"mode": "color", "color": "#F5EBC3"}}
+                section.save(update_fields=["settings"])
+            elif section.section_key == "linked_image":
+                section.settings = {**(section.settings or {}), "design": {"image_ratio": "square", "radius": 16}}
+                section.save(update_fields=["settings"])
+                banner = PromotionalBanner(store=self.store, section=section, is_active=True, display_order=0)
+                banner.desktop_image = rc.uploaded(None, f"tile{number}.jpg", size=(900, 900), color=(205 - number * 15, 214, 220))
+                banner.save()
+
+    def test_four_columns_and_samples_are_built_and_edited_from_the_add_layout_dialog(self):
+        context, page = self._studio(viewport=(1440, 1500))
+        try:
+            # 1) the dialog offers 2–4 columns and the ready-made samples, in Persian
+            self._open_layout_dialog(page)
+            text = page.locator("[data-rs-add-row-form]").inner_text()
+            for expected in ("چهار ستون مساوی", "چهار ستون نامتقارن ۴/۲/۴/۲", "متن · تصویر · متن · تصویر", "هیرو + پنل‌های کناری", "نمونه‌های آماده"):
+                self.assertIn(expected, text)
+            self._shot(page, "add_layout_dialog")
+
+            # 2) asymmetric four-column row: pick the card, choose sections for three cells and leave one EMPTY — one container.add
+            self._pick_layout(page, "quarters_424")
+            self.assertTrue(page.locator('[data-rs-slot-field="3"]').is_visible(), "the fourth slot picker appears for a four-column row")
+            page.select_option("[data-rs-add-row-first]", "rich_text")
+            page.select_option("[data-rs-add-row-second]", "linked_image")
+            page.select_option("[data-rs-add-row-fourth]", "linked_image")                    # the third cell stays empty on purpose
+            before = len(self._rows(page))
+            page.click("[data-rs-add-row-submit]")
+            self._until(page, f"()=>document.querySelectorAll('.rcontainer[data-container-id]').length === {before + 1}", "the four-cell row in the Preview")
+            page.wait_for_timeout(1000)
+            row = self._four_cell_row(page)
+            self.assertEqual(row["spans"], [4, 2, 4, 2])
+            self.assertEqual(row["keys"], ["rich_text", "linked_image", "linked_image"])      # three blocks, one empty cell
+            cid = row["id"]
+
+            # 3) drag the first column boundary
+            self._hover_container(page, cid)
+            handle = page.locator('[data-rs-handle="c"]').first
+            handle.wait_for(state="visible", timeout=8000)
+            box = handle.bounding_box()
+            page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            page.mouse.down()
+            page.mouse.move(box["x"] + box["width"] / 2 + 90, box["y"] + box["height"] / 2, steps=8)
+            page.mouse.up()
+            self._until(page, "()=>{const c=[...document.querySelectorAll('.rcontainer[data-container-id]')].find(x=>x.querySelectorAll(':scope > .rcontainer-cell').length===4);"
+                              "return !!c && [...c.querySelectorAll(':scope > .rcontainer-cell')].map(e=>e.style.getPropertyValue('--cell-span')).join()!=='4,2,4,2'}", "dragged widths")
+            dragged = self._four_cell_row(page)["spans"]
+            self.assertEqual((len(dragged), sum(dragged)), (4, 12))
+
+            # 4) the row's own settings, found in «ردیف‌ها و ستون‌بندی»: gap, vertical align, height, phone mode + order
+            page.wait_for_timeout(900)
+            group = self._container_group(page, self._four_cell_row(page)["id"])
+            group.locator('[data-r4-container-settings-field="gap"]').fill("26")
+            group.locator('[data-r4-container-settings-field="gap"]').press("Tab")
+            page.wait_for_timeout(1200)
+            for field, value in (("vertical_align", "center"), ("height_mode", "equal"), ("mobile_order", "reverse"), ("mobile_mode", "slider")):
+                group = self._container_group(page, self._four_cell_row(page)["id"])
+                group.locator(f'[data-r4-container-settings-field="{field}"]').select_option(value)
+                page.wait_for_timeout(1300)
+            probe = """()=>{const c=[...document.querySelectorAll('.rcontainer[data-container-id]')].find(x=>x.querySelectorAll(':scope > .rcontainer-cell').length===4);
+              return c && {gap:c.style.getPropertyValue('--container-gap'), v:c.dataset.verticalAlign, h:c.dataset.heightMode, o:c.dataset.mobileOrder, m:c.dataset.mobileMode}}"""
+            settings = self._frame(page).evaluate(probe)
+            self.assertEqual(settings, {"gap": "26px", "v": "center", "h": "equal", "o": "reverse", "m": "slider"})
+
+            # 5) Undo / Redo of the last edit (the phone mode), then a real page REFRESH keeps everything
+            page.click("#r4UndoButton")
+            self._until(page, "()=>{const c=[...document.querySelectorAll('.rcontainer[data-container-id]')].find(x=>x.querySelectorAll(':scope > .rcontainer-cell').length===4); return !!c && c.dataset.mobileMode!=='slider' && c.dataset.mobileOrder==='reverse'}", "Undo")
+            page.wait_for_timeout(900)
+            page.click("#r4RedoButton")
+            self._until(page, "()=>{const c=[...document.querySelectorAll('.rcontainer[data-container-id]')].find(x=>x.querySelectorAll(':scope > .rcontainer-cell').length===4); return !!c && c.dataset.mobileMode==='slider'}", "Redo")
+            page.wait_for_timeout(900)
+            page.reload(wait_until="networkidle")
+            page.wait_for_selector("#r4PreviewFrame")
+            page.wait_for_timeout(1500)
+            self.assertEqual(self._frame(page).evaluate(probe), settings, "the saved Draft survives a refresh")
+            self.assertEqual(self._four_cell_row(page)["spans"], dragged)
+
+            # 6) the ready-made «متن · تصویر · متن · تصویر» sample: one click pre-selects the pickers, everything stays editable
+            self._open_layout_dialog(page)
+            self._pick_layout(page, "sample_tiles")
+            picks = page.evaluate("['first','second','third','fourth'].map(n=>document.querySelector('[data-rs-add-row-'+n+']').value)")
+            self.assertEqual(picks, ["rich_text", "linked_image", "rich_text", "linked_image"])
+            self._shot(page, "add_layout_dialog_sample_selected")
+            page.select_option("[data-rs-add-row-fourth]", "rich_text")                         # the seller may still change a pick
+            page.select_option("[data-rs-add-row-fourth]", "linked_image")
+            rows_before = len(self._rows(page))
+            page.click("[data-rs-add-row-submit]")
+            self._until(page, f"()=>document.querySelectorAll('.rcontainer[data-container-id]').length === {rows_before + 1}", "the sample row")
+            page.wait_for_timeout(1000)
+            sample = self._rows(page)[-1]
+            self.assertEqual((sample["spans"], sample["keys"]), ([4, 2, 4, 2], ["rich_text", "linked_image", "rich_text", "linked_image"]))
+            # leaving a sample clears what it chose
+            self._open_layout_dialog(page)
+            self._pick_layout(page, "sample_tiles")
+            self._pick_layout(page, "half")
+            self.assertEqual(page.evaluate("['first','second','third','fourth'].map(n=>document.querySelector('[data-rs-add-row-'+n+']').value)"), ["", "", "", ""])
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(500)
+
+            # 7) the ready-made «هیرو + پنل‌های کناری» sample builds the stacked layout with its three blocks
+            self._open_layout_dialog(page)
+            self._pick_layout(page, "sample_hero_panels")
+            rows_before = len(self._rows(page))
+            page.click("[data-rs-add-row-submit]")
+            self._until(page, f"()=>document.querySelectorAll('.rcontainer[data-container-id]').length === {rows_before + 1}", "the hero + panels sample")
+            page.wait_for_timeout(1000)
+            hero = self._rows(page)[-1]
+            self.assertEqual((hero["layout"], hero["keys"]), ("big_right_two_left", ["hero_banner", "multi_banner", "multi_banner"]))
+            self.assertEqual(self.errors, [])
+            page.wait_for_timeout(900)
+            # the seller now fills the tiles (text + pictures, in the section panels); an EMPTY tile is invisible on the published page,
+            # so the content is put in through the ORM here, at a moment the Studio is idle, before the real «انتشار» button
+            tile_ids = [i for r in self._rows(page) if len(r["spans"]) == 4 for i in r["ids"]]
+            self._sample_assets(tile_ids)
+            self._publish(page)
+        finally:
+            context.close()
+
+        # 8) the PUBLISHED page: desktop widths follow the dragged spans; a phone sees one tile at a time, reversed
+        facts = """()=>{const c=document.querySelector('.rcontainer[data-mobile-mode="slider"][data-mobile-order="reverse"]'); if(!c) return null;
+          const cells=[...c.querySelectorAll(':scope > .rcontainer-cell')].map(e=>{const r=e.getBoundingClientRect();return {l:r.left,w:r.width}});
+          return {cells, scroll:c.scrollWidth, client:c.clientWidth, ox:getComputedStyle(c).overflowX, h:c.dataset.heightMode, v:c.dataset.verticalAlign, vw:innerWidth}}"""
+        ctx, desk = self._public("/", 1440)
+        try:
+            data = desk.evaluate("""()=>{const c=[...document.querySelectorAll('.rcontainer')].find(x=>x.dataset.heightMode==='equal'&&x.querySelectorAll(':scope > .rcontainer-cell').length===4);
+              return c && [...c.querySelectorAll(':scope > .rcontainer-cell')].map(e=>Math.round(e.getBoundingClientRect().width))}""")
+            self.assertIsNotNone(data, "the published page lost the four-cell row")
+            self.assertAlmostEqual(data[0] / data[1], dragged[0] / dragged[1], delta=0.3)
+        finally:
+            ctx.close()
+        ctx, phone = self._public("/", 390, 800)
+        try:
+            mobile = phone.evaluate(facts)
+            self.assertEqual((mobile["h"], mobile["v"]), ("equal", "center"))
+            self.assertIn(mobile["ox"], ("auto", "scroll"))
+            self.assertGreater(mobile["scroll"], mobile["client"] + 20)
+            self.assertGreater(mobile["cells"][0]["w"], mobile["vw"] * 0.7)
+            self.assertGreater(mobile["cells"][3]["l"], mobile["cells"][0]["l"], "reversed: the last cell is the first a phone visitor meets (RTL)")
+        finally:
+            ctx.close()
+
+        # 9) screenshot of the finished four-tile sample row, taken inside the Studio
+        ctx2, page2 = self._studio(viewport=(1440, 900))
+        try:
+            row = next(r for r in self._rows(page2) if r["keys"] == ["rich_text", "linked_image", "rich_text", "linked_image"])
+            self._sample_assets(row["ids"])                       # a fresh Draft after publishing: put the pictures on the new tiles
+            page2.reload(wait_until="networkidle")
+            page2.wait_for_timeout(1500)
+            frame = self._frame(page2)
+            row = next(r for r in self._rows(page2) if r["keys"] == ["rich_text", "linked_image", "rich_text", "linked_image"])
+            frame.locator(f'.rcontainer[data-container-id="{row["id"]}"]').first.scroll_into_view_if_needed()
+            page2.wait_for_timeout(1200)
+            self._shot(page2, "studio_four_tile_sample")
+        finally:
+            ctx2.close()

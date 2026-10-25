@@ -124,7 +124,7 @@ MAX_BLOCKS_PER_CELL = 4
 MAX_BLOCKS_PER_CONTAINER = 8
 
 
-def add_container(*, draft, page_type: str, layout_key: str, cells=None) -> StorefrontContainer:
+def add_container(*, draft, page_type: str, layout_key: str, cells=None, spans=None) -> StorefrontContainer:
     """V5-LAYOUT-ATOMIC — create ONE new Container (at the end of the page) with the Cells of an EXISTING layout preset, optionally
     with initial Blocks per Cell. Everything runs inside the caller's single ``apply_mutation`` transaction, so a refusal in ANY
     Block (page/type legality, single-instance limit, ...) rolls the whole build back: no half-built layout, one Revision, one
@@ -134,16 +134,20 @@ def add_container(*, draft, page_type: str, layout_key: str, cells=None) -> Stor
 
     ``cells`` is optional: ``None``/``[]``/empty lists create fully EMPTY Cells (the merchant fills them later through
     ``cell.add_section``). Otherwise it is a list (at most one entry per Cell of the preset) of lists of section keys; a Cell with
-    two keys becomes a multi-block Cell whose Blocks are independent Sections (own id, own settings)."""
+    two keys becomes a multi-block Cell whose Blocks are independent Sections (own id, own settings).
+
+    ``spans`` is optional too: one width per Cell (the Cell count of the preset), applied through the SAME validated
+    ``container_service.resize_container`` the drag handles use (sum 12, minimum usable width, locked/stacked rules) — so an
+    asymmetric row such as 4/2/4/2 is still ONE ``container.add`` with ONE Revision."""
     if page_type not in StorefrontPage.PageType.values:
         raise SectionStructureError("invalid_page_type")
-    spans = container_service.layout_spans(layout_key)
-    if spans is None or len(spans) < 2:
+    preset_spans = container_service.layout_spans(layout_key)
+    if preset_spans is None or len(preset_spans) < 2:
         raise SectionStructureError("invalid_container_layout")
 
     if cells is None:
         cells = []
-    if not isinstance(cells, (list, tuple)) or len(cells) > len(spans):
+    if not isinstance(cells, (list, tuple)) or len(cells) > len(preset_spans):
         raise SectionStructureError("invalid_cells")
     plan = []
     total = 0
@@ -162,6 +166,13 @@ def add_container(*, draft, page_type: str, layout_key: str, cells=None) -> Stor
         container = container_service.create_empty_container(page, layout_key)
     except container_service.ContainerLayoutError as exc:
         raise SectionStructureError("invalid_container_layout") from exc
+    if spans is not None:
+        try:
+            container_service.resize_container(container, spans=spans)
+        except container_service.ContainerResizeError as exc:
+            raise SectionStructureError(exc.code) from exc
+        except (container_service.ContainerLayoutError, TypeError, ValueError) as exc:
+            raise SectionStructureError("invalid_resize_value") from exc
     created_cells = list(container.cells.order_by("order", "id"))
     for cell, keys in zip(created_cells, plan):
         for section_key in keys:

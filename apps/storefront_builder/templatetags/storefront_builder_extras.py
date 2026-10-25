@@ -291,6 +291,49 @@ def rs_three_cell_patterns():
 
 
 @register.simple_tag
+def rs_four_cell_patterns():
+    """V5 — the four-column rows of «افزودن چیدمان», again ONLY through the engine's own ``quarters`` preset (looked up by its widths):
+    four equal columns, and an asymmetric row whose per-Cell widths (``spans``, e.g. 4/2/4/2) ride in the SAME ``container.add``
+    (applied server-side by the validated resize code the drag handles use). Each slot is a real, independent Cell."""
+    quarters = _layout_key_for((3, 3, 3, 3))
+    if not quarters:
+        return []
+    labels = "خانهٔ اول (راست)|خانهٔ دوم|خانهٔ سوم|خانهٔ چهارم (چپ)"
+    return [
+        {"key": "quarters_equal", "engine": quarters, "widths": (3, 3, 3, 3), "spans": "", "name": "چهار ستون مساوی",
+         "cells": "0,1,2,3", "slot_labels": labels},
+        {"key": "quarters_424", "engine": quarters, "widths": (4, 2, 4, 2), "spans": "4,2,4,2", "name": "چهار ستون نامتقارن ۴/۲/۴/۲",
+         "cells": "0,1,2,3", "slot_labels": labels},
+    ]
+
+
+@register.simple_tag
+def rs_sample_layouts():
+    """V5 — ready-made, fully EDITABLE starting points for the layouts the engine supports but a seller would not guess: the four-tile
+    row «متن · تصویر · متن · تصویر» and «هیرو + پنل‌های کناری». A sample is only a pre-selection of the same radio + section pickers the
+    dialog already has (the seller can change every pick before building); it adds no renderer, no persistence and no recipe — the build is
+    the ordinary ``container.add``. ``sections`` are plain section keys; a key the page cannot take is simply left empty by the dialog."""
+    quarters = _layout_key_for((3, 3, 3, 3))
+    stacked = _stacked_layout_key_for((8, 4, 4))
+    samples = []
+    if quarters:
+        samples.append({
+            "key": "sample_tiles", "engine": quarters, "widths": (4, 2, 4, 2), "stacked": False, "spans": "4,2,4,2",
+            "name": "متن · تصویر · متن · تصویر", "sections": "rich_text,linked_image,rich_text,linked_image",
+            "cells": "0,1,2,3", "slot_labels": "متن (راست)|تصویر|متن|تصویر (چپ)",
+            "hint": "چهار کاشی متناوب با عرض‌های ۴/۲/۴/۲؛ عرض و محتوای هر کاشی بعداً قابل‌تغییر است.",
+        })
+    if stacked:
+        samples.append({
+            "key": "sample_hero_panels", "engine": stacked, "widths": (8, 4), "stacked": True, "spans": "",
+            "name": "هیرو + پنل‌های کناری", "sections": "hero_banner,multi_banner,multi_banner",
+            "cells": "0,1,2", "slot_labels": "هیرو (راست)|پنل بالا (چپ)|پنل پایین (چپ)",
+            "hint": "هیروی بزرگ در راست و دو ردیف پنل کنار آن؛ همه قابل‌ویرایش‌اند.",
+        })
+    return samples
+
+
+@register.simple_tag
 def rs_featured(items, attr, current, count):
     """Split a real choice list for the Design Studio: the current choice
     first plus the next ones up to ``count`` stay visible, the rest go into a

@@ -48,14 +48,16 @@ class AddDialogRenderingTests(_BandBase):
         self.assertIn('id="r4StructureAddSelect"', html)
         self.assertIn('id="r4StructureAddButton"', html)
 
-    def test_layout_tab_offers_the_two_cell_presets_then_only_the_two_reference_patterns(self):
+    def test_layout_tab_offers_the_two_cell_presets_then_the_registry_patterns_and_samples(self):
         from apps.storefront_builder.services import container_service
 
         html = self._html()
         offered = re.findall(r'name="rs_row_layout" value="(\w+)"', html)
         expected = [k for k, widths in container_service.LAYOUT_PRESETS.items() if len(widths) == 2]
         self.assertEqual(offered[:len(expected)], expected)                       # the five existing ratios are untouched, same order
-        self.assertEqual(offered[len(expected):], ["thirds_equal", "big_right_two_left"])    # V5-LAYOUT-001 (see test_v5_layout_patterns)
+        # V5-LAYOUT-001 (see test_v5_layout_patterns), then the four-column rows and the two editable samples added for the seller's
+        # «افزودن چیدمان» dialog (see test_v5_add_layout_dialog) — each card still resolves to an existing engine preset
+        self.assertEqual(offered[len(expected):], ["thirds_equal", "big_right_two_left", "quarters_equal", "quarters_424", "sample_tiles", "sample_hero_panels"])
         self.assertFalse({"quarters", "single"} & set(offered))                   # no other preset is ever offered
 
     def test_the_empty_cell_add_control_stays_in_the_structure_panel(self):

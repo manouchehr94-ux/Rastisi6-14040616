@@ -539,8 +539,11 @@ def _apply_container_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_layout_key")
     if cells is not None and not isinstance(cells, list):
         raise R4MutationError("invalid_cells")
+    spans = mutation.get("spans")
+    if spans is not None and (not isinstance(spans, list) or not all(_is_strict_int(v) for v in spans)):
+        raise R4MutationError("invalid_resize_value")
     try:
-        section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells)
+        section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells, spans=spans)
     except section_structure_service.SectionStructureError as exc:
         raise R4MutationError(exc.code) from exc
 

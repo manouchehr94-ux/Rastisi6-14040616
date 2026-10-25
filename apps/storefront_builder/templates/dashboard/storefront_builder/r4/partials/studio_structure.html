@@ -15,7 +15,7 @@ sender). This whole element is re-fetched by R4 after structural mutations.
   21-section list). Both open a workspace dialog and only chain existing R4 mutations.{% endcomment %}
   <div class="rs-structure-actions" role="group" aria-label="افزودن به صفحه">
     <button type="button" class="primary" data-rastisi-action="add-section" data-rs-add-section-top>{% rs_icon "plus" %}افزودن بخش</button>
-    <button type="button" class="outline" data-rastisi-action="add-row" data-rs-add-row-top>{% rs_icon "grid" %}ردیف دو‌ستونه</button>
+    <button type="button" class="outline" data-rastisi-action="add-row" data-rs-add-row-top>{% rs_icon "grid" %}چیدمان چندستونه</button>
   </div>
 
   <div class="common-region">{% rs_icon "header" %} سربرگ فروشگاه <button type="button" data-rastisi-action="global" data-rs-global-focus="header" aria-label="تنظیم ظاهر مشترک سربرگ">{% rs_icon "sliders" %}</button></div>
@@ -215,10 +215,13 @@ sender). This whole element is re-fetched by R4 after structural mutations.
 
   <template data-rs-add-row-template>
     <form class="rs-add-row" data-rs-add-row-form novalidate>
-      <p class="rs-add-row-help">با انتخاب یک چیدمان فقط فرمِ همان چیدمان باز می‌شود؛ تا دکمهٔ «ساختن چیدمان» را نزنید چیزی ساخته نمی‌شود. انتخاب محتوا اختیاری است: بدون انتخاب، خانه‌ها خالی ساخته می‌شوند و بعداً از روی بوم پر می‌شوند. بخش «اول» سمت راست صفحه (راست‌چین) و بقیه به‌ترتیب سمت چپ قرار می‌گیرند؛ در موبایل زیر هم نمایش داده می‌شوند.</p>
+      <p class="rs-add-row-help">یک چیدمان بین ۲ تا ۴ ستون انتخاب کنید؛ تا دکمهٔ «ساختن چیدمان» را نزنید چیزی ساخته نمی‌شود. انتخاب محتوا اختیاری است: بدون انتخاب، خانه‌ها خالی ساخته می‌شوند و بعداً از روی بوم پر می‌شوند. «نمونه‌های آماده» فقط یک نقطهٔ شروع‌اند و همه‌چیزشان بعد از ساخت قابل‌تغییر است. بخش «اول» سمت راست صفحه (راست‌چین) و بقیه به‌ترتیب سمت چپ قرار می‌گیرند؛ در موبایل زیر هم نمایش داده می‌شوند.</p>
+      {% rs_four_cell_patterns as four_patterns %}
+      {% rs_sample_layouts as sample_layouts %}
       {% rs_three_cell_patterns as three_patterns %}
       <fieldset class="rs-add-row-layouts">
         <legend>چیدمان ردیف</legend>
+        <p class="rs-layout-group">دو ستونه</p>
         {% for preset_key, preset_label, widths in two_column_presets %}
         <label class="rs-layout-card">
           <input type="radio" name="rs_row_layout" value="{{ preset_key }}" {% if forloop.first %}checked{% endif %}>
@@ -226,6 +229,7 @@ sender). This whole element is re-fetched by R4 after structural mutations.
           <span class="rs-layout-name">{{ preset_label }}</span>
         </label>
         {% endfor %}
+        <p class="rs-layout-group">سه ستونه</p>
         {% for pattern in three_patterns %}
         <label class="rs-layout-card">
           <input type="radio" name="rs_row_layout" value="{{ pattern.key }}" data-rs-engine-layout="{{ pattern.engine }}" data-rs-slot-cells="{{ pattern.cells }}" data-rs-slot-labels="{{ pattern.slot_labels }}">
@@ -233,6 +237,27 @@ sender). This whole element is re-fetched by R4 after structural mutations.
           <span class="rs-layout-name">{{ pattern.name }}</span>
         </label>
         {% endfor %}
+        {% if four_patterns %}
+        <p class="rs-layout-group">چهار ستونه</p>
+        {% for pattern in four_patterns %}
+        <label class="rs-layout-card">
+          <input type="radio" name="rs_row_layout" value="{{ pattern.key }}" data-rs-engine-layout="{{ pattern.engine }}" data-rs-slot-cells="{{ pattern.cells }}" data-rs-slot-labels="{{ pattern.slot_labels }}"{% if pattern.spans %} data-rs-slot-spans="{{ pattern.spans }}"{% endif %}>
+          <span class="rs-layout-preview" aria-hidden="true">{% for w in pattern.widths %}<i style="flex:{{ w }}"></i>{% endfor %}</span>
+          <span class="rs-layout-name">{{ pattern.name }}</span>
+        </label>
+        {% endfor %}
+        {% endif %}
+        {% if sample_layouts %}
+        <p class="rs-layout-group">نمونه‌های آماده (قابل‌ویرایش)</p>
+        {% for pattern in sample_layouts %}
+        <label class="rs-layout-card rs-layout-sample">
+          <input type="radio" name="rs_row_layout" value="{{ pattern.key }}" data-rs-engine-layout="{{ pattern.engine }}" data-rs-slot-cells="{{ pattern.cells }}" data-rs-slot-labels="{{ pattern.slot_labels }}" data-rs-sample-sections="{{ pattern.sections }}"{% if pattern.spans %} data-rs-slot-spans="{{ pattern.spans }}"{% endif %}>
+          <span class="rs-layout-preview" aria-hidden="true">{% if pattern.stacked %}<i style="flex:{{ pattern.widths.0 }}"></i><span class="rs-stack" style="flex:{{ pattern.widths.1 }}"><i></i><i></i></span>{% else %}{% for w in pattern.widths %}<i style="flex:{{ w }}"></i>{% endfor %}{% endif %}</span>
+          <span class="rs-layout-name">{{ pattern.name }}</span>
+          <span class="rs-layout-hint">{{ pattern.hint }}</span>
+        </label>
+        {% endfor %}
+        {% endif %}
       </fieldset>
       <label class="field" data-rs-slot-field="0"><span data-rs-slot-label>بخش ستون اول (راست)</span>
         <select data-rs-add-row-first>
@@ -252,7 +277,13 @@ sender). This whole element is re-fetched by R4 after structural mutations.
           {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
         </select>
       </label>
-      <p class="rs-add-row-note">چیدمان با یک درخواست به انتهای همین صفحه اضافه می‌شود و فقط در پیش‌نویس می‌ماند؛ تا «انتشار» نزنید، فروشگاه عمومی تغییر نمی‌کند. ساختن آن یک مرحلهٔ «واگرد» است؛ اگر ساخت یکی از بخش‌ها ناموفق باشد هیچ‌چیز ساخته نمی‌شود.</p>
+      <label class="field" data-rs-slot-field="3" hidden><span data-rs-slot-label>بخش چهارم</span>
+        <select data-rs-add-row-fourth>
+          <option value="">خالی بماند (بعداً از روی بوم پر می‌شود)</option>
+          {% for group in structure_library %}<optgroup label="{{ group.category }}">{% for entry in group.items %}<option value="{{ entry.key }}">{{ entry.label }}</option>{% endfor %}</optgroup>{% endfor %}
+        </select>
+      </label>
+      <p class="rs-add-row-note">چیدمان با یک درخواست به انتهای همین صفحه اضافه می‌شود و فقط در پیش‌نویس می‌ماند؛ تا «انتشار» نزنید، فروشگاه عمومی تغییر نمی‌کند. ساختنش یک مرحلهٔ «واگرد» است؛ اگر ساخت یکی از بخش‌ها ناموفق باشد هیچ‌چیز ساخته نمی‌شود. بعد از ساخت: عرض خانه‌ها را با کشیدن مرز بین آن‌ها تغییر دهید، و ترتیب/اسلایدر موبایل، فاصله، ارتفاع و تراز را در «ردیف‌ها و ستون‌بندی ← تنظیمات این ردیف» پیدا کنید.</p>
       <button type="submit" class="primary full" data-rs-add-row-submit>{% rs_icon "plus" %}ساختن چیدمان</button>
     </form>
   </template>

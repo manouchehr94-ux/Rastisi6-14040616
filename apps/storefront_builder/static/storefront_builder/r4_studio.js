@@ -962,7 +962,7 @@
         // two-column row presets). Both panes are the server-rendered Structure-panel templates; the tab is UI-only state.
         var addTab = m.tab || (m.type === 'add-row' ? 'layout' : 'sections');
         title = 'چه چیزی به این صفحه اضافه کنیم؟';
-        sub = 'یک بخش یا یک چیدمان چندستونه (دو یا سه قسمتی)؛ فقط در همین صفحه و فقط در پیش‌نویس.';
+        sub = 'یک بخش یا یک چیدمان چندستونه (دو تا چهار قسمتی، یا یک نمونهٔ آماده)؛ فقط در همین صفحه و فقط در پیش‌نویس.';
         top = '<div class="rs-add-tabs" role="tablist" aria-label="نوع افزودن">' +
           [['sections', 'بخش‌ها'], ['layout', 'چیدمان']].map(function (t) {
             return '<button type="button" role="tab" data-rastisi-action="add-tab" data-tab="' + t[0] + '" aria-selected="' + (addTab === t[0]) + '"' +
@@ -1451,7 +1451,7 @@
   function syncRowForm(form) {
     var picked = form.querySelector('input[name="rs_row_layout"]:checked');
     var labels = picked && picked.getAttribute('data-rs-slot-labels') ? picked.getAttribute('data-rs-slot-labels').split('|') : [];
-    var defaults = ['بخش ستون اول (راست)', 'بخش ستون دوم (چپ)', 'بخش سوم'];
+    var defaults = ['بخش ستون اول (راست)', 'بخش ستون دوم (چپ)', 'بخش سوم', 'بخش چهارم'];
     var slots = labels.length || 2;
     $all('[data-rs-slot-field]', form).forEach(function (field) {
       var index = Number(field.getAttribute('data-rs-slot-field'));
@@ -1459,6 +1459,21 @@
       var text = field.querySelector('[data-rs-slot-label]');
       if (text) text.textContent = labels[index] || defaults[index];
     });
+    // a READY-MADE sample only pre-selects the ordinary section pickers (nothing else): every pick stays editable before building, and a
+    // section the page cannot take (not in the picker) is simply left empty. Leaving a sample clears what the sample had chosen.
+    var pickers = ['[data-rs-add-row-first]', '[data-rs-add-row-second]', '[data-rs-add-row-third]', '[data-rs-add-row-fourth]'].map(function (sel) { return form.querySelector(sel); });
+    var sample = picked && picked.getAttribute('data-rs-sample-sections');
+    if (sample) {
+      sample.split(',').forEach(function (key, index) {
+        var select = pickers[index];
+        if (!select) return;
+        select.value = Array.prototype.some.call(select.options, function (o) { return o.value === key; }) ? key : '';
+      });
+      form.setAttribute('data-rs-sample-applied', '1');
+    } else if (form.getAttribute('data-rs-sample-applied') === '1') {
+      pickers.forEach(function (select) { if (select) select.value = ''; });
+      form.removeAttribute('data-rs-sample-applied');
+    }
   }
 
   var layoutBuilding = false;   // double-click / repeated submit guard (the server additionally answers a replayed base_revision with 409)
@@ -1472,7 +1487,7 @@
     if (!layout) { notify('یک چیدمان را انتخاب کنید.'); return; }
     var engineLayout = layout.getAttribute('data-rs-engine-layout') || layout.value;
     var cellMap = (layout.getAttribute('data-rs-slot-cells') || '0,1').split(',').map(Number);
-    var picks = ['[data-rs-add-row-first]', '[data-rs-add-row-second]', '[data-rs-add-row-third]'].map(function (selector) {
+    var picks = ['[data-rs-add-row-first]', '[data-rs-add-row-second]', '[data-rs-add-row-third]', '[data-rs-add-row-fourth]'].map(function (selector) {
       var select = form.querySelector(selector);
       return select ? select.value : '';
     });
@@ -1485,6 +1500,8 @@
     });
     var mutation = { type: 'container.add', page_type: root.getAttribute('data-r4-page-type') || 'home', layout_key: engineLayout };
     if (anyContent) mutation.cells = cells;
+    var spansAttr = layout.getAttribute('data-rs-slot-spans');
+    if (spansAttr) mutation.spans = spansAttr.split(',').map(Number);      // per-Cell widths (e.g. 4/2/4/2) ride in the SAME container.add
     var submit = form.querySelector('[data-rs-add-row-submit]');
     layoutBuilding = true;
     if (submit) { submit.disabled = true; submit.textContent = 'در حال ساختن چیدمان…'; }
@@ -1492,7 +1509,7 @@
       layoutBuilding = false;
       closeModal();
       if (result && result.ok) {
-        notify('چیدمان به انتهای صفحه اضافه شد. هنوز منتشر نشده است.' + (anyContent ? '' : ' خانه‌ها خالی‌اند؛ از روی بوم به هر خانه بخش اضافه کنید.'));
+        notify('چیدمان به انتهای صفحه اضافه شد. هنوز منتشر نشده است. عرض خانه‌ها را با کشیدن مرزشان تغییر دهید؛ تنظیمات موبایل، فاصله، ارتفاع و تراز در «ردیف‌ها و ستون‌بندی» است.' + (anyContent ? '' : ' خانه‌ها خالی‌اند؛ از روی بوم به هر خانه بخش اضافه کنید.'));
       } else if (!result || !result.message) {
         notify('چیدمان ساخته نشد؛ هیچ تغییری ذخیره نشد.');   // a refusal that names its cause is already shown by R4 (nothing was saved either way)
       }

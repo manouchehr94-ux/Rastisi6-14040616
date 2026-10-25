@@ -33,7 +33,8 @@ class AddRowMarkupTests(_BandBase):
         self.assertLess(add, first_tree_row)
         self.assertLess(row, first_tree_row)
         self.assertIn("افزودن بخش", panel[add - 120:add + 200])
-        self.assertIn("ردیف دو‌ستونه", panel[row - 120:row + 200])
+        # V5: the button now covers 2–4 columns and the ready-made samples, so it is named for that (was «ردیف دو‌ستونه»)
+        self.assertIn("چیدمان چندستونه", panel[row - 120:row + 200])
 
     def test_the_dialog_offers_only_registry_two_cell_presets(self):
         _, panel = self._structure()
@@ -43,9 +44,11 @@ class AddRowMarkupTests(_BandBase):
         expected = [k for k, widths in container_service.LAYOUT_PRESETS.items() if len(widths) == 2]
         # V5-LAYOUT-001: after the registry two-cell presets, exactly the two reference three-section patterns (each mapped, server-side,
         # onto an EXISTING engine preset by its widths — see test_v5_layout_patterns)
-        self.assertEqual(offered, expected + ["thirds_equal", "big_right_two_left"])
+        # V5 «افزودن چیدمان»: then the four-column rows (equal / 4-2-4-2, both on the engine's ``quarters`` preset) and the two editable
+        # ready-made samples — every card still resolves to an EXISTING engine preset (see test_v5_add_layout_dialog)
+        self.assertEqual(offered, expected + ["thirds_equal", "big_right_two_left", "quarters_equal", "quarters_424", "sample_tiles", "sample_hero_panels"])
         self.assertNotIn("thirds", offered)
-        self.assertEqual(len(re.findall(r'<optgroup label=', tpl)) % 3, 0)   # the section picker appears once per slot (first/second/third)
+        self.assertEqual(len(re.findall(r'<optgroup label=', tpl)) % 4, 0)   # the section picker appears once per slot (first/second/third/fourth)
         self.assertIn("data-rs-add-row-first", tpl)
         self.assertIn("data-rs-add-row-second", tpl)
 
