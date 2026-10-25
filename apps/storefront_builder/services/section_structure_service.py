@@ -487,6 +487,47 @@ def build_structure_projection(page) -> list[dict]:
     return items
 
 
+def build_layout_tree(page) -> list[dict]:
+    """The Studio's read model of the page's whole layout tree — rows, Cells, nested Groups, Blocks — in render order (a pure read).
+
+    ``cells[].group`` is the nested Group hosted by that Cell (a Cell holds Blocks XOR one Group). Everything the on-canvas toolbar, the
+    layers tree and the Group inspector need comes from here, so none of them parses markup or keeps a second copy of the structure."""
+    from .. import group_style
+
+    nested = {}
+    for child in StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).prefetch_related(
+        "cells__section", "cells__blocks",
+    ).order_by("order", "id"):
+        nested.setdefault(child.parent_cell_id, []).append(child)
+
+    def label(block):
+        definition = _get_definition(block.section_key)
+        return definition.label_fa if definition is not None else block.section_key
+
+    def node(container, depth: int) -> dict:
+        settings = container_service.effective_container_settings(container.settings)
+        cells = []
+        for cell in sorted(container.cells.all(), key=lambda c: (c.order, c.id)):
+            blocks = container_service.blocks_from_prefetched_cell(cell)
+            hosted = [node(child, depth + 1) for child in nested.get(cell.pk, [])]
+            cells.append({
+                "id": cell.pk, "span": cell.span,
+                "blocks": [{"id": b.pk, "key": b.section_key, "label": label(b), "active": bool(b.is_active), "locked": bool(b.is_locked)} for b in blocks],
+                "group": hosted[0] if hosted else None,
+            })
+        return {
+            "id": container.pk, "depth": depth, "layout_key": container.layout_key, "locked": bool(container.is_locked),
+            "is_group": container_service.is_group(container) or container.parent_cell_id is not None,
+            "axis": settings.get("axis", "horizontal"), "title": settings.get("title", ""),
+            "settings": settings, "cells": cells,
+            "can_add_cell": len(cells) < container_service.cell_cap(container),
+            "style": group_style.validate_style(settings.get("style")) if settings.get("style") else {},
+        }
+
+    rows = page.containers.order_by("order", "id").prefetch_related("cells__section", "cells__blocks")
+    return [node(row, 0) for row in rows]
+
+
 def move_section(*, draft, section_id: int, direction: str) -> None:
     if direction not in ("up", "down"):
         raise SectionStructureError("invalid_direction")

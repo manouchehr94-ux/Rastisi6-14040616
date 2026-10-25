@@ -263,6 +263,11 @@ urlpatterns = [
         name="storefront-builder-r4-announcement-inspector",
     ),
     path(
+        "storefront-builder/r4/layout-tree/",
+        storefront_builder_r4_views.storefront_r4_layout_tree,
+        name="storefront-builder-r4-layout-tree",
+    ),
+    path(
         "storefront-builder/r4/mutate/",
         storefront_builder_r4_views.storefront_r4_mutation,
         name="storefront-builder-r4-mutation",

@@ -680,7 +680,7 @@ class BuilderChromeIsLayoutNeutralTests(SimpleTestCase):
         self.assertNotIn("transform:translate", compact)
         self.assertNotIn("bottom:-", compact)
         # it exists only in builder markup (render_containers.html is_preview branches), so published geometry is untouched
-        template = (APP / "templates" / "storefront_builder" / "partials" / "render_containers.html").read_text(encoding="utf-8")
+        template = (APP / "templates" / "storefront_builder" / "partials" / "render_container.html").read_text(encoding="utf-8")
         self.assertEqual(template.count('class="sfb-cell-add-more"'), 2)         # both inside is_preview branches; the published HTML is asserted in test_v5_ui_006_add_controls
 
     def test_the_only_builder_geometry_exceptions_are_visible_minimums_for_content_less_cells(self):
@@ -700,7 +700,7 @@ class BuilderChromeIsLayoutNeutralTests(SimpleTestCase):
         self.assertEqual(with_min_height, allowed)
 
     def test_empty_cell_markup_is_emitted_for_builder_preview_only(self):
-        template = (APP / "templates" / "storefront_builder" / "partials" / "render_containers.html").read_text(encoding="utf-8")
+        template = (APP / "templates" / "storefront_builder" / "partials" / "render_container.html").read_text(encoding="utf-8")
         self.assertIn("{% if is_preview and not blocks %} sfb-empty-cell{% endif %}", template)
 
     def test_edit_mode_does_not_reposition_storefront_elements(self):

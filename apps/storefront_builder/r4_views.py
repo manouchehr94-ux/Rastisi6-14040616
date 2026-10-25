@@ -22,6 +22,7 @@ from . import (
     appearance_registry,
     design_block,
     global_region_registry,
+    group_style,
     layout_preset_registry,
     media_views,
     resource_source,
@@ -951,6 +952,8 @@ def _build_studio_context(
         # «پیش‌نمایش»: the read-only customer view of the saved Draft (a different action from viewing the published store)
         "draft_preview_url": reverse("dashboard:storefront-builder-draft-preview"),
         "announcement_inspector_url": reverse("dashboard:storefront-builder-r4-announcement-inspector"),
+        "layout_tree_url": reverse("dashboard:storefront-builder-r4-layout-tree"),
+        "group_inspector": group_style.inspector_groups(),
         "templates": [
             {
                 "key": card["preset"].key,
@@ -1005,6 +1008,35 @@ def _build_studio_context(
 
 def _is_strict_int(value: object) -> bool:
     return type(value) is int
+
+
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_layout_tree(request):
+    """V5 Composer — the page's layout tree (rows -> cells -> Groups -> Blocks) of THIS store's active Draft, read-only. The on-canvas
+    toolbar, the layers tree and the Group inspector read it after every committed change; it writes nothing."""
+    store = resolve_store_for_service(request)
+    draft = layout_service.get_or_create_draft(store, user=request.user)
+    page_type = request.GET.get("page") or StorefrontPage.PageType.HOME
+    if page_type not in {choice for choice, _label in StorefrontPage.PageType.choices}:
+        return JsonResponse({"ok": False, "code": "unsupported_page"}, status=400)
+    page = draft.get_page(page_type)
+    from apps.content.models import MediaAsset
+
+    media = [
+        {"id": asset.pk, "url": asset.image.url if asset.image else "", "name": (asset.image.name or "").rsplit("/", 1)[-1]}
+        for asset in MediaAsset.objects.filter(store=store).order_by("-created_at", "-id")[:60]
+    ]
+    return JsonResponse({
+        "ok": True, "revision": draft.edit_revision, "page_type": page_type,
+        "tree": section_structure_service.build_layout_tree(page),
+        "media": media,
+        "patterns": [{"key": key, "label": label} for key, label in section_registry.PATTERN_REGISTRY.items()],
+        "palette": semantic_colors.token_hex_map(draft.effective_appearance_config()),
+        "palette_labels": semantic_colors.SEMANTIC_COLOR_TOKEN_LABELS_FA,
+        "limits": {"max_cells": container_service.MAX_GROUP_CELLS, "max_depth": container_service.MAX_GROUP_DEPTH, "page_cells": container_service.MAX_PAGE_CELLS},
+    })
 
 
 @require_POST

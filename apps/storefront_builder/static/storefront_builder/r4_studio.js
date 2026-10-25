@@ -1167,6 +1167,10 @@
     command: function (id, command) { ui.selectedSectionId = String(id); sectionCommand(command); },
     askRemove: function (id) { if (!ui.modal) openModal('remove-section', { sectionId: id }); },
     clearSelection: function () { ui.selectedSectionId = null; markSelectedRow(); R4.previewSelect(null); },
+    // V5 Composer (r4_composer.js): the same entry points the canvas chips and the structure drawer already use, exposed for the layers tree
+    addToCell: function (cellId) { openCellAdd(cellId); },
+    openGlobal: function (region) { focusGlobalRegion(region === 'footer' ? 'footer' : 'header'); },
+    select: function (id) { R4.previewSelect(id); R4.emit('r4:section-selected', { sectionId: id }); },
   };
 
   R4.confirm = function (message) {

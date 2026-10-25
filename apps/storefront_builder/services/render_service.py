@@ -1401,7 +1401,6 @@ def _group_view(container, settings: dict, store) -> dict:
     background = group_style.background_css(settings, media_url)
     title = settings.get("title", "")
     framed = bool(title or settings.get("description") or style or background)
-    cells = max(1, len(container.cells.all()))
     vertical = settings.get("axis") == "vertical"
     return {
         "framed": framed,
@@ -1412,8 +1411,6 @@ def _group_view(container, settings: dict, store) -> dict:
         "show_title": settings.get("title_visible", True) is not False and bool(title),
         "attrs": attrs,
         "background_css": background,
-        "rows": " ".join(f"{cell.span}fr" for cell in container.cells.all()) if vertical else "",
-        "cell_count": cells,
     }
 
 

@@ -22,7 +22,7 @@ class GroupRenderTests(_GroupBase):
         html = self.home_preview()
         self.assertIn(f'data-container-id="{group.pk}"', html)
         self.assertIn('data-axis="vertical"', html)
-        self.assertRegex(html, r'--group-rows:6fr 6fr')
+        self.assertEqual(len(re.findall(r'--cell-span:6', html[html.index('rcontainer--nested'):])) >= 2, True)
         # the nested rcontainer sits INSIDE a cell of the parent row
         self.assertRegex(html, rf'data-cell-id="{self.cells(row)[0].pk}"[^>]*>\s*<div class="rcontainer[^"]*rcontainer--nested')
         self.publish_and_probe(lambda page: "rcontainer--nested" in page and 'data-axis="vertical"' in page)
@@ -76,3 +76,26 @@ class GroupRenderTests(_GroupBase):
         self.assertIsNotNone(fragment)
         self.assertEqual((fragment["kind"], fragment["id"]), ("container", row.pk))
         self.assertIn("rcontainer--nested", fragment["html"])
+
+
+class LayoutTreeEndpointTests(_GroupBase):
+    def test_the_tree_endpoint_mirrors_the_nested_structure_and_is_store_scoped(self):
+        from django.urls import reverse
+
+        row = self.row()
+        self.mutate({"type": "cell.split", "cell_id": self.cells(row)[0].pk, "axis": "horizontal", "count": 2})
+        left = self.cells(row)[0]
+        self.put(left, "rich_text")
+        self.mutate({"type": "cell.split", "cell_id": left.pk, "axis": "vertical", "count": 3})
+        response = self.client.get(reverse("dashboard:storefront-builder-r4-layout-tree") + "?page=home")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        node = next(r for r in data["tree"] if r["id"] == row.pk)
+        self.assertEqual([c["span"] for c in node["cells"]], [6, 6])
+        group = node["cells"][0]["group"]
+        self.assertEqual((group["axis"], [c["span"] for c in group["cells"]], group["depth"]), ("vertical", [4, 4, 4], 1))
+        self.assertEqual(group["cells"][0]["blocks"][0]["key"], "rich_text")
+        self.assertEqual(data["revision"], self._revision())
+        self.assertEqual(self.client.get(reverse("dashboard:storefront-builder-r4-layout-tree") + "?page=nope").status_code, 400)
+        self.client.logout()
+        self.assertNotEqual(self.client.get(reverse("dashboard:storefront-builder-r4-layout-tree") + "?page=home").status_code, 200)

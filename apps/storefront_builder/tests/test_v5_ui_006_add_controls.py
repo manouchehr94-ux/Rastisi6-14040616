@@ -15,7 +15,7 @@ from apps.storefront_builder.services import container_service, layout_service
 from .test_r4_mutation_api import R4MutationApiTestCase
 
 APP = Path(__file__).resolve().parents[1]
-CONTAINERS = (APP / "templates/storefront_builder/partials/render_containers.html").read_text(encoding="utf-8")
+CONTAINERS = (APP / "templates/storefront_builder/partials/render_container.html").read_text(encoding="utf-8")
 BUILDER_CSS = (APP / "static/css/storefront_builder.css").read_text(encoding="utf-8")
 STUDIO_JS = (APP / "static/storefront_builder/r4_studio.js").read_text(encoding="utf-8")
 

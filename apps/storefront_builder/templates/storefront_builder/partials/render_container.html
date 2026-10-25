@@ -6,7 +6,7 @@
      {% if is_preview %}data-group-id="{{ container.pk }}"{% endif %}>
   {% if gview.show_title or gview.description %}<header class="rgroup-heading">{% if gview.show_title %}<h2 class="rgroup-title">{{ gview.title }}</h2>{% endif %}{% if gview.description %}<p class="rgroup-description">{{ gview.description }}</p>{% endif %}</header>{% endif %}
 {% endif %}<div class="rcontainer{% if is_preview %} sfb-builder-container{% endif %}{% if gview.nested %} rcontainer--nested{% endif %}"
-     style="--container-gap:{{ csettings.gap }}px{% if gview.vertical %};--group-rows:{{ gview.rows }}{% endif %}{% if csettings.background_color and csettings.background_mode != "gradient" %};background-color:{{ csettings.background_color }}{% endif %}{% if csettings.stack_split %};--stack-top:{{ csettings.stack_top }}fr;--stack-bottom:{{ csettings.stack_bottom }}fr{% endif %}"
+     style="--container-gap:{{ csettings.gap }}px{% if csettings.background_color and csettings.background_mode != "gradient" %};background-color:{{ csettings.background_color }}{% endif %}{% if csettings.stack_split %};--stack-top:{{ csettings.stack_top }}fr;--stack-bottom:{{ csettings.stack_bottom }}fr{% endif %}"
      data-layout="{{ container.layout_key }}"{% if gview.vertical %} data-axis="vertical"{% endif %}
      data-mobile-mode="{{ csettings.mobile_mode }}"{% if csettings.mobile_order == "reverse" %} data-mobile-order="reverse"{% endif %}
      data-content-width="{{ csettings.content_width }}"
@@ -16,6 +16,7 @@
      {% if csettings.background_mode == "pattern" and csettings.background_pattern %}data-container-pattern="{{ csettings.background_pattern }}"{% endif %}
      {% if is_preview %}data-container-id="{{ container.pk }}" data-container-locked="{% if container.is_locked %}1{% else %}0{% endif %}"{% endif %}>
   {% if is_preview %}
+  <button type="button" class="sfb-layout-chip sfb-layout-chip--group" data-group-layout="{{ container.pk }}" aria-label="انتخاب {% if gview.nested %}این گروه{% else %}این ردیف{% endif %} برای چیدمان" title="انتخاب {% if gview.nested %}گروه{% else %}ردیف{% endif %}">▦</button>
   <div class="sfb-rcontainer-toolbar" role="toolbar" aria-label="ابزار چیدمان">
     <button type="button" class="sfb-rcontainer-select" data-container-select="{{ container.pk }}" title="تنظیم این چیدمان" aria-label="تنظیم این چیدمان">▦</button>
     {% if not composition.has_placement %}
@@ -28,6 +29,7 @@
   <div class="rcontainer-cell{% if is_preview and not blocks %} sfb-empty-cell{% endif %}"
        style="--cell-span:{{ cell.span }}{% if csettings.mobile_order == "reverse" %};--cell-i:{{ forloop.counter }}{% endif %}"
        {% if is_preview %}data-cell-id="{{ cell.pk }}" data-container-id="{{ container.pk }}"{% endif %}>
+    {% if is_preview %}<button type="button" class="sfb-layout-chip sfb-layout-chip--cell" data-cell-layout="{{ cell.pk }}" aria-label="انتخاب این خانه برای چیدمان" title="انتخاب خانه">⊞</button>{% endif %}
     {% if cell_entry.group %}
       {% comment %}V5 Groups: this Cell hosts a nested Group (a Container) instead of Blocks — the same partial renders it, recursively.{% endcomment %}
       {% include "storefront_builder/partials/render_container.html" with composition=cell_entry.group %}
@@ -84,10 +86,10 @@
       «افزودن بخش». The tag says which Cell it is (1 = right in RTL) and its real width share; the button fills the Cell and opens the
       add dialog for THIS Cell only (cell.add_section).{% endcomment %}
     {% elif is_preview %}
-      <button type="button" class="sfb-empty-cell-add" data-empty-cell="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن بخش به خانه {{ forloop.counter }} از {{ composition.cells|length }}">
-        <span aria-hidden="true">＋</span><strong>افزودن بخش به این خانه</strong><small>خانه {{ forloop.counter|fa_number }} · {{ cell.span|fa_number }} از ۱۲ ستون</small>
+      <button type="button" class="sfb-empty-cell-add" data-empty-cell="{{ cell.pk }}" data-container-id="{{ container.pk }}" aria-label="افزودن بخش به {% if gview.vertical %}ردیف{% else %}خانه{% endif %} {{ forloop.counter }} از {{ composition.cells|length }}">
+        <span aria-hidden="true">＋</span><strong>افزودن بخش به این خانه</strong><small>{% if gview.vertical %}ردیف{% else %}خانه{% endif %} {{ forloop.counter|fa_number }} · {{ cell.span|fa_number }} از ۱۲ {% if gview.vertical %}واحد ارتفاع{% else %}ستون{% endif %}</small>
       </button>
-      {% if forloop.first and not composition.has_placement %}<button type="button" class="sfb-empty-cell-remove" data-container-remove="{{ container.pk }}" aria-label="حذف این چیدمان خالی">🗑 حذف چیدمان خالی</button>{% endif %}
+      {% if forloop.first and not composition.has_placement and not gview.nested %}<button type="button" class="sfb-empty-cell-remove" data-container-remove="{{ container.pk }}" aria-label="حذف این چیدمان خالی">🗑 حذف چیدمان خالی</button>{% endif %}
     {% endif %}
   </div>
   {% endwith %}

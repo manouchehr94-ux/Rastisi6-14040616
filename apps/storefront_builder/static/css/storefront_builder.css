@@ -4002,11 +4002,13 @@ html[dir="rtl"] .decor-strip-bg[data-grad]{background-image:linear-gradient(to r
    properties written by group_style.render_attributes and acts only when its data-g flag is present.
    ======================================================================== */
 .rcontainer--nested { width: 100%; }
-.rcontainer[data-axis="vertical"] {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: var(--group-rows, none);
+/* a vertical split stacks its Cells; the Cell's span is its share of the HEIGHT (a minimum: content may make a row taller) */
+.rcontainer[data-axis="vertical"] { grid-template-columns: minmax(0, 1fr); }
+.rcontainer[data-axis="vertical"] > .rcontainer-cell {
+  grid-column: 1 / -1;
+  min-height: calc(var(--group-unit, 24px) * var(--cell-span, 12));
 }
-.rcontainer[data-axis="vertical"] > .rcontainer-cell { grid-column: 1 / -1; }
+.rgroup[data-g~="minh"] > .rcontainer[data-axis="vertical"] { --group-unit: calc(var(--g-minh) / 12); }
 .rgroup {
   position: relative;
   min-width: 0;
@@ -4042,9 +4044,22 @@ html[dir="rtl"] .decor-strip-bg[data-grad]{background-image:linear-gradient(to r
 @media (min-width: 1001px) { .sfb-builder-group[data-hide-d] { opacity: .35; } }
 @media (min-width: 681px) and (max-width: 1000px) { .sfb-builder-group[data-hide-t] { opacity: .35; } }
 @media (max-width: 680px) { .sfb-builder-group[data-hide-m] { opacity: .35; } }
-@media (max-width: 1000px) {
-  .rcontainer--nested[data-mobile-mode="stack"][data-axis="vertical"] { grid-template-rows: none; }
+
+/* V5 Composer — hover chips that select a cell / Group for layout (builder only; never rendered on the storefront). Layout-neutral: absolutely
+   positioned, invisible until the cell or Group is hovered, hidden in the customer preview mode. */
+.sfb-layout-chip {
+  position: absolute; z-index: 40; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px;
+  background: #10192b; color: #e8edf6; font-size: 14px; line-height: 26px; text-align: center; cursor: pointer;
+  opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 4px 12px rgba(10, 18, 42, .25);
 }
+.sfb-layout-chip--cell { top: 14px; inset-inline-start: 14px; }   /* clear of the resize handles that sit on the cell boundaries */
+.sfb-layout-chip--group { top: -13px; inset-inline-end: 8px; background: #6d4aff; }
+.rcontainer-cell:hover:not(:has(.rcontainer-cell:hover)) > .sfb-layout-chip--cell,
+.rcontainer:hover:not(:has(.rcontainer-cell:hover)) > .sfb-layout-chip--group,
+.sfb-layout-chip:focus-visible { opacity: 1; pointer-events: auto; }
+.rcontainer:hover > .sfb-layout-chip--group { opacity: .9; pointer-events: auto; }
+html[data-sfb-builder-mode="preview"] .sfb-layout-chip { display: none; }
+.rgroup-title[contenteditable="true"], .rgroup-description[contenteditable="true"] { outline: 2px solid #6d4aff; outline-offset: 3px; border-radius: 4px; cursor: text; }
 
 /* FOLLOWUP-08 — ONE mobile contract for the opened header navigation of EVERY Global Header variant (<= 680px).
    Real-browser QA at 320/375/390/430 showed the opened row of most variants was a clipped horizontal strip (3-4 of 10-14

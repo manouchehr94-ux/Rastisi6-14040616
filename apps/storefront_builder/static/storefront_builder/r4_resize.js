@@ -37,7 +37,7 @@
   overlay.setAttribute('data-rs-overlay', '');
   overlay.innerHTML =
     '<div class="rs-sel-toolbar" role="toolbar" aria-label="ابزار بخش انتخاب‌شده" data-rs-sel-toolbar hidden>' +
-      tbButton('edit', 'edit', 'ویرایش', true) + tbButton('duplicate', 'copy', 'تکثیر بخش') + tbButton('up', 'up', 'انتقال به بالا') +
+      tbButton('edit', 'edit', 'ویرایش', true) + tbButton('layout', 'columns', 'چیدمان', false, true) + tbButton('duplicate', 'copy', 'تکثیر بخش') + tbButton('up', 'up', 'انتقال به بالا') +
       tbButton('down', 'down', 'انتقال به پایین') + tbButton('remove', 'trash', 'حذف بخش') +
       tbButton('ann-toggle', 'eye', 'غیرفعال‌کردن نوار اطلاعیه') + tbButton('close', 'close', 'بستن منو') +
     '</div>' +
@@ -45,9 +45,9 @@
     '<button type="button" class="rs-auto-chip" data-rs-auto hidden>اندازه خودکار</button>';
   canvas.appendChild(overlay);
 
-  function tbButton(action, iconName, label, primary) {
-    return '<button type="button" class="rs-tb-btn' + (primary ? ' primary' : '') + '" data-rs-sel="' + action + '" aria-label="' + label + '" title="' + label + '">' +
-      S.icon(iconName) + (primary ? '<span>' + label + '</span>' : '') + '</button>';
+  function tbButton(action, iconName, label, primary, withText) {
+    return '<button type="button" class="rs-tb-btn' + (primary ? ' primary' : '') + (withText ? ' text' : '') + '" data-rs-sel="' + action + '" aria-label="' + label + '" title="' + label + '">' +
+      S.icon(iconName) + (primary || withText ? '<span>' + label + '</span>' : '') + '</button>';
   }
 
   var toolbar = overlay.querySelector('[data-rs-sel-toolbar]');
@@ -238,10 +238,19 @@
       sectionBox = onScreen ? b : null;
     }
 
-    var container = null;
-    if (hoverContainerId) container = m.doc.querySelector('.rcontainer[data-container-id="' + hoverContainerId + '"]');
-    if (!container && sec) container = sec.closest('.rcontainer[data-container-id]');
-    if (container && resizeAllowed()) renderContainerHandles(m, container, area, usedKeys);
+    // handles of: the hovered (innermost) row / Group, the selected Section's row, and the rows / Groups of the selected layout target
+    // (a selected cell shows its row's boundaries, a selected Group shows its own AND its parent's — so a parent is resizable from inside it)
+    var ids = [];
+    function addId(v) { if (v != null && ids.indexOf(String(v)) === -1) ids.push(String(v)); }
+    addId(hoverContainerId);
+    if (sec) { var secContainer = sec.closest('.rcontainer[data-container-id]'); if (secContainer) addId(secContainer.getAttribute('data-container-id')); }
+    if (R4.composer && R4.composer.containersOfSelection) R4.composer.containersOfSelection().forEach(addId);
+    if (resizeAllowed()) {
+      ids.slice(0, 4).forEach(function (cid) {
+        var container = m.doc.querySelector('.rcontainer[data-container-id="' + cid + '"]');
+        if (container) renderContainerHandles(m, container, area, usedKeys);
+      });
+    }
 
     Object.keys(handles).forEach(function (key) { if (!usedKeys[key]) handles[key].hidden = true; });
 
@@ -392,11 +401,25 @@
     var cells = cellsOf(container);
     if (cells.length < 2) return;
     var id = container.getAttribute('data-container-id');
-    overlay.setAttribute('data-rs-container', id);
     var locked = container.getAttribute('data-container-locked') === '1';
     if (locked) return;
     var cr = box(m, container);
     var rects = cells.map(function (c) { return box(m, c); });
+    // V5 Groups: a vertical split stacks its Cells — the boundaries between them are horizontal bars that change the HEIGHT shares
+    if (container.getAttribute('data-axis') === 'vertical') {
+      for (var r = 0; r < cells.length - 1; r += 1) {
+        var upper = rects[r], lower = rects[r + 1];
+        var cy = (upper.t + upper.h + lower.t) / 2;
+        if (cy < area.t + 10 || cy > area.b - 10) continue;
+        var rk = 'r:' + id + ':' + r;
+        used[rk] = true;
+        var rh = handle(rk, 'rs-handle-r', 'تغییر ارتفاع ردیف‌ها — بکشید یا با کلیدهای بالا/پایین تنظیم کنید؛ دوبار کلیک: تقسیم مساوی', 'horizontal');
+        rh.setAttribute('data-rs-index', String(r));
+        rh.setAttribute('data-rs-container-id', id);
+        place(rh, upper.l, cy - 9, upper.w, 18);
+      }
+      return;
+    }
     var stacked = container.getAttribute('data-layout') === STACKED;
     var sideBySide = Math.abs(rects[0].t - rects[1].t) < 4 || stacked ? rects[0].l !== rects[1].l : false;
     if (!sideBySide && !stacked) return;
@@ -410,20 +433,22 @@
       var edgeA = a.l < bb.l ? a.l + a.w : a.l;                       // the facing edges (cells may be ordered right-to-left)
       var edgeB = a.l < bb.l ? bb.l : bb.l + bb.w;
       var center = (edgeA + edgeB) / 2;
-      var key = 'c:' + i;
+      var key = 'c:' + id + ':' + i;
       used[key] = true;
       var col = handle(key, 'rs-handle-c', 'تغییر عرض ستون‌ها — بکشید یا با کلیدهای چپ/راست تنظیم کنید؛ دوبار کلیک: نسبت اولیه', 'vertical');
       col.setAttribute('data-rs-index', String(i));
+      col.setAttribute('data-rs-container-id', id);
       place(col, center - 10, top, 20, bottom - top);
     }
     if (stacked && cells.length === 3) {
-      var upper = rects[1], lower = rects[2];
-      var cy = (upper.t + upper.h + lower.t) / 2;
-      var sk = 's';
-      if (cy < area.t + 12 || cy > area.b - 12) return;               // the divider is scrolled out of view: scroll to it, then drag
+      var upperCell = rects[1], lowerCell = rects[2];
+      var sy = (upperCell.t + upperCell.h + lowerCell.t) / 2;
+      var sk = 's:' + id;
+      if (sy < area.t + 12 || sy > area.b - 12) return;               // the divider is scrolled out of view: scroll to it, then drag
       used[sk] = true;
       var sp = handle(sk, 'rs-handle-s', 'تغییر نسبت ارتفاع دو خانهٔ کوچک — بکشید یا با کلیدهای بالا/پایین تنظیم کنید؛ دوبار کلیک: نسبت خودکار', 'horizontal');
-      place(sp, upper.l, cy - 9, upper.w, 18);
+      sp.setAttribute('data-rs-container-id', id);
+      place(sp, upperCell.l, sy - 9, upperCell.w, 18);
     }
   }
 
@@ -650,6 +675,34 @@
     },
   };
 
+  // ---- vertical split: the Cells' shares of the HEIGHT (Cell.span, integer 12-unit proportions, floor 2) -------------------------------
+  drivers.rows = {
+    begin: function (d) {
+      var c = d.ctx.container;
+      d.cells = cellsOf(c);
+      d.spans = currentSpans(d.cells);
+      d.rects = d.cells.map(function (cell) { return cell.getBoundingClientRect(); });
+    },
+    move: function (d, x, y) {
+      var py = toIframeY(d.m, y);
+      var i = d.ctx.index;
+      var spans = d.spans.slice();
+      var pair = d.spans[i] + d.spans[i + 1];
+      var top = d.rects[i].top, bottom = d.rects[i + 1].bottom;
+      var ratio = Math.max(0, Math.min(1, (py - top) / Math.max(1, bottom - top)));
+      var first = Math.max(2, Math.min(pair - 2, Math.round(ratio * pair)));
+      spans[i] = first;
+      spans[i + 1] = pair - first;
+      d.value = spans;
+      d.cells.forEach(function (c, idx) { setProp(d, c, '--cell-span', String(spans[idx])); });
+      showHint(spans.map(function (v) { return fa(Math.round(v / 12 * 100)) + '٪'; }).join('  |  '), x, y);
+    },
+    result: function (d) {
+      if (!d.value || d.value.join() === d.spans.join()) return null;
+      return { type: 'container.resize', container_id: d.ctx.containerId, spans: d.value };
+    },
+  };
+
   // ---- the stacked layout's height divider ---------------------------------------------
   drivers.split = {
     begin: function (d) {
@@ -688,7 +741,7 @@
       if (!sec) return null;
       return { id: Number(id), el: sec, side: key === 'wl' ? 'left' : 'right', wasManual: manualState(sec)[kind === 'height' ? 'height' : 'width'] };
     }
-    var cid = overlay.getAttribute('data-rs-container');
+    var cid = el.getAttribute('data-rs-container-id') || overlay.getAttribute('data-rs-container');
     var container = cid ? m.doc.querySelector('.rcontainer[data-container-id="' + cid + '"]') : null;
     if (!container) return null;
     return { container: container, containerId: Number(cid), index: Number(el.getAttribute('data-rs-index') || 0) };
@@ -700,6 +753,7 @@
     if (key === 'wl' || key === 'wr') return 'width';
     if (key === 'c') return 'column';
     if (key === 's') return 'split';
+    if (key === 'r') return 'rows';
     return null;
   }
 
@@ -724,12 +778,18 @@
     if (kind === 'height' && ctx.wasManual) R4.enqueueStructuralMutation({ type: 'section.resize', section_id: ctx.id, height: null });
     else if (kind === 'width' && ctx.wasManual) R4.enqueueStructuralMutation({ type: 'section.resize', section_id: ctx.id, width: null });
     else if (kind === 'split') R4.enqueueStructuralMutation({ type: 'container.resize', container_id: ctx.containerId, stack_split: null });
+    else if (kind === 'rows' || (kind === 'column' && isGroupContainer(ctx.container))) {
+      // a Group goes back to equal shares of its own axis
+      R4.enqueueStructuralMutation({ type: 'container.set_layout', container_id: ctx.containerId, axis: ctx.container.getAttribute('data-axis') === 'vertical' ? 'vertical' : 'horizontal', count: cellsOf(ctx.container).length });
+    }
     else if (kind === 'column') {
       var m = mapping();
       var layout = ctx.container.getAttribute('data-layout');
       if (m && layout) R4.enqueueStructuralMutation({ type: 'container.change_layout', container_id: ctx.containerId, layout_key: layout === STACKED ? STACKED : presetFor(ctx.container) });
     }
   });
+
+  function isGroupContainer(c) { return c.classList.contains('rcontainer--nested') || c.parentElement && c.parentElement.classList.contains('rgroup') || c.hasAttribute('data-axis'); }
 
   // the plain preset a dragged row returns to: the registry's own equal split for that cell count
   function presetFor(container) {
@@ -752,7 +812,7 @@
     else if (evt.key === 'Enter' && drag && drag.source === 'keyboard') { evt.preventDefault(); commitKeyboard(); return; }
     else return;
     evt.preventDefault();
-    var horizontal = kind === 'column' || kind === 'width';
+    var horizontal = kind === 'column' || kind === 'width';   // rows / split / height move vertically
     if ((horizontal && !sx) || (!horizontal && !sy)) return;
     if (!drag) {
       var ctx = ctxFor(kind, el);
@@ -815,6 +875,7 @@
       return;
     }
     if (action === 'edit') S.edit(Number(id));
+    else if (action === 'layout') { if (R4.composer) R4.composer.layoutOfSection(id); }
     else if (action === 'duplicate') S.command(id, 'duplicate');
     else if (action === 'up') S.command(id, 'up');
     else if (action === 'down') S.command(id, 'down');

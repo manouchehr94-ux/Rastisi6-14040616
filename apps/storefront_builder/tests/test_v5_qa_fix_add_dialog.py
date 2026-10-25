@@ -9,7 +9,7 @@ from ._v5_shell_support import APP, STUDIO_CSS, STUDIO_JS, strip_comments
 from .test_template51_designability_wiring import _BandBase
 
 BUILDER_CSS = (APP / "static" / "css" / "storefront_builder.css").read_text(encoding="utf-8")
-CONTAINERS = (APP / "templates" / "storefront_builder" / "partials" / "render_containers.html").read_text(encoding="utf-8")
+CONTAINERS = (APP / "templates" / "storefront_builder" / "partials" / "render_container.html").read_text(encoding="utf-8")
 
 
 class AddDialogRenderingTests(_BandBase):

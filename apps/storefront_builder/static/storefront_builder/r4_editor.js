@@ -127,6 +127,10 @@ window.RastiSiR4 = {
       : '.rsec[data-section-id="' + fragment.id + '"]';
     var current = doc.querySelector(selector);
     if (!current) return false;
+    // V5 Groups: a Group that carries a title / look is rendered inside its own frame (.rgroup) — the fragment is that whole frame, so it
+    // replaces the frame, never just the row inside it (which would nest a second frame inside the first one on every edit)
+    if (fragment.kind === 'container' && current.parentElement && current.parentElement.classList.contains('rgroup')
+        && current.parentElement.getAttribute('data-group-id') === String(fragment.id)) current = current.parentElement;
     var holder = doc.createElement('template');
     holder.innerHTML = fragment.html;
     var next = holder.content.firstElementChild;
@@ -525,6 +529,8 @@ window.RastiSiR4 = {
     return previewRefresh.promise;
   }
   R4.reloadPreview = reloadPreviewFrame;
+  // read-only: true while a twin-frame refresh is running or queued (the Studio's layout layer and the browser tests wait for it to go quiet)
+  R4.previewRefreshBusy = function () { return Boolean(previewRefresh.busy || previewRefresh.again); };
 
   // ---- R4 Task 8 — structural mutations (add/remove/duplicate/move) go
   // through the SAME single queue/endpoint as every other mutation; this
