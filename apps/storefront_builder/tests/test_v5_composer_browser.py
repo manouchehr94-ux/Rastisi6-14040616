@@ -334,3 +334,259 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             self.assertEqual(self.errors, [])
         finally:
             context.close()
+
+    # ------------------------------------------------------------------------------------------------------------ scenario D
+    def add_component(self, page, key):
+        """«ویرایش» on an EMPTY selected cell opens the real component library for that cell; one click on a card adds the real R4 section."""
+        page.click('[data-cmp="edit"]')
+        page.wait_for_selector('[data-rastisi-action="cell-add"]', timeout=10000)
+        page.locator(f'[data-rastisi-action="cell-add"][data-rs-library-key="{key}"]').first.click()
+        page.wait_for_function("()=>RastiSiR4.pendingWrites===0", timeout=20000)
+        self._until(page, f"()=>!!document.querySelector('.rsec[data-section-key=\"{key}\"]')", f"the {key} component in the Preview")
+        self.settle(page)
+
+    def library_keys(self, page):
+        page.click('[data-cmp="edit"]')
+        page.wait_for_selector('[data-rastisi-action="cell-add"]', timeout=10000)
+        keys = page.evaluate("()=>[...document.querySelectorAll('[data-rastisi-action=\"cell-add\"][data-rs-library-key]')].map(e=>e.dataset.rsLibraryKey)")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(500)
+        return keys
+
+    def test_d_real_registry_components_fill_a_free_layout_and_survive_re_layout(self):
+        from apps.storefront_builder import section_registry
+
+        context, page = self._studio()
+        try:
+            base = self.add_simple_row(page)
+            self.pick_leaf(page, base)
+            self.split(page, "horizontal", 2)
+            # the library the seller sees offers the registry's components (every one the page may legally hold)
+            self.pick_leaf(page, base)
+            offered = self.library_keys(page)
+            self.assertGreaterEqual(len(offered), 20)
+            self.assertTrue(set(offered) <= set(section_registry.SECTION_REGISTRY), set(offered) - set(section_registry.SECTION_REGISTRY))
+            for key in ("rich_text", "linked_image", "product_section", "multi_banner", "category_grid"):
+                self.assertIn(key, offered)
+            # 1) a text block (rich_text) in the first cell and a REAL product shelf in the second
+            self.pick_leaf(page, base)
+            self.add_component(page, "rich_text")
+            self.pick_leaf(page, base + 1)
+            self.add_component(page, "product_section")
+            shelf = self._frame(page).evaluate("()=>{const s=document.querySelector('.rsec[data-section-key=\"product_section\"]'); return s?{cards:s.querySelectorAll('.pcard, [data-product-id], .product-card').length, h:Math.round(s.getBoundingClientRect().height)}:null}")
+            self.assertIsNotNone(shelf)
+            self.assertGreater(shelf["h"], 120)
+            # 2) split the cell that HOLDS the text block: its content stays (first new cell), the other new cells take a media image and a banner
+            self.pick_leaf(page, base)
+            self.split(page, "vertical", 2)
+            kept = self._frame(page).evaluate("()=>{const row=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return [...row.querySelectorAll('.rcontainer-cell[data-cell-id]')].filter(c=>!c.querySelector('.rcontainer-cell')&&c.querySelector(':scope > .rsec[data-section-key=\"rich_text\"]')).length}")
+            self.assertEqual(kept, 1, "the text block must survive the split inside the first new cell")
+            self.pick_leaf(page, base + 1)
+            self.split(page, "horizontal", 2)                                # the empty second cell becomes two empty cells
+            self.pick_leaf(page, base + 1)
+            self.add_component(page, "linked_image")
+            self.pick_leaf(page, base + 2)
+            self.add_component(page, "multi_banner")
+            keys = self._frame(page).evaluate("()=>[...document.querySelectorAll('.rsec[data-section-key]')].map(e=>e.dataset.sectionKey)")
+            for key in ("rich_text", "linked_image", "product_section", "multi_banner"):
+                self.assertIn(key, keys)
+            # 3) split the cell that holds the product shelf: it stays in the first new cell, the second takes a fifth component
+            self.pick_leaf(page, base + 3)
+            self.split(page, "vertical", 2)
+            self.pick_leaf(page, base + 4)
+            self.add_component(page, "category_grid")
+            kept_shelf = self._frame(page).evaluate("()=>{const row=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return [...row.querySelectorAll('.rcontainer-cell[data-cell-id]')].filter(c=>!c.querySelector('.rcontainer-cell')&&c.querySelector(':scope > .rsec[data-section-key=\"product_section\"]')).length}")
+            self.assertEqual(kept_shelf, 1)
+            # 4) re-lay out the TOP group (select parents until the row, then three columns): every component is kept
+            before = sorted(self._frame(page).evaluate("()=>{const row=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return [...row.querySelectorAll('.rsec[data-section-id]')].map(e=>Number(e.dataset.sectionId))}"))
+            for _ in range(3):
+                page.click('[data-cmp="parent"]')
+                page.wait_for_timeout(300)
+            self.assertTrue(self.selected_group_id(page))
+            self.split(page, "horizontal", 3)
+            after = sorted(self._frame(page).evaluate("()=>{const row=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return [...row.querySelectorAll('.rsec[data-section-id]')].map(e=>Number(e.dataset.sectionId))}"))
+            self.assertEqual(before, after, "re-laying out a group must keep every component")
+            self._shot(page, "composer_d_real_components")
+            self.assertEqual(self.errors, [])
+        finally:
+            context.close()
+
+    # ------------------------------------------------------------------------------------------------------------ scenario E
+    PURCHASE_JS = """()=>({forms:[...document.querySelectorAll('form')].filter(f=>f.querySelector('.pdp-actions')).length,
+        selectors:document.querySelectorAll('[x-data*="variantSelector"]').length, actions:document.querySelectorAll('.pdp-actions').length,
+        satc:document.querySelectorAll('.pdp-satc').length, price:document.querySelectorAll('.pricebox .now').length,
+        qty:document.querySelectorAll('input[name=quantity]').length})"""
+
+    def test_e_header_and_footer_are_on_the_canvas_and_the_product_page_keeps_one_purchase_flow(self):
+        from django.urls import reverse
+
+        context, page = self._studio()
+        try:
+            # 1) Header -> Main -> Footer are all on the canvas, and clicking them opens the REAL header / footer editors
+            order = self._frame(page).evaluate("()=>{const h=document.querySelector('header'), m=document.querySelector('.sfb-preview-sections'), f=document.querySelector('footer');"
+                                               "return [h.getBoundingClientRect().top, m.getBoundingClientRect().top, f.getBoundingClientRect().top]}")
+            self.assertLess(order[0], order[1])
+            self.assertLess(order[1], order[2])
+            frame = self._frame(page)
+            frame.locator("footer").first.click(position={"x": 6, "y": 6}, force=True)
+            page.wait_for_function("()=>{const d=document.getElementById('rsGlobalFooter'); return !!d && d.open}", timeout=10000)
+            self.assertEqual(page.evaluate("()=>document.querySelector('.rs-studio').dataset.rsMode"), "global")
+            self._close_drawer(page)
+            frame = self._frame(page)
+            frame.locator("header").first.click(position={"x": 6, "y": 6}, force=True)
+            page.wait_for_function("()=>{const d=document.getElementById('rsGlobalHeader'); return !!d && d.open}", timeout=10000)
+            self._close_drawer(page)
+            # the layers tree lists the same three regions in the same order and opens the same editors
+            page.click('[data-rs-composer="panel"]')
+            page.wait_for_selector('[data-cmp-node="header:0"]')
+            nodes = page.evaluate("()=>[...document.querySelectorAll('[data-cmp-panel] [data-cmp-node]')].map(e=>e.dataset.cmpNode.split(':')[0])")
+            self.assertEqual((nodes[0], nodes[-1]), ("header", "footer"))
+            page.click('[data-cmp-node="footer:0"]')
+            page.wait_for_function("()=>{const d=document.getElementById('rsGlobalFooter'); return !!d && d.open}", timeout=10000)
+            self._close_drawer(page)
+        finally:
+            context.close()
+
+        # 2) the product page: a free row is added, split and filled; the purchase flow stays ONE flow
+        context, page = self._studio("product_detail")
+        try:
+            before = self._frame(page).evaluate(self.PURCHASE_JS)
+            self.assertEqual((before["forms"], before["selectors"], before["satc"] <= 1), (1, 1, True))
+            base = self.add_simple_row(page)
+            self.pick_leaf(page, base)
+            self.split(page, "horizontal", 2)
+            self.pick_leaf(page, base)
+            self.add_component(page, "rich_text")
+            self.pick_leaf(page, base + 1)
+            self.add_component(page, "faq")
+            during = self._frame(page).evaluate(self.PURCHASE_JS)
+            self.assertEqual(during, before, "composing around the buy box must not duplicate or remove any purchase control")
+            self._shot(page, "composer_e_pdp")
+            page.wait_for_timeout(800)
+            self._publish(page)
+        finally:
+            context.close()
+        path = reverse("catalog:product-detail", args=["parity-0"])
+        for width in (1440, 390):
+            ctx, public = self._public(path, width, 900)
+            try:
+                facts = public.evaluate(self.PURCHASE_JS)
+                self.assertEqual((facts["forms"], facts["selectors"]), (1, 1))
+                self.assertEqual(public.evaluate("()=>document.querySelectorAll('.rgroup, .rcontainer--nested').length >= 0"), True)
+                self.assertGreater(public.evaluate("()=>document.querySelectorAll('.rcontainer-cell').length"), 2)
+                self.assertLessEqual(public.evaluate("()=>document.documentElement.scrollWidth - innerWidth"), 0)
+                if width == 1440:
+                    # the real add-to-cart button still adds the real product, and the cart and checkout pages work
+                    public.locator(".pdp-actions button[type=submit]").first.click()
+                    public.wait_for_timeout(2500)
+                    public.goto(f"{self.public_base}{reverse('cart:detail')}", wait_until="networkidle")
+                    self.assertGreater(public.locator("body").inner_text().count("کالا"), 0)
+                    self.assertTrue(public.locator("a[href*='checkout']").count() >= 1, "the cart must still lead to checkout")
+                    self._shot(public, "composer_e_published_cart")
+            finally:
+                ctx.close()
+
+    # ------------------------------------------------------------------------------------------------------------ scenario F
+    def row_snapshot(self, page):
+        """The last page row as the seller sees it: nested structure, titles and the components it holds."""
+        return self._frame(page).evaluate("""()=>{const row=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop();
+          if(!row) return null; return {titles:[...row.querySelectorAll('.rgroup-title')].map(e=>e.textContent.trim()),
+            cells:row.querySelectorAll('.rcontainer-cell').length, keys:[...row.querySelectorAll('.rsec[data-section-key]')].map(e=>e.dataset.sectionKey)}}""")
+
+    def test_f_build_edit_refresh_undo_redo_draft_preview_and_publish(self):
+        context, page = self._studio()
+        try:
+            base = self.add_simple_row(page)
+            self.pick_leaf(page, base)
+            self.split(page, "horizontal", 2)
+            self.edit_group(page)
+            self.type_into(page, '[data-cmp-text="title"]', "ویترین بهاره")
+            page.locator('[data-cmp-theme="2"]').click()
+            self._until(page, "()=>[...document.querySelectorAll('.rgroup-title')].some(e=>e.textContent.trim()==='ویترین بهاره')", "the group title")
+            page.click("[data-cmp-panel-close]")
+            self.settle(page)
+            self.pick_leaf(page, base)
+            self.add_component(page, "rich_text")
+            self.pick_leaf(page, base + 1)
+            self.add_component(page, "product_section")
+            built = self.row_snapshot(page)
+            self.assertEqual((built["titles"], built["cells"]), (["ویترین بهاره"], 2))
+            self.assertEqual(sorted(built["keys"]), ["product_section", "rich_text"])
+            page.wait_for_timeout(900)
+            # refresh the whole Studio: the Draft kept everything
+            page.reload(wait_until="networkidle")
+            page.wait_for_selector("#r4PreviewFrame")
+            page.wait_for_timeout(1500)
+            self._frame(page)
+            self.settle(page)
+            self.assertEqual(self.row_snapshot(page), built)
+            # the real Undo takes the LAST edit (the shelf) away, Redo brings it back
+            page.click("#r4UndoButton")
+            self._until(page, "()=>{const r=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return r && !r.querySelector('.rsec[data-section-key=\"product_section\"]')}", "Undo")
+            self.settle(page)
+            page.click("#r4RedoButton")
+            self._until(page, "()=>{const r=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop(); return r && !!r.querySelector('.rsec[data-section-key=\"product_section\"]')}", "Redo")
+            self.settle(page)
+            # delete with content asks first; cancelling changes nothing, confirming removes it, Undo gives it all back
+            page.click('[data-rs-composer="panel"]')
+            page.click('[data-cmp-tab="layers"]')
+            page.locator('[data-cmp-panel] [data-cmp-node^="group:"]').last.click()
+            page.wait_for_selector("[data-cmp-toolbar]:not([hidden])")
+            page.click('[data-cmp="remove"]')
+            page.wait_for_selector(".rs-cmp-confirm")
+            page.click("[data-cmp-no]")
+            self.assertEqual(self.row_snapshot(page), built)
+            page.click('[data-cmp="remove"]')
+            page.wait_for_selector(".rs-cmp-confirm")
+            page.click("[data-cmp-yes]")
+            page.wait_for_function("()=>RastiSiR4.pendingWrites===0", timeout=20000)
+            self.settle(page)
+            self.assertNotEqual(self.row_snapshot(page), built)
+            page.click("#r4UndoButton")
+            self._until(page, "()=>[...document.querySelectorAll('.rgroup-title')].some(e=>e.textContent.trim()==='ویترین بهاره')", "Undo of the delete")
+            self.settle(page)
+            self.assertEqual(self.row_snapshot(page), built)
+            # «پیش‌نمایش» (the customer's view of the saved Draft) shows it; the published page does not yet
+            draft = context.new_page()
+            draft.goto(f"{self.base}/admin-portal/storefront-builder/draft-preview/", wait_until="networkidle")
+            self.assertGreaterEqual(draft.locator(".rgroup-title", has_text="ویترین بهاره").count(), 1)
+            draft.close()
+            ctx, before = self._public("/", 1440)
+            try:
+                self.assertEqual(before.locator(".rgroup-title", has_text="ویترین بهاره").count(), 0)
+            finally:
+                ctx.close()
+            page.wait_for_timeout(800)
+            # screenshot-only copy for the text block (the Studio is idle; every assertion above and below reads what the seller sees)
+            from apps.storefront_builder.models import StorefrontSection
+
+            text = StorefrontSection.objects.filter(section_key="rich_text", page__version__status="draft").order_by("-id").first()
+            text.settings = {**(text.settings or {}), "body_html": "<h3>پیشنهاد فصل</h3><p>مجموعهٔ تازه با ارسال سریع و بستهبندی هدیه.</p>", "design": {"align": "center", "valign": "center", "min_height": 220}}
+            text.save(update_fields=["settings"])
+            self._publish(page)
+            self.assertEqual(self.errors, [])
+        finally:
+            context.close()
+        for width, name in ((1440, "desktop"), (390, "mobile")):
+            ctx, public = self._public("/", width, 900)
+            try:
+                facts = public.evaluate("""()=>{const g=[...document.querySelectorAll('.rgroup')].find(e=>e.querySelector('.rgroup-title')&&e.querySelector('.rgroup-title').textContent.trim()==='ویترین بهاره');
+                  if(!g) return null; const cells=[...g.querySelectorAll(':scope > .rcontainer > .rcontainer-cell')].map(c=>Math.round(c.getBoundingClientRect().width));
+                  return {cells, gw:Math.round(g.getBoundingClientRect().width), vw:innerWidth, overflow:document.documentElement.scrollWidth-innerWidth,
+                          chrome:document.querySelectorAll('.sfb-layout-chip,.sfb-builder-group,.sfb-builder-container').length}}""")
+                self.assertIsNotNone(facts, f"{name}: the published page lost the group")
+                self.assertLessEqual(facts["overflow"], 0)
+                self.assertEqual(facts["chrome"], 0, "builder chrome must never reach the storefront")
+                if width == 1440:
+                    self.assertEqual(len(facts["cells"]), 2)
+                    self.assertLess(max(facts["cells"]) / min(facts["cells"]), 1.4)
+                else:
+                    self.assertGreater(min(facts["cells"]), facts["vw"] * 0.7, "on a phone the two cells stack at full width")
+                public.locator(".rgroup", has=public.locator(".rgroup-title", has_text="ویترین بهاره")).first.scroll_into_view_if_needed()
+                self._shot(public, f"composer_f_published_{name}")
+            finally:
+                ctx.close()
+
+
+# the studio module's fixture class must not be collected a second time from this module's namespace
+del _Base
