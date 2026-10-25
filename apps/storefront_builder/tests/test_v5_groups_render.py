@@ -1,0 +1,78 @@
+"""V5 Groups — what the SAME renderer shows for a nested composition: the Draft preview, the published page, Undo / Redo, the per-Group look,
+and the guarantee that an ordinary row keeps its exact markup."""
+
+import re
+
+from apps.storefront_builder.models import StorefrontCell, StorefrontContainer
+
+from .test_v5_groups_service import _GroupBase
+
+
+class GroupRenderTests(_GroupBase):
+    def build_nested(self):
+        row = self.row()
+        self.mutate({"type": "cell.split", "cell_id": self.cells(row)[0].pk, "axis": "horizontal", "count": 2})
+        left = self.cells(row)[0]
+        self.put(left, "rich_text")
+        self.mutate({"type": "cell.split", "cell_id": left.pk, "axis": "vertical", "count": 2})
+        return row, self.nested(left)
+
+    def test_a_nested_group_renders_as_a_group_inside_its_parent_cell_in_preview_and_published(self):
+        row, group = self.build_nested()
+        html = self.home_preview()
+        self.assertIn(f'data-container-id="{group.pk}"', html)
+        self.assertIn('data-axis="vertical"', html)
+        self.assertRegex(html, r'--group-rows:6fr 6fr')
+        # the nested rcontainer sits INSIDE a cell of the parent row
+        self.assertRegex(html, rf'data-cell-id="{self.cells(row)[0].pk}"[^>]*>\s*<div class="rcontainer[^"]*rcontainer--nested')
+        self.publish_and_probe(lambda page: "rcontainer--nested" in page and 'data-axis="vertical"' in page)
+
+    def test_group_presentation_is_rendered_on_a_frame_and_survives_undo_redo(self):
+        row, group = self.build_nested()
+        self.mutate({"type": "container.update_settings", "container_id": group.pk, "patch": {
+            "title": "پیشنهاد ویژه", "description": "فقط این هفته", "style": {"radius": 20, "pad": 24, "text_align": "center"},
+            "background_mode": "gradient", "background_color": "#112233", "background_color2": "#445566",
+        }})
+        html = self.home_preview()
+        self.assertIn('class="rgroup-title">پیشنهاد ویژه</h2>', html)
+        self.assertIn("فقط این هفته", html)
+        self.assertRegex(html, r'data-g="[^"]*radius[^"]*"')
+        self.assertIn("linear-gradient(135deg", html)
+        self.undo_redo_round_trip(lambda page: "پیشنهاد ویژه" in page)
+
+    def test_title_can_be_hidden_without_losing_it(self):
+        row, group = self.build_nested()
+        self.mutate({"type": "container.update_settings", "container_id": group.pk, "patch": {"title": "پنهان", "title_visible": False}})
+        self.assertNotIn("rgroup-title", self.home_preview())
+        group.refresh_from_db()
+        self.assertEqual(group.settings.get("title"), "پنهان")
+
+    def test_per_device_hide_is_dimmed_in_the_builder_but_hidden_when_published(self):
+        row, group = self.build_nested()
+        self.mutate({"type": "container.update_settings", "container_id": group.pk, "patch": {"style": {"hide_mobile": "hidden"}}})
+        self.assertRegex(self.home_preview(), r'class="rgroup sfb-builder-group[^"]*"[^>]*data-hide-m="1"')
+        self.publish_and_probe(lambda page: 'data-hide-m="1"' in page)
+
+    def test_an_ordinary_row_has_no_group_frame_and_no_group_markup(self):
+        row = self.build_container("thirds", [["rich_text"], ["rich_text"], ["rich_text"]])
+        html = self.home_preview()
+        markup = re.sub(r"<style.*?</style>|<script.*?</script>", "", html, flags=re.S)
+        self.assertNotIn('class="rgroup', markup)
+        self.assertNotIn("rcontainer--nested", markup)
+        self.assertNotIn('data-axis="vertical"', markup)
+        self.assertIn(f'data-container-id="{row.pk}"', markup)
+
+    def test_the_container_fragment_of_a_nested_group_is_its_top_level_row(self):
+        row, group = self.build_nested()
+        from django.test import RequestFactory
+
+        from apps.storefront_builder import views
+
+        request = RequestFactory().get("/")
+        request.user = self.staff
+        request.store = self.store
+        request.session = self.client.session
+        fragment = views.render_preview_fragment(request, self.store, self.draft, container_id=group.pk)
+        self.assertIsNotNone(fragment)
+        self.assertEqual((fragment["kind"], fragment["id"]), ("container", row.pk))
+        self.assertIn("rcontainer--nested", fragment["html"])

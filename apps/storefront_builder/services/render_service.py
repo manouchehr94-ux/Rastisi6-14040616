@@ -1318,22 +1318,24 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
         for item in items
         if item.get("section") is not None and item["section"].pk is not None
     }
-    rendered = []
-    containers = page.containers.prefetch_related(
+    from ..models import StorefrontContainer
+
+    # V5 Groups: the Containers nested in the Cells of this page, loaded once and grouped by the Cell that hosts them.
+    nested_by_cell: dict = {}
+    for nested in StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).prefetch_related(
         "cells__section", "cells__blocks",
-    ).order_by("order", "id")
-    for container in containers:
+    ).order_by("order", "id"):
+        nested_by_cell.setdefault(nested.parent_cell_id, []).append(nested)
+    store = getattr(getattr(getattr(page, "version", None), "layout", None), "store", None)
+
+    def compose(container) -> dict:
         cells = []
         has_content = False
         has_placement = False
         for cell in container.cells.all():
-            # U11 — N+1 fix: ``containers`` above was just fetched with
-            # ``prefetch_related("cells__section", "cells__blocks")``, so
-            # every Cell here is already fresh; ``get_cell_blocks`` would
-            # discard that prefetch and issue one live query per Cell (its
-            # own docstring documents why it always does that — a
-            # guarantee this loop doesn't need, see
-            # ``blocks_from_prefetched_cell``'s docstring).
+            # U11 — N+1 fix: the containers were just fetched with ``prefetch_related("cells__section", "cells__blocks")``, so every Cell
+            # here is already fresh; ``get_cell_blocks`` would discard that prefetch and issue one live query per Cell
+            # (see ``blocks_from_prefetched_cell``'s docstring).
             blocks = container_service.blocks_from_prefetched_cell(cell)
             block_items = []
             for block in blocks:
@@ -1342,30 +1344,77 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
                 if block_item is not None:
                     has_content = True
                     block_items.append(block_item)
+            hosted = [compose(child) for child in nested_by_cell.get(cell.pk, [])]
+            hosted = hosted[0] if hosted else None
+            if hosted is not None:
+                has_content = has_content or hosted["has_content"]
+                has_placement = has_placement or hosted["has_placement"]
             cells.append({
                 "cell": cell,
                 "item": block_items[0] if block_items else None,
                 "items": block_items,
-                # Raw placed Sections (including inactive/hidden ones) — the
-                # builder-only "occupied but all Blocks are hidden" chrome
-                # needs this list; ``items`` above only ever contains
-                # *visible* Blocks' render contexts.
+                # Raw placed Sections (including inactive/hidden ones) — the builder-only "occupied but all Blocks are hidden" chrome
+                # needs this list; ``items`` above only ever contains *visible* Blocks' render contexts.
                 "blocks": blocks,
+                # V5 Groups: the nested Group hosted by this Cell (then it has no direct Blocks), else ``None``.
+                "group": hosted,
             })
-        if not has_content and not include_empty:
-            continue
-        rendered.append({
+        settings = container_service.effective_container_settings(container.settings)
+        return {
             "container": container,
-            "settings": container_service.effective_container_settings(container.settings),
+            "settings": settings,
             "cells": cells,
             "has_content": has_content,
-            # Hidden content has no active render item but still physically owns
-            # its Cell.  Builder chrome must distinguish that from a truly empty
-            # Container so direct delete never risks hidden data.
+            # Hidden content has no active render item but still physically owns its Cell. Builder chrome must distinguish that from a
+            # truly empty Container so direct delete never risks hidden data.
             "has_placement": has_placement,
-        })
+            "group": _group_view(container, settings, store),
+        }
+
+    rendered = []
+    containers = page.containers.prefetch_related(
+        "cells__section", "cells__blocks",
+    ).order_by("order", "id")
+    for container in containers:
+        composition = compose(container)
+        if not composition["has_content"] and not include_empty:
+            continue
+        rendered.append(composition)
     return rendered
 
+
+def _group_view(container, settings: dict, store) -> dict:
+    """Presentation of a Group (``Container.settings``): everything the group frame / vertical axis needs, resolved server-side.
+
+    ``framed`` is true only when the Container actually carries Group presentation (a title, a description, a ``style`` or a gradient / picture
+    background) — every other Container keeps its exact pre-Group markup. Preview and the published page share this one result."""
+    from apps.content.services import resolve_background_media_url
+
+    from .. import group_style
+
+    style = settings.get("style") or {}
+    attrs = group_style.render_attributes(style)
+    mode = settings.get("background_mode")
+    media_url = ""
+    if mode == "image" and store is not None:
+        media_url = resolve_background_media_url(store, {"mode": "image", "media_asset_id": settings.get("background_media_asset_id")}) or ""
+    background = group_style.background_css(settings, media_url)
+    title = settings.get("title", "")
+    framed = bool(title or settings.get("description") or style or background)
+    cells = max(1, len(container.cells.all()))
+    vertical = settings.get("axis") == "vertical"
+    return {
+        "framed": framed,
+        "nested": container.parent_cell_id is not None,
+        "vertical": vertical,
+        "title": title,
+        "description": settings.get("description", ""),
+        "show_title": settings.get("title_visible", True) is not False and bool(title),
+        "attrs": attrs,
+        "background_css": background,
+        "rows": " ".join(f"{cell.span}fr" for cell in container.cells.all()) if vertical else "",
+        "cell_count": cells,
+    }
 
 
 def group_items_into_rows(items: list[dict]) -> list[dict]:

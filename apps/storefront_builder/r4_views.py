@@ -37,6 +37,7 @@ from .models import (
     FOOTER_TOGGLE_FIELDS,
     HEADER_RESPONSIVE_AWARE_KEYS,
     HEADER_TOGGLE_FIELDS,
+    StorefrontContainer,
     StorefrontLayoutVersion,
     StorefrontPage,
     StorefrontSection,
@@ -724,10 +725,16 @@ def storefront_r4_editor(request):
     # A pure read, same "prefetch once, never re-query per Cell" shape as
     # ``build_structure_projection`` itself.
     empty_cells = []
-    for container_obj in page.containers.order_by("order", "id").prefetch_related("cells__section", "cells__blocks"):
+    # V5 Groups: nested Groups are walked too, and a Cell that HOSTS a nested Group is occupied, not empty.
+    hosting_cell_ids = set(
+        StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).values_list("parent_cell_id", flat=True)
+    )
+    for container_obj in StorefrontContainer.all_objects.filter(page=page).order_by("order", "id").prefetch_related("cells__section", "cells__blocks"):
         if container_obj.is_locked:
             continue
         for cell_obj in sorted(container_obj.cells.all(), key=lambda c: (c.order, c.id)):
+            if cell_obj.pk in hosting_cell_ids:
+                continue
             if not container_service.blocks_from_prefetched_cell(cell_obj):
                 empty_cells.append({"container_id": container_obj.pk, "cell_id": cell_obj.pk})
 
