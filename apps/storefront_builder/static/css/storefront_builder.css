@@ -4045,6 +4045,14 @@ html[dir="rtl"] .decor-strip-bg[data-grad]{background-image:linear-gradient(to r
 @media (min-width: 681px) and (max-width: 1000px) { .sfb-builder-group[data-hide-t] { opacity: .35; } }
 @media (max-width: 680px) { .sfb-builder-group[data-hide-m] { opacity: .35; } }
 
+/* V5 Groups — product-style shelves adapt to the real width of their Cell (desktop only: below 1000px every Cell stacks full width).
+   data-cw is written only for Cells of a Group; the variable is the one the shelf already reads for its columns. */
+@media (min-width: 1001px) {
+  .rcontainer-cell[data-cw="1"] :is(.pcarousel, .grid).rsec-cols { --cols-desktop: 1; }
+  .rcontainer-cell[data-cw="2"] :is(.pcarousel, .grid).rsec-cols { --cols-desktop: 2; }
+  .rcontainer-cell[data-cw="3"] :is(.pcarousel, .grid).rsec-cols { --cols-desktop: 3; }
+}
+
 /* V5 Composer — hover chips that select a cell / Group for layout (builder only; never rendered on the storefront). Layout-neutral: absolutely
    positioned, invisible until the cell or Group is hovered, hidden in the customer preview mode. */
 .sfb-layout-chip {

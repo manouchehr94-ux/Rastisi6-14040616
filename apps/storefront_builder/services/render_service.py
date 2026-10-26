@@ -1328,8 +1328,10 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
         nested_by_cell.setdefault(nested.parent_cell_id, []).append(nested)
     store = getattr(getattr(getattr(page, "version", None), "layout", None), "store", None)
 
-    def compose(container) -> dict:
+    def compose(container, ratio: float = 1.0) -> dict:
         cells = []
+        vertical = (container.settings or {}).get("axis") == "vertical"
+        grouped = container.parent_cell_id is not None or bool((container.settings or {}).get("group"))
         has_content = False
         has_placement = False
         for cell in container.cells.all():
@@ -1344,7 +1346,9 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
                 if block_item is not None:
                     has_content = True
                     block_items.append(block_item)
-            hosted = [compose(child) for child in nested_by_cell.get(cell.pk, [])]
+            # the share of the page's content width this Cell really gets (a vertical split stacks full-width rows)
+            cell_ratio = ratio if vertical else ratio * (cell.span / 12)
+            hosted = [compose(child, cell_ratio) for child in nested_by_cell.get(cell.pk, [])]
             hosted = hosted[0] if hosted else None
             if hosted is not None:
                 has_content = has_content or hosted["has_content"]
@@ -1358,6 +1362,9 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
                 "blocks": blocks,
                 # V5 Groups: the nested Group hosted by this Cell (then it has no direct Blocks), else ``None``.
                 "group": hosted,
+                # V5 Groups: a shop component placed in a narrow Cell of a Group shows fewer columns (bucket of the real width share;
+                # absent for ordinary rows, whose shelves keep exactly the columns their own settings give)
+                "cw": _width_bucket(cell_ratio) if grouped else "",
             })
         settings = container_service.effective_container_settings(container.settings)
         return {
@@ -1381,6 +1388,17 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
             continue
         rendered.append(composition)
     return rendered
+
+
+def _width_bucket(ratio: float) -> str:
+    """Desktop columns a product-style shelf may use in a Cell that gets ``ratio`` of the content width: ≤¼ → 1, ≤½ → 2, ≤¾ → 3, else unchanged."""
+    if ratio <= 0.26:
+        return "1"
+    if ratio <= 0.51:
+        return "2"
+    if ratio <= 0.76:
+        return "3"
+    return ""
 
 
 def _group_view(container, settings: dict, store) -> dict:

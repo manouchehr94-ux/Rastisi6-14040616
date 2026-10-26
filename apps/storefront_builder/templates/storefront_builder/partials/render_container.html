@@ -27,7 +27,7 @@
   {% for cell_entry in composition.cells %}
   {% with cell=cell_entry.cell items=cell_entry.items blocks=cell_entry.blocks %}
   <div class="rcontainer-cell{% if is_preview and not blocks %} sfb-empty-cell{% endif %}"
-       style="--cell-span:{{ cell.span }}{% if csettings.mobile_order == "reverse" %};--cell-i:{{ forloop.counter }}{% endif %}"
+       style="--cell-span:{{ cell.span }}{% if csettings.mobile_order == "reverse" %};--cell-i:{{ forloop.counter }}{% endif %}"{% if cell_entry.cw %} data-cw="{{ cell_entry.cw }}"{% endif %}
        {% if is_preview %}data-cell-id="{{ cell.pk }}" data-container-id="{{ container.pk }}"{% endif %}>
     {% if is_preview %}<button type="button" class="sfb-layout-chip sfb-layout-chip--cell" data-cell-layout="{{ cell.pk }}" aria-label="انتخاب این خانه برای چیدمان" title="انتخاب خانه">⊞</button>{% endif %}
     {% if cell_entry.group %}

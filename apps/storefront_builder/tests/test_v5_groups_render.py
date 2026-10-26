@@ -99,3 +99,20 @@ class LayoutTreeEndpointTests(_GroupBase):
         self.assertEqual(self.client.get(reverse("dashboard:storefront-builder-r4-layout-tree") + "?page=nope").status_code, 400)
         self.client.logout()
         self.assertNotEqual(self.client.get(reverse("dashboard:storefront-builder-r4-layout-tree") + "?page=home").status_code, 200)
+
+
+class WidthBucketTests(_GroupBase):
+    def test_cells_of_a_group_carry_a_width_bucket_and_ordinary_rows_do_not(self):
+        ordinary = self.build_container("thirds", [["rich_text"], ["rich_text"], ["rich_text"]])
+        row = self.row()
+        self.mutate({"type": "cell.split", "cell_id": self.cells(row)[0].pk, "axis": "horizontal", "count": 3})     # 4 / 12 each -> «۲»
+        first = self.cells(row)[0]
+        self.mutate({"type": "cell.split", "cell_id": first.pk, "axis": "horizontal", "count": 2})                  # 6/12 of 4/12 -> «۱»
+        html = self.home_preview()
+        self.assertEqual(len(re.findall(r'data-cw="2"', html)), 3)       # the three columns (the first one hosts the nested Group)
+        self.assertEqual(len(re.findall(r'data-cw="1"', html)), 2)
+        self.assertEqual(html.count("data-cw="), 5, "only the Group's cells carry a bucket; the three cells of the ordinary row carry none")
+        # the columns come from the shelf's own variable, capped only inside a Group cell and only on desktop
+        css = open("apps/storefront_builder/static/css/storefront_builder.css", encoding="utf-8").read()
+        self.assertIn('.rcontainer-cell[data-cw="2"] :is(.pcarousel, .grid).rsec-cols { --cols-desktop: 2; }', css)
+        self.assertRegex(css, r"@media \(min-width: 1001px\) \{\s*\.rcontainer-cell\[data-cw=\"1\"\]")
