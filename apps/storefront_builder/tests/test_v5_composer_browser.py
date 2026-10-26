@@ -159,12 +159,12 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
     def edit_group(self, page):
         """«ویرایش» on the selected Group's toolbar opens the Group inspector (the panel's settings tab)."""
         page.click('[data-cmp="edit"]')
-        page.wait_for_selector('[data-cmp-panel]:not([hidden]) [data-cmp-text="title"]', timeout=8000)
+        page.wait_for_selector('.rs-workspace:not([hidden]) #r4Inspector [data-cmp-ws] [data-cmp-text="title"]', timeout=10000)
 
     def open_section(self, page, title):
-        summary = page.locator("[data-cmp-panel] details.rs-cmp-sect > summary", has_text=title).first
-        if not summary.evaluate("s => s.parentElement.open"):
-            summary.click()
+        # the group settings dialog is tabbed: «title» is a tab label here
+        page.locator("#r4Inspector [data-cmp-wtab]", has_text=title).first.click()
+        page.wait_for_timeout(200)
 
     def type_into(self, page, selector, text):
         field = page.locator(selector)
@@ -196,14 +196,14 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             self.edit_group(page)
             self.type_into(page, '[data-cmp-text="title"]', "مجموعهٔ پاییزی")
             self.type_into(page, '[data-cmp-text="description"]', "ویژه مشتریان وفادار")
-            page.select_option("[data-cmp-bg-mode]", "gradient")
-            page.wait_for_timeout(900)
             page.locator('[data-cmp-theme="3"]').click()                    # «برند»: gradient + brand text colours in one click
             page.wait_for_timeout(900)
+            self.open_section(page, "رنگ و پس‌زمینه")
+            self.assertEqual(page.locator("[data-cmp-bg-mode]").input_value(), "gradient")
+            self.open_section(page, "متن و فونت")
             page.select_option('[data-cmp-choice="style:text_align"]', "center")
-            self.open_section(page, "فاصله‌ها")
+            self.open_section(page, "فاصله و حاشیه")
             page.locator('[data-cmp-int-num="style:pad"]').fill("28")
-            self.open_section(page, "حاشیه")
             page.locator('[data-cmp-int-num="style:radius"]').fill("26")
             self._until(page, f"""()=>{{const c=document.querySelector('.rcontainer[data-container-id="{parent}"]'); const g=c&&c.closest('.rgroup');
               return g && g.querySelector('.rgroup-title') && g.querySelector('.rgroup-title').textContent.trim()==='مجموعهٔ پاییزی' && getComputedStyle(g).paddingTop==='28px'
@@ -212,15 +212,17 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             self.assertEqual((view["title"], view["desc"], view["align"]), ("مجموعهٔ پاییزی", "ویژه مشتریان وفادار", "center"))
             # the CHILDREN: the first cell becomes its own group with another look; the parent's look is untouched
             self.settle(page)
-            page.click("[data-cmp-panel-close]")                            # the floating panel is closed so it does not cover the canvas
+            page.click("#r4Inspector [data-r4-inspector-close]")            # the big settings dialog is closed with its own button
             self.pick_leaf(page, base)
             self.split(page, "vertical", 2)
             child = self.selected_group_id(page)
             self.assertNotEqual(child, parent)
             self.edit_group(page)
             self.type_into(page, '[data-cmp-text="title"]', "کودک اول")
+            self.open_section(page, "رنگ و پس‌زمینه")
             page.select_option("[data-cmp-bg-mode]", "color")
             page.wait_for_timeout(900)
+            self.open_section(page, "محتوا و تم")
             page.locator('[data-cmp-theme="1"]').click()                    # «تیره»
             self._until(page, f"""()=>{{const c=document.querySelector('.rcontainer[data-container-id="{child}"]'); const g=c&&c.closest('.rgroup');
               return g && g.querySelector('.rgroup-title') && g.querySelector('.rgroup-title').textContent.trim()==='کودک اول'
@@ -503,7 +505,7 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             self.type_into(page, '[data-cmp-text="title"]', "ویترین بهاره")
             page.locator('[data-cmp-theme="2"]').click()
             self._until(page, "()=>[...document.querySelectorAll('.rgroup-title')].some(e=>e.textContent.trim()==='ویترین بهاره')", "the group title")
-            page.click("[data-cmp-panel-close]")
+            page.click("#r4Inspector [data-r4-inspector-close]")
             self.settle(page)
             self.pick_leaf(page, base)
             self.add_component(page, "rich_text")
@@ -529,7 +531,6 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
             self.settle(page)
             # delete with content asks first; cancelling changes nothing, confirming removes it, Undo gives it all back
             page.click('[data-rastisi-action="composer-panel"]')
-            page.click('[data-cmp-tab="layers"]')
             page.locator('[data-cmp-panel] [data-cmp-node^="group:"]').last.click()
             page.wait_for_selector("[data-cmp-toolbar]:not([hidden])")
             page.click('[data-cmp="remove"]')
@@ -584,6 +585,147 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
                     self.assertGreater(min(facts["cells"]), facts["vw"] * 0.7, "on a phone the two cells stack at full width")
                 public.locator(".rgroup", has=public.locator(".rgroup-title", has_text="ویترین بهاره")).first.scroll_into_view_if_needed()
                 self._shot(public, f"composer_f_published_{name}")
+            finally:
+                ctx.close()
+
+
+    # ------------------------------------------------------------------------------------------------------------ scenario G (QA fixes)
+    def visible_toolbars(self, page):
+        return page.evaluate("()=>[...document.querySelectorAll('[data-cmp-toolbar], [data-rs-sel-toolbar]')].filter(e=>!e.hidden && e.getClientRects().length).length")
+
+    def toolbar_name(self, page):
+        return page.locator("[data-cmp-toolbar] [data-cmp-name] b").first.inner_text()
+
+    def test_g_one_toolbar_with_the_element_name_real_section_editing_group_dialog_and_narrow_shelves(self):
+        context, page = self._studio()
+        self.trace(page)
+        try:
+            base = self.add_simple_row(page)
+            self.pick_leaf(page, base)
+            self.split(page, "horizontal", 3)
+            # the row's own name is in the toolbar (no title yet -> «ردیف N»)
+            self.assertRegex(self.toolbar_name(page), r"^ردیف ")
+            self.assertEqual(self.visible_toolbars(page), 1)
+            # a real product shelf in the first (narrow, one third) cell
+            self.pick_leaf(page, base)
+            self.assertRegex(self.toolbar_name(page), r"^ستون ۱ از ۳")
+            self.add_component(page, "product_section")
+            self.settle(page)
+            # 1) a click on a product card selects the SECTION (no navigation); the toolbar shows its registry name
+            frame = self._frame(page)
+            url_before = frame.url
+            shelf = frame.locator('.rcontainer-cell[data-cw] .rsec[data-section-key="product_section"] .pcard a[href]').first
+            shelf.scroll_into_view_if_needed()
+            shelf.click(force=True)                      # the real mouse lands on whatever is on top of the card (its quick-add button)
+            page.wait_for_selector("[data-cmp-toolbar]:not([hidden]) [data-cmp-name]", timeout=8000)
+            registry_label = page.evaluate("()=>{const t=RastiSiR4.composer.tree(); let out=null; const w=(g)=>g.cells.forEach(c=>{c.blocks.forEach(b=>{if(b.key==='product_section') out=b.label}); if(c.group) w(c.group)}); t.forEach(w); return out}")
+            self.assertEqual(self.toolbar_name(page), registry_label)
+            self.assertEqual(self._frame(page).url, url_before, "a click in design mode must not navigate the seller away")
+            self.assertEqual(self.visible_toolbars(page), 1, "exactly one toolbar for a selected Section")
+            self._shot(page, "composer_g_section_toolbar")
+            # 2) «ویرایش» opens the real Section inspector of that shelf
+            page.click('[data-cmp="edit"]')
+            page.wait_for_selector("#r4Inspector [data-r4-tab]", timeout=15000)
+            self.assertEqual(page.locator("#r4Inspector [data-cmp-ws]").count(), 0)
+            page.keyboard.press("Escape")
+            page.wait_for_function("()=>!RastiSiR4.inspectorOpen", timeout=10000)
+            self.settle(page)
+            # 3) «چیدمان» hands over to the parent cell: still exactly one toolbar, now named after the cell, content untouched
+            frame = self._frame(page)
+            frame.locator('.rcontainer-cell[data-cw] .rsec[data-section-key="product_section"] .pcard a[href]').first.click(force=True)
+            page.wait_for_selector("[data-cmp-toolbar] [data-cmp=\"layout\"]")
+            page.click('[data-cmp="layout"]')
+            page.wait_for_selector("[data-cmp-menu]:not([hidden])")
+            self.assertRegex(self.toolbar_name(page), r"^ستون ۱ از ۳")
+            self.assertEqual(self.visible_toolbars(page), 1)
+            self.assertIsNone(page.evaluate("()=>RastiSiR4.studio.selectedId()"))
+            page.keyboard.press("Escape")
+            # 4) two Sections in one cell: «ویرایش» asks which one instead of guessing
+            page.locator('[data-cmp="close"]').click()
+            frame = self._frame(page)
+            frame.locator('.sfb-cell-add-more').last.scroll_into_view_if_needed()
+            frame.locator('.sfb-cell-add-more').last.click(force=True)
+            page.wait_for_selector('[data-rastisi-action="cell-add"]', timeout=10000)
+            page.locator('[data-rastisi-action="cell-add"][data-rs-library-key="rich_text"]').first.click()
+            page.wait_for_function("()=>RastiSiR4.pendingWrites===0", timeout=20000)
+            self.settle(page)
+            self.pick_leaf(page, base)
+            page.click('[data-cmp="edit"]')
+            page.wait_for_selector("[data-cmp-menu] [data-cmp-pick]", timeout=6000)
+            self.assertGreaterEqual(page.locator("[data-cmp-menu] [data-cmp-pick]").count(), 2)
+            self.assertEqual(page.locator("#r4Inspector [data-r4-tab]").count(), 0, "nothing may be opened before the seller chooses")
+            page.keyboard.press("Escape")
+            page.locator('[data-cmp="close"]').click()
+            # 5) the Group settings are a big workspace dialog (same shell as a Section's)
+            self.settle(page)
+            page.click('[data-rastisi-action="composer-panel"]')
+            page.locator('[data-cmp-panel] [data-cmp-node^="group:"]').first.click()
+            page.click('[data-cmp="edit"]')
+            page.wait_for_selector('.rs-workspace:not([hidden]) #r4Inspector [data-cmp-ws]', timeout=10000)
+            self.assertEqual(page.evaluate("()=>document.querySelector('[data-rs-workspace-dialog]').getAttribute('aria-label')"), "تنظیمات گروه")
+            size = page.evaluate("()=>{const r=document.querySelector('[data-rs-workspace-dialog]').getBoundingClientRect(); return [r.width, r.height, innerWidth, innerHeight]}")
+            self.assertGreater(size[0], size[2] * 0.6)
+            self.assertGreater(size[1], size[3] * 0.6)
+            self.type_into(page, '[data-cmp-text="title"]', "پیشنهادهای ویژه")
+            self._shot(page, "composer_g_group_dialog")
+            self.open_section(page, "متن و فونت")
+            page.select_option('[data-cmp-choice="style:font"]', index=1)
+            self.open_section(page, "رنگ و پس‌زمینه")
+            page.select_option("[data-cmp-bg-mode]", "gradient")
+            page.wait_for_timeout(900)
+            self._until(page, "()=>[...document.querySelectorAll('.rgroup-title')].some(e=>e.textContent.trim()==='پیشنهادهای ویژه')", "the group title from the dialog")
+            page.keyboard.press("Escape")
+            page.wait_for_function("()=>!RastiSiR4.inspectorOpen", timeout=10000)
+            self.settle(page)
+            # the toolbar name follows the new title without any refresh
+            page.locator('[data-cmp-panel] [data-cmp-node^="group:"]').first.click()
+            page.wait_for_selector("[data-cmp-toolbar] [data-cmp-name]")
+            self.assertEqual(self.toolbar_name(page), "ردیف: پیشنهادهای ویژه")
+            self.assertEqual(self.visible_toolbars(page), 1)
+            self.assertIn("پیشنهادهای ویژه", page.locator("[data-cmp-toolbar] [data-cmp-name]").first.get_attribute("title"))
+            # Undo / Redo / Refresh keep what the dialog saved
+            page.reload(wait_until="networkidle")
+            page.wait_for_selector("#r4PreviewFrame")
+            page.wait_for_timeout(1500)
+            self._frame(page)
+            self.settle(page)
+            self._until(page, "()=>[...document.querySelectorAll('.rgroup-title')].some(e=>e.textContent.trim()==='پیشنهادهای ویژه')", "the title after a refresh")
+            # 6) the shelf in the narrow cell shows fewer columns and stays readable; an ordinary full-width row is unchanged
+            cards = self._frame(page).evaluate("""()=>{const row=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer, .sfb-preview-sections > .rgroup')].pop();
+              const cell=row.querySelector('.rcontainer-cell[data-cw] .rsec[data-section-key="product_section"]'); const host=cell&&cell.closest('.rcontainer-cell');
+              const list=host&&host.querySelector('.pcarousel, .grid'); const card=host&&host.querySelector('.pcard');
+              const other=[...document.querySelectorAll('.sfb-preview-sections > .rcontainer > .rcontainer-cell:not([data-cw]) .pcarousel')][0];
+              return host?{cw:host.dataset.cw, cols:getComputedStyle(list).getPropertyValue('--cols-desktop').trim(), card:Math.round(card.getBoundingClientRect().width), cell:Math.round(host.getBoundingClientRect().width),
+                           ordinary:other?getComputedStyle(other).getPropertyValue('--cols-desktop').trim():null}:null}""")
+            self.assertIsNotNone(cards, "the shelf must sit in a Group cell")
+            self.assertEqual(cards["cw"], "2")
+            self.assertEqual(cards["cols"], "2")
+            self.assertGreater(cards["card"], cards["cell"] * 0.38, cards)
+            if cards["ordinary"] is not None:
+                self.assertNotIn(cards["ordinary"], ("1",), "an ordinary row keeps the columns its own settings give")
+            self._shot(page, "composer_g_toolbar_dialog_narrow")
+            page.wait_for_timeout(800)
+            self._publish(page)
+            self.assertEqual(self.errors, [])
+        finally:
+            context.close()
+        for width in (1440, 390):
+            ctx, public = self._public("/", width, 900)
+            try:
+                facts = public.evaluate("""()=>{const g=[...document.querySelectorAll('.rgroup')].find(e=>e.querySelector('.rgroup-title')&&e.querySelector('.rgroup-title').textContent.trim()==='پیشنهادهای ویژه');
+                  if(!g) return null; const a=g.querySelectorAll('.pcard a[href]'); const card=g.querySelector('.pcard');
+                  return {links:a.length, href:a.length?a[0].getAttribute('href'):'', card:card?Math.round(card.getBoundingClientRect().width):0, overflow:document.documentElement.scrollWidth-innerWidth,
+                          chrome:document.querySelectorAll('.sfb-layout-chip,[data-cmp-name],.rs-cmp-toolbar').length}}""")
+                self.assertIsNotNone(facts)
+                self.assertGreater(facts["links"], 0, "product links stay real links on the published storefront")
+                self.assertIn("/products/", facts["href"])
+                self.assertGreater(facts["card"], 120)
+                self.assertLessEqual(facts["overflow"], 0)
+                self.assertEqual(facts["chrome"], 0)
+                if width == 1440:
+                    self._shot(public, "composer_g_published_desktop")
+                else:
+                    self._shot(public, "composer_g_published_mobile")
             finally:
                 ctx.close()
 

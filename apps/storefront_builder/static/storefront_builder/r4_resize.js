@@ -261,6 +261,17 @@
 
   function renderToolbar(m, id, b, area, sec) {
     var isAnn = id === ANN;
+    // V5 Composer: ONE toolbar for every selection (Section, cell, Group) — r4_composer.js draws it; this layer keeps its own only for the
+    // announcement strip (not part of the page tree). The «اندازه خودکار» chip stays here, at the Section's own corner.
+    if (!isAnn && R4.composer && R4.composer.ownsToolbar && R4.composer.ownsToolbar()) {
+      toolbar.hidden = true;
+      var manualNow = manualState(sec);
+      if ((manualNow.height || manualNow.width) && (S.rowState(id) || {}).locked !== true) {
+        autoChip.hidden = false;
+        place(autoChip, b.l + 10, Math.min(area.b - 38, Math.max(area.t + 4, b.t + b.h - 40)));
+      } else { autoChip.hidden = true; }
+      return;
+    }
     var state = S.rowState(id) || {};
     toolbar.hidden = false;
     // The announcement strip is fixed above the header: no move, no duplicate (and nothing removable — it is switched on/off, data kept).

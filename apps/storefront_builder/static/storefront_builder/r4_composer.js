@@ -84,12 +84,6 @@
   }
 
   function exists(sel) { return sel.kind === 'cell' ? Boolean(cellIdx[sel.id]) : Boolean(groupIdx[sel.id]); }
-  function selGroup() {
-    if (!st.sel) return null;
-    if (st.sel.kind === 'group') return groupIdx[st.sel.id] ? groupIdx[st.sel.id].group : null;
-    var c = cellIdx[st.sel.id];
-    return c && c.cell.group ? c.cell.group : null;
-  }
   function contentCount(node, isCell) {
     var n = 0;
     function g(group) { group.cells.forEach(function (c) { n += c.blocks.length; if (c.group) g(c.group); }); }
@@ -141,13 +135,11 @@
   // ---- selection ---------------------------------------------------------------------------------------------------------------
   function select(sel, opts) {
     opts = opts || {};
-    if (window.__cmpTrace) console.log('SELECT ' + JSON.stringify(sel) + ' ' + String(new Error().stack).split('\n').slice(2, 5).join(' | '));
     selToken += 1;
     if (sel && !exists(sel)) sel = null;
     st.sel = sel;
-    st.menu = Boolean(sel && opts.menu);
+    st.menu = sel && opts.menu ? true : false;
     if (sel && S.selectedId()) { selfChange = true; S.clearSelection(); selfChange = false; }
-    if (sel && opts.settings) { st.panel = true; st.tab = 'settings'; }
     if (sel && opts.reveal !== false) revealTarget();
     renderAll();
   }
@@ -182,6 +174,7 @@
     var g = groupIdx[containerId] && groupIdx[containerId].group;
     if (g) {
       Object.keys(slot.flat).forEach(function (k) { g.settings[k] = slot.flat[k]; });
+      if ('title' in slot.flat) { g.title = slot.flat.title || ''; toolbar.removeAttribute('data-sig'); schedule(); renderLayersOnly(); }
       g.settings.style = Object.assign({}, g.settings.style || {});
       Object.keys(slot.style).forEach(function (k) {
         if (slot.style[k] === null || slot.style[k] === '') delete g.settings.style[k]; else g.settings.style[k] = slot.style[k];
@@ -195,21 +188,72 @@
   }
 
   // ---- toolbar actions -------------------------------------------------------------------------------------------------------------
-  function parentOfGroup(groupId) { return groupIdx[groupId]; }
+
+  // ---- the selected thing: a layout target (cell / Group, st.sel) OR a Section (the Studio's own selection) — never both ------------------
+  function sectionSel() { var id = S.selectedId(); return id && /^\d+$/.test(id) ? Number(id) : null; }
+  function findBlock(id) {
+    var found = null;
+    Object.keys(cellIdx).forEach(function (cid) {
+      var c = cellIdx[cid];
+      c.cell.blocks.forEach(function (b) { if (b.id === id) found = { block: b, cell: c.cell, group: c.group, index: c.index, count: c.count }; });
+    });
+    return found;
+  }
 
   // the structural operand of an action on the current selection
   function operand() {
-    if (!st.sel) return null;
-    if (st.sel.kind === 'cell') {
-      var c = cellIdx[st.sel.id];
-      if (!c) return null;
-      var single = c.count === 1;
-      var topRow = groupIdx[c.group.id].parentCellId == null;
-      return { kind: 'cell', cell: c.cell, group: c.group, index: c.index, count: c.count, single: single, topRow: topRow };
+    if (st.sel) {
+      if (st.sel.kind === 'cell') {
+        var c = cellIdx[st.sel.id];
+        if (!c) return null;
+        var single = c.count === 1;
+        var topRow = groupIdx[c.group.id].parentCellId == null;
+        return { kind: 'cell', cell: c.cell, group: c.group, index: c.index, count: c.count, single: single, topRow: topRow };
+      }
+      var g = groupIdx[st.sel.id];
+      if (!g) return null;
+      return { kind: 'group', group: g.group, hostCellId: g.parentCellId, topRow: g.parentCellId == null, position: g.position };
     }
-    var g = groupIdx[st.sel.id];
-    if (!g) return null;
-    return { kind: 'group', group: g.group, hostCellId: g.parentCellId, topRow: g.parentCellId == null, position: g.position };
+    var sid = sectionSel();
+    if (sid) {
+      var f = findBlock(sid);
+      return { kind: 'section', id: sid, block: f ? f.block : null, cell: f ? f.cell : null, group: f ? f.group : null, topRow: f ? groupIdx[f.group.id].parentCellId == null : true };
+    }
+    return null;
+  }
+
+  // ---- names: always read from the real tree (Group title, Section Registry label) — never a second, separate label -------------------
+  function pageName() {
+    var sel = document.getElementById('r4PageSwitcherSelect');
+    return sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent.trim() : 'صفحه';
+  }
+  function groupName(g) {
+    var gi = groupIdx[g.id];
+    if (gi && gi.parentCellId == null) return g.title ? 'ردیف: ' + g.title : 'ردیف ' + fa((gi.position || 0) + 1);
+    return g.title ? 'گروه: ' + g.title : 'گروه بدون‌نام (' + fa(g.cells.length) + (axisOf(g) === 'vertical' ? ' ردیف' : ' ستون') + ')';
+  }
+  function cellName(entry) {
+    if (!entry) return 'سلول';
+    return entry.count > 1 ? (axisOf(entry.group) === 'vertical' ? 'ردیف ' : 'ستون ') + fa(entry.index + 1) + ' از ' + fa(entry.count) : 'سلول';
+  }
+  function nameOf(op) {
+    if (op.kind === 'section') return op.block ? op.block.label : 'بخش';
+    if (op.kind === 'cell') return cellName(cellIdx[op.cell.id]);
+    return groupName(op.group);
+  }
+  function pathOf(op) {
+    var tail = [];
+    var gid = op.group ? op.group.id : null;
+    while (gid != null) {
+      var gi = groupIdx[gid];
+      if (!gi) break;
+      tail.unshift(groupName(gi.group));
+      if (gi.parentCellId != null) { var hc = cellIdx[gi.parentCellId]; tail.unshift(cellName(hc)); gid = hc ? hc.group.id : null; } else gid = null;
+    }
+    var parts = [pageName()].concat(tail);
+    if (op.kind === 'cell') parts.push(cellName(cellIdx[op.cell.id]));
+    if (op.kind === 'section') { if (op.cell) parts.push(cellName(cellIdx[op.cell.id])); parts.push(nameOf(op)); }
+    return parts.join(' ← ');
   }
 
   function axisOf(group) { return group && group.axis === 'vertical' ? 'vertical' : 'horizontal'; }
@@ -326,10 +370,25 @@
   function doEdit() {
     var op = operand();
     if (!op) return;
-    if (op.kind === 'group') { st.panel = true; st.tab = 'settings'; renderAll(); return; }
-    if (op.cell.group) { select({ kind: 'group', id: op.cell.group.id }, { settings: true }); return; }
-    if (op.cell.blocks.length) { var b = op.cell.blocks[0]; st.sel = null; renderAll(); S.edit(b.id); return; }
+    if (op.kind === 'section') { S.edit(op.id); return; }
+    if (op.kind === 'group') { openWorkspace(op.group.id); return; }
+    if (op.cell.group) { select({ kind: 'group', id: op.cell.group.id }); openWorkspace(op.cell.group.id); return; }
+    if (op.cell.blocks.length > 1) { st.menu = 'pick'; toolbar.removeAttribute('data-sig'); schedule(); return; }      // never guess which Section is meant
+    if (op.cell.blocks.length) { var b = op.cell.blocks[0]; st.sel = null; renderAll(); S.select(b.id); S.edit(b.id); return; }
     S.addToCell(op.cell.id);
+  }
+
+  // actions of the toolbar while a SECTION is selected: the Studio's own commands (same ones the structure list uses)
+  function sectionAction(action, op) {
+    var id = String(op.id);
+    if (action === 'edit') S.edit(op.id);
+    else if (action === 'layout') { if (op.cell) select({ kind: 'cell', id: op.cell.id }, { menu: true }); }
+    else if (action === 'duplicate') S.command(id, 'duplicate');
+    else if (action === 'up') S.command(id, 'up');
+    else if (action === 'down') S.command(id, 'down');
+    else if (action === 'remove') S.askRemove(op.id);
+    else if (action === 'parent') { if (op.cell) select({ kind: 'cell', id: op.cell.id }); }
+    else if (action === 'close') { S.clearSelection(); renderAll(); }
   }
 
   function addRow() {
@@ -354,36 +413,51 @@
     add: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 9v6M9 12h6"/></svg>',
   };
 
-  function labelFor(op) {
-    if (op.kind === 'cell') {
-      var where = axisOf(op.group) === 'vertical' ? 'ردیف' : 'خانه';
-      var base = op.count > 1 ? where + ' ' + fa(op.index + 1) + ' از ' + fa(op.count) + ' · ' + pct(op.cell.span) : 'خانه';
-      return base + (op.cell.group ? ' · دارای گروه' : '');
-    }
-    var title = op.group.title ? '«' + op.group.title + '»' : '';
-    if (op.topRow) return 'ردیف ' + fa(op.position + 1) + (title ? ' ' + title : '') + ' · ' + fa(op.group.cells.length) + ' خانه';
-    return 'گروه ' + title + ' · ' + fa(op.group.cells.length) + ' ' + (axisOf(op.group) === 'vertical' ? 'ردیف' : 'ستون');
+  function nameChip(op) {
+    var name = nameOf(op);
+    var short = name.length > 34 ? name.slice(0, 33) + '…' : name;
+    return '<span class="rs-cmp-name" data-cmp-name title="' + esc(pathOf(op)) + '"><i aria-hidden="true"></i><b>' + esc(short) + '</b></span>';
+  }
+
+  function btnHtml(action, ic, label, extra) {
+    return '<button type="button" class="rs-cmp-btn' + ((extra && extra.cls) || '') + '" data-cmp="' + action + '" aria-label="' + label + '" title="' + label + '"' + ((extra && extra.disabled) ? ' disabled' : '') + '>' + icon(ic) + ((extra && extra.text) ? '<span>' + extra.text + '</span>' : '') + '</button>';
+  }
+  function layoutBtn() {
+    return '<button type="button" class="rs-cmp-btn rs-cmp-layout" data-cmp="layout" aria-haspopup="menu" aria-expanded="' + (st.menu === true ? 'true' : 'false') + '" title="چیدمان: تقسیم افقی/عمودی"><span>چیدمان</span>' + icon('chevron') + '</button>';
   }
 
   function toolbarHtml(op) {
+    if (op.kind === 'section') {
+      var state = S.rowState(String(op.id)) || {};
+      var locked = state.locked === true;
+      return nameChip(op) + btnHtml('edit', 'edit', 'ویرایش', { cls: ' primary', text: 'ویرایش' }) +
+        (op.cell ? layoutBtn() : '') +
+        btnHtml('duplicate', 'copy', 'کپی بخش', { disabled: locked || state.canDuplicate === false }) +
+        btnHtml('up', 'up', 'انتقال به بالا', { disabled: locked || state.canUp === false }) + btnHtml('down', 'down', 'انتقال به پایین', { disabled: locked || state.canDown === false }) +
+        btnHtml('remove', 'trash', 'حذف بخش', { disabled: state.canRemove === false }) +
+        btnHtml('parent', 'layers', 'انتخاب سلول والد', { disabled: !op.cell }) + btnHtml('close', 'close', 'بستن');
+    }
     var info = moveInfo(op);
     var mv = info.vertical ? { up: 'انتقال به بالا', down: 'انتقال به پایین' } : { up: 'انتقال به راست', down: 'انتقال به چپ' };
     var canParent = !(op.kind === 'group' && op.topRow);
-    function b(action, ic, label, extra) {
-      return '<button type="button" class="rs-cmp-btn' + ((extra && extra.cls) || '') + '" data-cmp="' + action + '" aria-label="' + label + '" title="' + label + '"' + ((extra && extra.disabled) ? ' disabled' : '') + '>' + icon(ic) + ((extra && extra.text) ? '<span>' + extra.text + '</span>' : '') + '</button>';
-    }
-    return b('edit', 'edit', 'ویرایش', { cls: ' primary', text: 'ویرایش' }) +
-      '<button type="button" class="rs-cmp-btn rs-cmp-layout" data-cmp="layout" aria-haspopup="menu" aria-expanded="' + (st.menu ? 'true' : 'false') + '" title="چیدمان: تقسیم افقی/عمودی"><span>چیدمان</span>' + icon('chevron') + '</button>' +
-      b('duplicate', 'copy', 'کپی همراه با محتوا') +
-      b('up', 'up', mv.up, { disabled: info.idx <= 0 }) + b('down', 'down', mv.down, { disabled: info.idx >= info.count - 1 }) +
-      b('remove', 'trash', 'حذف') +
-      b('parent', 'layers', 'انتخاب والد', { disabled: !canParent }) +
-      b('close', 'close', 'بستن');
+    return nameChip(op) + btnHtml('edit', 'edit', 'ویرایش', { cls: ' primary', text: 'ویرایش' }) + layoutBtn() +
+      btnHtml('duplicate', 'copy', 'کپی همراه با محتوا') +
+      btnHtml('up', 'up', mv.up, { disabled: info.idx <= 0 }) + btnHtml('down', 'down', mv.down, { disabled: info.idx >= info.count - 1 }) +
+      btnHtml('remove', 'trash', 'حذف') +
+      btnHtml('parent', 'layers', 'انتخاب والد', { disabled: !canParent }) +
+      btnHtml('close', 'close', 'بستن');
+  }
+
+  function pickHtml(op) {
+    var html = '<p class="rs-cmp-menu-title">کدام بخش ویرایش شود؟</p><div class="rs-cmp-picks">';
+    op.cell.blocks.forEach(function (b) {
+      html += '<button type="button" role="menuitem" class="rs-cmp-pick" data-cmp-pick="' + b.id + '">' + icon('card') + '<span>' + esc(b.label) + '</span>' + (b.active ? '' : '<small>پنهان</small>') + '</button>';
+    });
+    return html + '</div>';
   }
 
   function menuHtml(op) {
     var group = op.group;
-    var depthOk = true;
     var html = '<p class="rs-cmp-menu-title">' + (op.kind === 'cell' ? 'تقسیم این خانه' : 'چیدمان این ' + (op.topRow ? 'ردیف' : 'گروه')) + '</p><div class="rs-cmp-splits">';
     SPLITS.forEach(function (s) {
       html += '<button type="button" role="menuitem" class="rs-cmp-split" data-cmp-split="' + s[0] + ':' + s[1] + '" title="' + s[3] + '">' + GLYPH[s[2]] + '<span>' + s[3] + '</span></button>';
@@ -404,17 +478,17 @@
 
   function clampTop(v, area, h) { return Math.max(area.t + 2, Math.min(v, area.b - h - 2)); }
 
+  function hideOverlays() {
+    outline.hidden = true; toolbar.hidden = true; menu.hidden = true;
+    pctPool.forEach(function (n) { n.hidden = true; });
+  }
+
   function renderOverlays() {
     var m = mapping();
     var op = operand();
-    var blocked = S.blocked();
-    if (!m || !op || blocked) {
-      outline.hidden = true; toolbar.hidden = true; menu.hidden = true;
-      pctPool.forEach(function (n) { n.hidden = true; });
-      return;
-    }
-    var el = targetEl(m, st.sel);
-    if (!el) { outline.hidden = true; toolbar.hidden = true; menu.hidden = true; pctPool.forEach(function (n) { n.hidden = true; }); return; }
+    if (!m || !op || S.blocked()) { hideOverlays(); return; }
+    var el = op.kind === 'section' ? m.doc.querySelector('.rsec[data-section-id="' + op.id + '"]') : targetEl(m, st.sel);
+    if (!el) { hideOverlays(); return; }
     var b = box(m, el);
     var area = { l: m.fr.left - m.ov.left, t: m.fr.top - m.ov.top, r: m.fr.right - m.ov.left, b: m.fr.bottom - m.ov.top };
     // the floating panel is an obstacle: the toolbar and the menu stay on the free side of it
@@ -423,28 +497,34 @@
       var pl = pb.left - m.ov.left, pr = pb.right - m.ov.left;
       if (pl + pb.width / 2 > (area.l + area.r) / 2) area.r = Math.min(area.r, pl - 8); else area.l = Math.max(area.l, pr + 8);
     }
-    outline.hidden = false;
-    place(outline, b.l, b.t, b.w, b.h);
-    outline.setAttribute('data-kind', st.sel.kind);
-    tagEl.textContent = labelFor(op);
-    // toolbar: rebuilt only when the operand changes (keeps hover / focus stable while scrolling)
-    var sig = st.sel.kind + ':' + st.sel.id + ':' + st.menu + ':' + (op.kind === 'cell' ? op.index + '/' + op.count : op.group.cells.length) + ':' + st.tree.length;
+    if (op.kind === 'section') {
+      outline.hidden = true;            // the preview already rings the selected Section
+    } else {
+      outline.hidden = false;
+      place(outline, b.l, b.t, b.w, b.h);
+      outline.setAttribute('data-kind', st.sel.kind);
+      tagEl.textContent = nameOf(op);
+    }
+    // toolbar: rebuilt only when the operand (or its name / state) changes — keeps hover and focus stable while scrolling
+    var state = op.kind === 'section' ? S.rowState(String(op.id)) || {} : {};
+    var sig = [op.kind, op.kind === 'section' ? op.id : st.sel.id, nameOf(op), st.menu, op.kind === 'cell' ? op.index + '/' + op.count : (op.group ? op.group.cells.length : 0), st.tree.length,
+               state.canUp, state.canDown, state.canDuplicate, state.canRemove, state.locked].join('|');
     if (toolbar.getAttribute('data-sig') !== sig) { toolbar.innerHTML = toolbarHtml(op); toolbar.setAttribute('data-sig', sig); }
     toolbar.hidden = false;
-    var tw = toolbar.offsetWidth || 340, th = toolbar.offsetHeight || 40;
+    var tw = toolbar.offsetWidth || 420, th = toolbar.offsetHeight || 40;
     var left = Math.max(area.l + 6, Math.min(b.l + b.w - tw, area.r - tw - 6));
     var above = b.t - th - 8;
     var top = above >= area.t + 2 ? above : clampTop(b.t + 8, area, th);
     place(toolbar, left, top);
-    // layout menu under the toolbar
-    if (st.menu) {
-      menu.innerHTML = menuHtml(op);
+    // layout / pick menu under the toolbar
+    if (st.menu && op.kind !== 'section') {
+      menu.innerHTML = st.menu === 'pick' ? pickHtml(op) : menuHtml(op);
       menu.hidden = false;
       var mw = menu.offsetWidth || 270, mh = menu.offsetHeight || 190;
       var mtop = top + th + 6 + mh > area.b ? Math.max(area.t + 2, top - mh - 6) : top + th + 6;
       place(menu, Math.max(area.l + 6, Math.min(left + tw - mw, area.r - mw - 6)), mtop);
     } else { menu.hidden = true; }
-    renderPct(m, op);
+    if (op.kind === 'section') pctPool.forEach(function (n) { n.hidden = true; }); else renderPct(m, op);
   }
 
   // every cell of the selected row / Group shows its share (the numbers the handles change)
@@ -474,11 +554,11 @@
     });
   }
 
-  // ---- panel (layers + group inspector) -----------------------------------------------------------------------------------------------
+  // ---- floating panel: the layers tree (Header -> page -> Footer). Group SETTINGS open in the big workspace dialog below. -------------------
   var panel = document.createElement('aside');
   panel.className = 'rs-cmp-panel';
   panel.setAttribute('data-cmp-panel', '');
-  panel.setAttribute('aria-label', 'لایه‌ها و گروه‌ها');
+  panel.setAttribute('aria-label', 'لایه‌ها');
   panel.hidden = true;
   canvas.appendChild(panel);
   function applySide() { panel.setAttribute('data-side', st.side); }
@@ -496,24 +576,41 @@
     out += nodeBtn(0, false, 'footer', 0, icon('footer') + '<b>فوتر سایت</b><small>همه صفحه‌ها</small>');
     return out + '</div><button type="button" class="rs-cmp-wide" data-cmp-add-row>' + icon('plus') + 'ردیف ساده</button>';
   }
-  function rowHtml(group, depth, position) {
+  function rowHtml(group, depth) {
     var selected = st.sel && st.sel.kind === 'group' && st.sel.id === group.id;
-    var name = (depth === 1 ? 'ردیف ' + fa(position + 1) : 'گروه') + (group.title ? ' «' + group.title + '»' : '');
     var axis = axisOf(group) === 'vertical' ? 'عمودی' : 'افقی';
-    var html = nodeBtn(depth, selected, 'group', group.id, icon('grid') + '<b>' + esc(name) + '</b><small>' + fa(group.cells.length) + ' خانه · ' + axis + '</small>');
+    var html = nodeBtn(depth, selected, 'group', group.id, icon('grid') + '<b>' + esc(groupName(group)) + '</b><small>' + fa(group.cells.length) + ' خانه · ' + axis + '</small>');
     group.cells.forEach(function (cell, i) {
       var cs = st.sel && st.sel.kind === 'cell' && st.sel.id === cell.id;
-      var label = group.cells.length > 1 ? (axisOf(group) === 'vertical' ? 'ردیف ' : 'خانه ') + fa(i + 1) + ' · ' + pct(cell.span) : 'خانه';
-      html += nodeBtn(depth + 1, cs, 'cell', cell.id, icon('columns') + '<b>' + label + '</b><small>' + (cell.group ? 'گروه' : (cell.blocks.length ? fa(cell.blocks.length) + ' بخش' : 'خالی')) + '</small>');
+      html += nodeBtn(depth + 1, cs, 'cell', cell.id, icon('columns') + '<b>' + esc(cellName(cellIdx[cell.id])) + (group.cells.length > 1 ? ' · ' + pct(cell.span) : '') + '</b><small>' + (cell.group ? 'گروه' : (cell.blocks.length ? fa(cell.blocks.length) + ' بخش' : 'خالی')) + '</small>');
       cell.blocks.forEach(function (blk) {
-        html += nodeBtn(depth + 2, false, 'block', blk.id, icon('card') + '<b>' + esc(blk.label) + '</b>' + (blk.active ? '' : '<small>پنهان</small>'));
+        html += nodeBtn(depth + 2, sectionSel() === blk.id, 'block', blk.id, icon('card') + '<b>' + esc(blk.label) + '</b>' + (blk.active ? '' : '<small>پنهان</small>'));
       });
-      if (cell.group) html += rowHtml(cell.group, depth + 2, 0);
+      if (cell.group) html += rowHtml(cell.group, depth + 2);
     });
     return html;
   }
 
-  // -- the Group inspector ---
+  function renderPanel() {
+    if (!st.panel) { panel.hidden = true; return; }
+    panel.hidden = false;
+    panel.innerHTML = '<header class="rs-cmp-ph"><b class="rs-cmp-ph-title">لایه‌ها</b>' +
+      '<span class="rs-cmp-ph-actions"><button type="button" class="rs-cmp-x" data-cmp-panel-side aria-label="جابه‌جایی پنل به طرف دیگر صفحه" title="جابه‌جایی پنل به طرف دیگر">⇄</button>' +
+      '<button type="button" class="rs-cmp-x" data-cmp-panel-close aria-label="بستن پنل">' + icon('close') + '</button></span></header><div class="rs-cmp-pb">' + layersHtml() + '</div>';
+  }
+  function renderLayersOnly() { if (st.panel) { var pb = panel.querySelector('.rs-cmp-pb'); if (pb) pb.innerHTML = layersHtml(); } }
+
+  function renderAll() { renderPanel(); schedule(); railState(); if (S.resizeLayer && S.resizeLayer.render) window.setTimeout(S.resizeLayer.render, 30); }
+  function railState() {
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rastisi-action="composer-panel"]'), function (b) { b.setAttribute('aria-pressed', st.panel ? 'true' : 'false'); b.classList.toggle('on', st.panel); });
+  }
+
+  // ---- the Group settings WORKSPACE: the standard large R4 settings dialog (same shell as a Section's), with a Group body -----------------
+  // r4_studio.js owns the dialog (mode, Escape, focus trap, backdrop, close); this file only fills #r4Inspector and announces it the way the
+  // announcement strip does. Every control writes through container.update_settings (patchGroup) — the one mutation path.
+  var inspectorEl = document.getElementById('r4Inspector');
+  var ws = { open: false, id: null, tab: 'content' };
+
   var BG_MODES = [['transparent', 'بدون پس‌زمینه'], ['color', 'رنگ ساده'], ['gradient', 'گرادیان'], ['image', 'تصویر'], ['pattern', 'الگو']];
   var MOBILE_MODES = [['stack', 'زیر هم'], ['same', 'مثل دسکتاپ'], ['slider', 'اسلایدر افقی']];
   var VALIGN = [['start', 'بالا'], ['center', 'وسط'], ['end', 'پایین']];
@@ -524,6 +621,7 @@
     ['ملایم', { text_color: 'token:text', title_color: 'token:primary' }, { background_mode: 'color', background_color: '#EEF6F2' }],
     ['برند', { text_color: 'token:primary', title_color: 'token:primary' }, { background_mode: 'gradient', background_color: '#FFFFFF', background_color2: '#DDF4EC' }],
   ];
+  var WS_TABS = [['content', 'محتوا و تم'], ['text', 'متن و فونت'], ['look', 'رنگ و پس‌زمینه'], ['box', 'فاصله و حاشیه'], ['device', 'دستگاه‌ها و موبایل']];
 
   function selectOpts(list, value) {
     return list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(value) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('');
@@ -546,46 +644,23 @@
   function choiceControl(scope, key, label, choices, value) {
     return '<div class="rs-cmp-field"><label>' + esc(label) + '</label><select data-cmp-choice="' + scope + ':' + key + '">' + selectOpts(choices.map(function (c) { return [c.value, c.label]; }), value || '') + '</select></div>';
   }
-  function section(title, body, open) { return '<details class="rs-cmp-sect"' + (open ? ' open' : '') + '><summary>' + esc(title) + '</summary><div>' + body + '</div></details>'; }
-
-  function settingsHtml() {
-    var g = selGroup();
-    if (!g) {
-      return '<p class="rs-cmp-empty">یک گروه یا ردیف را از لایه‌ها یا روی صفحه انتخاب کنید تا نوشته‌ها، رنگ‌ها، پس‌زمینه، فاصله‌ها و حالت موبایل آن را تنظیم کنید.</p>';
-    }
-    var s = g.settings || {};
-    var style = s.style || {};
-    var out = '<div class="rs-cmp-gh"><b>' + (g.depth ? 'گروه' : 'ردیف') + (g.title ? ' «' + esc(g.title) + '»' : '') + '</b><small>' + fa(g.cells.length) + ' خانه · ' + (axisOf(g) === 'vertical' ? 'عمودی' : 'افقی') + '</small></div>';
-    out += section('محتوا',
-      '<div class="rs-cmp-field"><label for="rsCmpTitle">عنوان گروه</label><input id="rsCmpTitle" type="text" maxlength="120" value="' + esc(s.title || '') + '" data-cmp-text="title" placeholder="مثلاً پیشنهاد ویژه"></div>' +
-      '<div class="rs-cmp-field"><label for="rsCmpDesc">توضیح</label><textarea id="rsCmpDesc" maxlength="300" rows="2" data-cmp-text="description" placeholder="یک خط توضیح کوتاه">' + esc(s.description || '') + '</textarea></div>' +
-      '<label class="rs-cmp-check"><input type="checkbox" data-cmp-titlevis ' + (s.title_visible === false ? '' : 'checked') + '> نمایش عنوان روی صفحه</label>', true);
-    var themes = '<div class="rs-cmp-themes">' + THEMES.map(function (t, i) { return '<button type="button" data-cmp-theme="' + i + '">' + esc(t[0]) + '</button>'; }).join('') + '</div>';
-    out += section('تم گروه', themes + '<p class="rs-cmp-note">رنگ پس‌زمینه و نوشته‌های همین گروه را یکجا می‌گذارد؛ هر مورد را می‌توان جداگانه تغییر داد.</p>', true);
-    var inspector = (DATA.group_inspector || []);
-    inspector.forEach(function (grp) {
-      var body = '';
-      grp.properties.forEach(function (p) {
-        var val = style[p.key];
-        if (p.kind === 'color') body += colorControl('style', p.key, p.label, val || '', true);
-        else if (p.kind === 'int') body += intControl('style', p.key, p.label, val, p.min, p.max);
-        else body += choiceControl('style', p.key, p.label, p.choices, val || '');
-      });
-      out += section(grp.label, body, grp.key === 'text');
-      if (grp.key === 'text') out += section('پس‌زمینه', bgHtml(s), true);
-    });
-    out += section('فاصله و چینش', intControl('flat', 'gap', 'فاصلهٔ بین خانه‌ها (px)', s.gap, 0, 64) +
-      '<div class="rs-cmp-field"><label>تراز عمودی خانه‌ها</label><select data-cmp-choice="flat:vertical_align">' + selectOpts(VALIGN, s.vertical_align) + '</select></div>' +
-      '<div class="rs-cmp-field"><label>ارتفاع خانه‌ها</label><select data-cmp-choice="flat:height_mode">' + selectOpts(HEIGHT_MODES, s.height_mode) + '</select></div>', false);
-    out += section('موبایل', '<div class="rs-cmp-field"><label>نمایش در موبایل</label><select data-cmp-choice="flat:mobile_mode">' + selectOpts(MOBILE_MODES, s.mobile_mode) + '</select></div>' +
-      '<label class="rs-cmp-check"><input type="checkbox" data-cmp-reverse ' + (s.mobile_order === 'reverse' ? 'checked' : '') + '> ترتیب معکوس در موبایل</label>' +
-      '<p class="rs-cmp-note">در بخش «نمایش در دستگاه‌ها» می‌توان این گروه را برای رایانه، تبلت یا موبایل پنهان کرد.</p>', false);
-    return out;
+  function wsCard(title, note, body) {
+    return '<section class="r4-ws-card" data-r4-ws-card="cmp" data-r4-ws-manage><header class="r4-ws-card-head"><h3>' + esc(title) + '</h3>' + (note ? '<p>' + esc(note) + '</p>' : '') + '</header><div class="r4-ws-card-body">' + body + '</div></section>';
+  }
+  function propsOf(key, style) {
+    var grp = (DATA.group_inspector || []).filter(function (x) { return x.key === key; })[0];
+    if (!grp) return '';
+    return wsCard(grp.label, '', grp.properties.map(function (p) {
+      var val = style[p.key];
+      if (p.kind === 'color') return colorControl('style', p.key, p.label, val || '', true);
+      if (p.kind === 'int') return intControl('style', p.key, p.label, val, p.min, p.max);
+      return choiceControl('style', p.key, p.label, p.choices, val || '');
+    }).join(''));
   }
   function bgHtml(s) {
     var mode = s.background_mode || 'transparent';
-    var html = '<div class="rs-cmp-bg"><div class="rs-cmp-field"><label>پس‌زمینهٔ گروه</label><select data-cmp-bg-mode>' + selectOpts(BG_MODES, mode) + '</select></div>';
-    if (mode === 'color' || mode === 'gradient' || mode === 'pattern') html += colorControl('flat', 'background_color', mode === 'gradient' ? 'رنگ اول' : 'رنگ پس‌زمینه', s.background_color || '', false).replace(/data-cmp-color="flat:background_color"/g, 'data-cmp-color="flat:background_color"');
+    var html = '<div class="rs-cmp-bg"><div class="rs-cmp-field"><label>نوع پس‌زمینه</label><select data-cmp-bg-mode>' + selectOpts(BG_MODES, mode) + '</select></div>';
+    if (mode === 'color' || mode === 'gradient' || mode === 'pattern') html += colorControl('flat', 'background_color', mode === 'gradient' ? 'رنگ اول' : 'رنگ پس‌زمینه', s.background_color || '', false);
     if (mode === 'gradient') html += colorControl('flat', 'background_color2', 'رنگ دوم', s.background_color2 || '', false);
     if (mode === 'pattern') html += '<div class="rs-cmp-field"><label>الگو</label><select data-cmp-pattern>' + selectOpts(st.patterns.map(function (p) { return [p.key, p.label]; }), s.background_pattern || (st.patterns[0] && st.patterns[0].key) || '') + '</select></div>';
     if (mode === 'image') {
@@ -599,32 +674,105 @@
     return html + '</div>';
   }
 
-  function renderPanel() {
-    if (!st.panel) { panel.hidden = true; return; }
-    panel.hidden = false;
+  function workspaceHtml(g) {
+    var s = g.settings || {};
+    var style = s.style || {};
+    var crumb = pathOf({ kind: 'group', group: g });
+    var panels = {
+      content: wsCard('محتوای گروه', 'عنوان و توضیح روی صفحه بالای گروه نمایش داده می‌شود.',
+        '<div class="rs-cmp-field"><label for="rsCmpTitle">عنوان گروه</label><input id="rsCmpTitle" type="text" maxlength="120" value="' + esc(s.title || '') + '" data-cmp-text="title" placeholder="مثلاً پیشنهاد ویژه"></div>' +
+        '<div class="rs-cmp-field"><label for="rsCmpDesc">توضیح</label><textarea id="rsCmpDesc" maxlength="300" rows="2" data-cmp-text="description" placeholder="یک خط توضیح کوتاه">' + esc(s.description || '') + '</textarea></div>' +
+        '<label class="rs-cmp-check"><input type="checkbox" data-cmp-titlevis ' + (s.title_visible === false ? '' : 'checked') + '> نمایش عنوان روی صفحه</label>') +
+        wsCard('تم گروه', 'رنگ پس‌زمینه و نوشته‌های همین گروه را یکجا می‌گذارد؛ هر مورد را می‌توان جداگانه تغییر داد.',
+          '<div class="rs-cmp-themes">' + THEMES.map(function (t, i) { return '<button type="button" data-cmp-theme="' + i + '">' + esc(t[0]) + '</button>'; }).join('') + '</div>'),
+      text: propsOf('text', style),
+      look: propsOf('colors', style) + wsCard('پس‌زمینهٔ گروه', 'رنگ ساده، گرادیان، تصویر از کتابخانهٔ رسانه یا الگو.', bgHtml(s)),
+      box: propsOf('spacing', style) + propsOf('border', style) + propsOf('size', style) +
+        wsCard('فاصله و چینش خانه‌ها', '', intControl('flat', 'gap', 'فاصلهٔ بین خانه‌ها (px)', s.gap, 0, 64) +
+          '<div class="rs-cmp-field"><label>تراز عمودی خانه‌ها</label><select data-cmp-choice="flat:vertical_align">' + selectOpts(VALIGN, s.vertical_align) + '</select></div>' +
+          '<div class="rs-cmp-field"><label>ارتفاع خانه‌ها</label><select data-cmp-choice="flat:height_mode">' + selectOpts(HEIGHT_MODES, s.height_mode) + '</select></div>'),
+      device: propsOf('visibility', style) + wsCard('رفتار در موبایل', 'چیدمان در تبلت از دسکتاپ پیروی می‌کند؛ فقط پنهان‌سازی برای تبلت جداست.',
+        '<div class="rs-cmp-field"><label>نمایش در موبایل</label><select data-cmp-choice="flat:mobile_mode">' + selectOpts(MOBILE_MODES, s.mobile_mode) + '</select></div>' +
+        '<label class="rs-cmp-check"><input type="checkbox" data-cmp-reverse ' + (s.mobile_order === 'reverse' ? 'checked' : '') + '> ترتیب معکوس در موبایل</label>'),
+    };
+    var tabs = WS_TABS.map(function (t) {
+      return '<button type="button" class="r4-inspector-tab r4-ws-tab" role="tab" data-cmp-wtab="' + t[0] + '" aria-selected="' + (ws.tab === t[0]) + '" tabindex="' + (ws.tab === t[0] ? 0 : -1) + '">' + t[1] + '</button>';
+    }).join('');
+    var body = '<div class="r4-inspector-body r4-ws-body">' + WS_TABS.map(function (t) {
+      return '<section class="r4-inspector-panel-fields r4-ws-panel" role="tabpanel" data-cmp-wpanel="' + t[0] + '"' + (ws.tab === t[0] ? '' : ' hidden') +
+        '><div class="r4-ws-cols r4-ws-cols--single"><div class="r4-ws-col r4-ws-col--main">' + panels[t[0]] + '</div></div></section>';
+    }).join('') + '</div>';
+    return '<div class="r4-inspector-panel r4-ws" data-cmp-ws data-cmp-ws-id="' + g.id + '">' +
+      '<header class="r4-ws-header"><div class="r4-ws-identity"><span class="r4-ws-glyph" aria-hidden="true">' + icon('grid') + '</span><div class="r4-ws-titles">' +
+      '<div class="r4-ws-crumb"><span>' + esc(crumb) + '</span></div>' +
+      '<div class="r4-ws-titlerow"><h2 class="r4-inspector-title r4-ws-title" data-cmp-ws-title>' + esc(groupName(g)) + '</h2><span class="r4-ws-scope">' + fa(g.cells.length) + ' ' + (axisOf(g) === 'vertical' ? 'ردیف' : 'ستون') + ' · ' + (axisOf(g) === 'vertical' ? 'عمودی' : 'افقی') + '</span></div></div></div>' +
+      '<div class="r4-ws-save" data-r4-ws-save role="status" aria-live="polite">' + icon('check') + '<span data-r4-ws-save-text>پیش‌نویس ذخیره شد</span></div>' +
+      '<button type="button" class="r4-ws-close" data-r4-inspector-close aria-label="بستن تنظیمات">' + icon('close') + '<span>بستن</span></button></header>' +
+      '<div class="r4-inspector-tabs r4-ws-tabs" role="tablist" aria-label="دسته‌بندی تنظیمات گروه">' + tabs + '</div>' +
+      '<div class="r4-ws-main">' + body + '</div></div>';
+  }
+
+  function wsGroup() { return ws.open && groupIdx[ws.id] ? groupIdx[ws.id].group : null; }
+
+  function renderWorkspace(force) {
+    if (!ws.open || !inspectorEl) return;
+    var g = wsGroup();
+    if (!g) { if (R4.closeInspector) R4.closeInspector(); return; }
     var active = document.activeElement;
-    if (active && panel.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName) && active.type !== 'checkbox' && active.type !== 'color') return;
-    var body = st.tab === 'layers' ? layersHtml() : settingsHtml();
-    panel.innerHTML = '<header class="rs-cmp-ph"><div class="rs-cmp-tabs" role="tablist">' +
-      '<button type="button" role="tab" class="' + (st.tab === 'layers' ? 'on' : '') + '" data-cmp-tab="layers" aria-selected="' + (st.tab === 'layers') + '">لایه‌ها</button>' +
-      '<button type="button" role="tab" class="' + (st.tab === 'settings' ? 'on' : '') + '" data-cmp-tab="settings" aria-selected="' + (st.tab === 'settings') + '">تنظیمات گروه</button></div>' +
-      '<span class="rs-cmp-ph-actions"><button type="button" class="rs-cmp-x" data-cmp-panel-side aria-label="جابه‌جایی پنل به طرف دیگر صفحه" title="جابه‌جایی پنل به طرف دیگر">⇄</button>' +
-      '<button type="button" class="rs-cmp-x" data-cmp-panel-close aria-label="بستن پنل">' + icon('close') + '</button></span></header><div class="rs-cmp-pb">' + body + '</div>';
-  }
-  function renderLayersOnly() { if (st.panel && st.tab === 'layers') { var pb = panel.querySelector('.rs-cmp-pb'); if (pb) pb.innerHTML = layersHtml(); } }
-
-  function renderAll() { renderPanel(); schedule(); railState(); if (S.resizeLayer && S.resizeLayer.render) window.setTimeout(S.resizeLayer.render, 30); }
-  function railState() {
-    Array.prototype.forEach.call(root.querySelectorAll('[data-rastisi-action="composer-panel"]'), function (b) { b.setAttribute('aria-pressed', st.panel ? 'true' : 'false'); b.classList.toggle('on', st.panel); });
+    if (!force && active && inspectorEl.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName) && !/^(checkbox|color|range)$/.test(active.type)) return;
+    var main = inspectorEl.querySelector('.r4-ws-main');
+    var top = main ? main.scrollTop : 0;
+    inspectorEl.innerHTML = workspaceHtml(g);
+    var again = inspectorEl.querySelector('.r4-ws-main');
+    if (again) again.scrollTop = top;
   }
 
-  // ---- panel + toolbar events ---------------------------------------------------------------------------------------------------------
+  function openWorkspace(groupId) {
+    if (!inspectorEl || !groupIdx[groupId]) return;
+    if (R4.isGlobalDesignOpen && R4.isGlobalDesignOpen()) R4.closeGlobalDesign();
+    if (R4.inspectorOpen && !ws.open && R4.closeInspector) R4.closeInspector();       // a Section workspace never stays open under this one
+    ws.id = groupId;
+    ws.open = true;
+    ws.tab = 'content';
+    st.menu = false;
+    renderWorkspace(true);
+    inspectorEl.hidden = false;
+    root.dataset.r4InspectorOpen = 'true';
+    R4.inspectorOpen = true;
+    var dialog = document.querySelector('[data-rs-workspace-dialog]');
+    if (dialog) dialog.setAttribute('aria-label', 'تنظیمات گروه');
+    R4.emit('r4:inspector-opened', { sectionId: null, group: true });
+    window.setTimeout(function () { var f = inspectorEl.querySelector('[data-cmp-text="title"]'); if (f) f.focus({ preventScroll: true }); }, 60);
+  }
+
+  root.addEventListener('r4:inspector-closed', function () {
+    if (!ws.open) return;
+    ws.open = false;
+    ws.id = null;
+    var dialog = document.querySelector('[data-rs-workspace-dialog]');
+    if (dialog) dialog.setAttribute('aria-label', 'تنظیمات بخش');
+    renderAll();
+  });
+  root.addEventListener('r4:inspector-opened', function (evt) {
+    if (ws.open && !(evt.detail && evt.detail.group)) {       // a Section (or the announcement) workspace replaced this one
+      ws.open = false;
+      ws.id = null;
+      var dialog = document.querySelector('[data-rs-workspace-dialog]');
+      if (dialog) dialog.setAttribute('aria-label', 'تنظیمات بخش');
+    }
+  });
+
+  // ---- events ---------------------------------------------------------------------------------------------------------------------------------
   layer.addEventListener('click', function (evt) {
+    var pick = evt.target.closest ? evt.target.closest('[data-cmp-pick]') : null;
+    if (pick) { var bid = Number(pick.getAttribute('data-cmp-pick')); st.sel = null; st.menu = false; renderAll(); S.select(bid); S.edit(bid); return; }
     var btn = evt.target.closest ? evt.target.closest('[data-cmp]') : null;
     if (btn && !btn.disabled) {
       var action = btn.getAttribute('data-cmp');
+      var op = operand();
+      if (op && op.kind === 'section') { sectionAction(action, op); return; }
       if (action === 'edit') doEdit();
-      else if (action === 'layout') { st.menu = !st.menu; schedule(); toolbar.removeAttribute('data-sig'); }
+      else if (action === 'layout') { st.menu = st.menu === true ? false : true; toolbar.removeAttribute('data-sig'); schedule(); }
       else if (action === 'duplicate') doDuplicate();
       else if (action === 'up') doMove('up');
       else if (action === 'down') doMove('down');
@@ -641,8 +789,6 @@
   panel.addEventListener('click', function (evt) {
     var t = evt.target.closest ? evt.target : null;
     if (!t) return;
-    var tab = t.closest('[data-cmp-tab]');
-    if (tab) { st.tab = tab.getAttribute('data-cmp-tab'); renderPanel(); return; }
     if (t.closest('[data-cmp-panel-close]')) { st.panel = false; renderAll(); return; }
     if (t.closest('[data-cmp-panel-side]')) { st.side = st.side === 'start' ? 'end' : 'start'; try { window.localStorage.setItem('rsCmpSide', st.side); } catch (e) { /* best effort */ } applySide(); renderAll(); return; }
     if (t.closest('[data-cmp-add-row]')) { addRow(); return; }
@@ -652,74 +798,95 @@
       var kind = p[0], id = Number(p[1]);
       if (kind === 'header') S.openGlobal('header');
       else if (kind === 'footer') S.openGlobal('footer');
-      else if (kind === 'block') { st.sel = null; renderAll(); S.select(id); }
+      else if (kind === 'block') { st.sel = null; st.menu = false; S.select(id); renderAll(); }
       else select({ kind: kind, id: id });
-      return;
     }
-    var color = t.closest('[data-cmp-color]');
-    if (color) { var cp = color.getAttribute('data-cmp-color').split(':'); setColor(cp[0], cp[1], color.getAttribute('data-value')); return; }
-    var theme = t.closest('[data-cmp-theme]');
-    if (theme) { applyTheme(Number(theme.getAttribute('data-cmp-theme'))); return; }
-    var media = t.closest('[data-cmp-media]');
-    if (media) { var g = selGroup(); if (g) patchGroup(g.id, { background_mode: 'image', background_media_asset_id: Number(media.getAttribute('data-cmp-media')) }).then(function () { renderPanel(); }); }
   });
 
+  function patchOne(flat, style) {
+    var g = wsGroup();
+    if (!g) return Promise.resolve();
+    return patchGroup(g.id, flat, style);
+  }
   function setColor(scope, key, value) {
-    var g = selGroup();
-    if (!g) return;
-    var p = scope === 'style' ? patchGroup(g.id, {}, (function () { var o = {}; o[key] = value || null; return o; })()) : (function () { var o = {}; o[key] = value; return patchGroup(g.id, o); })();
-    p.then(function () { renderPanel(); });
+    var o = {};
+    o[key] = scope === 'style' ? (value || null) : value;
+    return (scope === 'style' ? patchOne({}, o) : patchOne(o)).then(function () { renderWorkspace(true); });
   }
   function applyTheme(i) {
-    var g = selGroup(), t = THEMES[i];
-    if (!g || !t) return;
-    patchGroup(g.id, t[2], t[1]).then(function () { renderPanel(); });
+    var t = THEMES[i];
+    if (!t) return;
+    patchOne(t[2], t[1]).then(function () { renderWorkspace(true); });
   }
 
-  panel.addEventListener('input', function (evt) {
-    var t = evt.target;
-    var g = selGroup();
-    if (!g || !t.getAttribute) return;
-    var intKey = t.getAttribute('data-cmp-int') || t.getAttribute('data-cmp-int-num');
-    if (intKey) {
-      var parts = intKey.split(':');
-      var raw = t.value;
-      var twin = panel.querySelector('[data-cmp-int' + (t.hasAttribute('data-cmp-int') ? '-num' : '') + '="' + intKey + '"]');
-      if (twin) twin.value = raw;
-      var val = raw === '' ? null : Number(raw);
-      if (val !== null && isNaN(val)) return;
-      if (parts[0] === 'style') { var so = {}; so[parts[1]] = val; patchGroup(g.id, {}, so); } else { var fo = {}; fo[parts[1]] = val == null ? 0 : val; patchGroup(g.id, fo); }
-      return;
-    }
-    var textKey = t.getAttribute('data-cmp-text');
-    if (textKey) { var to = {}; to[textKey] = t.value; patchGroup(g.id, to).then(renderLayersOnly); return; }
-    var colorInput = t.getAttribute('data-cmp-color-input');
-    if (colorInput) { var cp = colorInput.split(':'); setColor(cp[0], cp[1], t.value.toUpperCase()); }
-  });
-  panel.addEventListener('change', function (evt) {
-    var t = evt.target;
-    var g = selGroup();
-    if (!g || !t.getAttribute) return;
-    var choice = t.getAttribute('data-cmp-choice');
-    if (choice) {
-      var parts = choice.split(':');
-      var o = {}; o[parts[1]] = t.value === '' ? null : t.value;
-      if (parts[0] === 'style') patchGroup(g.id, {}, o); else patchGroup(g.id, o);
-      return;
-    }
-    if (t.hasAttribute('data-cmp-titlevis')) { patchGroup(g.id, { title_visible: t.checked }); return; }
-    if (t.hasAttribute('data-cmp-reverse')) { patchGroup(g.id, { mobile_order: t.checked ? 'reverse' : 'normal' }); return; }
-    if (t.hasAttribute('data-cmp-bg-mode')) {
-      var mode = t.value, flat = { background_mode: mode };
-      var s = g.settings || {};
-      if (mode === 'color' && !s.background_color) flat.background_color = '#F3F4F6';
-      if (mode === 'gradient') { if (!s.background_color) flat.background_color = '#FFFFFF'; if (!s.background_color2) flat.background_color2 = '#DDF4EC'; }
-      if (mode === 'pattern') { if (!s.background_color) flat.background_color = '#F3F4F6'; flat.background_pattern = (st.patterns[0] && st.patterns[0].key) || 'commerce-doodle'; }
-      patchGroup(g.id, flat).then(function () { renderPanel(); });
-      return;
-    }
-    if (t.hasAttribute('data-cmp-pattern')) { patchGroup(g.id, { background_pattern: t.value }); }
-  });
+  if (inspectorEl) {
+    inspectorEl.addEventListener('click', function (evt) {
+      var t = evt.target.closest ? evt.target : null;
+      if (!t || !ws.open || !t.closest('[data-cmp-ws]')) return;
+      var tab = t.closest('[data-cmp-wtab]');
+      if (tab) {
+        ws.tab = tab.getAttribute('data-cmp-wtab');
+        Array.prototype.forEach.call(inspectorEl.querySelectorAll('[data-cmp-wtab]'), function (b) { var on = b.getAttribute('data-cmp-wtab') === ws.tab; b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
+        Array.prototype.forEach.call(inspectorEl.querySelectorAll('[data-cmp-wpanel]'), function (pn) { pn.hidden = pn.getAttribute('data-cmp-wpanel') !== ws.tab; });
+        return;
+      }
+      var color = t.closest('[data-cmp-color]');
+      if (color) { var cp = color.getAttribute('data-cmp-color').split(':'); setColor(cp[0], cp[1], color.getAttribute('data-value')); return; }
+      var theme = t.closest('[data-cmp-theme]');
+      if (theme) { applyTheme(Number(theme.getAttribute('data-cmp-theme'))); return; }
+      var media = t.closest('[data-cmp-media]');
+      if (media) patchOne({ background_mode: 'image', background_media_asset_id: Number(media.getAttribute('data-cmp-media')) }).then(function () { renderWorkspace(true); });
+    });
+
+    inspectorEl.addEventListener('input', function (evt) {
+      var t = evt.target;
+      if (!ws.open || !t.getAttribute || !t.closest('[data-cmp-ws]')) return;
+      var intKey = t.getAttribute('data-cmp-int') || t.getAttribute('data-cmp-int-num');
+      if (intKey) {
+        var parts = intKey.split(':');
+        var raw = t.value;
+        var twin = inspectorEl.querySelector('[data-cmp-int' + (t.hasAttribute('data-cmp-int') ? '-num' : '') + '="' + intKey + '"]');
+        if (twin) twin.value = raw;
+        var val = raw === '' ? null : Number(raw);
+        if (val !== null && isNaN(val)) return;
+        if (parts[0] === 'style') { var so = {}; so[parts[1]] = val; patchOne({}, so); } else { var fo = {}; fo[parts[1]] = val == null ? 0 : val; patchOne(fo); }
+        return;
+      }
+      var textKey = t.getAttribute('data-cmp-text');
+      if (textKey) {
+        var to = {}; to[textKey] = t.value;
+        patchOne(to).then(function () { renderLayersOnly(); var h = inspectorEl.querySelector('[data-cmp-ws-title]'); var g = wsGroup(); if (h && g) h.textContent = groupName(g); });
+        return;
+      }
+      var colorInput = t.getAttribute('data-cmp-color-input');
+      if (colorInput) { var cp = colorInput.split(':'); setColor(cp[0], cp[1], t.value.toUpperCase()); }
+    });
+
+    inspectorEl.addEventListener('change', function (evt) {
+      var t = evt.target;
+      var g = wsGroup();
+      if (!g || !t.getAttribute || !t.closest('[data-cmp-ws]')) return;
+      var choice = t.getAttribute('data-cmp-choice');
+      if (choice) {
+        var parts = choice.split(':');
+        var o = {}; o[parts[1]] = t.value === '' ? null : t.value;
+        if (parts[0] === 'style') patchOne({}, o); else patchOne(o);
+        return;
+      }
+      if (t.hasAttribute('data-cmp-titlevis')) { patchOne({ title_visible: t.checked }); return; }
+      if (t.hasAttribute('data-cmp-reverse')) { patchOne({ mobile_order: t.checked ? 'reverse' : 'normal' }); return; }
+      if (t.hasAttribute('data-cmp-bg-mode')) {
+        var mode = t.value, flat = { background_mode: mode };
+        var s = g.settings || {};
+        if (mode === 'color' && !s.background_color) flat.background_color = '#F3F4F6';
+        if (mode === 'gradient') { if (!s.background_color) flat.background_color = '#FFFFFF'; if (!s.background_color2) flat.background_color2 = '#DDF4EC'; }
+        if (mode === 'pattern') { if (!s.background_color) flat.background_color = '#F3F4F6'; flat.background_pattern = (st.patterns[0] && st.patterns[0].key) || 'commerce-doodle'; }
+        patchOne(flat).then(function () { renderWorkspace(true); });
+        return;
+      }
+      if (t.hasAttribute('data-cmp-pattern')) patchOne({ background_pattern: t.value });
+    });
+  }
 
   // ---- canvas integration (the preview iframe) -------------------------------------------------------------------------------------------
   function bindFrame(f) {
@@ -727,18 +894,29 @@
     try { win = f && f.contentWindow; if (!win || !win.document) return; } catch (e) { return; }
     if (win.__rsCmpBound) return;
     win.__rsCmpBound = true;
-    if (window.__cmpTrace) console.log('BIND ' + (f && f.id) + ' ' + win.location.search);
     win.addEventListener('click', function (evt) {
       if (win.document.documentElement.getAttribute('data-sfb-builder-mode') === 'preview') return;
       var t = evt.target && evt.target.closest ? evt.target : null;
       if (!t) return;
       var chip = t.closest('[data-cell-layout], [data-group-layout]');
-      if (window.__cmpTrace) console.log('CLICK ' + t.tagName + ' ' + t.className + ' chip=' + !!chip);
-      if (chip) {
+        if (chip) {
         evt.preventDefault(); evt.stopPropagation();
         if (chip.hasAttribute('data-cell-layout')) select({ kind: 'cell', id: Number(chip.getAttribute('data-cell-layout')) }, { menu: false });
         else select({ kind: 'group', id: Number(chip.getAttribute('data-group-layout')) }, { menu: false });
         return;
+      }
+      // a click on a link inside a Section (a product card, a banner …) selects that Section instead of navigating the seller away; real
+      // buttons / controls keep working, and the customer preview and the published storefront never see this listener
+      if (R4.previewInteractive !== false) {
+        var anchor = t.closest('a[href], .pcard');            // a product card's own quick actions (add to cart, wishlist …) select the shelf in design mode too
+        var owner = anchor && anchor.closest('.rsec[data-section-id]');
+        if (owner && /^\d+$/.test(owner.getAttribute('data-section-id'))) {
+          evt.preventDefault(); evt.stopPropagation();
+          st.sel = null; st.menu = false;
+          S.select(Number(owner.getAttribute('data-section-id')));
+          renderAll();
+          return;
+        }
       }
       // a click on a Group's frame / heading (not on a component) selects the Group
       var frameEl = t.closest('.rgroup[data-group-id]');
@@ -756,7 +934,7 @@
       evt.preventDefault(); evt.stopPropagation();
       inlineEdit(field, Number(frameEl.getAttribute('data-group-id')), field.classList.contains('rgroup-title') ? 'title' : 'description');
     }, true);
-    win.addEventListener('keydown', function (evt) { if (evt.key === 'Escape' && st.sel && !evt.defaultPrevented) { st.sel = null; st.menu = false; renderAll(); } });
+    win.addEventListener('keydown', function (evt) { if (evt.key === 'Escape' && !evt.defaultPrevented) clearAny(); });
     win.addEventListener('scroll', schedule, { passive: true });
     win.addEventListener('resize', schedule);
     if (win.ResizeObserver) { try { new win.ResizeObserver(schedule).observe(win.document.documentElement); } catch (e) { /* best effort */ } }
@@ -778,7 +956,7 @@
       var value = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (!commit || value === original.trim()) { el.textContent = original; return; }
       var patch = {}; patch[key] = value;
-      patchGroup(groupId, patch).then(function () { renderPanel(); });
+      patchGroup(groupId, patch).then(function () { renderWorkspace(); });
     }
     el.addEventListener('blur', function () { finish(true); }, { once: true });
     el.addEventListener('keydown', function (e) {
@@ -804,19 +982,25 @@
   // ---- rail buttons + state sources ---------------------------------------------------------------------------------------------------------
   root.addEventListener('r4:section-selected', function () {
     if (selfChange) return;
-    if (S.selectedId() && st.sel) { st.sel = null; st.menu = false; renderAll(); }
+    if (S.selectedId() && st.sel) { st.sel = null; st.menu = false; }
+    renderAll();
   });
-  root.addEventListener('r4:structure-refreshed', function () { loadTree().then(function () { renderAll(); }); });
-  root.addEventListener('r4:history', function () { window.setTimeout(function () { loadTree().then(renderAll); }, 200); });
+  root.addEventListener('r4:structure-refreshed', function () { loadTree().then(function () { renderAll(); renderWorkspace(); }); });
+  root.addEventListener('r4:history', function () { window.setTimeout(function () { loadTree().then(function () { renderAll(); renderWorkspace(true); }); }, 200); });
   ['r4:device', 'r4:inspector-opened', 'r4:inspector-closed'].forEach(function (name) { root.addEventListener(name, function () { window.setTimeout(schedule, 40); }); });
   window.addEventListener('resize', schedule);
   canvas.addEventListener('scroll', schedule, true);
-  window.setInterval(function () { if (!document.hidden && st.sel) schedule(); }, 800);
+  window.setInterval(function () { if (!document.hidden && (st.sel || sectionSel())) schedule(); }, 800);
+  function clearAny() {
+    if (st.menu) { st.menu = false; toolbar.removeAttribute('data-sig'); schedule(); return; }
+    if (st.sel) { st.sel = null; renderAll(); return; }
+    if (sectionSel()) { S.clearSelection(); renderAll(); }
+  }
   document.addEventListener('keydown', function (evt) {
-    if (evt.key !== 'Escape' || !st.sel) return;
+    if (evt.key !== 'Escape' || S.blocked()) return;
     var tg = evt.target;
     if (tg && /^(input|textarea|select)$/i.test(tg.tagName || '')) return;
-    if (st.menu) { st.menu = false; schedule(); toolbar.removeAttribute('data-sig'); } else { st.sel = null; renderAll(); }
+    clearAny();
   });
 
   // exposed for the section toolbar («چیدمان» next to «ویرایش») and for tests
@@ -831,6 +1015,7 @@
     containersOfSelection: function () {
       var op = operand();
       if (!op) return [];
+      if (!op.group) return [];
       var out = [op.group.id];
       if (op.kind === 'group' && op.hostCellId != null) { var h = cellIdx[op.hostCellId]; if (h) out.push(h.group.id); }
       if (op.kind === 'cell') { var gi = groupIdx[op.group.id]; if (gi && gi.parentGroupId != null) out.push(gi.parentGroupId); }
@@ -839,6 +1024,9 @@
     tree: function () { return st.tree; },
     reload: function () { return loadTree().then(function (d) { renderAll(); return d; }); },
     selection: function () { return st.sel; },
+    // true while the toolbar on the canvas is this file's (every Section / cell / Group selection): the resize layer then keeps its own hidden
+    ownsToolbar: function () { return true; },
+    openGroupSettings: function (id) { openWorkspace(Number(id)); },
     addRow: addRow,
     togglePanel: function () { st.panel = !st.panel; if (st.panel && !st.loaded) loadTree().then(renderAll); renderAll(); },
   };

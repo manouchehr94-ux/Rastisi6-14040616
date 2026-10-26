@@ -815,3 +815,18 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 .rs-studio .rs-sel-toolbar .rs-tb-btn.text{width:auto;padding:0 10px;gap:6px;font-size:12px;font-weight:700;background:#22304b;color:#fff}
 .rs-studio .rs-cmp-panel[data-side="start"]{inset-inline-end:auto;inset-inline-start:12px}
 .rs-studio .rs-cmp-ph-actions{display:flex;gap:2px}
+/* V5 Composer — one toolbar for every selection: the name of what is selected sits inside it */
+.rs-studio .rs-cmp-name{display:inline-flex;align-items:center;gap:6px;max-width:220px;height:30px;margin-inline-end:4px;padding:0 10px;border-radius:9px;background:#22304b;color:#fff;font-size:12px;cursor:default}
+.rs-studio .rs-cmp-name i{flex:none;width:8px;height:8px;border-radius:50%;background:#94edc4}
+.rs-studio .rs-cmp-name b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.rs-studio .rs-cmp-picks{display:flex;flex-direction:column;gap:5px}
+.rs-studio .rs-cmp-pick{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #2b3a57;border-radius:10px;background:#16233b;color:#dfe8f5;font:inherit;font-size:12.5px;font-weight:700;text-align:start;cursor:pointer}
+.rs-studio .rs-cmp-pick svg{width:16px;height:16px;flex:none}
+.rs-studio .rs-cmp-pick small{margin-inline-start:auto;color:#9fb0c9}
+.rs-studio .rs-cmp-pick:hover{background:#22304b;border-color:#94edc4}
+.rs-studio .rs-cmp-ph-title{font-size:13px}
+@media (max-width:760px){
+  .rs-studio .rs-cmp-toolbar{flex-wrap:wrap;max-width:calc(100% - 12px);row-gap:2px}
+  .rs-studio .rs-cmp-name{max-width:150px}
+  .rs-studio .rs-cmp-btn{min-width:32px}
+}
