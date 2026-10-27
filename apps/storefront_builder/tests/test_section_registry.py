@@ -80,6 +80,8 @@ from apps.storefront_builder.variant_contract import (
 
 EXPECTED_KEYS = {
     "announcement_bar", "hero_banner", "image_slider", "single_banner",
+    # V5 «عکس لینک‌دار» — one own picture + optional link (a deliberate, intentional addition; coverage: test_v5_linked_image_announcement.py)
+    "linked_image",
     "multi_banner", "category_grid", "featured_products", "newest_products",
     "best_sellers", "discounted_products", "amazing_offers", "brand_carousel",
     "promo_cards", "rich_text", "image_text", "product_section", "trust_features",
@@ -1327,7 +1329,7 @@ class U1ABackwardsCompatibilityTests(TestCase):
     """Test #1, #13, #14, #15 — nothing about the existing registry moved."""
 
     def test_all_34_definitions_still_construct_and_are_gettable(self):
-        self.assertEqual(len(list_definitions()), 38)
+        self.assertEqual(len(list_definitions()), 39)
         for key in U1A_EXPECTED_SECTION_KEYS:
             definition = get_definition(key)
             self.assertEqual(definition.key, key)
@@ -1440,7 +1442,7 @@ class U1AVariantContractTests(TestCase):
         """Test #3 — a definition can declare multiple variants."""
         definition = get_definition("category_grid")
         keys = {v.key for v in list_variants(definition)}
-        self.assertEqual(keys, {"grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles"})
+        self.assertEqual(keys, {"grid", "carousel", "circular", "image_strip", "fashion_flat", "fashion_mosaic", "beauty_icons", "chocolate_story", "chocolate_badges", "atelier_mosaic", "luxury_shortcuts", "pastel_tiles", "grey_circles", "icon_tiles", "gradient_tiles", "label_tiles", "icon_rail", "ring_circles", "photo_cards"})
         self.assertEqual(definition.default_variant, "grid")
         self.assertEqual(definition.variant_setting_key, "display_mode")
 

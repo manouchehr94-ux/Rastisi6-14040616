@@ -63,7 +63,11 @@ IMAGE_HOVER_CHOICES = ("none", "zoom")
 #: پایین). حالا مستقیماً در پنلِ «تنظیماتِ بیشتر» به‌عنوانِ کنترل‌هایِ
 #: مستقل در دسترس‌اند — این‌ها فقط enum بستهٔ مجازِ همان مقادیری هستند
 #: که Templateهایِ موجود از قبل استفاده می‌کنند، نه محدوده‌ی جدیدی.
-SITE_CONTENT_WIDTH_CHOICES = (1100, 1200, 1320, 1500)
+SITE_CONTENT_WIDTH_CHOICES = (1100, 1200, 1320, 1500, 1800)
+
+#: V5 — style of every section heading (``.sec-head``), a SPARSE structural key (absent == ``default``, the historical heading).
+#: One CSS rule-set keyed on ``html[data-sfb-heading]`` serves every section that renders ``.sec-head``; no per-section markup.
+SITE_HEADING_STYLE_CHOICES = ("default", "centered", "centered_rule", "underline", "plain")
 SITE_GRID_DENSITY_CHOICES = (3, 4, 5, 6)
 SITE_CARD_SHADOW_CHOICES = ("none", "soft", "strong")
 SITE_CARD_HOVER_CHOICES = ("none", "lift", "zoom")
@@ -72,7 +76,7 @@ SITE_HERO_STYLE_CHOICES = ("wide", "tall", "split")
 #: فونت‌هایِ مجاز — مجموعه‌ی کوچک و کیوریت‌شده، هرکدام واقعاً برایِ
 #: فارسی/RTL مناسب (نه هر فونتِ دلخواه؛ طبقِ الزامِ صریحِ کار: «مرچنت فونت
 #: را با نام انتخاب کند، نه CSS خام آپلود کند»).
-FONT_CHOICES = ("Vazirmatn", "Tahoma", "Arial", "Georgia")
+FONT_CHOICES = ("Vazirmatn", "Estedad", "Noto Sans Arabic", "Lalezar", "Tahoma", "Arial", "Georgia")
 
 #: مقیاسِ سلسله‌مراتبِ تایپوگرافی — پنج نقشِ معنادار (نه اندازه‌یِ دلخواه
 #: در هر جای CSS): عنوانِ بخش، متنِ عادی، نامِ محصول، قیمت، متنِ کم‌رنگ.

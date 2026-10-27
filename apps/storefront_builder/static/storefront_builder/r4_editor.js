@@ -127,6 +127,10 @@ window.RastiSiR4 = {
       : '.rsec[data-section-id="' + fragment.id + '"]';
     var current = doc.querySelector(selector);
     if (!current) return false;
+    // V5 Groups: a Group that carries a title / look is rendered inside its own frame (.rgroup) — the fragment is that whole frame, so it
+    // replaces the frame, never just the row inside it (which would nest a second frame inside the first one on every edit)
+    if (fragment.kind === 'container' && current.parentElement && current.parentElement.classList.contains('rgroup')
+        && current.parentElement.getAttribute('data-group-id') === String(fragment.id)) current = current.parentElement;
     var holder = doc.createElement('template');
     holder.innerHTML = fragment.html;
     var next = holder.content.firstElementChild;
@@ -525,6 +529,8 @@ window.RastiSiR4 = {
     return previewRefresh.promise;
   }
   R4.reloadPreview = reloadPreviewFrame;
+  // read-only: true while a twin-frame refresh is running or queued (the Studio's layout layer and the browser tests wait for it to go quiet)
+  R4.previewRefreshBusy = function () { return Boolean(previewRefresh.busy || previewRefresh.again); };
 
   // ---- R4 Task 8 — structural mutations (add/remove/duplicate/move) go
   // through the SAME single queue/endpoint as every other mutation; this
@@ -1044,6 +1050,17 @@ window.RastiSiR4 = {
     } catch (err) { /* cross-document access is best effort */ }
   };
 
+  // A refused / failed Inspector request is never silent: the seller gets a clear Persian message (the Studio's own notification) and the
+  // technical detail (status + path only — no ids of other stores, no response body) goes to the console for troubleshooting.
+  function reportInspectorFailure(url, status, detail) {
+    var message = status === 404 ? 'تنظیمات این بخش باز نشد: بخش در پیش‌نویس فعلی پیدا نشد یا هنوز ویرایشگر ندارد. صفحه را تازه کنید و اگر تکرار شد، گزارش دهید.'
+      : status === 403 ? 'اجازهٔ ویرایش این بخش را ندارید.'
+      : status >= 500 ? 'خطای سرور هنگام باز کردن تنظیمات این بخش؛ کمی بعد دوباره تلاش کنید.'
+      : 'ارتباط با سرور برقرار نشد؛ تنظیمات این بخش باز نشد.';
+    try { console.warn('R4 openSection failed', { status: status, path: url.pathname, detail: detail || '' }); } catch (e) { /* console unavailable */ }
+    if (typeof R4.notify === 'function') R4.notify(message);
+  }
+
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
     lastSent = {}; // the control values are re-read from the server below: nothing "already sent" survives
@@ -1053,9 +1070,9 @@ window.RastiSiR4 = {
     var url = new URL('sections/' + sectionId + '/inspector/', window.location.href);
     return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) {
-        if (!response.ok) return null;
+        if (!response.ok) { reportInspectorFailure(url, response.status); return null; }
         return response.text();
-      })
+      }, function (e) { reportInspectorFailure(url, 0, String(e)); return null; })
       .then(function (html) {
         if (html == null) return;
         inspector.innerHTML = html;
@@ -1098,9 +1115,10 @@ window.RastiSiR4 = {
         // it already mounts storefrontRichTextEditor()'s CKEditor here.
         // Do NOT also call Alpine.initTree(): doing so double-mounts.
       })
-      .catch(function () {
-        // Network/render failure opening the Inspector — no R3 fallback,
-        // no popup; the shell simply stays as it already was.
+      .catch(function (err) {
+        // A failure while building the Inspector view (after a successful response): no R3 fallback, no popup — but not silent either.
+        try { console.error('R4 openSection render failed', err); } catch (e) { /* console unavailable */ }
+        if (typeof R4.notify === 'function') R4.notify('تنظیمات این بخش درست نمایش داده نشد؛ صفحه را تازه کنید.');
       });
   };
 

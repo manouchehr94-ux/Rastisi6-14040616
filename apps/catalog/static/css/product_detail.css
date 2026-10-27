@@ -280,3 +280,227 @@
      its own (does not add document height), hence the padding above. */
   html:has(.pdp-satc){scroll-padding-bottom:calc(var(--gmn-clearance,env(safe-area-inset-bottom,0px)) + var(--satc-height) + 16px)}
 }
+
+
+/* ========================================================================
+   V5 — PDP design controls (بستهٔ ۱): ``product_main`` + ``product_description``
+   ------------------------------------------------------------------------
+   Everything below is keyed ONLY on generic data attributes written by the shared renderer (``pdp_settings``) and on the shared
+   Design Block flags (``.rsec[data-d~="…"]`` + ``--d-*``). An attribute is written only when a Section's value differs from its
+   default, so a Store that never touched these controls matches NONE of these selectors and renders exactly as before. No rule here
+   names a Store, a Ready Template or a brand. Colours come from the palette tokens / the Design Block, never from a literal brand.
+   ======================================================================== */
+
+/* ---- product_main · gallery ---- */
+.qty[hidden]{display:none}
+@media(min-width:1001px){
+  .pdp[data-gallery-pos="end"] .gallery{order:2}
+  .pdp[data-gallery-split="gallery_wide"]{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+  .pdp[data-gallery-split="info_wide"]{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+  .pdp[data-gallery-pos="end"][data-gallery-split="gallery_wide"]{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+  .pdp[data-gallery-pos="end"][data-gallery-split="info_wide"]{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+}
+.pdp[data-gallery-sticky="off"] .gallery{position:static}
+.pdp[data-thumbs="hidden"] .gallery .thumbs{display:none}
+.pdp[data-thumbs="side"] .gallery{display:flex;gap:14px}
+.pdp[data-thumbs="side"] .gallery .main{flex:1;order:2}
+.pdp[data-thumbs="side"] .gallery .thumbs{order:1;flex-direction:column;margin-top:0;flex:0 0 auto}
+.pdp[data-thumbs="side"] .gallery .thumbs .th{width:64px;height:64px;border-radius:10px}
+.pdp[data-pdp-layout="fashion"][data-thumbs="below"] .gallery{display:block}
+.pdp[data-pdp-layout="fashion"][data-thumbs="below"] .gallery .thumbs{flex-direction:row;margin-top:12px}
+.pdp[data-pdp-layout="fashion"][data-thumbs="below"] .gallery .thumbs .th{width:74px;height:74px;border-radius:14px}
+@media(max-width:1000px){
+  .pdp[data-thumbs="side"] .gallery{flex-direction:column}
+  .pdp[data-thumbs="side"] .gallery .thumbs{flex-direction:row;order:2;margin-top:10px}
+  .pdp[data-thumbs="side"] .gallery .main{order:1}
+}
+
+/* ---- product_main · info panel, price, quantity, options, CTA ---- */
+.pdp[data-info-panel="card"] .pinfo{background:var(--card,#fff);border:1px solid var(--line);border-radius:18px;padding:22px}
+.pdp[data-info-panel="outlined"] .pinfo{background:var(--card,#fff);border:2px solid var(--brand-primary,var(--violet));border-radius:22px;padding:22px}
+.pdp[data-price-layout="plain"] .pricebox{background:transparent;border:0;padding:0}
+.pdp[data-price-pos="before_options"] .pinfo form,
+.pdp[data-qty-layout="inline"] .pinfo form{display:grid;grid-template-columns:auto minmax(0,1fr)}
+.pdp[data-price-pos="before_options"] .pinfo form>*,
+.pdp[data-qty-layout="inline"] .pinfo form>*{grid-column:1/-1}
+.pdp[data-price-pos="before_options"] .pinfo form>.pricebox{order:-1}
+.pdp[data-qty-layout="inline"] .pinfo form>.qty{grid-column:1;margin-inline-end:12px}
+.pdp[data-qty-layout="inline"] .pinfo form>.pdp-actions{grid-column:2}
+.pdp[data-qty-layout="inline"] .qty .lbl{display:none}
+.pdp[data-qty-layout="inline"] .stepper :is(button,input){height:calc(var(--pdp-cta-h,50px) - 3px)}
+.pdp[data-option-shape="square"] .size{border-radius:4px}
+.pdp[data-option-shape="square"] .swatch,.pdp[data-option-shape="square"] .swatch.unavailable::after{border-radius:6px}
+.pdp[data-option-shape="pill"] .size{border-radius:999px}
+.pdp[data-cta-width="auto"] .pdp-actions .btn-primary{flex:0 1 auto;padding-inline:30px}
+.pdp[data-cta-size="compact"]{--pdp-cta-h:42px}
+.pdp[data-cta-size="large"]{--pdp-cta-h:58px}
+.pdp[data-cta-size="compact"] .pdp-actions .btn-primary,.pdp[data-cta-size="large"] .pdp-actions .btn-primary{height:var(--pdp-cta-h)}
+.pdp[data-cta-size="compact"] .pdp-actions .btn-primary{font-size:13.5px}
+.pdp[data-cta-size="large"] .pdp-actions .btn-primary{font-size:16px}
+.pdp[data-cta-shape="square"] .pdp-actions .btn-primary,.pdp[data-cta-shape="square"] .pdp-satc-btn{border-radius:4px}
+.pdp[data-cta-shape="pill"] .pdp-actions .btn-primary,.pdp[data-cta-shape="pill"] .pdp-satc-btn{border-radius:999px}
+
+/* ---- product_main · Design Block consumers (frame / border / radius / shadow / spacing / background act on the section wrapper) ---- */
+.rsec[data-d~="ratio"] .pdp .gallery .main{aspect-ratio:var(--d-ratio)}
+.rsec[data-d~="gap"] .pdp{gap:var(--d-gap)}
+.rsec[data-d~="heading"] .pdp .pinfo h1{color:var(--d-heading)}
+.rsec[data-d~="text"] .pdp .pinfo :is(h1,.opt-block .lbl,.qty .lbl,.pricebox .now){color:var(--d-text)}
+.rsec[data-d~="accent"] .pdp :is(.size.active){border-color:var(--d-accent);color:var(--d-accent)}
+.rsec[data-d~="accent"] .pdp .swatch.active{box-shadow:0 0 0 2px var(--d-accent)}
+.rsec[data-d~="accent"] .pdp .gallery .thumbs .th.active{border-color:var(--d-accent)}
+.rsec[data-d~="price"] .pdp :is(.pricebox .now,.pdp-satc-now){color:var(--d-price)}
+.rsec[data-d~="surface"] .pdp:not([data-price-layout="plain"]) .pricebox,
+.rsec[data-d~="surface"] .pdp[data-info-panel] .pinfo,
+.rsec[data-d~="surface"] .pdp .gallery .main{background:var(--d-surface);color:var(--d-surface-fg)}
+.rsec[data-d~="btnfill"] .pdp :is(.pdp-actions .btn-primary,.pdp-satc-btn):not(:disabled){background:var(--d-btn-bg);color:var(--d-btn-fg,var(--brand-primary-fg,#fff))}
+.rsec[data-d~="btntext"] .pdp :is(.pdp-actions .btn-primary,.pdp-satc-btn):not(:disabled){color:var(--d-btn-fg)}
+.rsec[data-d~="btnborder"] .pdp :is(.pdp-actions .btn-primary,.pdp-satc-btn):not(:disabled){border:1px solid var(--d-btn-bd)}
+
+/* ---- product_description · presentation modes ----------------------------------------------------------------------------
+   The DOM is the same accessible header→panel pairs in every mode (see product_description.html). ``tabs`` (default) is the rules
+   above; the modes below only re-arrange / re-skin it. Vertical tabs need the JS-set ``data-enhanced`` flag: without JavaScript
+   every panel is simply visible under its own header, so nothing ever overlaps or hides. */
+.pdp-sec-title{font-size:18px;font-weight:800;margin:0 0 12px;line-height:1.6}
+.pdp-tabs[data-tabs-mode="stacked"]{display:block}
+.pdp-tabs[data-tabs-mode="stacked"]::after{display:none}
+.pdp-tabs[data-tabs-mode="stacked"] .pdp-sec-panel{margin-bottom:28px}
+.brand-panel{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.brand-panel .brand-logo{width:96px;height:96px;border:1px solid var(--line);border-radius:14px;padding:8px;background:#fff}
+.brand-panel h3{font-size:16px;font-weight:800;margin:0 0 6px}
+.brand-panel h3 small{font-size:12px;font-weight:600;color:var(--muted);margin-inline-start:8px}
+.brand-panel p{font-size:13.5px;line-height:2;color:#4b4560;margin:0 0 8px;max-width:760px}
+.brand-panel dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:0}
+.brand-panel dt{color:var(--muted);font-weight:600}
+.brand-panel dd{margin:0}
+.pdp-tabs[data-panel-style="boxed"] .pdp-tab-panel{border:1px solid var(--line);border-radius:16px;padding:20px}
+.pdp-tabs[data-panel-style="soft"] .pdp-tab-panel{background:var(--violet-softer);border-radius:16px;padding:20px}
+.rsec[data-d~="surface"] .pdp-tabs .pdp-tab-panel{background:var(--d-surface);color:var(--d-surface-fg);border-radius:16px;padding:20px}
+.rsec[data-d~="heading"] .pdp-sec-title,.rsec[data-d~="heading"] .brand-panel h3{color:var(--d-heading)}
+.rsec[data-d~="text"] .pdp-tab-panel :is(.desc-text,.review p,.spec-table td,.brand-panel p){color:var(--d-text)}
+.rsec[data-d~="accent"] .pdp-acc-header.active{color:var(--d-accent);border-color:var(--d-accent)}
+@media(min-width:681px){
+  .pdp-tabs[data-tab-align="center"]{justify-content:center}
+  .pdp-tabs[data-tab-align="stretch"] .pdp-acc-header{flex:1 1 0;text-align:center}
+  .pdp-tabs[data-tab-style="pills"]::after,.pdp-tabs[data-tab-style="boxed"]::after{display:none}
+  .pdp-tabs[data-tab-style="pills"],.pdp-tabs[data-tab-style="boxed"]{row-gap:14px}
+  .pdp-tabs[data-tab-style="pills"] .pdp-acc-header{border:0;border-radius:999px;padding:9px 20px;background:var(--violet-softer)}
+  .pdp-tabs[data-tab-style="pills"] .pdp-acc-header.active{background:var(--brand-primary,var(--violet));color:var(--brand-primary-fg,#fff)}
+  .pdp-tabs[data-tab-style="boxed"] .pdp-acc-header{border:1px solid var(--line);border-radius:8px;padding:11px 18px}
+  .pdp-tabs[data-tab-style="boxed"] .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+  .rsec[data-d~="accent"] .pdp-tabs[data-tab-style="pills"] .pdp-acc-header.active{background:var(--d-accent);color:#fff}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced]{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr);grid-template-rows:repeat(var(--pdp-tab-count,3),max-content) 1fr;gap:8px 26px;align-items:start}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced]::after{display:none}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced] .pdp-acc-header{grid-column:1;width:100%;text-align:start;white-space:normal;border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced] .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+  .pdp-tabs[data-tabs-mode="tabs_vertical"][data-enhanced] .pdp-tab-panel{grid-column:2;grid-row:1 / -1}
+}
+/* accordion at EVERY width: the same rules the mobile block applies below the mobile breakpoint */
+.pdp-tabs[data-tabs-mode="accordion"]{flex-direction:column;gap:8px;margin:24px 0}
+.pdp-tabs[data-tabs-mode="accordion"]::after{display:none}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header{
+  order:0;width:100%;text-align:start;border:1px solid var(--line);border-radius:8px;
+  padding:14px 16px;display:flex;align-items:center;justify-content:space-between;margin:0;
+}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header.active{background:var(--violet-softer);border-color:var(--violet)}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header::after{content:"▾";margin-inline-start:auto;transition:transform .2s ease}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header.active::after{transform:rotate(180deg)}
+.pdp-tabs[data-tabs-mode="accordion"] .pdp-tab-panel{order:0;flex:0 0 auto;padding:4px 4px 8px}
+@media (prefers-reduced-motion: reduce){
+  .pdp-tabs[data-tabs-mode="accordion"] .pdp-acc-header::after{transition:none}
+}
+
+/* V5 — PDP typography roles (product_main ``title_size`` / ``price_size``); absent attribute == the historical sizes. */
+.pdp[data-title-size="large"] .pinfo h1{font-size:clamp(22px,2.4vw,30px);line-height:1.45}
+.pdp[data-title-size="xlarge"] .pinfo h1{font-size:clamp(26px,3vw,38px);line-height:1.4}
+.pdp[data-price-size="large"] .pricebox .now,.pdp[data-price-size="large"] .price-plain .now{font-size:32px}
+.pdp[data-price-size="xlarge"] .pricebox .now,.pdp[data-price-size="xlarge"] .price-plain .now{font-size:40px}
+.pdp[data-price-size="small"] .pricebox .now{font-size:16px;font-weight:500}
+
+/* V5 six-site kit — purchase-support blocks (product_main switches show_low_stock_alert / show_free_shipping_notice / show_contact_buttons) */
+.pdp-lowstock{display:grid;gap:8px;margin:12px 0;padding:10px 14px;border:1px solid var(--pink-soft,#f6cde0);border-radius:12px;background:var(--brand-surface,#fff)}
+.pdp-lowstock-text{display:grid;gap:2px;font-size:13px}
+.pdp-lowstock-text b{color:var(--brand-primary,#c0138a)}
+.pdp-lowstock-text small{color:var(--muted,#6b7280);font-size:11.5px}
+.pdp-lowstock-bar{height:5px;border-radius:5px;background:var(--pink-soft,#f6cde0);overflow:hidden}
+.pdp-lowstock-bar i{display:block;height:100%;background:var(--brand-primary,#c0138a);border-radius:5px;transition:width .25s}
+.pdp-freeship{margin:10px 0;padding:11px 14px;border-radius:12px;background:var(--green-soft,#e8f7ee);color:var(--green-text,#1a7f46);font-size:13px;font-weight:600}
+.pdp-contact{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.pdp-contact-btn{display:flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:var(--brand-surface,#fff);font-size:13px;font-weight:600;color:var(--brand-text,#222)}
+.pdp-contact-btn:hover{border-color:var(--brand-primary,#c0138a);color:var(--brand-primary,#c0138a)}
+
+/* ---- V5 six-site kit: add-to-cart colour from a palette role (only when data-cta-tone is written, i.e. non-default) ---- */
+.pdp[data-cta-tone="secondary"] .pdp-actions .btn-primary,.pdp[data-cta-tone="secondary"] .pdp-satc-btn{background:var(--brand-secondary);border-color:var(--brand-secondary);color:var(--brand-secondary-fg,#fff)}
+.pdp[data-cta-tone="accent"] .pdp-actions .btn-primary,.pdp[data-cta-tone="accent"] .pdp-satc-btn{background:var(--brand-accent);border-color:var(--brand-accent);color:var(--brand-accent-fg,#fff)}
+
+/* ---- V5 six-site kit: gallery lightbox (rendered only when the product-main switch is on) ---- */
+.pdp-lb{position:fixed;inset:0;z-index:1400;display:grid;place-items:center;background:rgba(10,10,14,.92);padding:24px}
+.pdp-lb[x-cloak]{display:none}
+.pdp-lb-img{max-width:min(94vw,1200px);max-height:88vh;object-fit:var(--img-fit,contain);cursor:zoom-in;transition:transform .2s;touch-action:pan-y}
+.pdp-lb-img.is-zoomed{transform:scale(1.9);cursor:zoom-out}
+.pdp-lb-close,.pdp-lb-nav{position:absolute;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:28px;line-height:1;cursor:pointer}
+.pdp-lb-close{top:16px;inset-inline-end:16px}
+.pdp-lb-nav{top:50%;transform:translateY(-50%)}
+.pdp-lb-prev{inset-inline-start:16px}.pdp-lb-next{inset-inline-end:16px}
+.pdp-lb-nav:dir(rtl){transform:translateY(-50%) scaleX(-1)}
+.pdp-lb-close:focus-visible,.pdp-lb-nav:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* ---- V5: the tab row stays a tab row on a phone (data-mobile="tabs"; the default is the historical accordion) ---- */
+@media(max-width:680px){
+  .pdp-tabs[data-mobile="tabs"]{flex-direction:row;flex-wrap:wrap;gap:0;margin:18px 0}
+  .pdp-tabs[data-mobile="tabs"]::after{display:block;order:1;flex:0 0 100%;margin-bottom:14px}
+  .pdp-tabs[data-mobile="tabs"] .pdp-acc-header{order:0;width:auto;display:block;border:0;border-bottom:2.5px solid transparent;border-radius:0;padding:12px 12px;background:transparent;white-space:normal;text-align:center}
+  .pdp-tabs[data-mobile="tabs"] .pdp-acc-header.active{background:transparent;border-color:var(--violet)}
+  .pdp-tabs[data-mobile="tabs"] .pdp-acc-header::after{display:none}
+  .pdp-tabs[data-mobile="tabs"] .pdp-tab-panel{order:2;flex:0 0 100%;padding:0}
+}
+
+/* V5 desktop sticky purchase bar — only when the switch writes data-satc (md / d). Hidden until the in-flow button scrolls out
+   above the viewport (JS toggles .is-shown); on phones the existing mobile rules apply and a desktop-only bar stays hidden. */
+@media(min-width:681px){
+  .pdp-satc[data-satc]{display:flex;align-items:center;justify-content:center;gap:28px;position:fixed;z-index:90;inset-inline:0;bottom:0;padding:12px 24px;background:var(--card,#fff);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(15,23,42,.10);direction:rtl;transform:translateY(110%);visibility:hidden;transition:transform .25s ease,visibility 0s linear .25s}
+  .pdp-satc[data-satc].is-shown{transform:none;visibility:visible;transition:transform .25s ease}
+  .pdp-satc[data-satc] .pdp-satc-id{display:flex;align-items:center;gap:10px;min-width:0;max-width:34%;margin-inline-end:auto}
+  .pdp-satc[data-satc] .pdp-satc-id img{width:40px;height:40px;border-radius:6px;object-fit:var(--img-fit,cover);flex:0 0 auto}
+  .pdp-satc[data-satc] .pdp-satc-id b{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pdp-satc[data-satc] .pdp-satc-price{display:flex;flex-direction:row;align-items:baseline;gap:10px}
+  .pdp-satc[data-satc] .pdp-satc-now{font-size:18px;font-weight:900;color:var(--ink)}
+  .pdp-satc[data-satc] .pdp-satc-old{font-size:13px;color:var(--muted);text-decoration:line-through}
+  .pdp-satc[data-satc] .pdp-satc-btn{flex:0 1 320px;height:46px;font-size:15px}
+  .pdp-satc[data-satc] .pdp-satc-btn:disabled{background:var(--disabled-bg,#e5e7eb);color:var(--disabled-ink,#6b7280);border-color:var(--disabled-bg,#e5e7eb);box-shadow:none;cursor:not-allowed}
+}
+@media(max-width:680px){
+  .pdp-satc[data-away]{transform:translateY(130%);visibility:hidden;transition:transform .2s ease,visibility 0s .2s}
+  .pdp-satc[data-satc="d"]{display:none}
+  .pdp-satc[data-satc] .pdp-satc-id{display:none}
+}
+
+/* V5 fidelity: flush picture frame and a larger reading size for the description (both attribute-gated, default rendering unchanged) */
+.pdp[data-gallery-frame="flush"] .gallery .main{border:0;background:transparent;border-radius:0;overflow:visible}
+.pdp[data-gallery-frame="flush"] .gallery .main>img[data-img-role]{border-radius:0}
+.pdp-tabs[data-body-size="large"] .pdp-tab-panel{font-size:17px;line-height:2.1}
+[data-pdp-specs]{list-style:none;margin:6px 0 14px;padding:0;display:grid;gap:8px;font-size:14px;line-height:1.8}
+[data-pdp-specs] li{position:relative;padding-inline-start:16px}
+[data-pdp-specs] li::before{content:"";position:absolute;inset-inline-start:0;top:.8em;width:6px;height:6px;border-radius:50%;background:var(--brand-primary,currentColor);opacity:.7}
+[data-pdp-specs] b{font-weight:700}
+[data-pdp-specs] span{color:var(--muted);margin-inline-start:6px}
+.pdp[data-info-panel="outlined_tone"] .pinfo{background:color-mix(in srgb,var(--brand-tone-2,var(--brand-primary,#c0138a)) 6%,var(--card,#fff));border:3px solid var(--brand-tone-2,var(--brand-primary,#c0138a));border-radius:30px;padding:28px}
+.pdp[data-option-size="large"] .size{min-width:92px;height:46px;font-size:15px}
+.pdp[data-option-size="large"] .sizes{gap:12px}
+.pdp-tabs[data-body-size="xlarge"] .pdp-tab-panel{font-size:19px;line-height:2.25}
+/* V5 composition: the merchant-ordered information column (only when data-info-order is written). The form is dissolved into the
+   panel grid so purchase blocks and the blocks around the form share ONE ordering context; the ordinary markup is untouched. */
+.pdp[data-info-order] .pinfo{display:grid;grid-template-columns:auto minmax(0,1fr);align-content:start}
+.pdp[data-info-order] .pinfo form{display:contents}
+.pdp[data-info-order] .pinfo>*,.pdp[data-info-order] .pinfo form>*{grid-column:1/-1}
+.pdp[data-info-order][data-qty-layout="inline"] .pinfo form>.qty{grid-column:1;margin-inline-end:12px}
+.pdp[data-info-order][data-qty-layout="inline"] .pinfo form>.pdp-actions{grid-column:2}
+.pdp[data-info-order] .pinfo>h1{order:-20}
+.pdp[data-info-order] .pinfo>.topline{order:-19}
+.pdp[data-info-order] [data-blk="options"]{order:var(--o-options,1)}
+.pdp[data-info-order] [data-blk="price"]{order:var(--o-price,2)}
+.pdp[data-info-order] [data-blk="specs"]{order:var(--o-specs,3)}
+.pdp[data-info-order] [data-blk="gift"]{order:var(--o-gift,4)}
+.pdp[data-info-order] [data-blk="actions"]{order:var(--o-actions,5)}
+.pdp[data-info-order] [data-blk="notices"]{order:var(--o-notices,6)}
+.pdp[data-info-order] [data-blk="contact"]{order:var(--o-contact,7)}
+.pdp[data-info-order] [data-blk="trust"]{order:var(--o-trust,8)}

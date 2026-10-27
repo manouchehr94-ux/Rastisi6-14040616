@@ -137,7 +137,7 @@ select,textarea{
 .tabs,
 .blog-card,
 .feat,
-.promo-card,
+.promo-grid:not(.promo-grid--panel-4) .promo-card,   /* panel-4 owns its tone gradients and white text */
 .special-wrap,
 .brand-tile,
 .product-spotlight-slider,

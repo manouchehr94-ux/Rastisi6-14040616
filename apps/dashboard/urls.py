@@ -253,6 +253,21 @@ urlpatterns = [
         name="storefront-builder-r4-editor",
     ),
     path(
+        "storefront-builder/r4/announcement-image/",
+        storefront_builder_r4_views.storefront_r4_announcement_image,
+        name="storefront-builder-r4-announcement-image",
+    ),
+    path(
+        "storefront-builder/r4/announcement/inspector/",
+        storefront_builder_r4_views.storefront_r4_announcement_inspector,
+        name="storefront-builder-r4-announcement-inspector",
+    ),
+    path(
+        "storefront-builder/r4/layout-tree/",
+        storefront_builder_r4_views.storefront_r4_layout_tree,
+        name="storefront-builder-r4-layout-tree",
+    ),
+    path(
         "storefront-builder/r4/mutate/",
         storefront_builder_r4_views.storefront_r4_mutation,
         name="storefront-builder-r4-mutation",
@@ -319,6 +334,7 @@ urlpatterns = [
         name="storefront-builder-template-live-preview",
     ),
     path("storefront-builder/preview/", storefront_builder_views.storefront_preview, name="storefront-builder-preview"),
+    path("storefront-builder/draft-preview/", storefront_builder_views.storefront_draft_preview, name="storefront-builder-draft-preview"),
     path("storefront-builder/sections/<int:pk>/product-search/", storefront_builder_views.storefront_section_product_search, name="storefront-builder-section-product-search"),
     path("storefront-builder/history/", storefront_builder_views.storefront_history, name="storefront-builder-history"),
     path("storefront-builder/apply-preset/", storefront_builder_views.storefront_apply_layout_preset, name="storefront-builder-apply-preset"),

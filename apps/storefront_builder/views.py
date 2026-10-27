@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_GET, require_POST
 
@@ -264,6 +265,34 @@ def storefront_preview(request):
     })
 
 
+@never_cache
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_draft_preview(request):
+    """«پیش‌نمایش» — the customer view of the Store's current DRAFT (unpublished changes), for a manager of THIS store only.
+
+    Read-only: it renders the Draft through the public pipeline (``build_draft_preview_context`` → the same shell, appearance and section
+    renderers as the live storefront, no builder markers, no overlays) and never writes or publishes. ``?page=`` selects the page type the
+    Studio is on. ``never_cache`` so a refresh always shows the latest saved Draft. A Store with no Draft has no unpublished changes: the page
+    says so explicitly and shows the current published layout (never silently)."""
+    from .models import StorefrontLayout
+    from .services.storefront_context_service import build_draft_preview_context
+
+    store = _resolve_store(request)
+    page_type = _resolve_page_type(request.GET.get("page"))
+    layout = StorefrontLayout.objects.filter(store=store).select_related("draft_version", "published_version").first()
+    version = layout.draft_version if layout is not None else None
+    is_draft = version is not None
+    if version is None:
+        version = layout_service.ensure_default_published_layout(store).published_version
+    context = build_draft_preview_context(
+        request, store, version, page_type, page_context=_preview_page_context(request, store, page_type),
+    )
+    context.update({"store": store, "is_draft_preview": True, "draft_preview_is_draft": is_draft})
+    return render(request, "storefront_builder/draft_preview.html", context)
+
+
 def render_preview_fragment(request, store, draft, *, section_id=None, container_id=None):
     """Canonical server-rendered HTML of ONE section (or ONE container) of the Draft Preview.
 
@@ -283,9 +312,13 @@ def render_preview_fragment(request, store, draft, *, section_id=None, container
             return None
         page = section.page
     elif container_id is not None:
-        container = StorefrontContainer.objects.select_related("page").filter(pk=container_id, page__version=draft).first()
+        container = StorefrontContainer.all_objects.select_related("page", "parent_cell__container").filter(pk=container_id, page__version=draft).first()
         if container is None:
             return None
+        # V5 Groups: a nested Group is re-rendered as part of its top-level row (the region the preview swaps is that row).
+        while container.parent_cell_id is not None:
+            container = container.parent_cell.container
+            container_id = container.pk
         page = container.page
     else:
         return None
@@ -297,17 +330,32 @@ def render_preview_fragment(request, store, draft, *, section_id=None, container
     store_appearance = resolved_store_appearance_for_request(request, draft)
     structure = build_container_render_items(page, [], include_empty=True)
     wanted = None
-    for composition in structure:
+
+    def _walk(composition):
+        nonlocal wanted
         for cell_entry in composition["cells"]:
             block_ids = {block.pk for block in cell_entry["blocks"]}
             if section_id is not None and section_id in block_ids:
                 wanted = (composition, cell_entry)
             if container_id is not None and composition["container"].pk == container_id:
                 wanted = (composition, cell_entry)
+            if cell_entry.get("group") is not None:
+                _walk(cell_entry["group"])
+
+    def _all_block_ids(composition):
+        ids = set()
+        for entry in composition["cells"]:
+            ids.update(block.pk for block in entry["blocks"])
+            if entry.get("group") is not None:
+                ids |= _all_block_ids(entry["group"])
+        return ids
+
+    for composition in structure:
+        _walk(composition)
     if wanted is None:
         return None
     if container_id is not None:
-        only_ids = {block.pk for entry in wanted[0]["cells"] for block in entry["blocks"]}
+        only_ids = _all_block_ids(wanted[0])
     else:
         only_ids = {section_id}
     items = build_page_render_items(
@@ -324,7 +372,20 @@ def render_preview_fragment(request, store, draft, *, section_id=None, container
         html = render_to_string("storefront_builder/partials/render_containers.html",
                                 {**context, "render_containers": [composition]}, request=request)
         return {"kind": "container", "id": container_id, "html": html.strip()}
-    composition = next(c for c in compositions if c["container"].pk == wanted[0]["container"].pk)
+    def _find_composition(pool, container_pk):
+        for candidate in pool:
+            if candidate["container"].pk == container_pk:
+                return candidate
+            for entry in candidate["cells"]:
+                if entry.get("group") is not None:
+                    found = _find_composition([entry["group"]], container_pk)
+                    if found is not None:
+                        return found
+        return None
+
+    composition = _find_composition(compositions, wanted[0]["container"].pk)
+    if composition is None:
+        return None
     cell_entry = next(ce for ce in composition["cells"] if ce["cell"].pk == wanted[1]["cell"].pk)
     item = next((i for i in cell_entry["items"] if i["section"].pk == section_id), None)
     if item is None:

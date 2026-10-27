@@ -438,3 +438,395 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 .rs-studio .r4-ws-subpanel .r4-ws-card-body[data-r4-ws-fields]>.r4-field--integer,
 .rs-studio .r4-ws-subpanel .r4-ws-card-body[data-r4-ws-fields]>.r4-field--boolean,
 .rs-studio .r4-ws-subpanel .r4-ws-card-body[data-r4-ws-fields]>.r4-field--color{grid-column:auto}
+
+/* ==========================================================================
+   V5-02A — Studio shell layer (presentation only; appended, nothing above is edited).
+   Geometry and colours follow RastiSi_Studio_V5.html: 70px dark top bar (#151a25), 92px tool rail (#191f2c),
+   mint accent #94edc4; the reference's own ≤800px values (65px bar, 67px rail) apply on narrow screens.
+   Every control here is an existing Studio action (data-rastisi-action); no write path, no storage and no new state
+   lives in this layer. The temporary drawer / backdrop keep their behaviour; only their anchor moves under the bar
+   and beside the rail (the rail is never hidden, so every tool stays reachable at every width).
+   ========================================================================== */
+.rs-studio .app-top{position:relative;z-index:11;height:70px;min-height:70px;flex:0 0 auto;padding:0 20px;gap:12px;background:#151a25;color:#f1f4f8;border-bottom:0;box-shadow:0 3px 16px #0b12212b;flex-wrap:nowrap}
+.rs-studio .app-top>*{min-width:0}
+.rs-studio .app-top a.brand{color:#fff;flex:0 0 auto;gap:10px;min-width:150px}
+.rs-studio .app-top .brand-mark{background:#9af0ca;color:#124233;border-radius:13px;width:42px;height:42px;font-size:21px;font-weight:900}
+.rs-studio .app-top .brand small{color:#9aa6b9;font-size:10px;letter-spacing:.14em}
+.rs-studio .app-top .project-title{display:flex;align-items:center;gap:0;padding-inline-start:14px;border-inline-start:1px solid #ffffff1f;flex:0 1 270px;min-width:0}
+.rs-studio .app-top .project-avatar{display:none}
+.rs-studio .app-top .project-title>div{min-width:0}
+.rs-studio .app-top .project-title h1{color:#fff;font-size:13px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-studio .app-top .project-title p{color:#9aa6b9;font-size:10px;line-height:1.5;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.rs-studio .app-top .top-nav{flex:1 1 auto;justify-content:center;height:auto;gap:7px;margin:0 auto}
+.rs-studio .app-top .top-nav button{height:40px;margin:0;padding:0 14px;border:1px solid #343e4d;border-radius:11px;background:#202736;color:#dfe8f5;font-size:12px;font-weight:750;gap:8px}
+.rs-studio .app-top .top-nav button:hover{background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio .app-top .top-nav button.active,.rs-studio .app-top .top-nav button[aria-pressed="true"]{background:#94edc4;border-color:#94edc4;color:#104a36;box-shadow:none}
+.rs-studio .app-top .top-nav button[data-rastisi-action=lab].active{background:#cfc4f5;border-color:#cfc4f5;color:#2f2150}
+.rs-studio .app-top .top-nav .nav-label{white-space:nowrap}
+.rs-studio .app-top .project-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.rs-studio .app-top .save-feedback{color:#9aa6b9;margin:0;max-width:130px;white-space:nowrap}
+.rs-studio .app-top .save-feedback .icon{color:#94edc4}
+.rs-studio .app-top .save-feedback.error,.rs-studio .app-top .save-feedback.conflict{color:#ffb4b6}
+.rs-studio .app-top .history-buttons{display:flex;align-items:center;gap:4px}
+.rs-studio.rs-studio .app-top .icon-btn{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;color:#dfe8f5;border-radius:11px;border:1px solid #343e4d;background:#202736}
+.rs-studio.rs-studio .app-top .icon-btn:hover:not(:disabled){background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio.rs-studio .app-top .icon-btn:disabled{background:transparent;border-color:#293242;color:#74839a}
+.rs-studio .app-top .project-actions .outline{height:40px;background:#202736;border:1px solid #343e4d;color:#dfe8f5;border-radius:11px;font-weight:750}
+.rs-studio .app-top .project-actions .outline:hover:not(:disabled){background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio .app-top .project-actions .outline:disabled{background:transparent;border-color:#293242;color:#74839a}
+.rs-studio .app-top .project-actions .primary{height:40px;min-width:104px;background:#94edc4;border:1px solid #94edc4;color:#104a36;border-radius:11px;font-weight:750}
+.rs-studio .app-top .project-actions .primary:hover:not(:disabled){background:#b0f9d7}
+.rs-studio .app-top .project-actions .primary:disabled{background:#2a3b3a;border-color:#2a3b3a;color:#9fb4ad}
+.rs-studio .app-top .user-menu{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.rs-studio .app-top .user-menu>button:not(.avatar){color:#dfe8f5;background:transparent;border:0}
+.rs-studio .app-top .user-menu>button:not(.avatar):hover{color:#fff;background:#ffffff14}
+.rs-studio .app-top .user-menu button.avatar{background:#94edc4;color:#104a36;width:36px;height:36px;border-radius:50%}
+.rs-studio .app-top .user-menu button.avatar:hover{background:#b0f9d7}
+.rs-studio .app-top a.brand:focus-visible,.rs-studio .app-top button:focus-visible{outline:3px solid #94edc4;outline-offset:2px;box-shadow:none}
+
+/* body = rail (first child, so it sits on the inline-start edge) + main column */
+.rs-studio .rs-body{display:flex;flex:1 1 auto;min-height:0;min-width:0}
+.rs-studio .rs-main{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
+.rs-studio .rs-main>.studio-layout{flex:1 1 0;height:auto;min-height:0}
+.rs-studio .rs-rail{flex:0 0 92px;width:92px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:10px;padding:17px 8px;background:#191f2c;border-left:1px solid #333b49;overflow-y:auto;overscroll-behavior:contain;z-index:11}
+.rs-studio .rs-rail .rail-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;width:76px;min-height:69px;padding:6px 2px;border:1px solid transparent;border-radius:13px;background:transparent;color:#bbc8d8;font:inherit;font-size:10px;font-weight:700;line-height:1.3;text-align:center;cursor:pointer}
+.rs-studio .rs-rail .rail-btn .icon{width:22px;height:22px}
+.rs-studio .rs-rail .rail-btn:hover{background:#2d3748;border-color:#425369;color:#fff}
+.rs-studio .rs-rail .rail-btn.rail-primary{background:#1d3b35;border-color:#3c8f72;color:#94edc4}
+.rs-studio .rs-rail .rail-btn.rail-primary:hover{background:#25483f;color:#b0f9d7}
+.rs-studio .rs-rail .rail-btn:focus-visible{outline:3px solid #94edc4;outline-offset:-2px}
+
+/* white stage toolbar + softly lifted canvas */
+.rs-studio .stage-toolbar{background:#fff;border-bottom:1px solid var(--line)}
+.rs-studio .canvas{box-shadow:0 18px 48px #1b284a24}
+
+/* floating quick bar (existing actions: add section / page structure) */
+.rs-studio .rs-float-bar{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);z-index:12;display:flex;gap:8px;padding:8px;background:#151a25;border-radius:16px;box-shadow:0 14px 36px #0f1a2a4d}
+.rs-studio .rs-float-bar button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border:1px solid #343e4d;border-radius:11px;background:#202736;color:#dfe8f5;font:inherit;font-size:12.5px;font-weight:750;white-space:nowrap;cursor:pointer}
+.rs-studio .rs-float-bar button:hover{background:#303b4e;border-color:#617187;color:#fff}
+.rs-studio .rs-float-bar button.float-primary{background:#94edc4;border-color:#94edc4;color:#104a36}
+.rs-studio .rs-float-bar button.float-primary:hover{background:#b0f9d7}
+.rs-studio .rs-float-bar button:focus-visible{outline:3px solid #94edc4;outline-offset:2px}
+.rs-studio[data-rs-mode="lab"] .rs-float-bar,.rs-studio[data-rs-drawer="structure"] .rs-float-bar,.rs-studio[data-rs-drawer="global"] .rs-float-bar{display:none}
+
+/* the temporary drawer + its backdrop hang under the 70px bar and beside the 92px rail (the rail stays clickable) */
+.rs-studio .context-panel{top:70px;right:92px}
+.rs-studio .rs-drawer-backdrop{top:70px;right:92px}
+
+/* header budget: the bar carries ten more controls than the reference, so secondary text yields first and the
+   labelled navigation yields last (icon-only with title tooltips below 1400px); no control is ever removed */
+@media (max-width:1800px){
+  .rs-studio .app-top .project-title p{display:none}
+  .rs-studio .app-top .project-title{flex-basis:150px}
+  .rs-studio .app-top .top-nav{gap:4px}
+  .rs-studio .app-top .top-nav button{padding:0 11px;font-size:11.5px}
+  .rs-studio .app-top .project-actions .hide-medium{display:none}
+}
+@media (max-width:1500px){
+  .rs-studio .app-top .project-title{flex:0 0 auto;padding-inline-start:12px}
+  .rs-studio .app-top .project-title h1{font-size:0}
+  .rs-studio .app-top .project-title h1 .pill{font-size:10px;margin:0}
+}
+@media (max-width:1280px){
+  .rs-studio .app-top .brand small{display:none}
+  .rs-studio .app-top .top-nav button{padding:0 9px;font-size:11px;gap:6px}
+}
+@media (max-width:1400px){
+  .rs-studio .app-top a.brand{min-width:0}
+  .rs-studio .app-top .top-nav .nav-label{display:none}
+  .rs-studio .app-top .top-nav button{width:40px;padding:0;justify-content:center}
+  .rs-studio .app-top .save-feedback{max-width:96px}
+}
+/* the reference's own narrow-screen values: 65px bar, 67px rail with 57px tools */
+@media (max-width:800px){
+  .rs-studio .app-top{height:65px;min-height:65px;padding:0 9px;gap:5px}
+  .rs-studio .app-top .brand .rs-brand-name{display:none}
+  .rs-studio .app-top .project-title{display:none}
+  .rs-studio .app-top .brand-mark{width:38px;height:38px}
+  .rs-studio .app-top .save-feedback{display:none}
+  .rs-studio .app-top .project-actions{gap:4px}
+  .rs-studio .app-top .project-actions .primary{min-width:0;padding:0 12px}
+  .rs-studio .app-top .user-menu>button:not(.avatar){font-size:0;gap:0;padding:0 8px}
+  .rs-studio .rs-rail{flex-basis:67px;width:67px;padding:10px 4px}
+  .rs-studio .rs-rail .rail-btn{width:57px;min-height:62px;font-size:9px}
+  .rs-studio .context-panel,.rs-studio .rs-drawer-backdrop{top:65px;right:67px}
+}
+@media (max-width:560px){
+  .rs-studio .app-top .top-nav{flex:1 1 0;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;gap:4px}
+  .rs-studio .app-top .top-nav button{flex:0 0 auto;width:34px;height:34px}
+  .rs-studio.rs-studio .app-top .icon-btn{width:32px;height:32px}
+  .rs-studio .app-top .user-menu{display:none}
+  .rs-studio .app-top .project-actions .outline{width:34px;height:34px;padding:0}
+  .rs-studio .app-top .project-actions .primary{height:34px}
+  .rs-studio .rs-float-bar{bottom:60px}
+}
+
+/* ---- V5 stage head, canvas frame, dialogs, block library and layout cards (RastiSi_Studio_V5.html: .stagehead / .seg /
+   .modal / .library-card / .layout-card). Presentation only; same markup, same actions, same hooks as before. ---- */
+.rs-studio .stage{background-color:#e8edf1;background-image:radial-gradient(circle,#cbd5df 1px,transparent 1.2px);background-size:20px 20px}
+.rs-studio .stage-toolbar{height:59px;min-height:59px;padding:10px 23px;gap:12px;background:#fdfefe;border-bottom:1px solid #d7e0e8}
+.rs-studio .stage-toolbar>.row{flex:1 1 auto;min-width:0;gap:9px;color:#8a98a7;font-size:11px}
+.rs-studio .stage-toolbar .page-select{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;background:transparent;color:#8a98a7}
+.rs-studio .stage-toolbar .page-select select{min-width:150px;height:36px;padding:0 12px;border:1px solid #e0e7ed;border-radius:11px;background:#fdfefe;color:#152233;font-size:13px;font-weight:800}
+.rs-studio .stage-toolbar .scope-tag{color:#8a98a7;font-size:11px}
+.rs-studio .device-switch{height:auto;gap:3px;padding:3px;border:1px solid #e0e7ed;border-radius:11px;background:#edf2f6}
+.rs-studio .device-switch button{min-height:30px;height:30px;padding:0 10px;border-radius:8px;color:#64748b}
+.rs-studio .device-switch button.active{background:#fff;color:#104a36;box-shadow:0 1px 4px #1b284a1f}
+.rs-studio .device-switch span{color:#64748b}
+.rs-studio .stage-toolbar select[data-control=zoom]{border:0;background:transparent;color:#64748b;font-size:11px}
+.rs-studio .browser-chrome{height:34px;min-height:34px;border-color:#d7e0e8;border-radius:14px 14px 0 0;background:#fff}
+.rs-studio .browser-url{min-width:min(380px,40%);justify-content:center;padding:4px 14px;border-radius:8px;background:#f1f4f7;color:#8a98a7}
+.rs-studio .stage-caption{color:#64748b}
+
+.rs-studio .modal-backdrop{background:#0d182a66;backdrop-filter:blur(4px)}
+.rs-studio .modal{border:1px solid #edf1f4;border-radius:20px;box-shadow:0 30px 90px #0d182a66}
+.rs-studio .modal:has(.rs-library),.rs-studio .modal:has(.rs-add-row){width:min(100%,860px)}
+.rs-studio .modal-head{padding:19px 25px;border-bottom:1px solid #e7ebf1}
+.rs-studio .modal-head h2{color:#152233;font-size:18px;font-weight:800}
+.rs-studio .modal-head p{color:#8a98a7}
+.rs-studio .modal-head .icon-btn{width:36px;height:36px;border:1px solid #e0e7ed;border-radius:10px;color:#475569}
+.rs-studio .modal-body{padding:23px 27px 31px}
+.rs-studio .modal-foot{padding:15px 25px;background:#f8fafb;border-top:1px solid #e7ecf0}
+.rs-studio .modal-foot p{color:#8a98a7}
+.rs-studio .rs-toast{background:#151a25;color:#fff;border-radius:12px;padding:11px 16px;box-shadow:0 6px 18px #0004}
+
+.rs-studio .rs-library{display:grid;gap:18px}
+.rs-studio .rs-library-group>.section-label{margin-bottom:10px;color:#64748b;font-size:12px;font-weight:800}
+.rs-studio .rs-library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.rs-studio .rs-library-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;min-height:84px;padding:14px;border:1px solid #e2e9ef;border-radius:14px;background:#fff;color:#152233;text-align:right;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.rs-studio .rs-library-card .icon{width:20px;height:20px;color:#169b73}
+.rs-studio .rs-library-card strong{font-size:12.5px;font-weight:800;line-height:1.5}
+.rs-studio .rs-library-card:hover{border-color:#81caae;box-shadow:0 10px 26px #18384716;transform:translateY(-2px)}
+.rs-studio .rs-library-card:focus-visible{outline:3px solid #169b73;outline-offset:2px}
+
+.rs-studio .rs-add-row-layouts{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.rs-studio .rs-add-row-layouts legend{color:#152233;font-size:13px;font-weight:800}
+.rs-studio .rs-layout-card{gap:8px;justify-items:stretch;padding:12px;border:1px solid #e2e9ef;border-radius:14px;background:#fff}
+.rs-studio .rs-layout-card:hover{border-color:#81caae;box-shadow:0 10px 26px #18384716}
+.rs-studio .rs-layout-card:has(input:checked){border-color:#169b73;background:#f3fbf7;box-shadow:0 0 0 2px #169b73}
+.rs-studio .rs-layout-card:has(input:checked)::before{content:"✓ انتخاب شده";position:absolute;top:18px;inset-inline-end:18px;z-index:1;padding:2px 7px;border-radius:6px;background:#d9f7ea;color:#0b6b4f;font-size:9px;font-weight:800;pointer-events:none}
+.rs-studio .rs-layout-preview{box-sizing:border-box;height:46px;padding:6px;border:1px solid #e7ecf0;border-radius:10px;background:#f5f8fa}
+.rs-studio .rs-layout-preview i{border-radius:5px;background:#a8b9cc}
+.rs-studio .rs-layout-preview i:first-child{background:#3fae8c}
+.rs-studio .rs-layout-name{color:#152233;font-size:12.5px;font-weight:800;text-align:center}
+
+@media (max-width:800px){
+  .rs-studio .stage-toolbar{padding:8px;height:auto;min-height:59px}
+  .rs-studio .modal-body{padding:17px}
+  .rs-studio .modal-head{padding:13px}
+  .rs-studio .rs-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* ---- V5 add dialog: «بخش‌ها» / «چیدمان» tabs, library search, and visual library cards (title, schematic glyph, description,
+   category). Presentation only; every card still forwards to the existing select + R4 add button. ---- */
+.rs-studio .rs-add-tabs{display:flex;gap:4px;margin:16px 27px 0;padding:4px;border:1px solid #e0e7ed;border-radius:12px;background:#edf2f6}
+.rs-studio .rs-add-tabs button{flex:1 1 0;min-height:38px;border:0;border-radius:9px;background:transparent;color:#64748b;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.rs-studio .rs-add-tabs button.active{background:#fff;color:#104a36;box-shadow:0 1px 4px #1b284a1f}
+.rs-studio .rs-add-tabs button:focus-visible{outline:3px solid #169b73;outline-offset:1px}
+.rs-studio .rs-library-search{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border:1px solid #e0e7ed;border-radius:12px;background:#fff;color:#64748b}
+.rs-studio .rs-library-search .icon{width:16px;height:16px;flex:none}
+.rs-studio .rs-library-search input{flex:1 1 auto;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:13px;color:#152233}
+.rs-studio .rs-library-search:focus-within{border-color:#169b73;box-shadow:0 0 0 3px #169b7329}
+.rs-studio .rs-library-empty{margin:0;padding:22px;border:1px dashed #cbd5df;border-radius:12px;color:#64748b;font-size:13px;text-align:center}
+.rs-studio .rs-library-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.rs-studio .rs-library-card{min-height:156px;gap:7px;align-items:stretch;padding:12px}
+.rs-studio .rs-library-card strong{display:flex;align-items:center;gap:7px;font-size:13px}
+.rs-studio .rs-library-card strong .icon{width:16px;height:16px;flex:none;color:#169b73}
+.rs-studio .rs-library-card small{color:#64748b;font-size:11px;font-weight:500;line-height:1.7}
+.rs-studio .rs-library-card em{align-self:flex-start;margin-top:auto;padding:2px 8px;border-radius:999px;background:#eef2f6;color:#64748b;font-size:10px;font-style:normal;font-weight:700}
+.rs-studio .rs-wire{display:flex;gap:4px;align-items:stretch;box-sizing:border-box;width:100%;height:50px;padding:6px;border:1px solid #e7ecf0;border-radius:10px;background:#f5f8fa}
+.rs-studio .rs-wire i{display:block;flex:1 1 0;border-radius:4px;background:#a8b9cc}
+.rs-studio .rs-wire--grid i:first-child{background:#3fae8c}
+.rs-studio .rs-wire--wide i:nth-child(n+2){display:none}
+.rs-studio .rs-wire--wide i{background:#3fae8c}
+.rs-studio .rs-wire--cards i:nth-child(3){display:none}
+.rs-studio .rs-wire--split i:first-child{background:#3fae8c}
+.rs-studio .rs-wire--split i:nth-child(3){display:none}
+.rs-studio .rs-wire--lines{flex-direction:column;justify-content:center;gap:5px}
+.rs-studio .rs-wire--lines i{flex:none;height:6px}
+.rs-studio .rs-wire--lines i:nth-child(1){width:55%;background:#3fae8c}
+.rs-studio .rs-wire--lines i:nth-child(2){width:100%}
+.rs-studio .rs-wire--lines i:nth-child(3){width:75%}
+.rs-studio .rs-wire--strip{align-items:center}
+.rs-studio .rs-wire--strip i{flex:1 1 0;height:16px}
+.rs-studio .rs-wire--strip i:first-child{background:#3fae8c}
+@media (max-width:560px){
+  .rs-studio .rs-library-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .rs-studio .rs-library-card{min-height:128px;padding:10px}
+  .rs-studio .rs-add-tabs{margin:12px 14px 0}
+}
+
+/* ---- V5-LAYOUT-001: schematic for the stacked pattern (one big cell + one narrow cell holding two sections) ---- */
+.rs-studio .rs-layout-preview .rs-stack{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rs-studio .rs-layout-preview .rs-stack i{flex:1 1 0;background:#a8b9cc}
+.rs-studio .rs-layout-preview .rs-stack i:first-child{background:#a8b9cc}
+
+/* ---- V5-LAYOUT-011: «حذف چیدمان» in the rows panel ---- */
+.rs-studio .rs-container-group .outline-header{flex-wrap:wrap;gap:8px}
+.rs-studio .rs-container-remove{padding:5px 11px;font-size:12px;color:var(--danger);border-color:#e6c8c9;background:#fff}
+.rs-studio .rs-container-remove:hover:not(:disabled){background:#fbeeee}
+.rs-studio .rs-container-group .outline-header > span{flex:1 1 100%}
+.rs-studio .rs-container-group .outline-header > label{flex:1 1 150px;min-width:0}
+.rs-studio .rs-container-group .outline-header .r4-structure-layout-select{width:100%}
+
+/* ---- V5-RESIZE: on-canvas layer (contextual toolbar + resize handles). A transparent overlay above the preview: it never takes pointer
+   events itself, only the toolbar buttons and the handles do, so no invisible layer lies over the storefront content. ---- */
+.rs-studio .rs-overlay{position:absolute;inset:0;z-index:30;pointer-events:none;direction:rtl;overflow:hidden}
+.rs-studio .rs-overlay [hidden]{display:none}
+.rs-studio .rs-sel-toolbar{position:absolute;display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:#10192b;color:#e8edf6;box-shadow:0 8px 24px #0a122a52;pointer-events:auto;white-space:nowrap}
+.rs-studio .rs-sel-toolbar .rs-tb-btn{width:36px;height:36px;min-width:36px;padding:0;border-radius:9px;color:#cfd8e8;border:0;background:transparent}
+.rs-studio .rs-sel-toolbar .rs-tb-btn svg{width:18px;height:18px;flex:none}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[hidden]{display:none}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[aria-pressed="true"]{color:#fbbf24}
+.rs-studio .rs-sel-toolbar .rs-tb-btn:hover:not(:disabled){background:#22304b;color:#fff}
+.rs-studio .rs-sel-toolbar .rs-tb-btn:disabled{color:#64708a;background:transparent}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.primary{width:auto;padding:0 14px 0 12px;background:#22c55e;color:#04230f;font-weight:700;gap:6px}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.primary:hover:not(:disabled){background:#4ade80;color:#04230f}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.primary + .rs-tb-btn{margin-inline-start:4px}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="up"],.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="remove"],.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="close"]{position:relative}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="up"]::before,.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="remove"]::before,.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="close"]::before{content:"";position:absolute;inset-inline-start:-2px;top:9px;bottom:9px;width:1px;background:#2b3a57}
+.rs-studio .rs-sel-toolbar .rs-tb-btn[data-rs-sel="remove"]:hover:not(:disabled){background:#4a1f2a;color:#ffb4b8}
+.rs-studio .rs-sel-toolbar .rs-tb-btn:focus-visible{outline:2px solid #86efac;outline-offset:1px}
+.rs-studio .rs-handle{position:absolute;display:flex;align-items:center;justify-content:center;padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;z-index:2}
+.rs-studio .rs-handle i{display:block;border-radius:99px;background:var(--primary);box-shadow:0 0 0 2px #fff,0 2px 8px #1d1f2b4d;transition:transform .12s}
+.rs-studio .rs-handle:hover i,.rs-studio .rs-handle.dragging i,.rs-studio .rs-handle:focus-visible i{transform:scale(1.18);background:#3f3acf}
+.rs-studio .rs-handle:focus-visible{outline:2px solid #3f3acf;outline-offset:2px}
+.rs-studio .rs-handle-h{cursor:ns-resize}.rs-studio .rs-handle-h i{width:44px;height:6px}
+.rs-studio .rs-handle-s{cursor:ns-resize}.rs-studio .rs-handle-s i{width:44px;height:6px;background:#0f9d73}
+.rs-studio .rs-handle-w{cursor:ew-resize}.rs-studio .rs-handle-w i{width:6px;height:30px}
+.rs-studio .rs-handle-c{cursor:col-resize}.rs-studio .rs-handle-c i{width:6px;height:44px;background:#0f9d73}
+/* touch target >= 40px without changing the visible bar */
+.rs-studio .rs-handle-h::after,.rs-studio .rs-handle-s::after{content:"";position:absolute;inset:-12px 0}
+.rs-studio .rs-handle-w::after,.rs-studio .rs-handle-c::after{content:"";position:absolute;inset:0 -12px}
+.rs-studio .rs-overlay.is-dragging{cursor:grabbing}
+.rs-studio .rs-hint{position:absolute;padding:5px 10px;border-radius:8px;background:#10192b;color:#fff;font-size:12px;font-weight:600;box-shadow:0 6px 18px #0a122a52;pointer-events:none;white-space:nowrap;z-index:3}
+.rs-studio .rs-hint.note{max-width:min(420px,70%);white-space:normal;font-weight:500;background:#fff7e6;color:#6b4a00;border:1px solid #f0d9a2;box-shadow:0 4px 14px #4a37000f}
+.rs-studio .rs-auto-chip{position:absolute;padding:3px 11px;min-height:28px;border-radius:99px;background:#fff;border:1px solid #cfd0e6;color:var(--primary);font-size:12px;font-weight:600;pointer-events:auto;box-shadow:0 2px 8px #1d1f2b26;z-index:2}
+.rs-studio .rs-auto-chip:hover{background:var(--primary-soft)}
+@media (pointer:coarse){
+  .rs-studio .rs-sel-toolbar .rs-tb-btn{width:44px;height:44px;min-width:44px}
+  .rs-studio .rs-sel-toolbar .rs-tb-btn.primary{width:auto}
+  .rs-studio .rs-handle-h::after,.rs-studio .rs-handle-s::after{inset:-16px 0}
+  .rs-studio .rs-handle-w::after,.rs-studio .rs-handle-c::after{inset:0 -16px}
+  .rs-studio .rs-handle-w i{width:8px;height:40px}.rs-studio .rs-handle-c i{width:8px}
+}
+
+/* ---- V5 announcement strip block (global design panel) ---- */
+.rs-studio .r4-announce-block{display:flex;flex-direction:column;gap:8px}
+.rs-studio .r4-announce-entry{display:flex;flex-direction:column;gap:8px;margin:6px 0}
+.rs-studio .r4-announce-image{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fafafc}
+.rs-studio .r4-announce-image-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rs-studio .r4-announce-thumb{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:40px;padding:0 6px;border:1px dashed #c9ccd6;border-radius:8px;background:#fff;color:var(--muted);font-size:11px}
+.rs-studio .r4-announce-thumb img{max-height:32px;max-width:96px;object-fit:contain}
+.rs-studio .r4-announce-image [data-r4-announce-status].is-error{color:var(--danger)}
+.rs-studio .r4-announce-image-row button,.rs-studio .r4-announce-entry button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+.rs-studio .r4-announce-image-row button:hover:not(:disabled),.rs-studio .r4-announce-entry button:hover{background:#f4f6f1}
+.rs-studio .r4-announce-image-row button:disabled{color:#9aa3a0;background:#f4f5f3;cursor:not-allowed}
+.rs-studio .r4-announce-image[aria-busy="true"] button{pointer-events:none;color:var(--disabled-ink)}
+
+/* «افزودن چیدمان» — group headings + ready-made samples (2–4 columns) */
+.rs-studio .rs-add-row-layouts .rs-layout-group{grid-column:1/-1;margin:6px 0 0;padding-top:8px;border-top:1px solid #e7ecf0;font-size:12.5px;font-weight:800;color:#456}
+.rs-studio .rs-add-row-layouts .rs-layout-group:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.rs-studio .rs-layout-sample{grid-column:span 2}
+.rs-studio .rs-layout-hint{font-size:11.5px;line-height:1.7;color:#5b6b7a;text-align:center}
+
+/* ===== V5 Visual Layout Composer (r4_composer.js) ===== */
+.rs-studio .rs-cmp-layer{position:absolute;inset:0;z-index:31;pointer-events:none;direction:rtl;overflow:hidden}
+.rs-studio .rs-cmp-layer [hidden]{display:none}
+.rs-studio .rs-cmp-outline{position:absolute;border:2px solid #6d4aff;border-radius:6px;background:rgba(109,74,255,.05);box-shadow:0 0 0 1px rgba(255,255,255,.7) inset;pointer-events:none}
+.rs-studio .rs-cmp-outline[data-kind="group"]{border-color:#0f9d73;background:rgba(15,157,115,.05)}
+.rs-studio .rs-cmp-tag{position:absolute;top:0;inset-inline-end:0;transform:translateY(-100%);padding:2px 8px;border-radius:6px 6px 0 0;background:#6d4aff;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
+.rs-studio .rs-cmp-outline[data-kind="group"] .rs-cmp-tag{background:#0f9d73}
+.rs-studio .rs-cmp-toolbar{position:absolute;display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:#10192b;color:#e8edf6;box-shadow:0 8px 24px #0a122a52;pointer-events:auto;white-space:nowrap}
+.rs-studio .rs-cmp-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:34px;height:34px;padding:0 6px;border:0;border-radius:9px;background:transparent;color:#cfd8e8;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.rs-studio .rs-cmp-btn svg{width:17px;height:17px;flex:none}
+.rs-studio .rs-cmp-btn:hover:not(:disabled){background:#22304b;color:#fff}
+.rs-studio .rs-cmp-btn:disabled{color:#5b6781;cursor:not-allowed}
+.rs-studio .rs-cmp-btn.primary{background:#22c55e;color:#04230f;padding:0 12px}
+.rs-studio .rs-cmp-btn.primary:hover:not(:disabled){background:#4ade80;color:#04230f}
+.rs-studio .rs-cmp-btn[data-cmp="remove"]:hover:not(:disabled){background:#4a1f2a;color:#ffb4b8}
+.rs-studio .rs-cmp-layout{padding:0 10px;background:#22304b;color:#fff}
+.rs-studio .rs-cmp-btn:focus-visible,.rs-studio .rs-cmp-split:focus-visible,.rs-studio .rs-cmp-add:focus-visible{outline:2px solid #86efac;outline-offset:1px}
+.rs-studio .rs-cmp-menu{position:absolute;width:270px;padding:12px;border-radius:14px;background:#10192b;color:#e8edf6;box-shadow:0 14px 36px #0a122a66;pointer-events:auto}
+.rs-studio .rs-cmp-menu-title{margin:0 0 8px;font-size:12px;font-weight:800;color:#94edc4}
+.rs-studio .rs-cmp-splits{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rs-studio .rs-cmp-split,.rs-studio .rs-cmp-add{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;border:1px solid #2b3a57;border-radius:10px;background:#16233b;color:#dfe8f5;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.rs-studio .rs-cmp-split:hover,.rs-studio .rs-cmp-add:hover:not(:disabled){background:#22304b;border-color:#94edc4;color:#fff}
+.rs-studio .rs-cmp-add{flex-direction:row;justify-content:center;width:100%;margin-top:8px;padding:8px}
+.rs-studio .rs-cmp-add:disabled{color:#7f8da6;cursor:not-allowed}
+.rs-studio .rs-cmp-menu-note{margin:10px 0 0;font-size:10.5px;line-height:1.7;color:#9fb0c9}
+.rs-studio .rs-cmp-pct{position:absolute;width:40px;padding:1px 0;border-radius:6px;background:rgba(16,25,43,.82);color:#fff;font-size:10.5px;font-weight:800;text-align:center;pointer-events:none}
+/* panel */
+.rs-studio .rs-cmp-panel{position:absolute;z-index:32;top:12px;inset-inline-end:12px;display:flex;flex-direction:column;width:330px;max-height:calc(100% - 24px);border-radius:16px;background:#fff;color:#1c2535;box-shadow:0 18px 48px rgba(15,26,42,.28);direction:rtl;overflow:hidden}
+.rs-studio .rs-cmp-panel[hidden]{display:none}
+.rs-studio .rs-cmp-ph{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #e6eaf1;background:#f6f8fb}
+.rs-studio .rs-cmp-tabs{display:flex;gap:4px}
+.rs-studio .rs-cmp-tabs button{padding:6px 12px;border:0;border-radius:9px;background:transparent;color:#51607a;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer}
+.rs-studio .rs-cmp-tabs button.on{background:#10192b;color:#fff}
+.rs-studio .rs-cmp-x{width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:#51607a;cursor:pointer}
+.rs-studio .rs-cmp-x:hover{background:#e6eaf1}
+.rs-studio .rs-cmp-pb{padding:10px;overflow:auto}
+.rs-studio .rs-cmp-tree{display:flex;flex-direction:column;gap:2px}
+.rs-studio .rs-cmp-sec{margin:8px 4px 2px;font-size:10.5px;font-weight:800;color:#8391a9;letter-spacing:.02em}
+.rs-studio .rs-cmp-node{display:flex;align-items:center;gap:7px;width:100%;padding:6px 8px;padding-inline-start:calc(8px + var(--d,0) * 14px);border:1px solid transparent;border-radius:9px;background:transparent;color:#1c2535;font:inherit;font-size:12px;text-align:start;cursor:pointer}
+.rs-studio .rs-cmp-node svg{width:15px;height:15px;flex:none;color:#7a8aa5}
+.rs-studio .rs-cmp-node b{font-weight:750}
+.rs-studio .rs-cmp-node small{margin-inline-start:auto;color:#8391a9;font-size:10.5px}
+.rs-studio .rs-cmp-node:hover{background:#f0f3f9}
+.rs-studio .rs-cmp-node.on{background:#e8f7f0;border-color:#0f9d73}
+.rs-studio .rs-cmp-wide{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:10px;padding:9px;border:1px dashed #0f9d73;border-radius:10px;background:#f1fbf6;color:#0b6e51;font:inherit;font-weight:800;cursor:pointer}
+.rs-studio .rs-cmp-wide svg{width:16px;height:16px}
+.rs-studio .rs-cmp-empty,.rs-studio .rs-cmp-note{margin:6px 4px;font-size:11.5px;line-height:1.8;color:#6b7a93}
+.rs-studio .rs-cmp-gh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.rs-studio .rs-cmp-gh small{color:#8391a9}
+.rs-studio .rs-cmp-sect{margin-bottom:6px;border:1px solid #e6eaf1;border-radius:11px}
+.rs-studio .rs-cmp-sect>summary{padding:8px 11px;font-size:12.5px;font-weight:800;cursor:pointer;list-style:none}
+.rs-studio .rs-cmp-sect>summary::-webkit-details-marker{display:none}
+.rs-studio .rs-cmp-sect>div{padding:2px 11px 10px}
+.rs-studio .rs-cmp-field{margin:8px 0}
+.rs-studio .rs-cmp-field label{display:block;margin-bottom:4px;font-size:11.5px;font-weight:700;color:#51607a}
+.rs-studio .rs-cmp-field input[type=text],.rs-studio .rs-cmp-field textarea,.rs-studio .rs-cmp-field select{width:100%;padding:7px 9px;border:1px solid #cdd6e4;border-radius:8px;background:#fff;font:inherit;font-size:12.5px}
+.rs-studio .rs-cmp-range{display:flex;align-items:center;gap:8px}
+.rs-studio .rs-cmp-range input[type=range]{flex:1}
+.rs-studio .rs-cmp-range input[type=number]{width:62px;padding:5px;border:1px solid #cdd6e4;border-radius:8px;font:inherit;font-size:12px}
+.rs-studio .rs-cmp-colors{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.rs-studio .rs-cmp-sw{width:22px;height:22px;padding:0;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #b8c3d6;cursor:pointer}
+.rs-studio .rs-cmp-sw.on{box-shadow:0 0 0 2px #0f9d73}
+.rs-studio .rs-cmp-sw.clear{background:#fff;color:#8391a9;line-height:18px;font-size:14px}
+.rs-studio .rs-cmp-colors input[type=color]{width:28px;height:24px;padding:0;border:1px solid #b8c3d6;border-radius:6px;background:none}
+.rs-studio .rs-cmp-check{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:12.5px;font-weight:700}
+.rs-studio .rs-cmp-themes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rs-studio .rs-cmp-themes button{padding:8px 4px;border:1px solid #cdd6e4;border-radius:9px;background:#f6f8fb;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.rs-studio .rs-cmp-themes button:hover{border-color:#0f9d73;background:#eefaf4}
+.rs-studio .rs-cmp-media{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.rs-studio .rs-cmp-thumb{aspect-ratio:1;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#eef1f6;cursor:pointer}
+.rs-studio .rs-cmp-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.rs-studio .rs-cmp-thumb.on{border-color:#0f9d73}
+.rs-studio .rail-btn.on{background:#2d3748;border-color:#94edc4;color:#fff}
+.rs-studio .rs-cmp-confirm-wrap{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(10,18,42,.45);direction:rtl}
+.rs-studio .rs-cmp-confirm{width:min(420px,calc(100vw - 32px));padding:20px;border-radius:16px;background:#fff;color:#1c2535;box-shadow:0 24px 64px rgba(10,18,42,.4);font-family:inherit}
+.rs-studio .rs-cmp-confirm p{margin:0 0 16px;line-height:1.9;font-size:14px;font-weight:600}
+.rs-studio .rs-cmp-confirm-actions{display:flex;gap:8px;justify-content:flex-end}
+.rs-studio .rs-cmp-confirm-actions button{padding:9px 16px;border:1px solid #cdd6e4;border-radius:10px;background:#f6f8fb;font:inherit;font-weight:800;cursor:pointer}
+.rs-studio .rs-cmp-confirm-actions .rs-cmp-danger{background:#d92d20;border-color:#d92d20;color:#fff}
+@media (max-width:900px){.rs-studio .rs-cmp-panel{width:min(330px,calc(100% - 24px))}}
+.rs-studio .rs-handle-r{cursor:ns-resize}.rs-studio .rs-handle-r i{width:44px;height:6px;background:#0f9d73}
+.rs-studio .rs-handle-r::after{content:"";position:absolute;inset:-3px 0}
+.rs-studio .rs-sel-toolbar .rs-tb-btn.text{width:auto;padding:0 10px;gap:6px;font-size:12px;font-weight:700;background:#22304b;color:#fff}
+.rs-studio .rs-cmp-panel[data-side="start"]{inset-inline-end:auto;inset-inline-start:12px}
+.rs-studio .rs-cmp-ph-actions{display:flex;gap:2px}
+/* V5 Composer — one toolbar for every selection: the name of what is selected sits inside it */
+.rs-studio .rs-cmp-name{display:inline-flex;align-items:center;gap:6px;max-width:220px;height:30px;margin-inline-end:4px;padding:0 10px;border-radius:9px;background:#22304b;color:#fff;font-size:12px;cursor:default}
+.rs-studio .rs-cmp-name i{flex:none;width:8px;height:8px;border-radius:50%;background:#94edc4}
+.rs-studio .rs-cmp-name b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.rs-studio .rs-cmp-picks{display:flex;flex-direction:column;gap:5px}
+.rs-studio .rs-cmp-pick{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #2b3a57;border-radius:10px;background:#16233b;color:#dfe8f5;font:inherit;font-size:12.5px;font-weight:700;text-align:start;cursor:pointer}
+.rs-studio .rs-cmp-pick svg{width:16px;height:16px;flex:none}
+.rs-studio .rs-cmp-pick small{margin-inline-start:auto;color:#9fb0c9}
+.rs-studio .rs-cmp-pick:hover{background:#22304b;border-color:#94edc4}
+.rs-studio .rs-cmp-ph-title{font-size:13px}
+@media (max-width:760px){
+  .rs-studio .rs-cmp-toolbar{flex-wrap:wrap;max-width:calc(100% - 12px);row-gap:2px}
+  .rs-studio .rs-cmp-name{max-width:150px}
+  .rs-studio .rs-cmp-btn{min-width:32px}
+}

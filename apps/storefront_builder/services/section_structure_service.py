@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import copy
 
+from django.db.models import F
+
 from .. import section_registry
 from ..models import StorefrontCell, StorefrontContainer, StorefrontPage, StorefrontSection
 from . import container_service, layout_service, row_service
@@ -119,6 +121,67 @@ def add_section(*, draft, section_key: str, page_type: str) -> StorefrontSection
     return new_section
 
 
+#: V5-LAYOUT-ATOMIC — bounds of one ``add_container`` request (a layout has at most ``container_service.MAX_CELLS`` cells).
+MAX_BLOCKS_PER_CELL = 4
+MAX_BLOCKS_PER_CONTAINER = 8
+
+
+def add_container(*, draft, page_type: str, layout_key: str, cells=None, spans=None) -> StorefrontContainer:
+    """V5-LAYOUT-ATOMIC — create ONE new Container (at the end of the page) with the Cells of an EXISTING layout preset, optionally
+    with initial Blocks per Cell. Everything runs inside the caller's single ``apply_mutation`` transaction, so a refusal in ANY
+    Block (page/type legality, single-instance limit, ...) rolls the whole build back: no half-built layout, one Revision, one
+    history step. Reuses only existing primitives — ``create_empty_container`` for the layout and ``add_section_to_cell`` for each
+    Block, i.e. every per-Block validation (page type, hidden-from-library, max instances, container lock, draft scoping) is the
+    SAME code path as ``cell.add_section``; nothing is re-implemented or relaxed here.
+
+    ``cells`` is optional: ``None``/``[]``/empty lists create fully EMPTY Cells (the merchant fills them later through
+    ``cell.add_section``). Otherwise it is a list (at most one entry per Cell of the preset) of lists of section keys; a Cell with
+    two keys becomes a multi-block Cell whose Blocks are independent Sections (own id, own settings).
+
+    ``spans`` is optional too: one width per Cell (the Cell count of the preset), applied through the SAME validated
+    ``container_service.resize_container`` the drag handles use (sum 12, minimum usable width, locked/stacked rules) — so an
+    asymmetric row such as 4/2/4/2 is still ONE ``container.add`` with ONE Revision."""
+    if page_type not in StorefrontPage.PageType.values:
+        raise SectionStructureError("invalid_page_type")
+    preset_spans = container_service.layout_spans(layout_key)
+    if preset_spans is None or len(preset_spans) < 2:
+        raise SectionStructureError("invalid_container_layout")
+
+    if cells is None:
+        cells = []
+    if not isinstance(cells, (list, tuple)) or len(cells) > len(preset_spans):
+        raise SectionStructureError("invalid_cells")
+    plan = []
+    total = 0
+    for entry in cells:
+        keys = list(entry) if isinstance(entry, (list, tuple)) else None
+        if keys is None or len(keys) > MAX_BLOCKS_PER_CELL or any(not isinstance(k, str) or not k for k in keys):
+            raise SectionStructureError("invalid_cells")
+        total += len(keys)
+        plan.append(keys)
+    if total > MAX_BLOCKS_PER_CONTAINER:
+        raise SectionStructureError("invalid_cells")
+
+    page = draft.get_page(page_type)
+    container_service.ensure_page_containers(page)
+    try:
+        container = container_service.create_empty_container(page, layout_key)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_container_layout") from exc
+    if spans is not None:
+        try:
+            container_service.resize_container(container, spans=spans)
+        except container_service.ContainerResizeError as exc:
+            raise SectionStructureError(exc.code) from exc
+        except (container_service.ContainerLayoutError, TypeError, ValueError) as exc:
+            raise SectionStructureError("invalid_resize_value") from exc
+    created_cells = list(container.cells.order_by("order", "id"))
+    for cell, keys in zip(created_cells, plan):
+        for section_key in keys:
+            add_section_to_cell(draft=draft, section_key=section_key, cell_id=cell.pk)
+    return container
+
+
 def _scoped_cell(draft, cell_id) -> StorefrontCell:
     """Same strict scoping rule as ``_scoped_section`` above, for a Cell
     id instead of a Section id."""
@@ -169,6 +232,9 @@ def add_section_to_cell(*, draft, section_key: str, cell_id: int) -> StorefrontS
         existing_count = page.sections.filter(section_key=section_key).count()
         if existing_count >= definition.max_instances:
             raise SectionStructureError("max_instances_exceeded")
+
+    if container_service.child_container(cell) is not None:
+        raise SectionStructureError("cell_hosts_group")
 
     new_section = StorefrontSection.objects.create(
         page=page, section_key=section_key, order=_next_page_order(page),
@@ -284,7 +350,7 @@ def _scoped_container(draft, container_id) -> StorefrontContainer:
     """Same strict scoping rule as ``_scoped_section`` above, for a
     Container id instead of a Section id."""
     try:
-        return StorefrontContainer.objects.select_for_update().get(
+        return StorefrontContainer.all_objects.select_for_update().get(
             pk=container_id, page__version=draft,
         )
     except StorefrontContainer.DoesNotExist:
@@ -304,23 +370,113 @@ def change_container_layout(*, draft, container_id: int, layout_key: str) -> Sto
         raise SectionStructureError("invalid_container_layout") from exc
 
 
+#: V5-RESIZE — the section size dimensions a visual drag may change, and the ``settings["design"]`` key each one is stored under. «Auto» =
+#: the key is ABSENT (every legacy section is Auto); a dimension passed as ``None`` (or its neutral value) removes the key again.
+RESIZE_DIMENSIONS = {"height": "min_height", "width": "width_pct", "align": "width_align"}
+
+
+def resize_section(*, draft, section_id: int, changes: dict) -> StorefrontSection:
+    """V5-RESIZE — set / clear a Section's manual size. One central contract for EVERY section type: the three values live in the existing
+    sparse ``settings["design"]`` block (``min_height`` = a floor, never a clip; ``width_pct`` = share of the Cell; ``width_align``), are
+    merged INTO it (every other design key is kept) and validated by ``design_block.validate_design_settings`` against the section's registered capabilities — the same validator every
+    settings write goes through; no other setting of the Section is read back or rewritten. Refused with no change for a locked Section or a Section in a locked Container."""
+    from .. import design_block
+
+    section = _scoped_section(draft, section_id)
+    if section.is_locked:
+        raise SectionStructureError("section_locked")
+    container_service.ensure_page_containers(section.page)
+    section.refresh_from_db()
+    cell = find_placement_cell(section)
+    if cell is not None and cell.container.is_locked:
+        raise SectionStructureError("container_locked")
+    definition = _get_definition(section.section_key)
+    if definition is None:
+        raise SectionStructureError("section_not_found")
+
+    current = dict(section.settings or {})
+    design = dict(current.get("design") or {})
+    for dimension, value in changes.items():
+        key = RESIZE_DIMENSIONS[dimension]
+        neutral = value is None or (dimension == "height" and value == 0) or (dimension == "width" and value == 100) \
+            or (dimension == "align" and value in ("", "center"))
+        if neutral:
+            design.pop(key, None)
+            if dimension == "width":
+                design.pop("width_align", None)          # a section at full width has no placement to remember
+        else:
+            design[key] = value
+    applicable = design_block.all_properties_for_capabilities(definition.capabilities)
+    dormant = design_block.dormant_design_keys(current.get("design"), applicable)
+    try:
+        cleaned = design_block.validate_design_settings(design_block.split_resubmitted_dormant(design, dormant), applicable)
+    except ValueError as exc:
+        raise SectionStructureError("invalid_resize_value") from exc
+    final_design = design_block.restore_dormant(cleaned, dormant)
+    # ONLY the design block is rewritten: every content value of the Section stays exactly as the merchant left it
+    if final_design:
+        current["design"] = final_design
+    else:
+        current.pop("design", None)
+    section.settings = current
+    section.save(update_fields=["settings", "updated_at"])
+    return section
+
+
+def remove_container(*, draft, container_id: int) -> None:
+    """V5-LAYOUT-011 — remove a Container (see ``container_service.remove_container``): an empty one is deleted; one with content is
+    dissolved into independent single-Cell rows, never deleting a Section. Refused WITHOUT any change when the Container is locked, when
+    any of its Blocks is locked, or when a Block is a legacy row member (same guards as ``section.move_to_cell``)."""
+    container = _scoped_container(draft, container_id)
+    if container.is_locked:
+        raise SectionStructureError("container_locked")
+    for block in container_service.collect_blocks(container):
+        if block.is_locked:
+            raise SectionStructureError("container_has_locked_section")
+        if row_service.is_row_member(block):
+            raise SectionStructureError("container_has_row_member")
+    try:
+        container_service.remove_container(container)
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_placement") from exc
+
+
+def resize_container(*, draft, container_id: int, spans=None, stack_split=None, set_split: bool = False) -> StorefrontContainer:
+    """V5-RESIZE — scoped wrapper over ``container_service.resize_container`` (column widths / stacked height split)."""
+    container = _scoped_container(draft, container_id)
+    try:
+        return container_service.resize_container(container, spans=spans, stack_split=stack_split, set_split=set_split)
+    except container_service.ContainerResizeError as exc:
+        raise SectionStructureError(exc.code) from exc
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_resize_layout") from exc
+
+
 def build_structure_projection(page) -> list[dict]:
-    """The exact visual order Preview renders: Container.order -> Cell.order
-    -> Block.cell_order. A purely-read projection — never mutates the page
-    (no ``ensure_page_containers`` call here; callers that need placement
-    initialized first must do that themselves before calling this)."""
+    """The exact visual order Preview renders: Container.order -> Cell.order -> Block.cell_order, descending into the Groups nested in a Cell
+    (V5) at the position of that Cell. A purely-read projection — never mutates the page (no ``ensure_page_containers`` call here; callers
+    that need placement initialized first must do that themselves before calling this)."""
     containers = list(
         page.containers.order_by("order", "id")
         .prefetch_related("cells__section", "cells__blocks")
     )
+    nested = {}
+    for child in StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).prefetch_related("cells__section", "cells__blocks").order_by("order", "id"):
+        nested.setdefault(child.parent_cell_id, []).append(child)
     items: list[dict] = []
     seen_ids: set[int] = set()
-    for container in containers:
+
+    def walk(container) -> None:
         cells = sorted(container.cells.all(), key=lambda c: (c.order, c.id))
         for cell in cells:
             for block in container_service.blocks_from_prefetched_cell(cell):
                 items.append({"section": block, "container": container, "cell": cell})
                 seen_ids.add(block.pk)
+            for child in nested.get(cell.pk, []):
+                walk(child)
+
+    for container in containers:
+        walk(container)
     # Compatibility fallback: a genuinely unplaced legacy Section (should
     # not exist after ensure_page_containers, but the projection stays
     # correct even if one slips through) is appended in page-level order.
@@ -329,6 +485,47 @@ def build_structure_projection(page) -> list[dict]:
             items.append({"section": section, "container": None, "cell": None})
             seen_ids.add(section.pk)
     return items
+
+
+def build_layout_tree(page) -> list[dict]:
+    """The Studio's read model of the page's whole layout tree — rows, Cells, nested Groups, Blocks — in render order (a pure read).
+
+    ``cells[].group`` is the nested Group hosted by that Cell (a Cell holds Blocks XOR one Group). Everything the on-canvas toolbar, the
+    layers tree and the Group inspector need comes from here, so none of them parses markup or keeps a second copy of the structure."""
+    from .. import group_style
+
+    nested = {}
+    for child in StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).prefetch_related(
+        "cells__section", "cells__blocks",
+    ).order_by("order", "id"):
+        nested.setdefault(child.parent_cell_id, []).append(child)
+
+    def label(block):
+        definition = _get_definition(block.section_key)
+        return definition.label_fa if definition is not None else block.section_key
+
+    def node(container, depth: int) -> dict:
+        settings = container_service.effective_container_settings(container.settings)
+        cells = []
+        for cell in sorted(container.cells.all(), key=lambda c: (c.order, c.id)):
+            blocks = container_service.blocks_from_prefetched_cell(cell)
+            hosted = [node(child, depth + 1) for child in nested.get(cell.pk, [])]
+            cells.append({
+                "id": cell.pk, "span": cell.span,
+                "blocks": [{"id": b.pk, "key": b.section_key, "label": label(b), "active": bool(b.is_active), "locked": bool(b.is_locked)} for b in blocks],
+                "group": hosted[0] if hosted else None,
+            })
+        return {
+            "id": container.pk, "depth": depth, "layout_key": container.layout_key, "locked": bool(container.is_locked),
+            "is_group": container_service.is_group(container) or container.parent_cell_id is not None,
+            "axis": settings.get("axis", "horizontal"), "title": settings.get("title", ""),
+            "settings": settings, "cells": cells,
+            "can_add_cell": len(cells) < container_service.cell_cap(container),
+            "style": group_style.validate_style(settings.get("style")) if settings.get("style") else {},
+        }
+
+    rows = page.containers.order_by("order", "id").prefetch_related("cells__section", "cells__blocks")
+    return [node(row, 0) for row in rows]
 
 
 def move_section(*, draft, section_id: int, direction: str) -> None:
@@ -446,3 +643,187 @@ def move_section_to_cell(*, draft, section_id: int, cell_id: int, at_index: int 
     StorefrontSection.objects.filter(pk=section.pk).update(order=_next_page_order(page))
     section.refresh_from_db()
     return section
+
+
+# ====================================================================================================================================
+# V5 Groups — scoped wrappers over the nested-layout operations of ``container_service`` (see its «V5 Groups» section). Every one of them
+# runs inside the caller's single ``apply_mutation`` transaction: a refusal anywhere rolls the whole operation back (one Revision, one Undo step).
+# ====================================================================================================================================
+def _group_call(function, *args, **kwargs):
+    try:
+        return function(*args, **kwargs)
+    except container_service.GroupOperationError as exc:
+        raise SectionStructureError(exc.code) from exc
+    except container_service.ContainerResizeError as exc:
+        raise SectionStructureError(exc.code) from exc
+    except container_service.ContainerLayoutError as exc:
+        raise SectionStructureError("invalid_container_layout") from exc
+
+
+def add_row(*, draft, page_type: str) -> StorefrontContainer:
+    """«ردیف ساده»: ONE empty single-Cell row at the end of the page — the starting point of a free layout (no preset implied)."""
+    if page_type not in StorefrontPage.PageType.values:
+        raise SectionStructureError("invalid_page_type")
+    page = draft.get_page(page_type)
+    container_service.ensure_page_containers(page)
+    return _group_call(container_service.create_empty_container, page, "single")
+
+
+def split_cell(*, draft, cell_id: int, axis: str, count: int) -> StorefrontContainer:
+    cell = _scoped_cell(draft, cell_id)
+    return _group_call(container_service.split_cell, cell, axis=axis, count=count)
+
+
+def set_group_layout(*, draft, container_id: int, axis: str, count: int) -> StorefrontContainer:
+    container = _scoped_container(draft, container_id)
+    return _group_call(container_service.set_group_layout, container, axis=axis, count=count)
+
+
+def add_group_cell(*, draft, container_id: int) -> StorefrontCell:
+    container = _scoped_container(draft, container_id)
+    return _group_call(container_service.add_group_cell, container)
+
+
+def move_cell(*, draft, cell_id: int, direction: str) -> None:
+    cell = _scoped_cell(draft, cell_id)
+    _group_call(container_service.move_group_cell, cell, direction)
+
+
+def move_container(*, draft, container_id: int, direction: str) -> None:
+    container = _scoped_container(draft, container_id)
+    _group_call(container_service.move_top_level_container, container, direction)
+
+
+def _delete_blocks(draft, blocks) -> None:
+    """Delete Sections with the SAME checks as ``section.remove`` (locked / not removable / minimum instances / legacy row member)."""
+    for block in blocks:
+        remove_section(draft=draft, section_id=block.pk)
+
+
+def remove_cell(*, draft, cell_id: int) -> None:
+    """Delete one Cell AND everything in it (its Blocks, or the nested Group with all of its Blocks). The Studio asks for confirmation first
+    when there is content; the Sections obey every ``section.remove`` rule, so a locked / required Section refuses the whole operation."""
+    cell = _scoped_cell(draft, cell_id)
+    container = cell.container
+    if container.is_locked:
+        raise SectionStructureError("container_locked")
+    hosted = container_service.child_container(cell)
+    blocks = list(container_service.get_cell_blocks(cell))
+    if hosted is not None:
+        blocks.extend(container_service.collect_blocks(hosted))
+    _delete_blocks(draft, blocks)
+    if hosted is not None:
+        StorefrontContainer.all_objects.filter(pk=hosted.pk).delete()
+    cell.refresh_from_db()
+    if StorefrontCell.objects.filter(container=container).count() > 1:
+        _group_call(container_service.remove_group_cell, cell)
+    elif container.parent_cell_id is not None:
+        parent_container = container.parent_cell.container
+        container.delete()
+        container_service.validate_container(parent_container)
+    else:
+        container.delete()
+
+
+def remove_group(*, draft, container_id: int) -> None:
+    """Delete a Group (or a page row) together with everything inside it; same rules as ``remove_cell``."""
+    container = _scoped_container(draft, container_id)
+    if container.is_locked:
+        raise SectionStructureError("container_locked")
+    _delete_blocks(draft, container_service.collect_blocks(container))
+    if container.parent_cell_id is not None:
+        # the hosting Cell stays (empty); if its Group was the last thing keeping a wrapper alive, the wrapper dissolves
+        host_container = container.parent_cell.container
+        container.delete()
+        if host_container.parent_cell_id is not None:
+            remaining = StorefrontCell.objects.filter(container=host_container).count()
+            if remaining == 1:
+                container_service._hoist_single_cell_group(host_container)
+    else:
+        container.delete()
+
+
+def _copy_section(source: StorefrontSection, page) -> StorefrontSection:
+    definition = _get_definition(source.section_key)
+    if definition is not None and not definition.duplicable:
+        raise SectionStructureError("section_not_duplicable")
+    if definition is not None and definition.max_instances is not None:
+        if page.sections.filter(section_key=source.section_key).count() >= definition.max_instances:
+            raise SectionStructureError("max_instances_exceeded")
+    new_section = StorefrontSection.objects.create(
+        page=page, section_key=source.section_key, order=_next_page_order(page), is_active=source.is_active,
+        settings=copy.deepcopy(source.settings or {}),
+    )
+    layout_service._clone_section_scoped_media(source, new_section)
+    return new_section
+
+
+def _copy_cell_content(source_cell, target_cell, page) -> None:
+    hosted = container_service.child_container(source_cell)
+    if hosted is not None:
+        _copy_container_tree(hosted, page, target_cell, order=0)
+        return
+    for block in container_service.get_cell_blocks(source_cell):
+        container_service.add_block(target_cell, _copy_section(block, page))
+
+
+def _copy_container_tree(source, page, parent_cell, *, order: int) -> StorefrontContainer:
+    clone = StorefrontContainer.objects.create(
+        page=page, parent_cell=parent_cell, order=order, layout_key=source.layout_key,
+        settings=copy.deepcopy(source.settings or {}), is_locked=False,
+    )
+    source_cells = list(source.cells.order_by("order", "id"))
+    for source_cell in source_cells:
+        new_cell = StorefrontCell.objects.create(
+            container=clone, order=source_cell.order, span=source_cell.span, settings=copy.deepcopy(source_cell.settings or {}),
+        )
+        _copy_cell_content(source_cell, new_cell, page)
+    return clone
+
+
+def duplicate_container(*, draft, container_id: int) -> StorefrontContainer:
+    """Copy a page ROW (with every Block and nested Group, each Block a NEW Section with its own copy of the settings and media) right after it."""
+    source = _scoped_container(draft, container_id)
+    if source.parent_cell_id is not None:
+        raise SectionStructureError("not_top_level")
+    if source.is_locked:
+        raise SectionStructureError("container_locked")
+    page = source.page
+    container_service._page_cell_budget(source, StorefrontCell.objects.filter(container__in=[source, *container_service.descendant_containers(source)]).count())
+    StorefrontContainer.objects.filter(page=page, order__gt=source.order).update(order=F("order") + 1)
+    return _copy_container_tree(source, page, None, order=source.order + 1)
+
+
+def duplicate_cell(*, draft, cell_id: int) -> StorefrontCell:
+    """Copy one Cell (its Blocks or nested Group, deeply) as its next sibling; the proportions are rescaled to make room."""
+    cell = _scoped_cell(draft, cell_id)
+    container = cell.container
+    if container.is_locked:
+        raise SectionStructureError("container_locked")
+    if container.parent_cell_id is None and not container_service.is_group(container):
+        raise SectionStructureError("not_group_cell")
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    if len(cells) >= container_service.MAX_GROUP_CELLS:
+        raise SectionStructureError("cell_limit")
+    page = container.page
+    weights = []
+    for c in cells:
+        weights.append(float(c.span))
+        if c.pk == cell.pk:
+            weights.append(float(c.span))
+    spans = container_service.scale_spans(weights)
+    position = next(i for i, c in enumerate(cells) if c.pk == cell.pk) + 1
+    for index in range(len(cells) - 1, position - 1, -1):
+        StorefrontCell.objects.filter(pk=cells[index].pk).update(order=index + 1)
+    new_cell = StorefrontCell.objects.create(container=container, order=position, span=1, settings=copy.deepcopy(cell.settings or {}))
+    ordered = [c for c in StorefrontCell.objects.filter(container=container).order_by("order", "id")]
+    for c, span in zip(ordered, spans):
+        c.span = span
+    StorefrontCell.objects.bulk_update(ordered, ["span"])
+    _copy_cell_content(cell, new_cell, page)
+    axis = (container.settings or {}).get("axis", "horizontal")
+    container.layout_key = container_service._spans_layout_key(spans, axis)
+    container.settings = container_service._group_settings(container)
+    container.save(update_fields=["layout_key", "settings", "updated_at"])
+    container_service.validate_container(container)
+    return new_cell

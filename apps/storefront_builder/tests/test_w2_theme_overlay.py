@@ -28,6 +28,7 @@ from apps.storefront_builder.services import layout_service
 from apps.stores.models import Store
 
 from .test_views import StorefrontBuilderViewsTestCase
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +290,7 @@ class ThemeReadyTemplateCompatibilityTests(SimpleTestCase):
         )
 
         presets = lpr.list_ready_templates()
-        self.assertEqual(len(presets), 53)
+        self.assertEqual(len(presets), READY_TEMPLATE_COUNT)
         required = set(COMPONENT_FAMILIES)
         for preset in presets:
             with self.subTest(preset=preset.key):

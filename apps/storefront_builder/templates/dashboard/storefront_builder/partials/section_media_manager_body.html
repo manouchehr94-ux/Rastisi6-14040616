@@ -10,10 +10,14 @@ media-editor dialog (data-r4-media-open → r4_studio.js), which loads the same
 canonical form over htmx; on save the refreshed manager body is retargeted
 back into this [data-r4-media-manager] container.
 {% endcomment %}
+{% if config.max_items and items|length >= config.max_items %}
+<p class="r4-media-limit-note" role="note">این بخش فقط یک {{ config.label }} دارد؛ برای تغییر، {{ config.label }} فعلی را ویرایش یا حذف کنید.</p>
+{% else %}
 <div class="r4-media-manager-toolbar">
   {# R4 heavy-editor modal: the add form opens in the Studio's media-editor dialog (r4_studio.js), not inside this narrow Inspector. #}
   <button type="button" class="btn btn-sm btn-primary"
           data-r4-media-open="{% url 'dashboard:storefront-builder-section-media-add' pk=section.pk kind=kind %}"
           data-r4-media-title="افزودن {{ config.label }}">+ افزودن {{ config.label }}</button>
 </div>
+{% endif %}
 {% include "dashboard/storefront_builder/partials/section_media_list_body.html" with inline_media=True %}

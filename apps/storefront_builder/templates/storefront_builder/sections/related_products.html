@@ -1,13 +1,18 @@
-{% comment %}Phase 5 — محصولات مرتبط (همان دسته‌بندی)؛ غیاب یعنی چیزی رندر نمی‌شود.{% endcomment %}
+{% comment %}Phase 5 — محصولات مرتبط (همان دسته‌بندی)؛ غیاب یعنی چیزی رندر نمی‌شود.
+V5: optional ``title`` / ``display_mode`` (grid — the historical default — or carousel with arrows/dots, via the shared product row).{% endcomment %}
 {% if related_products %}
 <div class="wrap">
   <div class="section">
-    <div class="sec-head"><h2><span class="bar"></span>محصولات مرتبط</h2></div>
+    <div class="sec-head"><h2><span class="bar"></span>{{ settings.title|default:"محصولات مرتبط" }}</h2></div>
+    {% if settings.display_mode == "carousel" %}
+    {% include "storefront_builder/partials/product_row.html" with products=related_products %}
+    {% else %}
     <div class="grid rsec-cols">
       {% for product in related_products %}
       {% include "catalog/partials/product_card.html" with card_settings=settings.card %}
       {% endfor %}
     </div>
+    {% endif %}
   </div>
 </div>
 {% endif %}

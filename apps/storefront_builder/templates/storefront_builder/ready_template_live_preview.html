@@ -45,5 +45,6 @@
 
 {% block footer %}
 {% include footer_variant_template with footer_config=footer_config is_live_storefront=False is_builder_preview=True %}
+{% include "storefront_builder/partials/global_footer/_shared/floating_actions.html" with footer_config=footer_config %}
 {% if mobile_bottom_nav_template %}{% include mobile_bottom_nav_template with footer_config=footer_config is_live_storefront=False is_builder_preview=True %}{% endif %}
 {% endblock %}

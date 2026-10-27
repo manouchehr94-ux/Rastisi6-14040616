@@ -46,6 +46,7 @@ IMAGE_CONTROLS_BY_SECTION: dict[str, frozenset[str]] = {
     "discounted_products": frozenset({"fit", "position", "ratio", "zoom"}),
     "hero_banner": frozenset({"position"}),
     "image_slider": frozenset({"position"}),
-    "multi_banner": frozenset({"position"}),
+    "multi_banner": frozenset({"position", "ratio"}),
+    "linked_image": frozenset({"fit", "position", "ratio"}),
     "image_text": frozenset({"fit", "position"}),
 }

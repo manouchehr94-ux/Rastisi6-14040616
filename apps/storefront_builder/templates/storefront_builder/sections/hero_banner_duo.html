@@ -1,0 +1,38 @@
+{% load content_tags %}{% comment %}
+Two-up slider: several real HeroSlide pictures are visible at once with the neighbours peeking in from both sides; arrows and bars scroll
+the track one slide at a time (scroll-snap, RTL aware). The slide title is a centred caption, the optional button a pill. No Store data is
+invented: no slides, nothing rendered.
+{% endcomment %}
+{% if hero_slides %}
+<section class="section hero hero--duo"
+         x-data="{ track() { return this.$refs.track },
+                   step(dir) { const t = this.track(); const first = t.firstElementChild; const w = first ? first.getBoundingClientRect().width + 24 : t.clientWidth / 2;
+                                const rtl = getComputedStyle(t).direction === 'rtl'; t.scrollBy({ left: (rtl ? -dir : dir) * w, behavior: 'smooth' }) },
+                   goto(i) { const t = this.track(); const el = t.children[i]; if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }) } }">
+  <div class="hero-duo-viewport hero-inner">
+    <div class="hero-duo-track" x-ref="track" tabindex="0" aria-label="اسلایدها">
+      {% for s in hero_slides %}
+      <article class="hero-duo-slide"{% if is_builder_preview %} data-admin-edit-kind="media" data-admin-edit-id="{{ s.pk }}" data-admin-edit-title="{{ s.title|default:'اسلاید'|escape }}" data-admin-media-kind="hero-slides"{% endif %}>
+        <picture class="hero-duo-media">
+          {% if s.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ s.mobile_image_url }}">{% endif %}
+          {% if s.desktop_image_url %}<img src="{{ s.desktop_image_url }}" data-img-role="hero" alt="{{ s.title|default:'اسلاید' }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}">{% endif %}
+        </picture>
+        {% if s.title or s.show_button %}
+        <div class="hero-duo-caption">
+          {% if s.title %}<h2>{{ s.title }}</h2>{% endif %}
+          {% if s.show_button and s.button_label %}{% resolve_destination s as dest %}{% if dest.url %}<a class="hero-duo-cta" href="{{ dest.url }}"{% if dest.open_new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ s.button_label }}</a>{% endif %}{% endif %}
+        </div>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% if slider_settings.show_arrows is not False and hero_slides|length > 1 %}
+    <button type="button" class="hero-duo-arrow hero-duo-prev" @click="step(-1)" aria-label="اسلاید قبلی">‹</button>
+    <button type="button" class="hero-duo-arrow hero-duo-next" @click="step(1)" aria-label="اسلاید بعدی">›</button>
+    {% endif %}
+  </div>
+  {% if slider_settings.show_dots is not False and hero_slides|length > 1 %}
+  <div class="hero-duo-bars" aria-label="اسلایدها">{% for s in hero_slides %}<button type="button" @click="goto({{ forloop.counter0 }})" aria-label="اسلاید {{ forloop.counter }}"></button>{% endfor %}</div>
+  {% endif %}
+</section>
+{% endif %}

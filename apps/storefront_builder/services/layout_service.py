@@ -117,7 +117,7 @@ def _validate_shell_component_responsive(raw, allowed_keys: list[str]) -> dict:
 #: فروشگاه می‌خوانند (``SHOP_CONTACT_PHONE``/``SOCIAL_LINKS_HEADER`` —
 #: از پیش در context processorها موجود بودند، بدونِ مصرف‌کننده)، نه
 #: یک کپیِ تازه‌یِ آن داده در پیکربندیِ Draft.
-HEADER_EXTRA_BLOCK_TYPES = ("phone", "social", "cta", "spacer", "tagline")
+HEADER_EXTRA_BLOCK_TYPES = ("phone", "social", "cta", "spacer", "tagline", "category_menu")
 _MAX_HEADER_EXTRA_BLOCKS = 6
 _MAX_HEADER_CTA_LABEL_LENGTH = 30
 
@@ -164,6 +164,90 @@ def _validate_announcement_links(raw) -> list[dict]:
 
         cleaned.append({"label": label, "url": url})
     return cleaned
+
+
+_MAX_ANNOUNCEMENT_IMAGE_ALT_LENGTH = 120
+_ANNOUNCEMENT_IMAGE_SIDES = ("start", "end")
+_ANNOUNCEMENT_ALIGNS = ("start", "center", "end")
+_ANNOUNCEMENT_PAGES = ("all", "home")
+
+
+def _clean_announcement_link_url(url: str) -> str:
+    """The announcement-bar link's destination: the SAME contract as ``announcement_links`` items (fragment / internal path / validated
+    external URL; ``javascript:`` / ``data:`` / protocol-relative are refused by ``validate_external_url``)."""
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    from apps.content.models import validate_external_url
+
+    url = url.strip()[:_MAX_ANNOUNCEMENT_LINK_URL_LENGTH]
+    if not url:
+        return ""
+    if url.startswith("#") or (url.startswith("/") and not url.startswith("//")):
+        return url
+    try:
+        validate_external_url(url)
+    except DjangoValidationError as exc:
+        raise ShellBlockError("; ".join(exc.messages)) from exc
+    return url
+
+
+def validate_announcement_extras(config: dict) -> dict:
+    """V5 — the optional, SPARSE extension of the header's announcement bar (one picture beside the text, a link on the text, alignment,
+    page scope). Every key is written only when it differs from the historical behaviour, so a header that never touched them keeps its exact
+    stored shape / fingerprint and renders byte-identically. Store ownership of the picture is a mutation-boundary check
+    (``r4_mutation_service``) and is re-checked fail-closed at render time; this validator only fixes the SHAPE."""
+    extras: dict = {}
+
+    raw_asset = config.get("announcement_image_asset_id")
+    if raw_asset not in (None, "", 0, "0"):
+        try:
+            asset_id = int(str(raw_asset).strip()) if not isinstance(raw_asset, bool) else 0
+        except (TypeError, ValueError):
+            asset_id = 0
+        if asset_id <= 0:
+            raise HeaderConfigValidationError("تصویر نوار اعلان نامعتبر است")
+        extras["announcement_image_asset_id"] = asset_id
+
+    alt = config.get("announcement_image_alt", "")
+    if not isinstance(alt, str):
+        raise HeaderConfigValidationError("متن جایگزین تصویر نوار اعلان نامعتبر است")
+    alt = alt.strip()[:_MAX_ANNOUNCEMENT_IMAGE_ALT_LENGTH]
+    if alt:
+        extras["announcement_image_alt"] = alt
+
+    side = config.get("announcement_image_side") or "start"
+    if side not in _ANNOUNCEMENT_IMAGE_SIDES:
+        raise HeaderConfigValidationError("جای تصویر نوار اعلان نامعتبر است")
+    if side != "start":
+        extras["announcement_image_side"] = side
+
+    link_url = config.get("announcement_link_url", "")
+    if not isinstance(link_url, str):
+        raise HeaderConfigValidationError("لینک نوار اعلان نامعتبر است")
+    try:
+        link_url = _clean_announcement_link_url(link_url)
+    except ShellBlockError as exc:
+        raise HeaderConfigValidationError(str(exc)) from exc
+    if link_url:
+        extras["announcement_link_url"] = link_url
+        new_tab = config.get("announcement_link_new_tab", False)
+        if not isinstance(new_tab, bool):
+            raise HeaderConfigValidationError("تنظیم تب جدید لینک نوار اعلان نامعتبر است")
+        if new_tab:
+            extras["announcement_link_new_tab"] = True
+
+    align = config.get("announcement_align") or ""
+    if align and align not in _ANNOUNCEMENT_ALIGNS:
+        raise HeaderConfigValidationError("تراز متن نوار اعلان نامعتبر است")
+    if align:
+        extras["announcement_align"] = align
+
+    pages = config.get("announcement_pages") or "all"
+    if pages not in _ANNOUNCEMENT_PAGES:
+        raise HeaderConfigValidationError("محدودهٔ نمایش نوار اعلان نامعتبر است")
+    if pages != "all":
+        extras["announcement_pages"] = pages
+    return extras
 
 
 def _validate_header_extra_blocks(raw) -> list[dict]:
@@ -236,6 +320,7 @@ def validate_header_config(config: dict) -> dict:
     if not isinstance(announcement_show_phone, bool):
         raise HeaderConfigValidationError("تنظیم نمایش تلفن در نوار اعلان نامعتبر است")
     cleaned["announcement_show_phone"] = announcement_show_phone
+    cleaned.update(validate_announcement_extras(config))
 
     cleaned["responsive"] = _validate_shell_component_responsive(
         config.get("responsive"), HEADER_RESPONSIVE_AWARE_KEYS,
@@ -325,6 +410,29 @@ def _validate_footer_extra_blocks(raw) -> list[dict]:
     return cleaned
 
 
+FLOATING_ACTION_KEYS = ("floating_whatsapp", "floating_phone", "floating_back_to_top")
+_FLOATING_POSITIONS = ("start", "end")
+
+
+def validate_floating_extras(config: dict) -> dict:
+    """V5 — optional, SPARSE floating widgets (WhatsApp / phone / back-to-top). Written only when switched on, so a footer that never
+    touched them keeps its exact stored shape and renders byte-identically. The widgets carry NO data of their own: the WhatsApp link is
+    the Store's own active WhatsApp social link and the phone is the Store's own contact phone (resolved at render time)."""
+    extras: dict = {}
+    for key in FLOATING_ACTION_KEYS:
+        value = config.get(key, False)
+        if not isinstance(value, bool):
+            raise FooterConfigValidationError("مقدار ابزارک شناور باید درست/نادرست باشد")
+        if value:
+            extras[key] = True
+    position = config.get("floating_position") or "end"
+    if position not in _FLOATING_POSITIONS:
+        raise FooterConfigValidationError("جای ابزارک‌های شناور نامعتبر است")
+    if extras and position != "end":
+        extras["floating_position"] = position
+    return extras
+
+
 def validate_footer_config(config: dict) -> dict:
     """پیکربندی خام فوتر را اعتبارسنجی و پاک‌سازی می‌کند.
 
@@ -359,6 +467,8 @@ def validate_footer_config(config: dict) -> dict:
         )
     except global_region_registry.UnknownGlobalVariantSelectionError as exc:
         raise FooterConfigValidationError(str(exc)) from exc
+
+    cleaned.update(validate_floating_extras(config))
 
     # Optional, sparse: merchant-editable footer geometry/colours (shell_geometry.py).
     try:
@@ -593,6 +703,14 @@ def _apply_structural_page_fields(config: dict, cleaned: dict) -> None:
         if hero_style not in appearance_registry.SITE_HERO_STYLE_CHOICES:
             raise AppearanceConfigValidationError("سبکِ هیرویِ انتخاب‌شده نامعتبر است")
         cleaned["hero_style"] = hero_style
+
+    # V5 — sparse like the fields above: written only when it differs from the historical heading, so a Store that never
+    # touched it keeps its exact stored shape / fingerprint.
+    heading_style = config.get("heading_style")
+    if heading_style and heading_style != "default":
+        if heading_style not in appearance_registry.SITE_HEADING_STYLE_CHOICES:
+            raise AppearanceConfigValidationError("سبکِ عنوانِ بخش‌هایِ انتخاب‌شده نامعتبر است")
+        cleaned["heading_style"] = heading_style
 
 
 def validate_page_appearance_overrides(raw: dict) -> dict:

@@ -49,6 +49,7 @@ ID_TARGETED = frozenset({
     "section.update_settings", "section.remove", "section.duplicate", "section.move", "section.toggle_active",
     "section.toggle_locked", "section.reset_to_baseline", "section.reset_setting_to_baseline",
     "container.change_layout", "container.update_settings", "cell.add_section", "section.move_to_cell",
+    "section.resize", "container.resize",
 })
 #: operations pinned to one Draft by an explicit ``draft_id`` (rejected for a Published / Archived / foreign / unknown id)
 DRAFT_PINNED = frozenset({
@@ -172,6 +173,12 @@ class R4MutationSecurityCoverageTests(R4MutationApiTestCase):
             "section.toggle_locked": lambda: {"type": "section.toggle_locked", "section_id": s.pk},
             "container.change_layout": lambda: {"type": "container.change_layout", "container_id": c.pk,
                                                 "layout_key": "single"},
+            # V5-LAYOUT-ATOMIC: one new Container (existing preset) with a pre-filled and an empty Cell; no foreign id involved
+            "container.add": lambda: {"type": "container.add", "page_type": "home", "layout_key": "half", "cells": [["faq"], []]},
+            "container.remove": lambda: {"type": "container.remove", "container_id": c.pk},
+            # V5-RESIZE: one section's manual size / one row's column split (both scoped to the caller's own Draft)
+            "section.resize": lambda: {"type": "section.resize", "section_id": s.pk, "height": 520},
+            "container.resize": lambda: {"type": "container.resize", "container_id": c.pk, "spans": [8, 4]},
             "cell.add_section": lambda: {"type": "cell.add_section", "section_key": "faq", "cell_id": cell.pk},
             "section.move_to_cell": lambda: {"type": "section.move_to_cell", "section_id": s.pk, "cell_id": cell.pk},
             "container.update_settings": lambda: {"type": "container.update_settings", "container_id": c.pk,
@@ -205,7 +212,7 @@ class R4MutationSecurityCoverageTests(R4MutationApiTestCase):
     # ------------------------------------------------------------------------------------------------- completeness
     def test_the_protection_table_covers_exactly_the_dispatcher(self):
         self.assertEqual(set(self._payloads()), _dispatched_types())
-        self.assertEqual(len(_dispatched_types()), 25)
+        self.assertEqual(len(_dispatched_types()), 29)
         self.assertTrue(ID_TARGETED <= set(self._payloads()))
         self.assertTrue(DRAFT_PINNED <= set(self._payloads()))
 

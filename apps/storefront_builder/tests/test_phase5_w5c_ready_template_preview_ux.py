@@ -43,6 +43,7 @@ from apps.storefront_builder.models import (
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -104,7 +105,7 @@ class GalleryPreviewTriggerTests(TestCase):
     def test_gallery_lists_every_registered_ready_template(self):
         """Contract A — registry-derived, count == 53, never a second hand-written key list here. The ONE gallery
         is the Design Studio's; the old gallery URL forwards to it."""
-        self.assertEqual(len(REGISTERED_READY_TEMPLATE_KEYS), 53)
+        self.assertEqual(len(REGISTERED_READY_TEMPLATE_KEYS), READY_TEMPLATE_COUNT)
         response = self.client.get(self.url, follow=True)
         self.assertEqual(response.status_code, 200)
         listed = {t["key"] for t in response.context["studio"]["client"]["templates"]}

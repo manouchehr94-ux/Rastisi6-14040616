@@ -127,6 +127,13 @@ after each successful global edit.
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_crossfade" {% if global_design.appearance.card_image_crossfade %}checked{% endif %}> <span>کراس‌فید تصویر کارت</span></label>
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_zoom" {% if global_design.appearance.card_image_zoom %}checked{% endif %}> <span>زوم تصویر کارت روی هاور</span></label>
 
+          <label class="r4-field-sublabel" for="r4GlobalHeadingStyle">سبک عنوان بخش‌ها</label>
+          <select id="r4GlobalHeadingStyle" class="r4-control" data-r4-global-field="heading_style">
+            {% for c in global_design.site_heading_style_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.heading_style or c == 'default' and not global_design.appearance.heading_style %}selected{% endif %}>{{ c|rs_heading_style_label }}</option>
+            {% endfor %}
+          </select>
+
           <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض محتوای سایت</label>
           <select id="r4GlobalContentWidth" class="r4-control" data-r4-global-field="content_width">
             {% for w in global_design.site_content_width_choices %}
@@ -219,50 +226,12 @@ after each successful global edit.
           </div>
           {% endif %}
 
-          <label class="r4-field-sublabel" for="r4GlobalAnnouncementText">متن نوار اعلان</label>
-          <input type="text" id="r4GlobalAnnouncementText" class="r4-control" maxlength="300" data-r4-global-field="announcement_text" value="{{ global_design.header.announcement_text }}">
-
-          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="announcement_show_phone" {% if global_design.header.announcement_show_phone %}checked{% endif %}> <span>نمایش تلفن در نوار اعلان</span></label>
-
-          <h5>لینک‌های نوار اعلان</h5>
-          <div class="r4-repeater" data-r4-global-repeater-field="announcement_links">
-            <div data-r4-repeater-rows>
-              {% for link in global_design.header.announcement_links %}
-              <div class="r4-repeater-row" data-r4-repeater-row>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">برچسب</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50" value="{{ link.label }}">
-                </div>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">لینک</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500" value="{{ link.url }}">
-                </div>
-                <div class="r4-repeater-row-actions">
-                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
-                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
-                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
-                </div>
-              </div>
-              {% endfor %}
-            </div>
-            <template data-r4-repeater-row-template>
-              <div class="r4-repeater-row" data-r4-repeater-row>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">برچسب</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50">
-                </div>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">لینک</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500">
-                </div>
-                <div class="r4-repeater-row-actions">
-                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
-                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
-                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
-                </div>
-              </div>
-            </template>
-            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن لینک</button>
+          {# V5-UI-014 «نوار اطلاعیه» — edited like any Section: click the strip in the preview, then «ویرایش» (the standard R4 workspace). This is only a
+             shortcut to that same editor; the data (and its on/off switch above) is the one header_config. #}
+          <div class="r4-announce-entry" data-r4-announce-entry>
+            <h5>نوار اطلاعیه (بالاترین بخش صفحه، بالای هدر)</h5>
+            <p class="r4-field-hint">متن، تصویر کوچک، لینک، رنگ و اندازهٔ نوار در پنجرهٔ استاندارد ویرایش تنظیم می‌شود؛ همان پنجره‌ای که با کلیک روی نوار در پیش‌نمایش و زدن «ویرایش» باز می‌شود.</p>
+            <button type="button" class="outline" data-rastisi-action="edit-announcement">{% rs_icon "megaphone" %}ویرایش نوار اطلاعیه</button>
           </div>
 
           <h5>بلوک‌های اضافی هدر</h5>

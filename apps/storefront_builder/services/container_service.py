@@ -71,11 +71,20 @@ from __future__ import annotations
 from copy import deepcopy
 
 from django.db import transaction
+from django.db.models import F
 
 from ..models import StorefrontCell, StorefrontContainer, StorefrontSection
 
 GRID_UNITS = 12
 MAX_CELLS = 4
+
+#: V5 Groups — a Container that is NESTED in a Cell (or flagged ``settings["group"]`` after a free split) may hold more than the four cells of a
+#: layout preset; depth and the page-wide cell count are bounded so a tree can never grow into a resource problem. Spans stay integers of the
+#: same 12-unit grid at every level (the proportions of a Group are always LOCAL to its parent, never page coordinates).
+MAX_GROUP_CELLS = 6
+MAX_GROUP_DEPTH = 8
+MAX_PAGE_CELLS = 240
+GROUP_MIN_SPAN = 2
 
 LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
     "single": (12,),
@@ -88,8 +97,37 @@ LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
     "quarters": (3, 3, 3, 3),
 }
 
+#: V5-LAYOUT-011 — presets whose Cells are NOT all side by side: «one big column + two small Cells stacked beside it». Each stacked slot is a
+#: REAL Cell (own id, own order), so an empty slot can exist, be filled and be reordered independently — unlike a 2-Cell 8/4 row whose narrow
+#: Cell merely holds two Blocks (an empty top/bottom position cannot be represented there). Kept apart from ``LAYOUT_PRESETS`` on purpose:
+#: that registry is the side-by-side composition vocabulary the appearance/Design-Lab component catalogue is built from; this one adds
+#: layout keys without touching it. Spans are the Cells' own widths (the CHECK constraint stays 1..12); ``STACKED_LAYOUT_COLUMNS`` are the
+#: visual column widths the 12-unit total is validated against. The placement itself is central CSS keyed by ``data-layout``
+#: (storefront_builder.css), shared by Preview and the published page — no per-template rule.
+STACKED_LAYOUT_PRESETS: dict[str, tuple[int, ...]] = {
+    "big_right_two_left": (8, 4, 4),
+}
+STACKED_LAYOUT_COLUMNS: dict[str, tuple[int, ...]] = {
+    "big_right_two_left": (8, 4),
+}
+
+
+#: V5-RESIZE — the big column of a stacked layout may be dragged within these spans (the small column is always ``12 - big``), and the
+#: top small Cell's share of the column height (``settings["stack_split"]``, in %) within these bounds. Auto = the key is absent.
+STACKED_BIG_SPAN_RANGE = (4, 9)
+STACK_SPLIT_RANGE = (25, 75)
+
+
+def layout_spans(layout_key):
+    """Cell spans of any KNOWN preset (side-by-side or stacked), else ``None``."""
+    if not isinstance(layout_key, str):
+        return None
+    return LAYOUT_PRESETS.get(layout_key) or STACKED_LAYOUT_PRESETS.get(layout_key)
+
+
 #: Persian labels for the container layout presets (Studio layout picker).
 LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
+    "big_right_two_left": "بزرگ راست + دو کوچک چپ",
     "single": "۱۰۰٪",
     "half": "۵۰/۵۰",
     "quarter_left": "۲۵/۷۵",
@@ -102,7 +140,8 @@ LAYOUT_PRESET_LABELS_FA: dict[str, str] = {
 
 CONTAINER_SETTINGS_DEFAULTS = {
     "gap": 14,
-    "mobile_mode": "stack",   # stack | same
+    "mobile_mode": "stack",   # stack | same | slider (cells become horizontal one-at-a-time cards on a phone)
+    "mobile_order": "normal",  # normal | reverse (the cells' order when they stack on a phone)
     "content_width": "standard",  # standard | full
     # Independent content blocks should keep their natural height.  The old
     # ``stretch`` default made a short Slider Cell look as tall as a long
@@ -130,6 +169,9 @@ def layout_key_for_spans(spans) -> str:
     for key, preset in LAYOUT_PRESETS.items():
         if spans == preset:
             return key
+    for key, preset in STACKED_LAYOUT_PRESETS.items():
+        if spans == preset:
+            return key
     return "custom"
 
 
@@ -144,9 +186,14 @@ def effective_container_settings(raw: dict | None) -> dict:
     cleaned["gap"] = max(0, min(64, gap))
 
     mobile_mode = raw.get("mobile_mode", cleaned["mobile_mode"])
-    if mobile_mode not in {"stack", "same"}:
+    if mobile_mode not in {"stack", "same", "slider"}:
         mobile_mode = cleaned["mobile_mode"]
     cleaned["mobile_mode"] = mobile_mode
+
+    mobile_order = raw.get("mobile_order", cleaned["mobile_order"])
+    if mobile_order not in {"normal", "reverse"}:
+        mobile_order = cleaned["mobile_order"]
+    cleaned["mobile_order"] = mobile_order
 
     content_width = raw.get("content_width", cleaned["content_width"])
     if content_width not in {"standard", "full"}:
@@ -169,11 +216,11 @@ def effective_container_settings(raw: dict | None) -> dict:
     cleaned["height_mode"] = height_mode
 
     background_mode = raw.get("background_mode", cleaned["background_mode"])
-    if background_mode not in {"transparent", "color", "pattern"}:
+    if background_mode not in {"transparent", "color", "pattern", "gradient", "image"}:
         background_mode = cleaned["background_mode"]
 
     background_color = str(raw.get("background_color", cleaned["background_color"]) or "").strip()
-    if background_mode in {"color", "pattern"}:
+    if background_mode in {"color", "pattern", "gradient"}:
         if background_color:
             from django.core.exceptions import ValidationError as DjangoValidationError
             from apps.core.models import validate_hex_color
@@ -182,7 +229,7 @@ def effective_container_settings(raw: dict | None) -> dict:
             except DjangoValidationError:
                 background_mode = "transparent"
                 background_color = ""
-        elif background_mode == "color":
+        elif background_mode in {"color", "gradient"}:
             background_mode = "transparent"
 
     background_pattern = str(raw.get("background_pattern", cleaned["background_pattern"]) or "").strip()
@@ -195,15 +242,110 @@ def effective_container_settings(raw: dict | None) -> dict:
     cleaned["background_mode"] = background_mode
     cleaned["background_color"] = background_color
     cleaned["background_pattern"] = background_pattern
+
+    # V5 Groups — every key below is SPARSE (absent for any Container that never used it), so a pre-existing row cleans to exactly what it did.
+    if background_mode == "gradient":
+        second = str(raw.get("background_color2") or "").strip()
+        if second:
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            from apps.core.models import validate_hex_color
+            try:
+                validate_hex_color(second)
+                cleaned["background_color2"] = second
+            except DjangoValidationError:
+                pass
+    if background_mode == "image":
+        asset = raw.get("background_media_asset_id")
+        if isinstance(asset, int) and not isinstance(asset, bool) and asset > 0:
+            cleaned["background_media_asset_id"] = asset
+        else:
+            cleaned["background_mode"] = "transparent"
+    if raw.get("axis") == "vertical":
+        cleaned["axis"] = "vertical"
+    if raw.get("group") is True:
+        cleaned["group"] = True
+    from .. import group_style
+
+    title = raw.get("title")
+    if isinstance(title, str) and title.strip():
+        cleaned["title"] = " ".join(title.split())[:group_style.MAX_TITLE_LENGTH]
+    description = raw.get("description")
+    if isinstance(description, str) and description.strip():
+        cleaned["description"] = " ".join(description.split())[:group_style.MAX_DESCRIPTION_LENGTH]
+    if raw.get("title_visible") is False:
+        cleaned["title_visible"] = False
+    try:
+        style = group_style.validate_style(raw.get("style"))
+    except group_style.GroupStyleError:
+        style = {}
+    if style:
+        cleaned["style"] = style
+
+    # V5-RESIZE — optional, sparse: present only when a merchant dragged the stacked layout's height divider (Auto otherwise)
+    split = raw.get("stack_split")
+    if isinstance(split, int) and not isinstance(split, bool) and STACK_SPLIT_RANGE[0] <= split <= STACK_SPLIT_RANGE[1]:
+        cleaned["stack_split"] = split
+        cleaned["stack_top"] = split
+        cleaned["stack_bottom"] = 100 - split
     return cleaned
+
+
+def is_group(container: StorefrontContainer) -> bool:
+    """A free-layout Group: nested in a Cell, or a row flagged by a free split. Only Groups may exceed the four cells of a layout preset."""
+    return container.parent_cell_id is not None or bool((container.settings or {}).get("group"))
+
+
+def cell_cap(container: StorefrontContainer) -> int:
+    return MAX_GROUP_CELLS if is_group(container) else MAX_CELLS
+
+
+def child_container(cell: StorefrontCell):
+    """The nested Group hosted by ``cell`` (a Cell holds either Blocks or exactly one Group), else ``None``."""
+    return StorefrontContainer.all_objects.filter(parent_cell=cell).order_by("order", "id").first()
+
+
+def container_depth(container: StorefrontContainer) -> int:
+    """0 for a page row, +1 for every Group above it (bounded walk: a corrupted cycle can never loop forever)."""
+    depth = 0
+    node = container
+    while node.parent_cell_id is not None and depth <= MAX_GROUP_DEPTH + 2:
+        node = StorefrontContainer.all_objects.select_related("parent_cell").get(pk=node.parent_cell.container_id)
+        depth += 1
+    return depth
+
+
+def descendant_containers(container: StorefrontContainer) -> list[StorefrontContainer]:
+    """Every Group below ``container`` (depth-first, reading order), excluding ``container`` itself."""
+    out: list[StorefrontContainer] = []
+    for cell in container.cells.order_by("order", "id"):
+        for child in StorefrontContainer.all_objects.filter(parent_cell=cell).order_by("order", "id"):
+            out.append(child)
+            out.extend(descendant_containers(child))
+    return out
+
+
+def collect_blocks(container: StorefrontContainer) -> list[StorefrontSection]:
+    """Every Block under ``container`` in reading order — its own Cells first-to-last, descending into hosted Groups."""
+    blocks: list[StorefrontSection] = []
+    for cell in container.cells.select_related("section").prefetch_related("blocks").order_by("order", "id"):
+        blocks.extend(get_cell_blocks(cell))
+        for child in StorefrontContainer.all_objects.filter(parent_cell=cell).order_by("order", "id"):
+            blocks.extend(collect_blocks(child))
+    return blocks
 
 
 def validate_container(container: StorefrontContainer, cells=None) -> None:
     cells = list(cells if cells is not None else container.cells.select_related("section").order_by("order", "id"))
-    if not 1 <= len(cells) <= MAX_CELLS:
+    cap = cell_cap(container)
+    if not 1 <= len(cells) <= cap:
         raise ContainerLayoutError(
-            f"هر چیدمان باید بین ۱ تا {MAX_CELLS} خانه داشته باشد"
+            f"هر چیدمان باید بین ۱ تا {cap} خانه داشته باشد"
         )
+    for cell in cells:
+        if cell.pk and StorefrontContainer.all_objects.filter(parent_cell=cell).exists() and (
+            cell.section_id or StorefrontSection.objects.filter(cell_id=cell.pk).exists()
+        ):
+            raise ContainerLayoutError("یک خانه نمی‌تواند هم‌زمان محتوای مستقیم و گروه تودرتو داشته باشد")
 
     total = 0
     seen_orders = set()
@@ -242,6 +384,15 @@ def validate_container(container: StorefrontContainer, cells=None) -> None:
             actual_orders = sorted(block.cell_order for block in cell_blocks)
             if actual_orders != list(range(len(cell_blocks))):
                 raise ContainerLayoutError("ترتیب بلاک‌های یک خانه باید نرمال‌شده (بدون شکاف) باشد")
+    columns = STACKED_LAYOUT_COLUMNS.get(container.layout_key)
+    if columns is not None:
+        # a stacked layout: «big | small / small» — the two small Cells share ONE column, so their spans are equal and the 12-unit
+        # total is that of its two visual COLUMNS (V5-RESIZE: the big/small column boundary can be dragged, the Cell count cannot change)
+        spans = [int(cell.span) for cell in cells]
+        if len(spans) != len(STACKED_LAYOUT_PRESETS[container.layout_key]) or spans[1] != spans[2] \
+                or not STACKED_BIG_SPAN_RANGE[0] <= spans[0] <= STACKED_BIG_SPAN_RANGE[1]:
+            raise ContainerLayoutError("خانه‌های این چیدمان با الگوی انتخاب‌شده هم‌خوان نیستند")
+        total = spans[0] + spans[1]
     if total != GRID_UNITS:
         raise ContainerLayoutError(
             f"مجموع عرض خانه‌های چیدمان باید دقیقاً {GRID_UNITS} باشد — مقدار فعلی: {total}"
@@ -263,6 +414,22 @@ def validate_page_containers(page) -> None:
             )
             overlap = cell_section_ids & placed_sections
             if overlap:
+                raise ContainerLayoutError("یک بخش نمی‌تواند هم‌زمان در دو خانه باشد")
+            placed_sections |= cell_section_ids
+    # V5 Groups: the nested tree obeys the same invariants, plus the depth / size guards.
+    total_cells = StorefrontCell.objects.filter(container__page=page).count()
+    if total_cells > MAX_PAGE_CELLS:
+        raise ContainerLayoutError(f"تعداد خانه‌های یک صفحه حداکثر {MAX_PAGE_CELLS} است")
+    for nested in StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).prefetch_related("cells__section", "cells__blocks"):
+        if container_depth(nested) > MAX_GROUP_DEPTH:
+            raise ContainerLayoutError(f"عمق گروه‌های تودرتو حداکثر {MAX_GROUP_DEPTH} سطح است")
+        if nested.parent_cell.container.page_id != page.pk:
+            raise ContainerLayoutError("گروه تودرتو باید در همان صفحهٔ والد خود باشد")
+        cells = list(nested.cells.all().order_by("order", "id"))
+        validate_container(nested, cells)
+        for cell in cells:
+            cell_section_ids = {block.pk for block in cell.blocks.all()} or ({cell.section_id} if cell.section_id else set())
+            if cell_section_ids & placed_sections:
                 raise ContainerLayoutError("یک بخش نمی‌تواند هم‌زمان در دو خانه باشد")
             placed_sections |= cell_section_ids
 
@@ -363,7 +530,7 @@ def ensure_version_containers(version) -> None:
 
 @transaction.atomic
 def create_empty_container(page, layout_key: str = "single", *, order: int | None = None, settings=None):
-    spans = LAYOUT_PRESETS.get(layout_key)
+    spans = layout_spans(layout_key)
     if spans is None:
         raise ContainerLayoutError("چینش انتخاب‌شده معتبر نیست")
 
@@ -424,6 +591,8 @@ def place_section(cell: StorefrontCell, section: StorefrontSection) -> Storefron
         raise ContainerLayoutError("این محتوا متعلق به صفحه دیگری است")
     if cell.section_id and cell.section_id != section.pk:
         raise ContainerLayoutError("این خانه از قبل محتوا دارد")
+    if child_container(cell) is not None:
+        raise ContainerLayoutError("این خانه یک گروه تودرتو دارد؛ محتوا را داخل یکی از خانه‌های همان گروه قرار دهید")
 
     # OneToOne prevents two cells from owning the same section.  Explicitly
     # clear the old placement to make a future drag-between-cells operation
@@ -722,6 +891,8 @@ def add_block(cell: StorefrontCell, section: StorefrontSection, *, at_index: int
         raise ContainerLayoutError("این محتوا متعلق به صفحه دیگری است")
     if cell.container.is_locked:
         raise ContainerLayoutError("این چیدمان قفل است — ابتدا قفل آن را باز کنید")
+    if child_container(cell) is not None:
+        raise ContainerLayoutError("این خانه یک گروه تودرتو دارد؛ محتوا را داخل یکی از خانه‌های همان گروه قرار دهید")
 
     existing = list(
         StorefrontSection.objects.select_for_update()
@@ -976,7 +1147,7 @@ def clone_page_containers(source_page, target_page, target_sections_by_stable_id
     target Section rows carry). Stable IDs are never invented or reassigned
     here — only looked up.
     """
-    target_page.containers.all().delete()
+    target_page.containers.all().delete()      # top-level rows; their nested Groups go with them (the Cell FK cascades)
     source_containers = list(
         source_page.containers.prefetch_related("cells__section", "cells__blocks").order_by("order", "id")
     )
@@ -985,54 +1156,164 @@ def clone_page_containers(source_page, target_page, target_sections_by_stable_id
         return
 
     for source_container in source_containers:
-        target_container = StorefrontContainer.objects.create(
-            page=target_page,
-            order=source_container.order,
-            stable_id=source_container.stable_id,
-            layout_key=source_container.layout_key,
-            settings=deepcopy(source_container.settings or {}),
-            is_locked=source_container.is_locked,
-        )
-        cells = []
-        source_cells = list(source_container.cells.all().order_by("order", "id"))
-        for source_cell in source_cells:
-            target_section = None
-            if source_cell.section_id:
-                target_section = target_sections_by_stable_id.get(source_cell.section.stable_id)
-            cells.append(StorefrontCell(
-                container=target_container,
-                order=source_cell.order,
-                stable_id=source_cell.stable_id,
-                span=source_cell.span,
-                section=target_section,
-                settings=deepcopy(source_cell.settings or {}),
-            ))
-        StorefrontCell.objects.bulk_create(cells)
+        _clone_container_tree(source_container, target_page, None, target_sections_by_stable_id)
 
-        # Second pass (mirrors ``layout_service._clone_version_content``'s own
-        # re-fetch-by-stable_id pattern): bulk_create above does not
-        # reliably populate PKs on every backend, so the just-created target
-        # Cells are re-fetched by ``stable_id`` before wiring up the new
-        # multi-block FK on the matching target Sections.
-        target_cells_by_stable_id = {
-            cell.stable_id: cell for cell in target_container.cells.all()
-        }
-        blocks_to_update = []
-        for source_cell in source_cells:
-            target_cell = target_cells_by_stable_id.get(source_cell.stable_id)
-            if target_cell is None:
+
+def _clone_container_tree(source_container, target_page, target_parent_cell, target_sections_by_stable_id: dict):
+    """Clone one Container (and, recursively, every Group nested in its Cells) keeping every stable id; returns the new Container."""
+    target_container = StorefrontContainer.objects.create(
+        page=target_page,
+        parent_cell=target_parent_cell,
+        order=source_container.order,
+        stable_id=source_container.stable_id,
+        layout_key=source_container.layout_key,
+        settings=deepcopy(source_container.settings or {}),
+        is_locked=source_container.is_locked,
+    )
+    cells = []
+    source_cells = list(source_container.cells.all().order_by("order", "id"))
+    for source_cell in source_cells:
+        target_section = None
+        if source_cell.section_id:
+            target_section = target_sections_by_stable_id.get(source_cell.section.stable_id)
+        cells.append(StorefrontCell(
+            container=target_container,
+            order=source_cell.order,
+            stable_id=source_cell.stable_id,
+            span=source_cell.span,
+            section=target_section,
+            settings=deepcopy(source_cell.settings or {}),
+        ))
+    StorefrontCell.objects.bulk_create(cells)
+
+    # Second pass (mirrors ``layout_service._clone_version_content``'s own re-fetch-by-stable_id pattern): bulk_create above does not
+    # reliably populate PKs on every backend, so the just-created target Cells are re-fetched by ``stable_id`` before wiring up the
+    # multi-block FK on the matching target Sections.
+    target_cells_by_stable_id = {cell.stable_id: cell for cell in target_container.cells.all()}
+    blocks_to_update = []
+    for source_cell in source_cells:
+        target_cell = target_cells_by_stable_id.get(source_cell.stable_id)
+        if target_cell is None:
+            continue
+        for source_block in source_cell.blocks.order_by("cell_order", "id"):
+            target_block = target_sections_by_stable_id.get(source_block.stable_id)
+            if target_block is None:
                 continue
-            for source_block in source_cell.blocks.order_by("cell_order", "id"):
-                target_block = target_sections_by_stable_id.get(source_block.stable_id)
-                if target_block is None:
-                    continue
-                target_block.cell_id = target_cell.pk
-                target_block.cell_order = source_block.cell_order
-                blocks_to_update.append(target_block)
-        if blocks_to_update:
-            StorefrontSection.objects.bulk_update(blocks_to_update, ["cell", "cell_order"])
+            target_block.cell_id = target_cell.pk
+            target_block.cell_order = source_block.cell_order
+            blocks_to_update.append(target_block)
+    if blocks_to_update:
+        StorefrontSection.objects.bulk_update(blocks_to_update, ["cell", "cell_order"])
+    # V5 Groups: the nested tree, level by level (a Cell hosts Blocks OR Groups, never both).
+    for source_cell in source_cells:
+        target_cell = target_cells_by_stable_id.get(source_cell.stable_id)
+        if target_cell is None:
+            continue
+        for child in StorefrontContainer.all_objects.filter(parent_cell=source_cell).prefetch_related("cells__section", "cells__blocks").order_by("order", "id"):
+            _clone_container_tree(child, target_page, target_cell, target_sections_by_stable_id)
+    return target_container
+
+
+class ContainerResizeError(ContainerLayoutError):
+    """A refused ``resize_container`` request; ``code`` is the stable R4 refusal code (nothing was changed)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
 
 @transaction.atomic
+def resize_container(container: StorefrontContainer, *, spans=None, stack_split=None, set_split: bool = False) -> StorefrontContainer:
+    """V5-RESIZE — change the column widths (``Cell.span``, the single width truth) and/or the stacked layout's height split of ONE Container.
+
+    Cells keep their ids, order, Blocks and settings — only the integer widths change, and the preset label follows them
+    (``layout_key_for_spans``; a stacked layout keeps its structural key). The 12-unit total, the minimum usable width, the Cell count
+    and the stacked shape are re-validated; a locked Container is refused. Everything is one transaction inside the caller's mutation."""
+    container = StorefrontContainer.all_objects.select_for_update().get(pk=container.pk)
+    if container.is_locked:
+        raise ContainerResizeError("container_locked", "این چیدمان قفل است")
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    stacked = container.layout_key in STACKED_LAYOUT_COLUMNS
+
+    if spans is not None:
+        spans = [int(v) for v in spans]
+        if len(spans) != len(cells):
+            raise ContainerResizeError("invalid_resize_value", "تعداد عرض‌ها با تعداد خانه‌ها یکی نیست")
+        if stacked:
+            big, first, second = spans if len(spans) == 3 else (0, 0, 1)
+            if first != second or big + first != GRID_UNITS or not STACKED_BIG_SPAN_RANGE[0] <= big <= STACKED_BIG_SPAN_RANGE[1]:
+                raise ContainerResizeError("invalid_resize_value", "عرض ستون‌ها در این چیدمان معتبر نیست")
+        else:
+            floor = 3 if len(spans) == 2 else 2
+            if len(spans) < 2 or sum(spans) != GRID_UNITS or min(spans) < floor:
+                raise ContainerResizeError("invalid_resize_value", "مجموع عرض‌ها باید ۱۲ باشد و هر ستون حداقل عرض قابل‌استفاده را داشته باشد")
+        for cell, span in zip(cells, spans):
+            cell.span = span
+        StorefrontCell.objects.bulk_update(cells, ["span"])
+        if not stacked:
+            container.layout_key = layout_key_for_spans(spans)
+
+    if set_split:
+        settings = dict(container.settings or {})
+        if stack_split is None:
+            settings.pop("stack_split", None)
+        else:
+            if not stacked:
+                raise ContainerResizeError("invalid_resize_layout", "نسبت ارتفاع فقط برای چیدمان «بزرگ + دو کوچک» است")
+            if not STACK_SPLIT_RANGE[0] <= int(stack_split) <= STACK_SPLIT_RANGE[1]:
+                raise ContainerResizeError("invalid_resize_value", "نسبت ارتفاع خارج از محدودهٔ مجاز است")
+            settings["stack_split"] = int(stack_split)
+        container.settings = settings
+
+    container.save(update_fields=["layout_key", "settings", "updated_at"])
+    validate_container(container, list(StorefrontCell.objects.filter(container=container).select_related("section").order_by("order", "id")))
+    return container
+
+
+@transaction.atomic
+def remove_container(container: StorefrontContainer) -> list[StorefrontContainer]:
+    """V5-LAYOUT-011 — delete one Container WITHOUT ever deleting user content.
+
+    · an EMPTY Container (no Blocks, hidden/inactive ones count as content) is simply deleted;
+    · a Container that holds Blocks is dissolved: every Block (hidden ones included) keeps its Section row — same id, settings, media and
+      Draft/Publish lifecycle — and is re-homed, in reading order (Cell.order -> Block.cell_order), into its OWN new single-Cell Container
+      that takes the removed Container's place in the page order (inheriting its container settings). Later Containers are shifted
+      down to make room; nothing else on the page moves.
+
+    The caller (``section_structure_service.remove_container``) enforces the lock / row-member / scoping refusals BEFORE this runs; the whole
+    operation sits inside the caller's single ``apply_mutation`` transaction, so any failure leaves the page untouched. Returns the new
+    Containers (empty list when the Container was empty)."""
+    container = StorefrontContainer.all_objects.select_for_update().get(pk=container.pk)
+    # V5 Groups: «its Blocks» means every Block under it in reading order, descending into nested Groups (they go away with the row)
+    blocks: list[StorefrontSection] = collect_blocks(container)
+
+    if not blocks:
+        container.delete()
+        return []
+
+    page = container.page
+    base_order = container.order
+    shift = len(blocks) - 1
+    if shift:
+        StorefrontContainer.objects.filter(page=page, order__gt=base_order).update(order=F("order") + shift)
+
+    created: list[StorefrontContainer] = []
+    homes: list[tuple[StorefrontSection, StorefrontCell]] = []
+    for index, block in enumerate(blocks):
+        row = StorefrontContainer.objects.create(
+            page=page, order=base_order + index, layout_key="single", settings=deepcopy(container.settings or {}),
+        )
+        cell = StorefrontCell.objects.create(container=row, order=0, span=GRID_UNITS)
+        created.append(row)
+        homes.append((block, cell))
+    for block, cell in homes:
+        move_block(block, cell)
+    container.delete()
+    for row in created:
+        validate_container(row)
+    return created
+
+
 def change_container_layout(container: StorefrontContainer, layout_key: str) -> StorefrontContainer:
     """Change one Container preset without treating content as the layout.
 
@@ -1047,11 +1328,11 @@ def change_container_layout(container: StorefrontContainer, layout_key: str) -> 
     silently destroyed, per the approved V3 prototype). This is the core
     merchant UX: choose the shape first, and content follows safely.
     """
-    spans = LAYOUT_PRESETS.get(layout_key)
+    spans = layout_spans(layout_key)
     if spans is None:
         raise ContainerLayoutError("چینش انتخاب‌شده معتبر نیست")
 
-    container = StorefrontContainer.objects.select_for_update().get(pk=container.pk)
+    container = StorefrontContainer.all_objects.select_for_update().get(pk=container.pk)
     if container.is_locked:
         raise ContainerLayoutError("این چیدمان قفل است — ابتدا قفل آن را باز کنید")
 
@@ -1064,6 +1345,8 @@ def change_container_layout(container: StorefrontContainer, layout_key: str) -> 
     )
     target_count = len(spans)
     current_count = len(cells)
+    if target_count != current_count and any(child_container(cell) is not None for cell in cells):
+        raise ContainerLayoutError("این چیدمان گروه تودرتو دارد؛ تعداد خانه‌ها را با ابزار «چیدمان» همان گروه تغییر دهید")
 
     if current_count == target_count and tuple(cell.span for cell in cells) == tuple(spans):
         if container.layout_key != layout_key:
@@ -1129,3 +1412,301 @@ def change_container_layout(container: StorefrontContainer, layout_key: str) -> 
     validate_container(container, list(container.cells.select_related("section").order_by("order", "id")))
     return container
 
+
+
+# ====================================================================================================================================
+# V5 Groups — a Container may be NESTED in a Cell (``Container.parent_cell``): a free, recursive layout tree.
+#
+# Model: Container -> Cells -> (Blocks | exactly one nested Container) -> Cells -> ...  Every level keeps the existing invariants (integer spans of
+# the 12-unit grid that sum to 12, normalised block order, same-page placement); a nested Group's axis (``settings["axis"]``: horizontal by
+# default, ``"vertical"`` = its Cells are stacked and their spans are HEIGHT proportions) and presentation live in ``Container.settings``.
+# Content is never lost by a layout operation: splitting a Cell moves its Blocks into the first new Cell; shrinking a Group merges the removed
+# Cells' Blocks into the last surviving one; a Group that is left with one Cell dissolves into its parent. Deleting content is a separate,
+# explicit operation (``section_structure_service``), because Sections own media and lifecycle rules this module must not duplicate.
+# ====================================================================================================================================
+class GroupOperationError(ContainerLayoutError):
+    """A refused Group operation; ``code`` is the stable R4 refusal code (nothing was changed — the caller's transaction rolls back)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+GROUP_AXES = ("horizontal", "vertical")
+GROUP_SPLIT_COUNTS = (2, 3)
+
+
+def even_spans(count: int) -> list[int]:
+    """``count`` integer spans of the 12-unit grid that sum to 12 and differ by at most one unit (6,6 · 4,4,4 · 3,3,3,3 · 3,3,2,2,2 · 2×6)."""
+    base, extra = divmod(GRID_UNITS, count)
+    return [base + (1 if index < extra else 0) for index in range(count)]
+
+
+def scale_spans(weights: list[float], *, floor: int = GROUP_MIN_SPAN, total: int = GRID_UNITS) -> list[int]:
+    """Proportionally rescale ``weights`` to integer spans that sum to ``total`` with none below ``floor`` (largest-remainder method)."""
+    count = len(weights)
+    if count == 0:
+        return []
+    if count * floor > total:
+        floor = max(1, total // count)
+    weight_sum = float(sum(weights)) or float(count)
+    raw = [max(float(w), 0.0) * total / weight_sum for w in weights]
+    spans = [max(floor, int(value)) for value in raw]
+    while sum(spans) > total:
+        index = max(range(count), key=lambda i: (spans[i] - floor, spans[i]))
+        if spans[index] <= floor:
+            break
+        spans[index] -= 1
+    remainders = sorted(range(count), key=lambda i: raw[i] - int(raw[i]), reverse=True)
+    position = 0
+    while sum(spans) < total:
+        spans[remainders[position % count]] += 1
+        position += 1
+    return spans
+
+
+def _spans_layout_key(spans: list[int], axis: str) -> str:
+    return layout_key_for_spans(spans) if axis == "horizontal" else "custom"
+
+
+def _group_settings(container: StorefrontContainer, *, axis: str | None = None, group: bool = True) -> dict:
+    settings = dict(container.settings or {})
+    if group:
+        settings["group"] = True
+    if axis == "vertical":
+        settings["axis"] = "vertical"
+    elif axis == "horizontal":
+        settings.pop("axis", None)
+    return settings
+
+
+def _refuse_if_locked(container: StorefrontContainer) -> None:
+    node = container
+    for _ in range(MAX_GROUP_DEPTH + 3):
+        if node.is_locked:
+            raise GroupOperationError("container_locked", "این چیدمان قفل است — ابتدا قفل آن را باز کنید")
+        if node.parent_cell_id is None:
+            return
+        node = StorefrontContainer.all_objects.get(pk=node.parent_cell.container_id)
+
+
+def _lock_cell(cell_id: int) -> StorefrontCell:
+    try:
+        return StorefrontCell.objects.select_for_update().select_related("container", "container__parent_cell").get(pk=cell_id)
+    except StorefrontCell.DoesNotExist:
+        raise GroupOperationError("cell_not_found", "این خانه پیدا نشد") from None
+
+
+def _lock_container(container_id: int) -> StorefrontContainer:
+    try:
+        return StorefrontContainer.all_objects.select_for_update().select_related("parent_cell").get(pk=container_id)
+    except StorefrontContainer.DoesNotExist:
+        raise GroupOperationError("container_not_found", "این گروه پیدا نشد") from None
+
+
+def _page_cell_budget(container: StorefrontContainer, extra: int) -> None:
+    if StorefrontCell.objects.filter(container__page_id=container.page_id).count() + extra > MAX_PAGE_CELLS:
+        raise GroupOperationError("page_cell_limit", f"تعداد خانه‌های یک صفحه حداکثر {MAX_PAGE_CELLS} است")
+
+
+@transaction.atomic
+def split_cell(cell: StorefrontCell, *, axis: str, count: int) -> StorefrontContainer:
+    """Split ONE Cell into ``count`` (2 or 3) independent Cells side by side (``horizontal``) or one below the other (``vertical``).
+
+    · the Cell's own Container has only this Cell -> the Container itself becomes the Group (no extra level is created);
+    · the Cell hosts a nested Group -> that Group is re-laid out (``set_group_layout``);
+    · otherwise a new nested Group is created inside the Cell and the Cell's Blocks move, in order, into its FIRST Cell.
+    Returns the Container that now holds the new Cells. Nothing is ever deleted; a locked Block / Container refuses the whole operation."""
+    if axis not in GROUP_AXES:
+        raise GroupOperationError("invalid_axis", "جهت تقسیم نامعتبر است")
+    if count not in GROUP_SPLIT_COUNTS:
+        raise GroupOperationError("invalid_split_count", "تقسیم فقط به دو یا سه قسمت ممکن است")
+    cell = _lock_cell(cell.pk)
+    container = _lock_container(cell.container_id)
+    _refuse_if_locked(container)
+
+    hosted = child_container(cell)
+    if hosted is not None:
+        return set_group_layout(hosted, axis=axis, count=count)
+
+    blocks = get_cell_blocks(cell)
+    if any(block.is_locked for block in blocks):
+        raise GroupOperationError("block_locked", "یکی از بخش‌های این خانه قفل است — ابتدا قفل آن را باز کنید")
+
+    spans = even_spans(count)
+    if StorefrontCell.objects.filter(container=container).count() == 1:
+        _page_cell_budget(container, count - 1)
+        cell.span = spans[0]
+        cell.save(update_fields=["span", "updated_at"])
+        StorefrontCell.objects.bulk_create([
+            StorefrontCell(container=container, order=index, span=spans[index]) for index in range(1, count)
+        ])
+        container.layout_key = _spans_layout_key(spans, axis)
+        container.settings = _group_settings(container, axis=axis)
+        container.save(update_fields=["layout_key", "settings", "updated_at"])
+        validate_container(container)
+        return container
+
+    if container_depth(container) + 1 > MAX_GROUP_DEPTH:
+        raise GroupOperationError("group_depth_limit", f"عمق گروه‌های تودرتو حداکثر {MAX_GROUP_DEPTH} سطح است")
+    _page_cell_budget(container, count)
+    group = StorefrontContainer.objects.create(
+        page=container.page, parent_cell=cell, order=0, layout_key=_spans_layout_key(spans, axis),
+        settings=_group_settings(StorefrontContainer(settings={}), axis=axis),
+    )
+    StorefrontCell.objects.bulk_create([StorefrontCell(container=group, order=index, span=spans[index]) for index in range(count)])
+    first = group.cells.order_by("order", "id").first()
+    for block in blocks:
+        move_block(block, first)
+    validate_container(group)
+    return group
+
+
+@transaction.atomic
+def set_group_layout(container: StorefrontContainer, *, axis: str, count: int) -> StorefrontContainer:
+    """Re-lay out an existing Group: a new axis and/or ``count`` Cells (spans reset to even). Growing adds empty Cells; shrinking merges the
+    removed Cells' Blocks, in order, into the last surviving Cell — and refuses when a removed (or the surviving) Cell hosts a nested Group,
+    because that content must be moved or deleted explicitly rather than guessed at."""
+    if axis not in GROUP_AXES:
+        raise GroupOperationError("invalid_axis", "جهت تقسیم نامعتبر است")
+    if not 1 <= count <= MAX_GROUP_CELLS:
+        raise GroupOperationError("invalid_split_count", f"تعداد خانه‌های گروه باید بین ۱ تا {MAX_GROUP_CELLS} باشد")
+    container = _lock_container(container.pk)
+    _refuse_if_locked(container)
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    current = len(cells)
+    if count > current:
+        _page_cell_budget(container, count - current)
+        StorefrontCell.objects.bulk_create([StorefrontCell(container=container, order=index, span=GRID_UNITS) for index in range(current, count)])
+    elif count < current:
+        survivors, trailing = cells[:count], cells[count:]
+        last = survivors[-1]
+        if child_container(last) is not None or any(child_container(cell) is not None for cell in trailing):
+            raise GroupOperationError("group_has_children", "برای کم‌کردن خانه‌ها، ابتدا گروه‌های داخل خانه‌های حذفی را جابه‌جا یا حذف کنید")
+        merged = list(get_cell_blocks(last))
+        for cell in trailing:
+            merged.extend(get_cell_blocks(cell))
+        if any(block.is_locked for block in merged):
+            raise GroupOperationError("block_locked", "یکی از بخش‌های این خانه‌ها قفل است — ابتدا قفل آن را باز کنید")
+        for block in merged:
+            if block.cell_id != last.pk:
+                move_block(block, last)
+        StorefrontCell.objects.filter(pk__in=[cell.pk for cell in trailing]).delete()
+    cells = list(StorefrontCell.objects.filter(container=container).order_by("order", "id"))
+    spans = even_spans(len(cells))
+    for index, (cell, span) in enumerate(zip(cells, spans)):
+        cell.order, cell.span = index, span
+    StorefrontCell.objects.bulk_update(cells, ["order", "span"])
+    container.layout_key = _spans_layout_key(spans, axis)
+    container.settings = _group_settings(container, axis=axis)
+    container.save(update_fields=["layout_key", "settings", "updated_at"])
+    validate_container(container)
+    return container
+
+
+@transaction.atomic
+def add_group_cell(container: StorefrontContainer) -> StorefrontCell:
+    """Add one empty Cell to a Group; the others keep their proportions (rescaled to make room)."""
+    container = _lock_container(container.pk)
+    _refuse_if_locked(container)
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    if len(cells) >= MAX_GROUP_CELLS:
+        raise GroupOperationError("cell_limit", f"هر گروه حداکثر {MAX_GROUP_CELLS} خانه دارد؛ برای بیشتر، یکی از خانه‌ها را دوباره تقسیم کنید")
+    _page_cell_budget(container, 1)
+    weights = [float(cell.span) for cell in cells] + [sum(cell.span for cell in cells) / len(cells)]
+    spans = scale_spans(weights)
+    new_cell = StorefrontCell.objects.create(container=container, order=len(cells), span=spans[-1])
+    for cell, span in zip(cells, spans):
+        cell.span = span
+    StorefrontCell.objects.bulk_update(cells, ["span"])
+    axis = (container.settings or {}).get("axis", "horizontal")
+    container.layout_key = _spans_layout_key(spans, axis)
+    container.settings = _group_settings(container)
+    container.save(update_fields=["layout_key", "settings", "updated_at"])
+    validate_container(container)
+    return new_cell
+
+
+def _hoist_single_cell_group(container: StorefrontContainer) -> None:
+    """A nested Group left with ONE Cell is just a wrapper: its content moves up into the parent Cell and the Group disappears."""
+    if container.parent_cell_id is None:
+        return
+    cells = list(StorefrontCell.objects.filter(container=container).order_by("order", "id"))
+    if len(cells) != 1:
+        return
+    only, parent = cells[0], StorefrontCell.objects.select_for_update().get(pk=container.parent_cell_id)
+    inner = child_container(only)
+    blocks = [] if inner is not None else list(get_cell_blocks(only))
+    # detach the wrapper first: while it still hangs in ``parent`` that Cell «hosts a Group» and may not receive Blocks directly
+    StorefrontContainer.all_objects.filter(pk=container.pk).update(parent_cell=None)
+    if inner is not None:
+        StorefrontContainer.all_objects.filter(pk=inner.pk).update(parent_cell=parent)
+    for block in blocks:
+        move_block(block, parent)
+    StorefrontContainer.all_objects.filter(pk=container.pk).delete()
+
+
+@transaction.atomic
+def remove_group_cell(cell: StorefrontCell) -> None:
+    """Remove one Cell of a Group (its Blocks / nested Groups must already be gone — the caller deletes content explicitly); the others
+    absorb the width. A nested Group left with a single Cell dissolves into its parent."""
+    cell = _lock_cell(cell.pk)
+    container = _lock_container(cell.container_id)
+    _refuse_if_locked(container)
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    if len(cells) < 2:
+        raise GroupOperationError("last_cell", "آخرین خانهٔ یک گروه حذف نمی‌شود؛ خودِ گروه را حذف کنید")
+    if get_cell_blocks(cell) or child_container(cell) is not None:
+        raise GroupOperationError("cell_not_empty", "خانهٔ دارای محتوا مستقیماً حذف نمی‌شود")
+    remaining = [c for c in cells if c.pk != cell.pk]
+    cell.delete()
+    spans = scale_spans([float(c.span) for c in remaining])
+    for index, (c, span) in enumerate(zip(remaining, spans)):
+        c.order, c.span = index, span
+    StorefrontCell.objects.bulk_update(remaining, ["order", "span"])
+    axis = (container.settings or {}).get("axis", "horizontal")
+    container.layout_key = _spans_layout_key(spans, axis)
+    container.save(update_fields=["layout_key", "updated_at"])
+    if len(remaining) == 1 and container.parent_cell_id is not None:
+        _hoist_single_cell_group(container)
+    else:
+        validate_container(container)
+
+
+@transaction.atomic
+def move_group_cell(cell: StorefrontCell, direction: str) -> None:
+    """Swap a Cell with its neighbour inside its Container (``up``/``left`` = earlier, ``down``/``right`` = later). A Cell's span travels with it."""
+    if direction not in ("up", "down"):
+        raise GroupOperationError("invalid_direction", "جهت جابه‌جایی نامعتبر است")
+    cell = _lock_cell(cell.pk)
+    container = _lock_container(cell.container_id)
+    _refuse_if_locked(container)
+    cells = list(StorefrontCell.objects.select_for_update().filter(container=container).order_by("order", "id"))
+    index = next(i for i, c in enumerate(cells) if c.pk == cell.pk)
+    other = index - 1 if direction == "up" else index + 1
+    if not 0 <= other < len(cells):
+        raise GroupOperationError("move_boundary", "این خانه در همین جایگاه پایان مسیر خود است")
+    cells[index], cells[other] = cells[other], cells[index]
+    for position, c in enumerate(cells):          # ``Cell.order`` carries no uniqueness constraint (unlike a Block's ``cell_order``)
+        c.order = position
+    StorefrontCell.objects.bulk_update(cells, ["order"])
+
+
+@transaction.atomic
+def move_top_level_container(container: StorefrontContainer, direction: str) -> None:
+    """Swap a page ROW with its neighbour (``up``/``down``)."""
+    if direction not in ("up", "down"):
+        raise GroupOperationError("invalid_direction", "جهت جابه‌جایی نامعتبر است")
+    container = _lock_container(container.pk)
+    if container.parent_cell_id is not None:
+        raise GroupOperationError("not_top_level", "فقط ردیف‌های صفحه با این عملیات جابه‌جا می‌شوند")
+    _refuse_if_locked(container)
+    rows = list(StorefrontContainer.objects.select_for_update().filter(page=container.page).order_by("order", "id"))
+    index = next(i for i, c in enumerate(rows) if c.pk == container.pk)
+    other = index - 1 if direction == "up" else index + 1
+    if not 0 <= other < len(rows):
+        raise GroupOperationError("move_boundary", "این ردیف در همین جایگاه پایان مسیر خود است")
+    rows[index], rows[other] = rows[other], rows[index]
+    for position, row in enumerate(rows):
+        row.order = position
+    StorefrontContainer.objects.bulk_update(rows, ["order"])

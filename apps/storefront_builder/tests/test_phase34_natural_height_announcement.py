@@ -62,5 +62,6 @@ class Phase34NaturalHeightAndAnnouncementTests(StorefrontBuilderViewsTestCase):
         self.assertIn('href="/my-track/"', html)
         self.assertIn(">رهگیری من</a>", html)
         self.assertNotIn('class="sfb-announcement-phone"', html)
-        self.assertIn("data-open-header-settings", html)
-        self.assertIn("ویرایش نوار اعلان", html)
+        # V5-UI-014: the strip is selected like any Section (standard R4 toolbar → «ویرایش»); the old in-bar «⚙ ویرایش» button is gone
+        self.assertIn('data-section-id="announcement"', html)
+        self.assertNotIn("sfb-announcement-edit-button", html)

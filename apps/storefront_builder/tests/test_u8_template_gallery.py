@@ -35,6 +35,7 @@ from apps.storefront_builder.tests._gallery_support import (
 from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service
 from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -93,7 +94,7 @@ class TemplateGalleryTests(TestCase):
         self.assertEqual(
             {t["key"] for t in gallery_client_templates(response)}, {p.key for p in lpr.list_ready_templates()},
         )
-        self.assertEqual(len(gallery_client_templates(response)), 53)
+        self.assertEqual(len(gallery_client_templates(response)), READY_TEMPLATE_COUNT)
         labels = {t["label"] for t in gallery_client_templates(response)}
         for preset in lpr.list_ready_templates():
             self.assertIn(preset.label_fa, labels)

@@ -10,12 +10,20 @@ from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.a8_ready_templates import A8_READY_TEMPLATES
 from apps.storefront_builder.storefront_appearance.families import COMPONENT_FAMILIES
 from apps.storefront_builder.storefront_appearance.registry import get_component
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 
 EXPECTED_REFERENCE_VERSIONS = {
     "stationery_spectrum": "2",
     "magenta_beauty_retail": "1",
     "pastel_kawaii_stationery": "1",
+    # V5 six-site kit (54-59)
+    "decor_sand_boutique": "1",
+    "rose_beauty_store": "1",
+    "pink_beauty_gallery": "1",
+    "campaign_beauty_hub": "1",
+    "cocoa_gift_shop": "1",
+    "neon_digital_store": "1",
 }
 
 EXPECTED_LATEST_VERSIONS = {
@@ -130,8 +138,8 @@ class A8ReadyTemplateCatalogTests(SimpleTestCase):
         )
         # The merchant-facing catalog is the 50 A8 identities plus the three
         # reference-fidelity templates (51-53).
-        self.assertEqual(len(presets), 53)
-        self.assertEqual(len({preset.key for preset in presets}), 53)
+        self.assertEqual(len(presets), READY_TEMPLATE_COUNT)
+        self.assertEqual(len({preset.key for preset in presets}), READY_TEMPLATE_COUNT)
         self.assertEqual(
             {preset.key: preset.version for preset in presets},
             {**EXPECTED_LATEST_VERSIONS, **EXPECTED_REFERENCE_VERSIONS},

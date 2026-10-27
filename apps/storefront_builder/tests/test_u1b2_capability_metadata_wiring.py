@@ -56,10 +56,11 @@ class SupportsCapabilityCorrectnessTests(TestCase):
         for definition in list_definitions():
             self.assertFalse(definition.supports_capability("no_such_capability_xyz"))
 
-    def test_blog_posts_has_no_layout_gating_capabilities(self):
-        """``blog_posts`` is a representative "no capability" section — only
-        the unconditional ``responsive`` capability applies."""
-        definition = get_definition("blog_posts")
+    def test_announcement_bar_has_no_layout_gating_capabilities(self):
+        """``announcement_bar`` is a representative "no capability" section — only
+        the unconditional ``responsive`` capability applies. (``blog_posts`` used to be the example; it now owns a
+        background + spacing so a Ready Template can put the journal on a coloured band.)"""
+        definition = get_definition("announcement_bar")
         for capability in self._CAPABILITIES:
             self.assertFalse(definition.supports_capability(capability), capability)
         self.assertTrue(definition.supports_capability("responsive"))
@@ -165,7 +166,7 @@ class RegistryInvariantsUnchangedByU1B2Tests(TestCase):
     conditional was introduced anywhere in ``section_registry.py``."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 38)
+        self.assertEqual(len(SECTION_REGISTRY), 39)
 
     def test_hero_banner_and_image_slider_both_still_present(self):
         self.assertIn("hero_banner", SECTION_REGISTRY)

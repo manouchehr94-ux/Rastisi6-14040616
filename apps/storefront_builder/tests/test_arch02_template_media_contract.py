@@ -28,6 +28,7 @@ from apps.storefront_builder.services import layout_service as svc
 from apps.storefront_builder.services import preset_service, render_service
 from apps.storefront_builder.services import r4_mutation_service as r4
 from apps.stores.models import Store, StoreMembership
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -153,7 +154,7 @@ class CandidateFallbackTests(MediaContractBase):
 
 class AllReadyTemplatesTests(MediaContractBase):
     def test_gallery_has_53_ready_templates(self):
-        self.assertEqual(len(lpr.list_ready_templates()), 53)
+        self.assertEqual(len(lpr.list_ready_templates()), READY_TEMPLATE_COUNT)
 
     def test_every_template_previews_without_writes_applies_exactly_and_keeps_shared_media(self):
         templates = lpr.list_ready_templates()

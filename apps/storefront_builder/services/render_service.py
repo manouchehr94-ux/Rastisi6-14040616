@@ -23,7 +23,7 @@ from apps.catalog.services.promotion_service import active_discount_q, earliest_
 from apps.content.models import HeroSlide, PromotionalBanner
 from apps.orders.services import best_seller_service
 
-from .. import appearance_registry, decorative_strip, design_block, semantic_colors
+from .. import appearance_registry, decorative_strip, design_block, pdp_settings, semantic_colors
 from ..section_registry import (
     UnknownSectionTypeError,
     default_brand_carousel_settings,
@@ -151,6 +151,17 @@ def _single_banner_context(store, section):
     return {"banners": _scoped_banners(store, section)[:1]}
 
 
+def _linked_image_context(store, section):
+    """V5 «عکس لینک‌دار» — ONLY this section's own picture row (no fallback to the store-wide banner pool, ever): a missing picture must show
+    nothing, never a random / default store banner. ``banners`` is a 0-or-1 list so the shared empty-state plumbing and the template agree."""
+    if getattr(section, "pk", None) is None:  # an unsaved candidate (gallery live preview) has no picture row yet
+        return {"banners": []}
+    banner = PromotionalBanner.objects.filter(
+        store=store, section=section, is_active=True,
+    ).select_related(*_DESTINATION_SELECT_RELATED).order_by("display_order", "id").first()
+    return {"banners": [banner] if banner is not None else []}
+
+
 def _multi_banner_context(store, section):
     """Resolve a reusable slice of active promotional banners.
 
@@ -206,7 +217,7 @@ def _category_grid_context(store, section):
     # modes that explicitly need uncropped representative photography pay
     # for the extra per-category product lookup; every other category_grid
     # variant keeps reading ``category.image`` exactly as before.
-    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles"}:
+    if settings.get("display_mode") in {"fashion_mosaic", "beauty_icons", "atelier_mosaic", "luxury_shortcuts", "grey_circles", "pastel_tiles", "gradient_tiles", "label_tiles", "icon_rail", "ring_circles", "photo_cards"}:
         for category in top_categories:
             category.representative_media = section_data_service.resolve_category_representative_media(category)
     # ``min_slots`` reserves visible positions: the positions without a category render as neutral empty slots.
@@ -499,23 +510,35 @@ def _video_section_context(store, section):
     ویدیویِ کالا استفاده می‌شود عبور می‌کند (نه بازنویسیِ دوباره) — یک
     نمونه‌ی موقتِ (ذخیره‌نشده‌یِ) ``ProductVideo`` فقط برایِ عبور از همان
     منطق ساخته می‌شود."""
-    video_url = (section.settings or {}).get("video_url") or ""
-    if not video_url:
-        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None}
-
     from apps.catalog.models import ProductVideo
     from apps.catalog.services import product_video_service
+
+    items = []
+    for row in (section.settings or {}).get("videos") or []:
+        try:
+            provider, _external_id = product_video_service.detect_provider_and_id(row.get("url", ""))
+        except product_video_service.ProductVideoError:
+            continue
+        temp = ProductVideo(provider=provider, url=row["url"])
+        if provider == ProductVideo.Provider.INSTAGRAM:
+            items.append({"title": row.get("title", ""), "embed_url": None, "permalink": product_video_service.instagram_permalink(temp)})
+        else:
+            items.append({"title": row.get("title", ""), "embed_url": product_video_service.embed_url(temp), "permalink": None})
+    video_url = (section.settings or {}).get("video_url") or ""
+    if not video_url:
+        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None, "video_items": items}
 
     try:
         provider, _external_id = product_video_service.detect_provider_and_id(video_url)
     except product_video_service.ProductVideoError:
-        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None}
+        return {"video_embed_url": None, "video_is_instagram": False, "video_permalink": None, "video_items": items}
 
     temp_video = ProductVideo(provider=provider, url=video_url)
     if provider == ProductVideo.Provider.INSTAGRAM:
         return {"video_embed_url": None, "video_is_instagram": True,
-                "video_permalink": product_video_service.instagram_permalink(temp_video)}
-    return {"video_embed_url": product_video_service.embed_url(temp_video), "video_is_instagram": False, "video_permalink": None}
+                "video_permalink": product_video_service.instagram_permalink(temp_video), "video_items": items}
+    return {"video_embed_url": product_video_service.embed_url(temp_video), "video_is_instagram": False, "video_permalink": None,
+            "video_items": items}
 
 
 def _category_context_for_promo_cards(store, section):
@@ -550,6 +573,18 @@ def _decorative_strip_context(store, section):
     return {"strip": decorative_strip.build_view(settings, image_url)}
 
 
+def _image_text_context(store, section):
+    """Destination (as every destination section) + the Store-scoped media-library picture, resolved server-side and fail-closed:
+    a missing / foreign asset yields no picture rather than a broken image. Absent unless a media asset is chosen."""
+    context = dict(_resolved_destination_context(store, section))
+    media_id = (section.settings or {}).get("image_media_asset_id")
+    if media_id:
+        from apps.content.services import resolve_background_media_url
+
+        context["image_media_url"] = resolve_background_media_url(store, {"mode": "image", "media_asset_id": media_id}) or ""
+    return context
+
+
 def _resolved_destination_context(store, section):
     """بلوکِ ``destination`` این section (اگر داشته باشد) را به URL/تب‌جدید
     واقعی حل می‌کند — برایِ انواعی که در ``destination`` capability
@@ -582,7 +617,12 @@ def _product_section_context(store, section):
         resolved = resolve_destination_setting(store, destination)
         if resolved["url"]:
             view_all_url = resolved["url"]
-    return {"products": products, "view_all_url": view_all_url}
+    context = {"products": products, "view_all_url": view_all_url}
+    if (section.settings or {}).get("tabs_source"):
+        context["tabs"] = section_data_service.resolve_product_tabs(
+            store, section.settings or {}, availability=_availability_mode(section),
+        )
+    return context
 
 
 #: کلیدهایی که context builder‌شان به تنظیماتِ خودِ همان نمونه‌ی section
@@ -591,7 +631,7 @@ def _product_section_context(store, section):
 #: تکرارشده (duplicable) با تنظیماتِ متفاوت (مثلاً دو کالکشنِ متفاوت)
 #: محتوایِ یکسان (نمونه‌ی اول) نشان می‌دهند.
 PER_INSTANCE_SECTION_KEYS = {
-    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "multi_banner",
+    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "linked_image", "multi_banner",
     "category_grid", "brand_carousel", "collection_tiles", "quick_links", "video_section", "story_rail",
     #: Part 2D — same reason as ``product_section``/``category_grid``
     #: above: this builder's output depends on the section's own
@@ -647,13 +687,37 @@ def _product_main_context(store, section, page_context):
         "gift_wrap": page_context.get("gift_wrap"),
         "gallery_slides": page_context.get("gallery_slides"),
         "review_count": page_context.get("review_count", 0),
+        # V5 (PDP بستهٔ ۱) — فقط «چینش و ظاهر»: همین‌جا از settings ی همین Section حل می‌شود (lenient، هرگز exception نمی‌دهد)؛
+        # قیمت/موجودی/تنوع/فرم خرید همچنان از page_context بالا می‌آیند، نه از این view.
+        "pdp": pdp_settings.resolve_product_main_view(getattr(section, "settings", None)),
     }
+
+
+def _brand_panel_view(brand, product=None):
+    """The real, Store-owned brand data the optional «برند» section can show — ``None`` when the product has no brand, the brand
+    belongs to another Store, or it carries nothing to say (no empty / decorative panel is ever rendered). Only an http(s)
+    website is ever linked."""
+    if brand is None:
+        return None
+    if product is not None and getattr(brand, "store_id", None) != getattr(product, "store_id", None):
+        return None
+    try:
+        logo_url = brand.logo.url if brand.logo else ""
+    except Exception:  # a missing / unreadable file simply means «no logo» — never a broken page
+        logo_url = ""
+    view = {
+        "name": brand.name, "name_en": brand.name_en, "logo_url": logo_url,
+        "description": brand.description, "country": brand.country,
+        "website": brand.website if str(brand.website or "").lower().startswith(("http://", "https://")) else "",
+    }
+    return view if any(view[key] for key in ("logo_url", "description", "country", "website")) else None
 
 
 def _product_description_context(store, section, page_context):
     product = page_context.get("product")
     if product is None:
         return {}
+    brand_panel = _brand_panel_view(getattr(product, "brand", None), product)
     return {
         "product": product,
         "spec_variant_summary": page_context.get("spec_variant_summary", {}),
@@ -661,6 +725,10 @@ def _product_description_context(store, section, page_context):
         "review_count": page_context.get("review_count", 0),
         "rating_breakdown": page_context.get("rating_breakdown", []),
         "can_review": page_context.get("can_review", False),
+        "brand_panel": brand_panel,
+        "pdd": pdp_settings.resolve_product_description_view(
+            getattr(section, "settings", None), brand_available=brand_panel is not None,
+        ),
     }
 
 
@@ -750,6 +818,7 @@ _CONTEXT_BUILDERS = {
     "hero_banner": _hero_banner_context,
     "image_slider": _image_slider_context,
     "single_banner": _single_banner_context,
+    "linked_image": _linked_image_context,
     "multi_banner": _multi_banner_context,
     "category_grid": _category_grid_context,
     "featured_products": _featured_products_context,
@@ -760,7 +829,7 @@ _CONTEXT_BUILDERS = {
     "brand_carousel": _brand_carousel_context,
     "promo_cards": _category_context_for_promo_cards,
     "rich_text": _static_context,
-    "image_text": _resolved_destination_context,
+    "image_text": _image_text_context,
     "blog_posts": _blog_posts_context,
     "product_section": _product_section_context,
     "catalog_product_wall": _catalog_product_wall_context,
@@ -1022,8 +1091,10 @@ def _build_items_from_sections(
             render_section = copy(section)
             render_section.settings = effective_settings
 
+        # An unsaved candidate section (gallery live preview) has no pk: key it by identity so two instances of the same key
+        # (two banner rows, two product rows …) never share one cached context.
         cache_key = (
-            (section.section_key, section.pk)
+            (section.section_key, section.pk if section.pk is not None else id(section))
             if section.section_key in PER_INSTANCE_SECTION_KEYS
             else section.section_key
         )
@@ -1075,7 +1146,7 @@ def _build_items_from_sections(
             context["campaign"] = _campaign_panel_view(store, context["settings"])
         # Sparse ``design`` block -> data-d flags + --d-* custom properties for the wrapper.
         context["design_attrs"] = design_block.render_attributes(
-            context["settings"].get("design"), design_block.applicable_properties(section.section_key),
+            context["settings"].get("design"), design_block.all_properties(section.section_key),
         )
         # Column counts: the section's own ``*_columns`` (product-section contract) win over the shared
         # ``responsive`` block; a ``design`` block may still override them through ``--cols-*``.
@@ -1247,22 +1318,26 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
         for item in items
         if item.get("section") is not None and item["section"].pk is not None
     }
-    rendered = []
-    containers = page.containers.prefetch_related(
+    from ..models import StorefrontContainer
+
+    # V5 Groups: the Containers nested in the Cells of this page, loaded once and grouped by the Cell that hosts them.
+    nested_by_cell: dict = {}
+    for nested in StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).prefetch_related(
         "cells__section", "cells__blocks",
-    ).order_by("order", "id")
-    for container in containers:
+    ).order_by("order", "id"):
+        nested_by_cell.setdefault(nested.parent_cell_id, []).append(nested)
+    store = getattr(getattr(getattr(page, "version", None), "layout", None), "store", None)
+
+    def compose(container, ratio: float = 1.0) -> dict:
         cells = []
+        vertical = (container.settings or {}).get("axis") == "vertical"
+        grouped = container.parent_cell_id is not None or bool((container.settings or {}).get("group"))
         has_content = False
         has_placement = False
         for cell in container.cells.all():
-            # U11 — N+1 fix: ``containers`` above was just fetched with
-            # ``prefetch_related("cells__section", "cells__blocks")``, so
-            # every Cell here is already fresh; ``get_cell_blocks`` would
-            # discard that prefetch and issue one live query per Cell (its
-            # own docstring documents why it always does that — a
-            # guarantee this loop doesn't need, see
-            # ``blocks_from_prefetched_cell``'s docstring).
+            # U11 — N+1 fix: the containers were just fetched with ``prefetch_related("cells__section", "cells__blocks")``, so every Cell
+            # here is already fresh; ``get_cell_blocks`` would discard that prefetch and issue one live query per Cell
+            # (see ``blocks_from_prefetched_cell``'s docstring).
             blocks = container_service.blocks_from_prefetched_cell(cell)
             block_items = []
             for block in blocks:
@@ -1271,30 +1346,90 @@ def build_container_render_items(page, items: list[dict], *, include_empty: bool
                 if block_item is not None:
                     has_content = True
                     block_items.append(block_item)
+            # the share of the page's content width this Cell really gets (a vertical split stacks full-width rows)
+            cell_ratio = ratio if vertical else ratio * (cell.span / 12)
+            hosted = [compose(child, cell_ratio) for child in nested_by_cell.get(cell.pk, [])]
+            hosted = hosted[0] if hosted else None
+            if hosted is not None:
+                has_content = has_content or hosted["has_content"]
+                has_placement = has_placement or hosted["has_placement"]
             cells.append({
                 "cell": cell,
                 "item": block_items[0] if block_items else None,
                 "items": block_items,
-                # Raw placed Sections (including inactive/hidden ones) — the
-                # builder-only "occupied but all Blocks are hidden" chrome
-                # needs this list; ``items`` above only ever contains
-                # *visible* Blocks' render contexts.
+                # Raw placed Sections (including inactive/hidden ones) — the builder-only "occupied but all Blocks are hidden" chrome
+                # needs this list; ``items`` above only ever contains *visible* Blocks' render contexts.
                 "blocks": blocks,
+                # V5 Groups: the nested Group hosted by this Cell (then it has no direct Blocks), else ``None``.
+                "group": hosted,
+                # V5 Groups: a shop component placed in a narrow Cell of a Group shows fewer columns (bucket of the real width share;
+                # absent for ordinary rows, whose shelves keep exactly the columns their own settings give)
+                "cw": _width_bucket(cell_ratio) if grouped else "",
             })
-        if not has_content and not include_empty:
-            continue
-        rendered.append({
+        settings = container_service.effective_container_settings(container.settings)
+        return {
             "container": container,
-            "settings": container_service.effective_container_settings(container.settings),
+            "settings": settings,
             "cells": cells,
             "has_content": has_content,
-            # Hidden content has no active render item but still physically owns
-            # its Cell.  Builder chrome must distinguish that from a truly empty
-            # Container so direct delete never risks hidden data.
+            # Hidden content has no active render item but still physically owns its Cell. Builder chrome must distinguish that from a
+            # truly empty Container so direct delete never risks hidden data.
             "has_placement": has_placement,
-        })
+            "group": _group_view(container, settings, store),
+        }
+
+    rendered = []
+    containers = page.containers.prefetch_related(
+        "cells__section", "cells__blocks",
+    ).order_by("order", "id")
+    for container in containers:
+        composition = compose(container)
+        if not composition["has_content"] and not include_empty:
+            continue
+        rendered.append(composition)
     return rendered
 
+
+def _width_bucket(ratio: float) -> str:
+    """Desktop columns a product-style shelf may use in a Cell that gets ``ratio`` of the content width: ≤¼ → 1, ≤½ → 2, ≤¾ → 3, else unchanged."""
+    if ratio <= 0.26:
+        return "1"
+    if ratio <= 0.51:
+        return "2"
+    if ratio <= 0.76:
+        return "3"
+    return ""
+
+
+def _group_view(container, settings: dict, store) -> dict:
+    """Presentation of a Group (``Container.settings``): everything the group frame / vertical axis needs, resolved server-side.
+
+    ``framed`` is true only when the Container actually carries Group presentation (a title, a description, a ``style`` or a gradient / picture
+    background) — every other Container keeps its exact pre-Group markup. Preview and the published page share this one result."""
+    from apps.content.services import resolve_background_media_url
+
+    from .. import group_style
+
+    style = settings.get("style") or {}
+    attrs = group_style.render_attributes(style)
+    mode = settings.get("background_mode")
+    media_url = ""
+    if mode == "image" and store is not None:
+        media_url = resolve_background_media_url(store, {"mode": "image", "media_asset_id": settings.get("background_media_asset_id")}) or ""
+    background = group_style.background_css(settings, media_url)
+    title = settings.get("title", "")
+    framed = bool(title or settings.get("description") or style or background)
+    vertical = settings.get("axis") == "vertical"
+    return {
+        "framed": framed,
+        "nested": container.parent_cell_id is not None,
+        "vertical": vertical,
+        "title": title,
+        "description": settings.get("description", ""),
+        "show_title": settings.get("title_visible", True) is not False and bool(title),
+        "attrs": attrs,
+        "background_css": background,
+    }
 
 
 def group_items_into_rows(items: list[dict]) -> list[dict]:
