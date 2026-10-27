@@ -3118,6 +3118,8 @@ _MIN_AUTO_SOURCE_PRODUCT_ITEMS = _PRODUCT_SECTION_MIN_LIMIT
 _MAX_AUTO_SOURCE_PRODUCT_ITEMS = _PRODUCT_SECTION_MAX_LIMIT
 _DEFAULT_NEWEST_PRODUCTS_ITEMS = 8
 _DEFAULT_BEST_SELLERS_ITEMS = 8
+#: ``featured_products`` renders through ``_newest_products_context`` (no is_featured field exists), whose own default slice is 8
+_DEFAULT_FEATURED_PRODUCTS_ITEMS = 8
 _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS = 6
 
 
@@ -3142,6 +3144,20 @@ def _validate_newest_products_settings(raw: dict) -> dict:
 
 def default_newest_products_settings() -> dict:
     return {"item_limit": _DEFAULT_NEWEST_PRODUCTS_ITEMS}
+
+
+def _validate_featured_products_settings(raw: dict) -> dict:
+    """The only managed field is ``item_limit`` (clamped 2-24, default 8). Every other key a stored section already carries (title, recipe
+    keys, card / design / background markers …) is kept exactly as before: this section used the pass-through validator until now, so an
+    Inspector save must never drop what a Ready Template or an earlier edit put there."""
+    cleaned = dict(raw) if isinstance(raw, dict) else raw
+    cleaned_limit = _validate_auto_source_product_settings(raw, _DEFAULT_FEATURED_PRODUCTS_ITEMS)
+    cleaned.update(cleaned_limit)
+    return cleaned
+
+
+def default_featured_products_settings() -> dict:
+    return {"item_limit": _DEFAULT_FEATURED_PRODUCTS_ITEMS}
 
 
 def _validate_best_sellers_settings(raw: dict) -> dict:
@@ -3171,6 +3187,7 @@ def _auto_source_product_schema(label_fa: str, default_item_limit: int) -> "Sett
 
 
 NEWEST_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_NEWEST_PRODUCTS_ITEMS)
+FEATURED_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_FEATURED_PRODUCTS_ITEMS)
 BEST_SELLERS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_BEST_SELLERS_ITEMS)
 DISCOUNTED_PRODUCTS_SCHEMA = _auto_source_product_schema("تعداد محصولات", _DEFAULT_DISCOUNTED_PRODUCTS_ITEMS)
 
@@ -3609,8 +3626,9 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
             "appearance_override", "background", "card", "columns", "columns_visual", "spacing",
         }),
         template_name="storefront_builder/sections/featured_products.html",
-        validate_settings=_passthrough_dict, default_settings=_empty_defaults,
+        validate_settings=_validate_featured_products_settings, default_settings=default_featured_products_settings,
         duplicable=True, removable=True, category_fa="محصولات",
+        settings_schema=FEATURED_PRODUCTS_SCHEMA,
     ),
     "newest_products": SectionDefinition(
         key="newest_products", label_fa="جدیدترین محصولات", icon="sparkles",

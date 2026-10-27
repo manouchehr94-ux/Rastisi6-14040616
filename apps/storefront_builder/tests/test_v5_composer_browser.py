@@ -730,5 +730,48 @@ class ComposerScenarioTests(_Steps, ComposerBrowserTests):
                 ctx.close()
 
 
+    # ------------------------------------------------------------------------------------------------------------ scenario H (Windows QA: «محصولات ویژه»)
+    def test_h_featured_products_inside_a_group_opens_its_real_inspector_and_failures_are_visible(self):
+        context, page = self._studio()
+        try:
+            base = self.add_simple_row(page)
+            self.pick_leaf(page, base)
+            self.split(page, "horizontal", 2)
+            self.pick_leaf(page, base)
+            self.add_component(page, "featured_products")
+            cards = lambda: self._frame(page).evaluate(
+                "()=>{const s=document.querySelector('.rcontainer-cell[data-cw] .rsec[data-section-key=\"featured_products\"]'); return s?s.querySelectorAll('.pcard').length:-1}")
+            before = cards()
+            self.assertGreater(before, 2)
+            # a failed request is NOT silent: the seller reads a Persian message (simulated 404 on the real endpoint)
+            page.route("**/sections/*/inspector/", lambda route: route.fulfill(status=404, body="nope"))
+            self._frame(page).locator('.rcontainer-cell[data-cw] .rsec[data-section-key="featured_products"] .pcard').first.click(force=True)
+            page.wait_for_selector("[data-cmp-toolbar]:not([hidden]) [data-cmp-name]")
+            page.click('[data-cmp="edit"]')
+            page.wait_for_function("()=>{const t=document.querySelector('.toast, [data-rs-toast], .rs-toast'); return !!t && /تنظیمات این بخش باز نشد/.test(t.textContent)}", timeout=8000)
+            page.unroute("**/sections/*/inspector/")
+            page.wait_for_timeout(4200)
+            # the real endpoint: the large workspace opens with the product-count field; the new value is saved and changes the shelf
+            page.click('[data-cmp="edit"]')
+            page.wait_for_selector("#r4Inspector [data-r4-field-key=\"item_limit\"]", timeout=15000)
+            self.assertEqual(page.locator("#r4Inspector [data-cmp-ws]").count(), 0)
+            field = page.locator('#r4Inspector [data-r4-field-key="item_limit"] input').first
+            field.fill("3")
+            field.press("Tab")
+            self._until(page, "()=>{const s=document.querySelector('.rcontainer-cell[data-cw] .rsec[data-section-key=\"featured_products\"]'); return s && s.querySelectorAll('.pcard').length===3}", "three products after the change")
+            page.keyboard.press("Escape")
+            page.wait_for_function("()=>!RastiSiR4.inspectorOpen", timeout=10000)
+            page.wait_for_timeout(900)
+            page.reload(wait_until="networkidle")
+            page.wait_for_selector("#r4PreviewFrame")
+            page.wait_for_timeout(1500)
+            self._frame(page)
+            self.settle(page)
+            self.assertEqual(cards(), 3, "the saved limit survives a refresh")
+            self._shot(page, "composer_h_featured_inspector")
+        finally:
+            context.close()
+
+
 # the studio module's fixture class must not be collected a second time from this module's namespace
 del _Base
