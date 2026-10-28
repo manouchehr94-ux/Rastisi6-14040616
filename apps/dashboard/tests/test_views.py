@@ -40,10 +40,10 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, f'href="{product_list_url}?health=no_seo"')
         self.assertContains(response, f'href="{product_list_url}?health=missing_variants"')
 
-    def test_dashboard_shows_all_nine_sidebar_sections(self):
+    def test_dashboard_shows_all_ten_sidebar_sections(self):
         response = self.client.get(reverse("dashboard:dashboard"))
         for label in [
-            "داشبورد", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
+            "داشبورد", "استودیو", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
             "بازاریابی", "فروشگاه", "گزارش‌ها", "تنظیمات",
         ]:
             self.assertContains(response, label)
@@ -55,7 +55,7 @@ class DashboardViewTests(TestCase):
 
 
 class CollapsibleSidebarTests(TestCase):
-    """چک‌های ساختاریِ سایدبارِ تخت (دو سطحی) — نُه حوزه‌ی کاری بدون آکاردئون،
+    """چک‌های ساختاریِ سایدبارِ تخت (دو سطحی) — ده حوزه‌ی کاری (با «استودیو») بدون آکاردئون،
     مخفی‌شدنِ بج‌های صفر، و درِ کشویی موبایل."""
 
     def setUp(self):
@@ -63,14 +63,14 @@ class CollapsibleSidebarTests(TestCase):
         _grant_akhlaghi_membership(self.staff)
         self.client.login(username="09121121003", password="pass12345")
 
-    def test_sidebar_is_flat_with_nine_sections_and_no_accordion(self):
+    def test_sidebar_is_flat_with_ten_sections_and_no_accordion(self):
         response = self.client.get(reverse("dashboard:dashboard"))
-        for section_key in ["dashboard", "orders", "products", "finance", "customers",
+        for section_key in ["dashboard", "studio", "orders", "products", "finance", "customers",
                             "marketing", "store", "reports", "settings"]:
             self.assertContains(response, f'data-section="{section_key}"')
         for legacy in ("nav-group-head", "nav-group-body", "sidebarNav", 'data-group='):
             self.assertNotContains(response, legacy)
-        self.assertEqual(response.content.decode().count('data-section="'), 9)
+        self.assertEqual(response.content.decode().count('data-section="'), 10)
 
     def test_zero_badges_are_not_rendered(self):
         # فروشگاهِ akhlaghi در fixture پایه هیچ محصول/سفارشِ در انتظاری ندارد.

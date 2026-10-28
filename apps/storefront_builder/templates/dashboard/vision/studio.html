@@ -117,6 +117,7 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
       <main class="vs-stage stage" id="vsStage">
         <div class="canvas vs-canvas">
           <div class="browser-chrome vs-chrome" hidden><span data-rs-browser-url>{{ studio.public_url|default:studio.store_name }}</span><span class="browser-state" data-rs-browser-state>پیش‌نمایش زنده</span></div>
+          <div class="vs-loading" data-vs-loading role="status" aria-live="polite"><i aria-hidden="true"></i><span>در حال بارگذاری پیش‌نمایش…</span></div>
           <div class="preview-viewport r4-preview-canvas" data-r4-device="desktop">
             <iframe
               id="r4PreviewFrame"
@@ -161,7 +162,8 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
           </div>
           <button type="button" data-rastisi-action="lab-diffs" class="diff-trigger" data-rs-lab-only hidden aria-label="مشاهده تفاوت‌ها">{% rs_icon "layers" %}<span data-rs-diff-count>۰ تغییر</span></button>
         </div>
-        <span class="visually-hidden" data-rs-caption></span><span class="visually-hidden" data-rs-caption-side></span><span class="visually-hidden" data-rs-scope-tag></span>
+        {# r4_studio.js writes its status captions here; its own wrapper keeps it from touching the device bar's icons #}
+        <div class="visually-hidden" aria-hidden="true"><span data-rs-caption></span><span data-rs-caption-side></span><span data-rs-scope-tag></span></div>
 
       {% if design_lab.families %}
       {# ---- Design Lab dock: families are server-rendered; transient state is owned by r4_editor.js ---- #}
@@ -236,6 +238,17 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
 
           {# ---- طراحی (the real global design panel) ---- #}
           <section class="vs-pane" id="vsPane-design" role="tabpanel" aria-labelledby="vsTab-design" data-vs-pane="design" hidden>
+            {# a global region (header / footer / mobile bar) opened as an element: the reference's «ظاهر عنصر» header with a way back #}
+            <div class="vs-focus-head" data-vs-focus-head hidden>
+              <button type="button" class="vs-back" data-vs-focus-back aria-label="بازگشت به همهٔ بخش‌ها">{% rs_icon "arrow" %}<span>همهٔ بخش‌ها</span></button>
+              <span class="vs-ws-head__title">ظاهر عنصر</span>
+              <strong class="vs-focus-name" data-vs-focus-name></strong>
+            </div>
+            <div class="vs-regions" data-vs-regions role="group" aria-label="بخش‌های مشترک فروشگاه">
+              <button type="button" class="vs-chip-btn" data-vs-region="header">{% rs_icon "header" %}<span>سربرگ</span></button>
+              <button type="button" class="vs-chip-btn" data-vs-region="footer">{% rs_icon "footer" %}<span>پایین صفحه</span></button>
+              <button type="button" class="vs-chip-btn" data-vs-region="bottom_nav">{% rs_icon "mobile" %}<span>ناوبری موبایل</span></button>
+            </div>
             <div class="context-panel vs-design" id="rsStructureDrawer" role="complementary" aria-label="طراحی سراسری" data-rastisi-panel="structure" data-rs-context-panel>
               <div class="rs-panel-view" data-rs-view="global" hidden>
                 <div class="panel-head"><div class="row space-between"><span class="eyebrow">تمام فروشگاه</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن طراحی سراسری">{% rs_icon "close" %}</button></div><h2>طراحی سراسری</h2><p>تغییرات این پنل روی تمام پیش‌نویس اعمال می‌شود.</p></div>
@@ -325,7 +338,7 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
   <div class="rs-workspace vs-workspace" data-rs-workspace hidden>
     <div class="rs-workspace-backdrop" data-rastisi-action="workspace-backdrop" aria-hidden="true"></div>
     <div class="rs-workspace-dialog" role="dialog" aria-label="تنظیمات بخش" data-rs-workspace-dialog tabindex="-1">
-      <div class="vs-ws-head"><button type="button" class="vs-back" data-r4-inspector-close aria-label="بازگشت به همهٔ بخش‌ها">{% rs_icon "chevron" %}<span>همهٔ بخش‌ها</span></button><span class="vs-ws-head__title">ظاهر عنصر</span></div>
+      <div class="vs-ws-head"><button type="button" class="vs-back" data-r4-inspector-close aria-label="بازگشت به همهٔ بخش‌ها">{% rs_icon "arrow" %}<span>همهٔ بخش‌ها</span></button><span class="vs-ws-head__title">ظاهر عنصر</span></div>
       <aside id="r4Inspector" class="rs-workspace-body" hidden aria-label="تنظیمات بخش"></aside>
     </div>
   </div>

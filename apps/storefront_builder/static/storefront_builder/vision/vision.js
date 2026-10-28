@@ -69,7 +69,7 @@
   }
 
   tabButtons.forEach(function (b) {
-    b.addEventListener('click', function () { selectTab(b.getAttribute('data-vs-tab-button')); });
+    b.addEventListener('click', function () { clearRegionFocus(); selectTab(b.getAttribute('data-vs-tab-button')); });
     b.addEventListener('keydown', function (evt) {
       var at = tabButtons.indexOf(b);
       var next = evt.key === 'ArrowLeft' ? at + 1 : evt.key === 'ArrowRight' ? at - 1 : null;   // RTL: left = next
@@ -84,7 +84,57 @@
   // the Global Design panel can be opened from elsewhere (rail buttons, header/footer rows, the Studio): follow it
   root.addEventListener('r4:global-opened', function () { setActiveTab('design'); });
   root.addEventListener('r4:global-closed', function () {
+    clearRegionFocus();
     if (root.dataset.vsTab === 'design') setActiveTab('templates');
+  });
+
+  // ---- global regions as elements (header / footer / mobile bar) ---------------------------------------
+  var REGIONS = {
+    header: { id: 'rsGlobalHeader', name: 'سربرگ فروشگاه' },
+    footer: { id: 'rsGlobalFooter', name: 'پایین صفحه (فوتر)' },
+    bottom_nav: { id: 'rsGlobalMobileNav', name: 'ناوبری پایین موبایل' },
+  };
+  var focusHead = $('[data-vs-focus-head]');
+  var focusName = $('[data-vs-focus-name]');
+  var regionsBar = $('[data-vs-regions]');
+
+  function clearRegionFocus() {
+    delete root.dataset.vsFocusRegion;
+    $all('.vs-focus-target').forEach(function (el) { el.classList.remove('vs-focus-target'); });
+    if (focusHead) focusHead.hidden = true;
+  }
+  function focusRegion(region) {
+    var info = REGIONS[region];
+    var details = info && document.getElementById(info.id);
+    if (!details) return;
+    clearRegionFocus();
+    root.dataset.vsFocusRegion = region;
+    details.classList.add('vs-focus-target');
+    details.open = true;
+    if (focusName) focusName.textContent = info.name;
+    if (focusHead) focusHead.hidden = false;
+    var scroller = $('.vs-panes');
+    if (scroller) scroller.scrollTop = 0;   // r4_studio scrolled before the other groups were hidden
+  }
+  // the rail / navigator rows open a region through r4_studio's own action; Vision only presents it as an element
+  root.addEventListener('click', function (evt) {
+    var trigger = evt.target.closest('[data-rs-global-focus]');
+    if (!trigger) return;
+    var region = trigger.getAttribute('data-rs-global-focus');
+    window.setTimeout(function () { if (R4.isGlobalDesignOpen()) focusRegion(region); }, 0);
+  });
+  $all('[data-vs-region]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var region = chip.getAttribute('data-vs-region');
+      selectTab('design');
+      window.setTimeout(function () { focusRegion(region); }, 30);
+    });
+  });
+  var focusBack = $('[data-vs-focus-back]');
+  if (focusBack) focusBack.addEventListener('click', function () {
+    clearRegionFocus();
+    if (R4.isGlobalDesignOpen()) R4.closeGlobalDesign();
+    setActiveTab('templates');
   });
 
   // «باز کردن تنظیم …»: open the real Global Design panel and focus the real control
@@ -125,12 +175,12 @@
     if (R4.studio && R4.studio.edit) R4.studio.edit(id);
   }, true);
 
-  // a section clicked on the canvas also opens its settings (r4_editor.js only highlights it)
-  root.addEventListener('r4:section-selected', function (evt) {
-    var id = evt.detail && evt.detail.sectionId;
-    if (!id || (R4.inspectorOpen && String(R4.selected) === String(id))) return;
-    if (R4.openSection) R4.openSection(Number(id));
-  });
+  // A click on the canvas only SELECTS (the Composer toolbar with «ویرایش», move, duplicate, delete appears); its «ویرایش» / a double click
+  // opens the settings, exactly like R4. Only a navigator row opens them directly.
+
+  // the back button lives outside #r4Inspector (where r4_editor.js listens for [data-r4-inspector-close]), so it asks R4 to close directly
+  var wsBack = $('.vs-workspace .vs-back');
+  if (wsBack) wsBack.addEventListener('click', function () { if (R4.inspectorOpen) R4.closeInspector(); });
 
   // ---- inspector chrome ----------------------------------------------------
   // each titled card of the settings form becomes a collapsible group (presentation only; the form values stay in the DOM)
@@ -172,6 +222,16 @@
     new MutationObserver(function () { enhanceInspector(); }).observe(inspectorHost, { childList: true });
   }
 
+  // ---- first Preview load ------------------------------------------------------
+  var loading = $('[data-vs-loading]');
+  function doneLoading() { if (loading) loading.hidden = true; }
+  var preview = document.getElementById('r4PreviewFrame');
+  if (preview) {
+    preview.addEventListener('load', doneLoading);
+    try { if (preview.contentDocument && preview.contentDocument.readyState === 'complete' && preview.contentDocument.URL !== 'about:blank') doneLoading(); } catch (e) { /* cross-origin never happens here */ }
+    window.setTimeout(doneLoading, 15000);   // never leave the overlay up if the Preview is slow: the Preview itself shows its own state
+  }
+
   // ---- zoom read-out ------------------------------------------------------
   var zoomOut = $('[data-vs-zoom-out]');
   var frame = document.getElementById('r4PreviewFrame');
@@ -184,6 +244,9 @@
     new MutationObserver(syncZoom).observe(frame, { attributes: true, attributeFilter: ['style'] });
   }
   syncZoom();
+
+  // a phone shows the store at its real phone width (the device switch is UI-only state; nothing is stored)
+  if (window.matchMedia('(max-width:700px)').matches && typeof R4.setDevice === 'function') R4.setDevice('mobile');
 
   // ---- small screens: the navigator and the panel become drawers -----------------
   $all('[data-vs-toggle]').forEach(function (btn) {
