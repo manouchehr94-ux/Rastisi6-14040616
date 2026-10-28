@@ -1,0 +1,350 @@
+{% extends "dashboard/base_admin.html" %}
+{% load static %}
+{% load storefront_builder_extras persian %}
+{% block title %}ویژن استودیو — {{ studio.store_name }}{% endblock %}
+{% block page_title %}ویژن استودیو{% endblock %}
+{% block page_sub %}{{ studio.store_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static_v 'storefront_builder/r4_editor.css' %}">
+<link rel="stylesheet" href="{% static_v 'storefront_builder/r4_studio.css' %}">
+<link rel="stylesheet" href="{% static_v 'storefront_builder/r4_color_picker.css' %}" data-r4-cp-css>
+<style>
+  @font-face{font-family:'Estedad';src:url('{% static "fonts/Estedad-Arabic-Variable.woff2" %}') format('woff2');font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC,U+200C-200E}
+  @font-face{font-family:'Estedad';src:url('{% static "fonts/Estedad-Latin-Variable.woff2" %}') format('woff2');font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF}
+</style>
+<link rel="stylesheet" href="{% static_v 'storefront_builder/vision/vision-r4-dark.css' %}">
+<link rel="stylesheet" href="{% static_v 'storefront_builder/vision/vision.css' %}">
+{% endblock %}
+
+{% block content %}
+{% comment %}
+RastiSi Vision Studio — a second PRESENTATION of the one R4 Design Studio session (route «vision-studio»).
+Nothing here owns design data: every control keeps the existing R4 hooks (data-rastisi-action / data-r4-*), so r4_editor.js (the ONE mutation
+queue, history, publish, Preview) and r4_studio.js (UI state, dialogs, toasts) run unchanged; vision.js only places the panes. The shell keeps
+the DOM contract r4_editor.js / r4_composer.js / r4_resize.js rely on: .rs-studio[data-r4-shell], #r4Structure, #r4GlobalDesign, #r4Inspector,
+#r4PreviewFrame, #r4Undo/Redo/PublishButton, #r4SaveState, #r4PageSwitcherSelect, [data-r4-device-switcher], .r4-preview-canvas.
+The layout (top bar / navigator / canvas / properties panel / floating device bar) is reconstructed from the Vision Studio reference.
+{% endcomment %}
+<div class="r4-builder rs-studio vs" data-r4-shell="true" data-r4-inspector-open="false"
+     data-r4-sidebar-expanded="false" data-edit-revision="{{ r4_edit_revision }}"
+     data-r4-draft-id="{{ draft.pk }}" data-r4-page-type="{{ page_type }}"
+     data-rs-mode="structure" data-rs-global-tab="visual" data-rs-device="desktop"
+     data-rs-draft-changed="{{ studio.draft_changed|yesno:'true,false' }}"
+     data-rs-has-published="{{ studio.has_published|yesno:'true,false' }}"
+     data-vs-tab="templates">
+  <div class="rs-app vs-app">
+
+    {# ================= top bar ================= #}
+    <header class="vs-bar" role="banner">
+      <div class="vs-bar__group vs-bar__group--start">
+        <a class="vs-tool" href="{% url 'dashboard:dashboard' %}" aria-label="بازگشت به داشبورد" title="بازگشت به داشبورد">{% rs_icon "arrow" %}</a>
+        <button type="button" class="vs-tool vs-mobile-only" data-vs-toggle="panel" aria-label="تنظیمات و ویژگی‌ها" title="تنظیمات و ویژگی‌ها">{% rs_icon "sliders" %}</button>
+        <button type="button" class="vs-tool vs-mobile-only" data-vs-toggle="nav" aria-label="صفحه‌ها و بخش‌ها" title="صفحه‌ها و بخش‌ها">{% rs_icon "layers" %}</button>
+        <span class="vs-bar__sep" aria-hidden="true"></span>
+        <div class="vs-menu" data-vs-menu>
+          <button type="button" class="vs-tool vs-tool--menu" id="vsMenuButton" aria-haspopup="menu" aria-expanded="false" aria-controls="vsMenuList" aria-label="منوی استودیو" title="منوی استودیو">
+            <span class="vs-beta" aria-hidden="true">بتا</span>
+            <span class="vs-avatar" aria-hidden="true">{% if studio.user_initial %}{{ studio.user_initial }}{% else %}{% rs_icon "spark" %}{% endif %}</span>
+            <span class="vs-chevron" aria-hidden="true">{% rs_icon "chevron" %}</span>
+          </button>
+          <div class="vs-menu__list" id="vsMenuList" role="menu" aria-labelledby="vsMenuButton" hidden>
+            <div class="vs-menu__who">{{ studio.user_display_name }}</div>
+            {% if design_lab.families %}<button type="button" role="menuitem" data-rastisi-action="lab">{% rs_icon "spark" %}<span>آزمایشگاه طراحی</span></button>{% endif %}
+            <button type="button" role="menuitem" data-rastisi-action="history">{% rs_icon "history" %}<span>تاریخچهٔ ویرایش</span></button>
+            <button type="button" role="menuitem" data-rastisi-action="public-preview" data-rs-public-url="{{ studio.public_url|default:'' }}" data-rs-draft-url="{% url 'dashboard:storefront-builder-draft-preview' %}">{% rs_icon "eye" %}<span>پیش‌نمایش پیش‌نویس (بدون انتشار)</span></button>
+            <button type="button" role="menuitem" data-rastisi-action="help">{% rs_icon "help" %}<span>راهنمای استودیو</span></button>
+            <a role="menuitem" href="{% url 'dashboard:storefront-builder-r4-editor' %}">{% rs_icon "layers" %}<span>استودیوی قدیمی (R4)</span></a>
+            <a role="menuitem" href="{% url 'dashboard:dashboard' %}">{% rs_icon "arrow" %}<span>بازگشت به پنل مدیریت</span></a>
+          </div>
+        </div>
+        <button type="button" class="vs-tool" data-rastisi-action="open-add-section" aria-label="افزودن بخش" title="افزودن بخش">{% rs_icon "plus" %}</button>
+        <span class="vs-bar__pair">
+          <button type="button" class="vs-tool" id="r4UndoButton" data-rastisi-action="undo" aria-label="واگرد" title="واگرد (Ctrl+Z){% if history.undo_label %}: {{ history.undo_label }}{% endif %}" {% if not history.can_undo %}disabled{% endif %}>{% rs_icon "undo" %}</button>
+          <button type="button" class="vs-tool" id="r4RedoButton" data-rastisi-action="redo" aria-label="ازنو" title="ازنو{% if history.redo_label %}: {{ history.redo_label }}{% endif %}" {% if not history.can_redo %}disabled{% endif %}>{% rs_icon "redo" %}</button>
+        </span>
+        <button type="button" class="vs-tool" data-rastisi-action="history" aria-label="تاریخچهٔ ویرایش" title="تاریخچهٔ ویرایش">{% rs_icon "history" %}</button>
+      </div>
+
+      <div class="vs-bar__title">
+        <h1>{{ studio.store_name }}</h1>
+        <div class="vs-bar__status">
+          <span class="pill {% if studio.draft_changed %}amber{% else %}green{% endif %}" data-rs-status-pill>{% if studio.draft_changed %}هنوز منتشر نشده{% else %}همگام با سایت{% endif %}</span>
+          <span class="save-feedback saved vs-save" data-rs-save-feedback role="status" aria-live="polite"><i class="vs-save__dot" aria-hidden="true"></i><span id="r4SaveState">پیش‌نویس ذخیره شد</span></span>
+        </div>
+      </div>
+
+      <div class="vs-bar__group vs-bar__group--end">
+        <button type="button" class="vs-publish" id="r4PublishButton" data-rastisi-action="publish">انتشار</button>
+        <span class="vs-bar__sep" aria-hidden="true"></span>
+        <button type="button" class="vs-tool" data-rastisi-action="view-published" aria-label="مشاهدهٔ فروشگاه منتشرشده" {% if not studio.public_url %}disabled title="نشانی عمومی فروشگاه هنوز فعال نیست"{% else %}title="مشاهدهٔ فروشگاه منتشرشده"{% endif %}>{% rs_icon "external" %}</button>
+        {% if can_view_reports %}<a class="vs-tool" href="{% url 'dashboard:report-list' %}" aria-label="آمار و گزارش‌ها" title="آمار و گزارش‌ها">{% rs_icon "grid" %}</a>{% endif %}
+        <button type="button" class="vs-tool vs-tool--quiet" id="r4SidebarToggle" hidden aria-hidden="true" tabindex="-1"></button>
+      </div>
+    </header>
+
+    <div class="vs-body">
+      {# ================= navigator ================= #}
+      <aside class="vs-nav" aria-label="صفحه‌ها و بخش‌ها">
+        <section class="vs-nav__sec" aria-label="صفحات">
+          <div class="vs-nav__head"><h2>صفحات</h2></div>
+          <label class="visually-hidden" for="r4PageSwitcherSelect">صفحهٔ در حال ویرایش</label>
+          <select id="r4PageSwitcherSelect" class="vs-hidden-select" data-control="page" aria-label="صفحه در حال ویرایش">
+            {% for value, label in page_types %}<option value="{{ value }}" {% if value == page_type %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          <ul class="vs-pages" role="list">
+            {% for value, label in page_types %}
+            <li><button type="button" class="vs-row {% if value == page_type %}vs-row--active{% endif %}" data-vs-page="{{ value }}" {% if value == page_type %}aria-current="page"{% endif %}>
+              <span class="vs-row__icon" aria-hidden="true">{% if value == "home" %}{% rs_icon "home" %}{% elif value == "product_detail" %}{% rs_icon "bag" %}{% elif value == "listing" %}{% rs_icon "grid" %}{% elif value == "collection" %}{% rs_icon "card" %}{% elif value == "search" %}{% rs_icon "search" %}{% else %}{% rs_icon "bag" %}{% endif %}</span>
+              <span class="vs-row__name">{{ label }}</span>
+            </button></li>
+            {% endfor %}
+          </ul>
+        </section>
+        <section class="vs-nav__sec vs-nav__sec--grow" aria-label="بخش‌ها">
+          <div class="vs-nav__head"><h2>بخش‌ها</h2><button type="button" class="vs-icon-btn" data-rastisi-action="open-add-section" aria-label="افزودن بخش" title="افزودن بخش">{% rs_icon "plus" %}</button></div>
+          <label class="vs-nav__search">{% rs_icon "search" %}<span class="visually-hidden">جستجو در بخش‌های صفحه</span><input type="search" data-rs-structure-search placeholder="جستجوی بخش…" autocomplete="off"></label>
+          <aside id="r4Structure" class="vs-structure" aria-label="ساختار صفحه">{% include "dashboard/storefront_builder/r4/partials/studio_structure.html" %}</aside>
+        </section>
+        <div class="vs-nav__foot">
+          <button type="button" class="vs-btn vs-btn--ghost" data-rastisi-action="add-row">{% rs_icon "columns" %}<span>چیدمان چندستونه</span></button>
+          <button type="button" class="vs-btn vs-btn--ghost" data-rastisi-action="composer-add-row">{% rs_icon "rows" %}<span>ردیف ساده</span></button>
+          <button type="button" class="vs-btn vs-btn--ghost" data-rastisi-action="composer-panel" aria-pressed="false">{% rs_icon "layers" %}<span>گروه‌ها و لایه‌ها</span></button>
+        </div>
+      </aside>
+
+      {# ================= canvas ================= #}
+      <main class="vs-stage stage" id="vsStage">
+        <div class="canvas vs-canvas">
+          <div class="browser-chrome vs-chrome" hidden><span data-rs-browser-url>{{ studio.public_url|default:studio.store_name }}</span><span class="browser-state" data-rs-browser-state>پیش‌نمایش زنده</span></div>
+          <div class="preview-viewport r4-preview-canvas" data-r4-device="desktop">
+            <iframe
+              id="r4PreviewFrame"
+              title="پیش‌نمایش فروشگاه {{ studio.store_name }}"
+              data-rastisi-state="draft"
+              data-desktop-viewport-width="1440"
+              data-tablet-viewport-width="768"
+              data-mobile-viewport-width="390"
+              data-rs-draft-src="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}"
+              src="{% url 'dashboard:storefront-builder-preview' %}?page={{ page_type }}">
+            </iframe>
+          </div>
+        </div>
+
+        <div class="vs-devicebar" role="group" aria-label="اندازهٔ پیش‌نمایش">
+          <div class="vs-devicebar__switch" role="group" aria-label="دستگاه پیش‌نمایش" data-r4-device-switcher>
+            <button type="button" data-r4-device="mobile" aria-pressed="false" data-rastisi-action="device" data-rastisi-preview-device="mobile" aria-label="نمای موبایل">{% rs_icon "mobile" %}<span>موبایل</span></button>
+            <button type="button" data-r4-device="tablet" aria-pressed="false" data-rastisi-action="device" data-rastisi-preview-device="tablet" aria-label="نمای تبلت">{% rs_icon "tablet" %}<span>تبلت</span></button>
+            <button type="button" data-r4-device="desktop" aria-pressed="true" data-rastisi-action="device" data-rastisi-preview-device="desktop" class="active" aria-label="نمای رایانه">{% rs_icon "desktop" %}<span>دسکتاپ</span></button>
+          </div>
+          <span class="vs-devicebar__sep" aria-hidden="true"></span>
+          <label class="vs-zoom"><span class="visually-hidden">بزرگ‌نمایی قاب</span>
+            <output data-vs-zoom-out aria-live="off">۱۰۰٪</output>
+            <select data-control="zoom" aria-label="بزرگ‌نمایی قاب">
+              <option value="width" selected>عرض کامل</option>
+              <option value="overview">نمای کلی</option>
+              <option value="0.5">۵۰٪</option>
+              <option value="0.75">۷۵٪</option>
+              <option value="1">۱۰۰٪</option>
+            </select>
+            <span class="vs-chevron" aria-hidden="true">{% rs_icon "chevron" %}</span>
+          </label>
+          <span class="vs-devicebar__sep" aria-hidden="true"></span>
+          <span class="vs-devicebar__width" data-rs-device-width>1440 px</span>
+          <button type="button" class="vs-icon-btn" data-rastisi-action="help" aria-label="راهنمای ویرایش" title="راهنمای ویرایش">{% rs_icon "help" %}</button>
+        </div>
+
+        <div class="view-controls vs-lab-controls" data-rs-view-controls>
+          <div class="compare-switch" data-rs-lab-only hidden>
+            <button type="button" data-rastisi-action="show-base" aria-pressed="false">طرح پایه</button>
+            <button type="button" data-rastisi-action="show-candidate" class="active" aria-pressed="true">طرح آزمایشی</button>
+          </div>
+          <button type="button" data-rastisi-action="lab-diffs" class="diff-trigger" data-rs-lab-only hidden aria-label="مشاهده تفاوت‌ها">{% rs_icon "layers" %}<span data-rs-diff-count>۰ تغییر</span></button>
+        </div>
+        <span class="visually-hidden" data-rs-caption></span><span class="visually-hidden" data-rs-caption-side></span><span class="visually-hidden" data-rs-scope-tag></span>
+
+      {% if design_lab.families %}
+      {# ---- Design Lab dock: families are server-rendered; transient state is owned by r4_editor.js ---- #}
+      <section class="lab-dock lab-start" data-rastisi-panel="design-lab" data-r4-design-lab-panel
+               data-r4-design-lab-url="{{ design_lab.endpoint_url }}" data-rastisi-state="idle" hidden>
+        <div class="lab-start-copy" data-rs-lab-start>
+          <span class="lab-orb">{% rs_icon "spark" %}</span>
+          <div><div class="eyebrow">آزمایشگاه طراحی</div><h2>یک ایده تازه؛ بدون دست‌زدن به فروشگاه.</h2><p>هفت بخش طراحی را ترکیب کنید، نتیجه را ببینید و فقط اگر دوست داشتید اعمال کنید.</p></div>
+        </div>
+        <div class="lab-start-actions" data-rs-lab-start><button type="button" data-rastisi-action="start-lab" class="primary">{% rs_icon "spark" %}شروع آزمایش</button><span>ترکیب ← مقایسه ← اعمال</span></div>
+
+        <div class="stale-line" role="alert" data-rs-lab-stale hidden><span><strong>پیش‌نویس در جای دیگری تغییر کرده.</strong> این آزمایش بر کار جدید شما نوشته نمی‌شود.</span><button type="button" data-rastisi-action="restart-lab">{% rs_icon "refresh" %}شروع با نسخه جدید</button></div>
+        <div class="stale-line" role="alert" data-rs-lab-error hidden>درخواست انجام نشد؛ ایده موقت شما محفوظ است. دوباره تلاش کنید.</div>
+
+        <div class="dock-head" data-rs-lab-active hidden>
+          <div class="dock-title"><div class="lab-orb" data-rs-lab-orb>{% rs_icon "spark" %}</div><div><strong data-rs-lab-title>آزمایش شما</strong><small data-rs-lab-summary>۰ تغییر · ۰ قفل · هنوز اعمال نشده</small></div></div>
+          <div class="row dock-actions">
+            <button type="button" data-rastisi-action="lab-theme" class="quiet">{% rs_icon "tag" %}مناسبت</button>
+            <button type="button" data-rastisi-action="lab-options" class="outline" aria-label="ابزارهای آزمایش و خروج">{% rs_icon "dots" %}ابزارها</button>
+            <div class="divider"></div>
+            <button type="button" data-rastisi-action="random-mix" data-r4-design-lab-random-mix class="lab-primary">{% rs_icon "shuffle" %}ترکیب تصادفی</button>
+            <button type="button" data-rastisi-action="apply-candidate" data-r4-design-lab-apply class="primary" disabled>{% rs_icon "check" %}اعمال در پیش‌نویس</button>
+          </div>
+        </div>
+        <div class="family-grid" data-rs-lab-active hidden>
+          {% for family in design_lab.families %}
+          <article class="family-card" data-rastisi-family="{{ family.family }}" data-rs-family-label="{{ family.family|rs_family_label:family.label_fa }}">
+            <div class="family-top">{% rs_family_icon family.family %}<span>{{ family.family|rs_family_label:family.label_fa }}</span><button type="button" data-rastisi-action="lock-family" data-family="{{ family.family }}" aria-label="قفل {{ family.family|rs_family_label:family.label_fa }}" title="این انتخاب را نگه دار" aria-pressed="false">{% rs_icon "unlock" %}</button></div>
+            <div class="family-choice"><button type="button" data-rastisi-action="focus-family" data-family="{{ family.family }}" class="family-name" title="دیدن در پیش‌نمایش" data-rs-family-current>{{ family.current_label }}</button><button type="button" data-rastisi-action="random-family" data-family="{{ family.family }}" title="تغییر فقط {{ family.family|rs_family_label:family.label_fa }}" aria-label="تغییر فقط {{ family.family|rs_family_label:family.label_fa }}">{% rs_icon "refresh" %}</button></div>
+            <span class="family-before" data-rs-family-before>بدون تغییر</span>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      </main>
+
+      {# ================= properties panel ================= #}
+      <aside class="vs-panel" aria-label="تنظیمات و ویژگی‌ها">
+        <div class="vs-tabs" role="tablist" aria-label="بخش‌های تنظیمات">
+          <button type="button" role="tab" id="vsTab-templates" data-vs-tab-button="templates" aria-controls="vsPane-templates" aria-selected="true">قالب‌ها</button>
+          <button type="button" role="tab" id="vsTab-design" data-vs-tab-button="design" aria-controls="vsPane-design" aria-selected="false" tabindex="-1">طراحی</button>
+          <button type="button" role="tab" id="vsTab-motion" data-vs-tab-button="motion" aria-controls="vsPane-motion" aria-selected="false" tabindex="-1">حرکت</button>
+          <button type="button" role="tab" id="vsTab-seo" data-vs-tab-button="seo" aria-controls="vsPane-seo" aria-selected="false" tabindex="-1">سئو</button>
+          <button type="button" role="tab" id="vsTab-blog" data-vs-tab-button="blog" aria-controls="vsPane-blog" aria-selected="false" tabindex="-1">وبلاگ</button>
+        </div>
+        <button type="button" hidden data-vs-proxy="global" data-rastisi-action="global" aria-hidden="true" tabindex="-1"></button>
+
+        <div class="vs-panes">
+          {# ---- قالب‌ها ---- #}
+          <section class="vs-pane" id="vsPane-templates" role="tabpanel" aria-labelledby="vsTab-templates" data-vs-pane="templates">
+            <h2 class="vs-lead">فروشگاهتان را زیبا کنید</h2>
+            <ol class="vs-steps" aria-label="مراحل">
+              <li class="vs-step {% if studio.current_template or studio.current_template_unresolved %}is-done{% endif %}"><span>۱</span> انتخاب قالب</li>
+              <li class="vs-step {% if studio.draft_changed %}is-done{% endif %}"><span>۲</span> شخصی‌سازی</li>
+              <li class="vs-step {% if studio.has_published and not studio.draft_changed %}is-done{% endif %}"><span>۳</span> انتشار</li>
+            </ol>
+            <div class="vs-card">
+              <div class="vs-card__title">{% rs_icon "grid" %}<span>قالب فعلی</span></div>
+              <div class="vs-current">
+                <span class="vs-current__mark" aria-hidden="true">{% rs_icon "spark" %}</span>
+                <span class="vs-current__name">{% if studio.current_template %}{{ studio.current_template.preset.label_fa }}{% elif studio.current_template_unresolved %}قالبِ اعمال‌شده (نسخهٔ آن در فهرست نیست){% else %}بدون قالب آماده{% endif %}</span>
+                {% if studio.draft_changed %}<span class="vs-chip">تغییر داده‌شده</span>{% endif %}
+              </div>
+              <button type="button" class="vs-btn vs-btn--wide" data-rastisi-action="templates">تغییر قالب</button>
+            </div>
+            <div class="vs-card vs-card--soon">
+              <div class="vs-card__title">{% rs_icon "lock" %}<span>قالب‌های سفارشی من</span><span class="vs-chip vs-chip--soon">در دست توسعه</span></div>
+              <p>ذخیرهٔ طراحی فعلی به‌عنوان قالب سفارشی هنوز در موتور طراحی نیست؛ به‌جای آن می‌توانید هر تغییر را با «تاریخچهٔ ویرایش» برگردانید.</p>
+            </div>
+          </section>
+
+          {# ---- طراحی (the real global design panel) ---- #}
+          <section class="vs-pane" id="vsPane-design" role="tabpanel" aria-labelledby="vsTab-design" data-vs-pane="design" hidden>
+            <div class="context-panel vs-design" id="rsStructureDrawer" role="complementary" aria-label="طراحی سراسری" data-rastisi-panel="structure" data-rs-context-panel>
+              <div class="rs-panel-view" data-rs-view="global" hidden>
+                <div class="panel-head"><div class="row space-between"><span class="eyebrow">تمام فروشگاه</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن طراحی سراسری">{% rs_icon "close" %}</button></div><h2>طراحی سراسری</h2><p>تغییرات این پنل روی تمام پیش‌نویس اعمال می‌شود.</p></div>
+                <div class="global-tabs" role="tablist" aria-label="بخش‌های طراحی سراسری">
+                  <button type="button" data-rastisi-action="global-tab" data-tab="visual" class="active" aria-pressed="true">رنگ و تایپ</button>
+                  <button type="button" data-rastisi-action="global-tab" data-tab="template" aria-pressed="false">قالب</button>
+                  <button type="button" data-rastisi-action="global-tab" data-tab="theme" aria-pressed="false">مناسبت</button>
+                </div>
+                <div class="panel-scroll">
+                  <aside id="r4GlobalDesign" aria-label="طراحی سراسری" hidden>{% include "dashboard/storefront_builder/r4/partials/studio_global_design.html" %}</aside>
+                </div>
+              </div>
+              <div class="rs-panel-view" data-rs-view="template-preview" hidden>
+                <div class="panel-head"><div class="row space-between"><span class="eyebrow">قالب / فقط پیش‌نمایش</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن و بازگشت بدون تغییر">{% rs_icon "close" %}</button></div><h2 data-rs-peek-title></h2><p data-rs-peek-sub></p></div>
+                <div class="panel-scroll">
+                  <span class="pill purple">هنوز اعمال نشده</span>
+                  <div class="template-peek-summary"><h3>با محتوای خودتان ببینید</h3><p>پیش‌نمایش روبه‌رو همان متن‌ها، تصاویر و محصولات شماست؛ با ظاهر این قالب.</p><div class="note">هیچ تغییری در پیش‌نویس یا نسخهٔ عمومی اعمال نشده است.</div></div>
+                  <div class="peek-palette" data-rs-peek-palette></div>
+                  <div class="section-divider"></div>
+                  <button type="button" data-rastisi-action="templates" class="outline full">{% rs_icon "grid" %}بازگشت به قالب‌ها</button>
+                </div>
+                <div class="panel-foot">
+                  <button type="button" data-rastisi-action="switch-template" class="primary full" data-rs-peek-apply>{% rs_icon "check" %}اعمال این قالب</button>
+                  <button type="button" data-rastisi-action="cancel-template-preview" class="full quiet small">{% rs_icon "arrow" %}بازگشت بدون تغییر</button>
+                </div>
+              </div>
+            </div>
+            <div class="vs-card vs-card--soon vs-soon-list">
+              <div class="vs-card__title">{% rs_icon "lock" %}<span>هنوز در موتور طراحی نیست</span><span class="vs-chip vs-chip--soon">در دست توسعه</span></div>
+              <ul>
+                <li>سبک آیکون سراسری (خطی، دورنگ، توپر)</li>
+                <li>حالت رنگی خودکار / روشن / تیره برای فروشگاه</li>
+                <li>فونت جدا برای تیترها و ضخامت متن</li>
+                <li>پس‌زمینهٔ شیشه‌ای و تصویر پس‌زمینهٔ کل صفحه</li>
+              </ul>
+            </div>
+          </section>
+
+          {# ---- حرکت ---- #}
+          <section class="vs-pane" id="vsPane-motion" role="tabpanel" aria-labelledby="vsTab-motion" data-vs-pane="motion" hidden>
+            <h2 class="vs-lead">حرکت و تعامل</h2>
+            <div class="vs-card">
+              <div class="vs-card__title">{% rs_icon "spark" %}<span>سبک حرکت و افکت‌های کارت</span></div>
+              <p>سبک حرکت فروشگاه، افکت هاور کارت محصول و بزرگ‌نمایی تصویر همین حالا در طراحی سراسری فعال و قابل‌ذخیره‌اند.</p>
+              <button type="button" class="vs-btn vs-btn--wide" data-vs-focus="r4GlobalMotion">باز کردن تنظیم حرکت</button>
+              <button type="button" class="vs-btn vs-btn--wide vs-btn--ghost" data-vs-focus="r4GlobalCardHover">افکت هاور کارت محصول</button>
+            </div>
+            <div class="vs-card vs-card--soon">
+              <div class="vs-card__title">{% rs_icon "lock" %}<span>ظاهر شدن بخش‌ها هنگام اسکرول</span><span class="vs-chip vs-chip--soon">در دست توسعه</span></div>
+              <p>افکت ورود (محو شدن، بالا آمدن) و پیش‌فرض حرکت برای هر صفحه هنوز در موتور طراحی نیست.</p>
+            </div>
+          </section>
+
+          {# ---- سئو ---- #}
+          <section class="vs-pane" id="vsPane-seo" role="tabpanel" aria-labelledby="vsTab-seo" data-vs-pane="seo" hidden>
+            <h2 class="vs-lead">سئو</h2>
+            <div class="vs-card vs-card--soon">
+              <div class="vs-card__title">{% rs_icon "lock" %}<span>امتیاز و بررسی سئو</span><span class="vs-chip vs-chip--soon">در دست توسعه</span></div>
+              <p>امتیاز سئوی فروشگاه، پیش‌نمایش گوگل و فهرست مشکلات هنوز ساخته نشده‌اند. تا آن زمان، اطلاعات واقعی را از همین بخش‌ها ویرایش کنید:</p>
+            </div>
+            <div class="vs-links">
+              <a class="vs-link" href="{% url 'dashboard:settings' %}">{% rs_icon "user" %}<span>هویت فروشگاه (نام، لوگو، شعار، تماس)</span></a>
+              <a class="vs-link" href="{% url 'dashboard:product-list' %}">{% rs_icon "tag" %}<span>سئوی هر محصول (عنوان و توضیح متا)</span></a>
+              <a class="vs-link" href="{% url 'dashboard:journal-list' %}">{% rs_icon "edit" %}<span>سئوی نوشته‌های وبلاگ</span></a>
+            </div>
+          </section>
+
+          {# ---- وبلاگ ---- #}
+          <section class="vs-pane" id="vsPane-blog" role="tabpanel" aria-labelledby="vsTab-blog" data-vs-pane="blog" hidden>
+            <h2 class="vs-lead">وبلاگ</h2>
+            <div class="vs-card">
+              <div class="vs-card__title">{% rs_icon "edit" %}<span>وبلاگ فروشگاه</span></div>
+              <p>نوشته‌های وبلاگ در بخش «مجله»ٔ پنل مدیریت ساخته و منتشر می‌شوند؛ این صفحه فقط میان‌بر واقعی به آن است.</p>
+              <a class="vs-btn vs-btn--wide" href="{% url 'dashboard:journal-create' %}">نوشتهٔ تازه</a>
+              <a class="vs-btn vs-btn--wide vs-btn--ghost" href="{% url 'dashboard:journal-list' %}">همهٔ نوشته‌ها</a>
+              {% if studio.public_url %}<a class="vs-btn vs-btn--wide vs-btn--ghost" href="{{ studio.public_url }}journal/" target="_blank" rel="noopener">دیدن وبلاگ در سایت</a>{% endif %}
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  {% comment %}Section settings: the SAME R4 workspace (the Inspector body is rendered into #r4Inspector by r4_editor.js). Vision places this overlay exactly over
+     the properties panel (position:fixed, see vision.css) so a selected element's settings take over the right column, like the reference's «ظاهر عنصر».
+     No live-preview aside: the one canvas is the preview.{% endcomment %}
+  <div class="rs-workspace vs-workspace" data-rs-workspace hidden>
+    <div class="rs-workspace-backdrop" data-rastisi-action="workspace-backdrop" aria-hidden="true"></div>
+    <div class="rs-workspace-dialog" role="dialog" aria-label="تنظیمات بخش" data-rs-workspace-dialog tabindex="-1">
+      <div class="vs-ws-head"><button type="button" class="vs-back" data-r4-inspector-close aria-label="بازگشت به همهٔ بخش‌ها">{% rs_icon "chevron" %}<span>همهٔ بخش‌ها</span></button><span class="vs-ws-head__title">ظاهر عنصر</span></div>
+      <aside id="r4Inspector" class="rs-workspace-body" hidden aria-label="تنظیمات بخش"></aside>
+    </div>
+  </div>
+
+  <div class="rs-modal-root" data-rs-modal-root></div>
+  <div class="rs-toast" data-rs-toast role="status" aria-live="polite"></div>
+
+  {{ studio.icon_paths|json_script:"rsStudioIcons" }}
+  {{ studio.client|json_script:"rsStudioData" }}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'storefront_builder/destination_picker.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_editor.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_color_picker.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_studio.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_resize.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_composer.js' %}"></script>
+<script src="{% static_v 'storefront_builder/r4_announcement.js' %}"></script>
+<script src="{% static_v 'storefront_builder/vision/vision.js' %}"></script>
+{% endblock %}

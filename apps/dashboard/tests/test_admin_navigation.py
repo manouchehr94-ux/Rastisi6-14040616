@@ -3,7 +3,7 @@
 Covers the information architecture in ``apps.dashboard.navigation`` and its
 rendering in ``base_admin.html``:
 
-* the IA map itself (nine sections, the agreed tabs, no duplicate hrefs);
+* the IA map itself (ten sections, the agreed tabs, no duplicate hrefs);
 * routing coverage — every named dashboard route belongs to a section, so no
   screen is orphaned by the redesign;
 * round-trip — each tab's own URL resolves back to that tab;
@@ -25,10 +25,11 @@ from apps.stores.models import StoreMembership
 
 User = get_user_model()
 
-SECTION_ORDER = ["dashboard", "orders", "products", "finance", "customers",
+SECTION_ORDER = ["dashboard", "studio", "orders", "products", "finance", "customers",
                  "marketing", "store", "reports", "settings"]
 
 EXPECTED_TABS = {
+    "studio": ["استودیو"],
     "orders": ["همه سفارش‌ها", "مرجوعی‌ها"],
     "products": ["همه کالاها", "دسته‌بندی‌ها", "برندها", "ویژگی‌ها", "موجودی", "انبارها",
                  "رزرو موجودی", "انتقال انبار"],
@@ -67,11 +68,11 @@ def _dashboard_url_names():
 
 
 class NavigationMapTests(SimpleTestCase):
-    def test_nine_sections_in_the_agreed_order(self):
+    def test_ten_sections_in_the_agreed_order(self):
         self.assertEqual([s.key for s in navigation.SECTIONS], SECTION_ORDER)
         self.assertEqual(
             [s.label for s in navigation.SECTIONS],
-            ["داشبورد", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
+            ["داشبورد", "استودیو", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
              "بازاریابی", "فروشگاه", "گزارش‌ها", "تنظیمات"],
         )
 
@@ -245,13 +246,13 @@ class NavigationRenderingTests(PermissionEnforcementTestCase):
         tab = soup.select_one(".admin-section-tab.active")
         return (section["data-section"] if section else None, tab["data-tab"] if tab else None)
 
-    def test_owner_sidebar_is_flat_with_nine_links_and_no_nested_items(self):
+    def test_owner_sidebar_is_flat_with_ten_links_and_no_nested_items(self):
         self._login(self.owner)
         soup, _ = self._soup("dashboard")
         links = soup.select(".sidebar nav.nav a.nav-item")
         self.assertEqual([a["data-section"] for a in links], SECTION_ORDER)
         self.assertEqual(soup.select(".sidebar .nav-group, .sidebar button[aria-expanded]"), [])
-        self.assertEqual(len(soup.select(".sidebar nav.nav a")), 9)
+        self.assertEqual(len(soup.select(".sidebar nav.nav a")), 10)
         self.assertEqual(soup.select(".admin-section-tabs"), [], "dashboard has a single screen: no tab bar")
 
     def test_navigation_partials_do_not_leak_template_comments(self):

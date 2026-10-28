@@ -635,9 +635,15 @@ def _build_design_lab_design_context(draft: StorefrontLayoutVersion) -> dict:
     }
 
 
+R4_EDITOR_TEMPLATE = "dashboard/storefront_builder/r4/editor.html"
+
+
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
-def storefront_r4_editor(request):
+def storefront_r4_editor(request, template_name=R4_EDITOR_TEMPLATE):
+    """The R4 Studio page. ``template_name`` lets a second presentation (RastiSi Vision Studio, route ``vision-studio``) render the very
+    same context - same Draft, same permission, same tenant resolution - through its own template; the URL conf is the only caller
+    that ever passes it."""
     store = resolve_store_for_service(request)
     layout = layout_service.get_or_create_layout(store)
 
@@ -765,7 +771,7 @@ def storefront_r4_editor(request):
 
     return render(
         request,
-        "dashboard/storefront_builder/r4/editor.html",
+        template_name,
         {
             "active_page": "storefront_builder",
             "layout": layout,

@@ -103,6 +103,17 @@ SECTIONS: tuple = (
                 keywords="خانه داشبورد فروش امروز سفارش امروز"),
         ),
     ),
+    # RastiSi Vision Studio — its own one-click entry. The route name is ``vision-studio`` (no ``storefront-builder-`` prefix), so it never
+    # shares an active state with the older «ظاهر و طراحی» / «ساختار صفحه‌ها» tabs of «فروشگاه», which stay exactly as they were.
+    Section(
+        key="studio", label="استودیو", icon="studio",
+        tabs=(
+            Tab("vision-studio", "استودیو", "vision-studio",
+                perms=("can_manage_storefront_layout",),
+                matches=(_m("vision-studio", prefix="vision-studio-"),), pages=("vision_studio",),
+                keywords="استودیو ویژن طراحی فروشگاه vision studio ویرایشگر"),
+        ),
+    ),
     Section(
         key="orders", label="سفارش‌ها", icon="bag", badge="nav_pending_order_count",
         tabs=(

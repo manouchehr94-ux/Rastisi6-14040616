@@ -1,0 +1,203 @@
+/* RastiSi Vision Studio — shell controller (presentation only).
+ *
+ * Vision is a second PRESENTATION of the one R4 Studio session. Every operation still belongs to the existing owners:
+ *   r4_editor.js  (window.RastiSiR4: mutation queue, history, publish, Preview, Inspector, Global Design)
+ *   r4_studio.js  (UI state, dialogs, toasts; R4.studio)
+ * This file only decides WHICH pane of the new layout is visible and routes a few Vision-only controls to those owners. It never sends a
+ * request, never stores design data and never keeps state beyond the current tab / open menu (in memory).
+ */
+(function () {
+  'use strict';
+  var root = document.querySelector('.rs-studio.vs[data-r4-shell]');
+  var R4 = window.RastiSiR4;
+  if (!root || !R4) return;
+
+  function $(selector, scope) { return (scope || root).querySelector(selector); }
+  function $all(selector, scope) { return Array.prototype.slice.call((scope || root).querySelectorAll(selector)); }
+  function faDigits(text) { return String(text).replace(/[0-9]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.charAt(Number(d)); }); }
+
+  // ---- studio menu ---------------------------------------------------------
+  var menu = $('[data-vs-menu]');
+  var menuButton = menu && $('#vsMenuButton', menu);
+  var menuList = menu && $('#vsMenuList', menu);
+  function setMenu(open) {
+    if (!menu) return;
+    menuList.hidden = !open;
+    menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      var first = menuList.querySelector('[role="menuitem"]');
+      if (first) first.focus({ preventScroll: true });
+    }
+  }
+  if (menu) {
+    menuButton.addEventListener('click', function () { setMenu(menuList.hidden); });
+    menuList.addEventListener('click', function (evt) { if (evt.target.closest('[role="menuitem"]')) setMenu(false); });
+    document.addEventListener('click', function (evt) { if (!menuList.hidden && !menu.contains(evt.target)) setMenu(false); });
+    document.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Escape' && !menuList.hidden) { setMenu(false); menuButton.focus(); }
+      if (!menuList.hidden && (evt.key === 'ArrowDown' || evt.key === 'ArrowUp')) {
+        var items = $all('[role="menuitem"]', menuList);
+        var at = items.indexOf(document.activeElement);
+        evt.preventDefault();
+        items[(at + (evt.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+      }
+    });
+  }
+
+  // ---- properties panel tabs -----------------------------------------------
+  var tabButtons = $all('[data-vs-tab-button]');
+  var panes = $all('[data-vs-pane]');
+  var proxyGlobal = $('[data-vs-proxy="global"]');
+
+  function setActiveTab(name) {
+    root.dataset.vsTab = name;
+    tabButtons.forEach(function (b) {
+      var on = b.getAttribute('data-vs-tab-button') === name;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+    });
+    panes.forEach(function (p) { p.hidden = p.getAttribute('data-vs-pane') !== name; });
+  }
+
+  function selectTab(name) {
+    if (name === 'design') {
+      if (!R4.isGlobalDesignOpen() && proxyGlobal) proxyGlobal.click();   // the one Studio mode switch (r4_studio.js)
+    } else if (R4.isGlobalDesignOpen()) {
+      R4.closeGlobalDesign();
+    }
+    setActiveTab(name);
+  }
+
+  tabButtons.forEach(function (b) {
+    b.addEventListener('click', function () { selectTab(b.getAttribute('data-vs-tab-button')); });
+    b.addEventListener('keydown', function (evt) {
+      var at = tabButtons.indexOf(b);
+      var next = evt.key === 'ArrowLeft' ? at + 1 : evt.key === 'ArrowRight' ? at - 1 : null;   // RTL: left = next
+      if (next == null) return;
+      evt.preventDefault();
+      var target = tabButtons[(next + tabButtons.length) % tabButtons.length];
+      target.focus();
+      selectTab(target.getAttribute('data-vs-tab-button'));
+    });
+  });
+
+  // the Global Design panel can be opened from elsewhere (rail buttons, header/footer rows, the Studio): follow it
+  root.addEventListener('r4:global-opened', function () { setActiveTab('design'); });
+  root.addEventListener('r4:global-closed', function () {
+    if (root.dataset.vsTab === 'design') setActiveTab('templates');
+  });
+
+  // «باز کردن تنظیم …»: open the real Global Design panel and focus the real control
+  root.addEventListener('click', function (evt) {
+    var btn = evt.target.closest('[data-vs-focus]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-vs-focus');
+    selectTab('design');
+    window.setTimeout(function () {
+      var control = document.getElementById(id);
+      if (!control) return;
+      var details = control.closest('details');
+      if (details) details.open = true;
+      control.scrollIntoView({ block: 'center' });
+      control.focus({ preventScroll: true });
+    }, 60);
+  });
+
+  // ---- navigator -----------------------------------------------------------
+  var pageSelect = document.getElementById('r4PageSwitcherSelect');
+  $all('[data-vs-page]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var value = btn.getAttribute('data-vs-page');
+      if (!pageSelect || pageSelect.value === value) return;
+      pageSelect.value = value;
+      pageSelect.dispatchEvent(new Event('change', { bubbles: true }));   // r4_studio.js navigates (keeps ?page=, asks first inside the Design Lab)
+    });
+  });
+
+  // a section row selects the section AND shows its settings in the properties panel (the reference's «ظاهر عنصر»)
+  root.addEventListener('click', function (evt) {
+    var select = evt.target.closest('[data-rastisi-action="row-select"]');
+    if (!select) return;
+    var row = select.closest('[data-r4-structure-row]');
+    var id = row && Number(row.getAttribute('data-r4-structure-section-id'));
+    if (!id) return;
+    evt.stopImmediatePropagation();
+    if (R4.studio && R4.studio.edit) R4.studio.edit(id);
+  }, true);
+
+  // a section clicked on the canvas also opens its settings (r4_editor.js only highlights it)
+  root.addEventListener('r4:section-selected', function (evt) {
+    var id = evt.detail && evt.detail.sectionId;
+    if (!id || (R4.inspectorOpen && String(R4.selected) === String(id))) return;
+    if (R4.openSection) R4.openSection(Number(id));
+  });
+
+  // ---- inspector chrome ----------------------------------------------------
+  // each titled card of the settings form becomes a collapsible group (presentation only; the form values stay in the DOM)
+  function enhanceInspector() {
+    var inspector = document.getElementById('r4Inspector');
+    if (!inspector) return;
+    $all('.r4-ws-card', inspector).forEach(function (card) {
+      var head = card.querySelector('.r4-ws-card-head');
+      if (!head || head.dataset.vsBound) return;
+      head.dataset.vsBound = '1';
+      head.setAttribute('role', 'button');
+      head.tabIndex = 0;
+      head.setAttribute('aria-expanded', 'true');
+      function toggle() {
+        var collapsed = card.classList.toggle('is-collapsed');
+        head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      }
+      head.addEventListener('click', toggle);
+      head.addEventListener('keydown', function (evt) {
+        if (evt.key === 'Enter' || evt.key === ' ') { evt.preventDefault(); toggle(); }
+      });
+    });
+    var title = $('[data-rs-inspector-title]', inspector);
+    var label = $('.vs-ws-head__title');
+    if (title && label) label.textContent = title.textContent;
+  }
+  // the open section's row stays highlighted in the navigator
+  function markOpenRow() {
+    var id = R4.inspectorOpen ? String(R4.selected) : null;
+    $all('[data-r4-structure-row]').forEach(function (row) {
+      row.classList.toggle('is-open', id !== null && row.getAttribute('data-r4-structure-section-id') === id);
+    });
+  }
+  root.addEventListener('r4:inspector-opened', function () { enhanceInspector(); window.setTimeout(enhanceInspector, 0); markOpenRow(); });
+  root.addEventListener('r4:inspector-closed', markOpenRow);
+  root.addEventListener('r4:structure-refreshed', markOpenRow);
+  var inspectorHost = document.getElementById('r4Inspector');
+  if (inspectorHost && window.MutationObserver) {
+    new MutationObserver(function () { enhanceInspector(); }).observe(inspectorHost, { childList: true });
+  }
+
+  // ---- zoom read-out ------------------------------------------------------
+  var zoomOut = $('[data-vs-zoom-out]');
+  var frame = document.getElementById('r4PreviewFrame');
+  function syncZoom() {
+    if (!zoomOut || !frame) return;
+    var match = /scale\(([0-9.]+)\)/.exec(frame.style.transform || '');
+    if (match) zoomOut.textContent = faDigits(Math.round(parseFloat(match[1]) * 100)) + '٪';
+  }
+  if (frame && window.MutationObserver) {
+    new MutationObserver(syncZoom).observe(frame, { attributes: true, attributeFilter: ['style'] });
+  }
+  syncZoom();
+
+  // ---- small screens: the navigator and the panel become drawers -----------------
+  $all('[data-vs-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var which = btn.getAttribute('data-vs-toggle');
+      root.dataset.vsDrawer = root.dataset.vsDrawer === which ? '' : which;
+    });
+  });
+  $all('[data-vs-drawer-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () { root.dataset.vsDrawer = ''; });
+  });
+
+  // opening the settings of a section on a small screen must show the panel
+  root.addEventListener('r4:inspector-opened', function () {
+    if (window.matchMedia('(max-width:1023px)').matches) root.dataset.vsDrawer = 'panel';
+  });
+})();

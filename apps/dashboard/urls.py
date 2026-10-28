@@ -8,6 +8,34 @@ from . import cod_views, engagement_views, journal_views, payment_reconciliation
 
 app_name = "dashboard"
 
+# RastiSi Vision Studio — a second presentation of the SAME R4 session (route name ``vision-studio``; deliberately NOT prefixed with
+# ``storefront-builder-`` so the sidebar's active-state rules of the older tabs never claim it).
+# r4_editor.js resolves its write/read endpoints RELATIVE to the page it runs on (``new URL('mutate/', location.href)``), so the
+# Vision page needs the same relative endpoints under its own prefix. They are aliases of the ONE set of R4 views - the permission
+# decorators, Store resolution and Draft logic live on those views - never a second implementation. ``VISION_STUDIO_R4_ALIASES`` is the
+# single table the parity test (test_vision_studio.py) checks against r4_editor.js.
+VISION_STUDIO_TEMPLATE = "dashboard/vision/studio.html"
+VISION_STUDIO_R4_ALIASES = (
+    ("mutate/", storefront_builder_r4_views.storefront_r4_mutation, "vision-studio-mutate"),
+    ("sections/<int:pk>/inspector/", storefront_builder_r4_views.storefront_r4_section_inspector, "vision-studio-section-inspector"),
+    ("resources/picker/", storefront_builder_r4_views.storefront_r4_resource_picker, "vision-studio-resource-picker"),
+    ("history/", storefront_builder_r4_views.storefront_r4_history_command, "vision-studio-history"),
+    ("publish/", storefront_builder_r4_views.storefront_r4_publish, "vision-studio-publish"),
+    ("discard/", storefront_builder_r4_views.storefront_r4_discard, "vision-studio-discard"),
+    ("reset-page/", storefront_builder_r4_views.storefront_r4_reset_page, "vision-studio-reset-page"),
+    ("reset-storefront/", storefront_builder_r4_views.storefront_r4_reset_storefront, "vision-studio-reset-storefront"),
+    ("switch-template/", storefront_builder_r4_views.storefront_r4_switch_template, "vision-studio-switch-template"),
+)
+VISION_STUDIO_ROUTES = [
+    path(
+        "vision-studio/",
+        storefront_builder_r4_views.storefront_r4_editor,
+        {"template_name": VISION_STUDIO_TEMPLATE},
+        name="vision-studio",
+    ),
+    *[path("vision-studio/" + rel, view, name=name) for rel, view, name in VISION_STUDIO_R4_ALIASES],
+]
+
 urlpatterns = [
     path("login/", views.admin_login, name="login"),
     path("handoff/<str:token>/", views.consume_admin_handoff, name="handoff"),
@@ -327,6 +355,7 @@ urlpatterns = [
         storefront_builder_r4_views.storefront_r4_apply_industry_layout,
         name="storefront-builder-r4-apply-industry-layout",
     ),
+    *VISION_STUDIO_ROUTES,
     path("storefront-builder/templates/", storefront_builder_views.storefront_template_gallery, name="storefront-builder-templates"),
     path(
         "storefront-builder/templates/<slug:key>/preview/",
