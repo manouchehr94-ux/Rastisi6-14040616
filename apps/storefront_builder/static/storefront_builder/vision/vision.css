@@ -136,6 +136,9 @@
 .vs .vs-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 14px;border:1px solid var(--vs-line-strong);border-radius:10px;background:var(--vs-field);color:var(--vs-text);font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;transition:background .15s,border-color .15s}
 .vs .vs-btn:hover{background:#1f2d46;border-color:#3a4a66}
 .vs .vs-btn--wide{width:100%;margin-top:8px}
+.vs .vs-btn--accent{background:#7c6df0;border-color:#9a8ef5;color:#fff;font-weight:800}
+.vs .vs-btn--accent:hover{background:#6e5fe3;border-color:#b3a9f8}
+.vs .vs-btn--accent.full{width:100%}
 .vs .vs-btn--ghost{background:transparent;border-color:transparent;color:#c5cfe0;justify-content:flex-start;font-weight:500}
 .vs .vs-btn--ghost:hover{background:#18233a;border-color:transparent}
 .vs .vs-nav__foot .vs-btn{width:100%;min-height:34px;padding:0 10px}
@@ -206,101 +209,220 @@
 .vs .vs-link:hover{background:#1b2a45}
 .vs .vs-link .icon{color:#98a5bb}
 
-/* the global design panel, in-flow inside its pane */
-.vs .vs-design.context-panel{position:static;inset:auto;width:auto;height:auto;transform:none;display:flex;flex-direction:column;background:transparent;border:0;box-shadow:none;border-radius:0;animation:none;overflow:visible}
-.vs .vs-design.context-panel[hidden]{display:none}
-.vs .vs-design .rs-panel-view{display:flex;flex-direction:column}
-.vs .vs-design .rs-panel-view[hidden]{display:none}
-.vs .vs-design .panel-head{padding:6px 2px 8px}
-.vs .vs-design .panel-head h2{font-size:14px;margin:4px 0 2px;color:#fff}
-.vs .vs-design .panel-head p,.vs .vs-design .panel-head .eyebrow{color:var(--vs-muted);font-size:11.5px}
-.vs .vs-design .panel-head .icon-btn{display:none}
-.vs .vs-design .panel-scroll{padding:0;overflow:visible}
-.vs .vs-design .global-tabs{display:flex;gap:2px;margin:0 0 10px;padding:3px;border-radius:11px;background:var(--vs-field)}
-.vs .vs-design .global-tabs button{flex:1 1 0;height:30px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:#a9b5ca;font-size:12px;font-weight:600;cursor:pointer}
-.vs .vs-design .global-tabs button.active,.vs .vs-design .global-tabs button[aria-pressed="true"]{background:#0f1930;color:#fff;box-shadow:inset 0 0 0 1px #2d3a50}
-.vs .vs-regions{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px}
-.vs .vs-chip-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:1px solid var(--vs-line-strong);border-radius:999px;background:transparent;color:#c9d3e4;font-size:12px;font-weight:600;cursor:pointer}
-.vs .vs-chip-btn:hover{background:#1a2640;color:#fff}
-.vs .vs-chip-btn .icon{width:14px;height:14px;color:#98a5bb}
-.vs .vs-focus-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 10px}
-.vs .vs-focus-head[hidden],.vs .vs-regions[hidden]{display:none}
-.vs .vs-focus-name{flex-basis:100%;font-size:14.5px;font-weight:800;color:#fff;padding-inline:4px}
-/* element mode: only the opened region of the Global Design panel is shown */
-.rs-studio.vs[data-vs-focus-region] .vs-design .global-tabs,.rs-studio.vs[data-vs-focus-region] .vs-design .panel-head,.rs-studio.vs[data-vs-focus-region] .vs-soon-list,.rs-studio.vs[data-vs-focus-region] .vs-regions{display:none}
-.rs-studio.vs[data-vs-focus-region] #r4GlobalDesign [data-rs-tab-pane]:not([data-rs-tab-pane="visual"]){display:none}
-.rs-studio.vs[data-vs-focus-region] #r4GlobalDesign [data-rs-tab-pane="visual"]>:not(.vs-focus-target){display:none}
-.rs-studio.vs[data-vs-focus-region] #r4GlobalDesign .vs-focus-target{border:0;background:transparent;margin:0}
-.rs-studio.vs[data-vs-focus-region] #r4GlobalDesign .vs-focus-target>summary{display:none}
-.rs-studio.vs[data-vs-focus-region] #r4GlobalDesign .vs-focus-target>.rs-more-body{padding:0}
-.vs .vs-design #r4GlobalDesign{position:static;width:auto;border:0;background:transparent;box-shadow:none;padding:0}
-.vs .vs-design .panel-foot{display:none}
+/* ---------- design tab: a short list of categories ---------- */
+.vs .vs-hint{margin:-4px 2px 14px;font-size:13px;line-height:1.9;color:#a9b6cb}
+.vs .vs-dlist{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:8px}
+.vs .vs-dcard{display:flex;align-items:center;gap:12px;width:100%;min-height:62px;padding:10px 12px;border:1px solid var(--vs-line-strong);border-radius:14px;background:#142036;color:var(--vs-text);text-align:start;cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
+.vs .vs-dcard:hover{background:#1a2a47;border-color:#3b4d6c;transform:translateY(-1px)}
+.vs .vs-dcard:focus-visible{outline:3px solid #b7aef8;outline-offset:2px}
+.vs .vs-dcard__icon{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:11px;background:#232b52;color:#d2ccff;flex:0 0 auto}
+.vs .vs-dcard__icon .icon{width:19px;height:19px}
+.vs .vs-dcard__text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.vs .vs-dcard__text strong{font-size:14px;font-weight:700;color:#fff}
+.vs .vs-dcard__text small{font-size:12.5px;color:#a9b6cb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vs .vs-dcard__strip{display:flex;height:22px;width:66px;border-radius:7px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.18);flex:0 0 auto}
+.vs .vs-dcard__strip i{flex:1}
+.vs .vs-dcard__chev{display:inline-flex;color:#8190a8;flex:0 0 auto}
+.vs .vs-dcard__chev .icon{width:16px;height:16px}
 
-/* ---------- settings workspace over the panel (the reference's «ظاهر عنصر») ---------- */
-.vs .vs-workspace.rs-workspace{position:fixed;top:var(--vs-bar-h);bottom:0;inset-inline-start:auto;right:0;left:auto;width:var(--vs-panel-w);z-index:40;display:block;background:transparent;padding:0}
+/* ---------- large modals (section settings, design categories) ---------- */
+.vs .vs-modal{display:flex;flex-direction:column;min-height:0;background:#0f192c;color:var(--vs-text);border:1px solid var(--vs-line-strong);border-radius:18px;box-shadow:0 36px 120px rgba(0,0,0,.65);overflow:hidden;outline:0}
+.vs .vs-modal__head{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--vs-line)}
+.vs .vs-modal__head h2{margin:0;flex:1;font-size:19px;font-weight:800;color:#fff}
+.vs .vs-modal__close,.vs .vs-workspace .r4-ws-close{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 14px;border:1px solid var(--vs-line-strong);border-radius:11px;background:#16233b;color:#e3eaf6;font-size:13.5px;font-weight:700;cursor:pointer;flex:0 0 auto;transition:background .15s}
+.vs .vs-modal__close:hover,.vs .vs-workspace .r4-ws-close:hover{background:#1f3050}
+.vs .vs-modal__close .icon,.vs .vs-workspace .r4-ws-close .icon{width:16px;height:16px}
+.vs .vs-modal__status,.vs .vs-workspace .r4-ws-save{display:inline-flex;align-items:center;gap:8px;min-height:30px;padding:0 12px;border-radius:999px;background:#13203a;color:#bfe9d4;font-size:13px;font-weight:600;white-space:nowrap}
+.vs .vs-modal__status[data-state="saving"],.vs .vs-workspace .r4-ws-save[data-state="saving"]{color:#f3d28f}
+.vs .vs-modal__status[data-state="error"],.vs .vs-modal__status[data-state="conflict"],.vs .vs-workspace .r4-ws-save[data-state="error"],.vs .vs-workspace .r4-ws-save[data-state="conflict"]{background:#3b1f27;color:#ffb4bb}
+.vs .vs-modal__status .icon,.vs .vs-workspace .r4-ws-save .icon{width:15px;height:15px}
+.vs .vs-modal__status button{height:26px;padding:0 10px;border:0;border-radius:8px;background:#ffb4bb;color:#3b1f27;font-weight:700;cursor:pointer}
+.vs .vs-modal__body{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+.vs .vs-modal__scroll,.vs .vs-design-modal .panel-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:20px 26px 24px;scrollbar-width:thin;scrollbar-color:#2d3a50 transparent}
+.vs .vs-modal__tools{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:12px 26px;border-bottom:1px solid var(--vs-line)}
+.vs .vs-modal__tools[hidden]{display:none}
+.vs .vs-search{display:flex;align-items:center;gap:8px;flex:1;max-width:340px;height:40px;padding:0 12px;background:var(--vs-field);border:1px solid var(--vs-line-strong);border-radius:11px;color:var(--vs-muted)}
+.vs .vs-search input{flex:1;min-width:0;border:0!important;background:transparent!important;box-shadow:none!important;color:var(--vs-text);font-size:14px;outline:0;padding:0!important;min-height:0!important}
+.vs .vs-modal__count{font-size:13px;color:#a9b6cb}
+.vs .vs-modal__foot{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 22px;border-top:1px solid var(--vs-line);font-size:12.5px;color:#a9b6cb}
+.vs .vs-modal__foot .icon{width:14px;height:14px;color:var(--vs-ok);vertical-align:-2px}
+
+/* section / group settings: R4's own workspace dialog, dressed as a large dark modal */
+.vs .vs-workspace.rs-workspace{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(4,9,19,.68);backdrop-filter:blur(3px)}
 .vs .vs-workspace.rs-workspace[hidden]{display:none}
-.vs .vs-workspace .rs-workspace-backdrop{display:none}
-.vs .vs-workspace .rs-workspace-dialog{position:relative;display:flex;flex-direction:column;width:100%;height:100%;max-width:none;border-radius:0;box-shadow:none;background:var(--vs-panel);border:0;border-inline-start:1px solid var(--vs-line-strong);animation:none;overflow:hidden}
-.vs .vs-workspace.rs-workspace:not([hidden]):has([data-cmp-ws]){inset:0;top:0;width:auto;display:flex;align-items:center;justify-content:center;background:rgba(4,9,19,.66)}
-.vs .vs-workspace.rs-workspace:has([data-cmp-ws]) .rs-workspace-backdrop{display:block;position:absolute;inset:0;background:transparent;backdrop-filter:blur(2px)}
-.vs .vs-workspace.rs-workspace:has([data-cmp-ws]) .rs-workspace-dialog{width:min(92vw,1180px);height:min(90vh,calc(100dvh - 24px));border-radius:18px;border:1px solid var(--vs-line-strong);box-shadow:0 36px 120px rgba(0,0,0,.6)}
-.vs .vs-ws-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:12px 14px 4px}
-.vs .vs-ws-head__title{font-size:12.5px;font-weight:700;color:#cfd8e8;margin-inline-start:auto}
-.vs .vs-back{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:#c3cde0;font-size:12.5px;cursor:pointer}
-.vs .vs-back:hover{background:#1a2640;color:#fff}
-.vs .vs-back .icon{width:15px;height:15px;transform:rotate(180deg)}   /* back = pointing to the inline-start side (right in RTL) */
+.vs .vs-workspace .rs-workspace-backdrop{position:absolute;inset:0;background:transparent;backdrop-filter:none;animation:none}
+.vs .vs-workspace .rs-workspace-dialog{position:relative;display:flex;flex-direction:column;width:min(96vw,1000px);height:min(90vh,calc(100dvh - 40px));background:#0f192c;border:1px solid var(--vs-line-strong);border-radius:18px;box-shadow:0 36px 120px rgba(0,0,0,.65);overflow:hidden;animation:none;outline:0}
+/* the «default slides» notice of the slider settings is a light-theme R4 component */
+.vs .sfb-media-defaults{background:#13203a!important;border-color:#4a5a78!important;color:#dbe4f2;--muted:#b9c5d9;--ink:#e8eefb}
+.vs .sfb-media-defaults :is(strong,p,span,li){color:#dbe4f2!important}
+.vs .sfb-media-defaults :is(button,a){background:#1c2a47!important;border:1px solid #4a5a78!important;color:#fff!important;box-shadow:none}
+/* the Composer's own Group settings are a bigger workspace than a Section's form (the Composer scenarios rely on it) */
+.vs .vs-workspace:has([data-cmp-ws]) .rs-workspace-dialog{width:min(96vw,1280px)}
 .vs .vs-workspace .rs-workspace-body{flex:1 1 auto;min-height:0;background:transparent;display:flex;flex-direction:column;overflow:hidden}
 .vs .vs-workspace .r4-ws{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;background:transparent}
-.vs .vs-workspace .r4-ws-header{display:flex;align-items:center;gap:10px;padding:2px 14px 10px;border:0;background:transparent}
-.vs .vs-workspace .r4-ws-glyph,.vs .vs-workspace .r4-ws-search,.vs .vs-workspace .r4-ws-footer,.vs .vs-workspace .r4-ws-scope,.vs .vs-workspace .r4-ws-crumb{display:none}
-.vs .vs-workspace .r4-ws-identity{min-width:0;flex:1}
-.vs .vs-workspace .r4-ws-titles{min-width:0}
-.vs .vs-workspace .r4-ws-title{margin:0;font-size:14.5px;font-weight:800;color:#fff}
-.vs .vs-workspace .r4-ws-save{margin-inline-start:auto;font-size:11px;color:var(--vs-muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.vs .vs-workspace .r4-ws-save .icon{width:12px;height:12px;color:var(--vs-ok)}
-.vs .vs-workspace .r4-ws-save[data-state="saving"] .icon{color:var(--vs-amber)}
-.vs .vs-workspace .r4-ws-save[data-state="error"],.vs .vs-workspace .r4-ws-save[data-state="conflict"]{color:var(--vs-danger)}
-.vs .vs-workspace .r4-ws-locked{margin:0 14px 8px;padding:8px 10px;border-radius:8px;background:#3a2f1c;color:#f0c987;font-size:12px}
-.vs .vs-workspace .r4-ws-tabs{display:flex;gap:2px;margin:0 12px 8px;padding:3px;border-radius:11px;background:var(--vs-field);border:0}
-.vs .vs-workspace .r4-ws-tab{flex:1 1 0;height:32px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:#a9b5ca;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px}
-.vs .vs-workspace .r4-ws-tab[aria-selected="true"]{background:#0f1930;color:#fff;font-weight:700;box-shadow:inset 0 0 0 1px #2d3a50}
-.vs .vs-workspace .r4-ws-main{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 14px 22px;scrollbar-width:thin;scrollbar-color:#2d3a50 transparent}
-.vs .vs-workspace .r4-ws-body,.vs .vs-workspace .r4-ws-panel{display:block;padding:0;background:transparent;overflow:visible}
-.vs .vs-workspace .r4-ws-panel[hidden]{display:none}
-.vs .vs-workspace .r4-ws-cols,.vs .vs-workspace .r4-ws-col{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0;grid-template-columns:none}
-.vs .vs-workspace .r4-ws-card{border:0;border-bottom:1px solid var(--vs-line);border-radius:0;background:transparent;box-shadow:none;margin:0;padding:6px 0}
-.vs .vs-workspace .r4-ws-card-head{display:flex;flex-direction:column;gap:2px;padding:8px 2px;cursor:pointer;position:relative;padding-inline-end:22px}
-.vs .vs-workspace .r4-ws-card-head::after{content:"";position:absolute;inset-inline-end:4px;top:16px;width:7px;height:7px;border-inline-end:2px solid #8a97ad;border-bottom:2px solid #8a97ad;transform:rotate(45deg);transition:transform .15s}
+.vs .vs-workspace .r4-ws-header{display:flex;align-items:center;gap:14px;padding:16px 22px;border:0;border-bottom:1px solid var(--vs-line);background:transparent}
+.vs .vs-workspace .r4-ws-identity{flex:1;min-width:0}
+.vs .vs-workspace .r4-ws-title{margin:0;font-size:19px;font-weight:800;color:#fff}
+.vs .vs-workspace .r4-ws-crumb{font-size:12.5px;color:#a9b6cb}
+.vs .vs-workspace .r4-ws-scope{font-size:12px;color:#bdb7ff;background:#232b52;border-radius:6px;padding:2px 8px}
+.vs .vs-workspace .r4-ws-search{display:flex;align-items:center;gap:8px;height:40px;width:min(260px,32%);padding:0 12px;background:var(--vs-field);border:1px solid var(--vs-line-strong);border-radius:11px;color:var(--vs-muted)}
+.vs .vs-workspace .r4-ws-search input{flex:1;min-width:0;border:0!important;background:transparent!important;box-shadow:none!important;color:var(--vs-text);font-size:14px;padding:0!important;min-height:0!important;outline:0}
+.vs .vs-workspace .r4-ws-locked{margin:12px 22px 0;padding:10px 12px;border-radius:10px;background:#3a2f1c;color:#f6d79a;font-size:13px}
+.vs .vs-workspace .r4-ws-tabs{display:flex;gap:6px;margin:0;padding:10px 22px;border:0;border-bottom:1px solid var(--vs-line);background:transparent}
+.vs .vs-workspace .r4-ws-tab{height:38px;padding:0 18px;border:1px solid transparent;border-radius:10px;background:transparent;color:#b3bfd3;font-size:14px;font-weight:600;cursor:pointer}
+.vs .vs-workspace .r4-ws-tab:hover{color:#fff;background:#16233b}
+.vs .vs-workspace .r4-ws-tab[aria-selected="true"]{background:#1c2c4a;color:#fff;font-weight:800;border-color:var(--vs-line-strong)}
+.vs .vs-workspace .r4-ws-main{flex:1 1 auto;min-height:0;display:flex}
+.vs .vs-workspace .r4-ws-body{flex:1 1 0;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;padding:20px 24px 26px;background:#0c1527;scrollbar-width:thin;scrollbar-color:#2d3a50 transparent}
+.vs .vs-workspace .r4-ws-card{background:#13203a;border:1px solid var(--vs-line-strong);border-radius:14px;box-shadow:none}
+.vs .vs-workspace .r4-ws-card-head{padding:14px 18px 10px;border-bottom:1px solid var(--vs-line)}
+.vs .vs-workspace .r4-ws-card-head h3{font-size:15.5px;font-weight:800;color:#fff}
+.vs .vs-workspace .r4-ws-card-head p{font-size:12.5px;color:#a9b6cb}
+.vs .vs-workspace .r4-ws-card-body{padding:10px 18px 16px}
+.vs .vs-workspace .r4-ws-card-body>.r4-field{border-color:#1c2a45}
+.vs .vs-workspace .r4-ws-footer{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 22px;border-top:1px solid var(--vs-line);background:#0f192c}
+.vs .vs-workspace .r4-ws-footnote{font-size:12.5px;color:#a9b6cb}
+.vs .vs-workspace .r4-ws-done{height:40px;padding:0 22px;border-radius:11px}
+.vs .vs-workspace .r4-ws-subnav{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.vs .vs-workspace .r4-ws-subtab{height:34px;padding:0 14px;border:1px solid var(--vs-line-strong);border-radius:9px;background:transparent;color:#c2ccdd;font-size:13px;cursor:pointer}
+.vs .vs-workspace .r4-ws-subtab[aria-selected="true"]{background:#1c2c4a;color:#fff;font-weight:700}
+.vs .vs-workspace .r4-ws-empty,.vs .vs-workspace .r4-ws-noresults{color:#a9b6cb;font-size:13px;padding:12px 2px}
+/* a card of a settings form is collapsible (vision.js); the heading is the handle */
+.vs .vs-workspace .r4-ws-card-head{cursor:pointer;position:relative;padding-inline-end:44px}
+.vs .vs-workspace .r4-ws-card-head::after{content:"";position:absolute;inset-inline-end:18px;top:20px;width:8px;height:8px;border-inline-end:2px solid #8a97ad;border-bottom:2px solid #8a97ad;transform:rotate(45deg);transition:transform .15s}
 .vs .vs-workspace .r4-ws-card.is-collapsed .r4-ws-card-head::after{transform:rotate(-45deg)}
-.vs .vs-workspace .r4-ws-card-head h3{margin:0;font-size:13px;font-weight:700;color:#e9eef7}
-.vs .vs-workspace .r4-ws-card-head p{margin:0;font-size:11.5px;color:var(--vs-muted)}
 .vs .vs-workspace .r4-ws-card.is-collapsed .r4-ws-card-body{display:none}
-.vs .vs-workspace .r4-ws-card-body{padding:2px 2px 8px}
-.vs .vs-workspace .r4-ws-subnav{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
-.vs .vs-workspace .r4-ws-subtab{height:28px;padding:0 10px;border:1px solid var(--vs-line-strong);border-radius:8px;background:transparent;color:#b9c4d8;font-size:12px;cursor:pointer}
-.vs .vs-workspace .r4-ws-subtab[aria-selected="true"]{background:var(--vs-raised);color:#fff}
-.vs .vs-workspace .r4-ws-empty,.vs .vs-workspace .r4-ws-noresults{color:var(--vs-muted);font-size:12px;padding:10px 2px}
 
-.vs .vs-workspace .r4-ws-close{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:#aeb9cc;cursor:pointer;flex:0 0 auto}
-.vs .vs-workspace .r4-ws-close span{display:none}
-.vs .vs-workspace .r4-ws-close:hover{background:#1a2640;color:#fff}
-.vs .vs-workspace .r4-ws-close .icon{width:15px;height:15px}
+/* ---------- controls inside the modals: larger, calmer, readable ---------- */
+.vs .vs-workspace :is(input,select,textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="search"]),
+.vs .vs-design-modal :is(input,select,textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="search"]){width:100%;min-height:42px;padding:8px 12px;background:var(--vs-field);color:var(--vs-text);border:1px solid #34445f;border-radius:11px;font-size:14px}
+.vs .vs-workspace textarea,.vs .vs-design-modal textarea{min-height:92px;line-height:1.8}
+.vs .vs-workspace :is(input,select,textarea):focus,.vs .vs-design-modal :is(input,select,textarea):focus{border-color:#a79df7;outline:0;box-shadow:0 0 0 3px rgba(124,109,240,.28)}
+.vs .vs-workspace ::placeholder,.vs .vs-design-modal ::placeholder{color:#7686a0}
+.vs .vs-workspace label,.vs .vs-design-modal label{color:#d6deec}
+.vs .vs-workspace .r4-field>label,.vs .vs-workspace .r4-field-label,.vs .vs-design-modal .r4-field-sublabel{font-size:13.5px;font-weight:700;color:#e4ebf7}
+.vs .vs-workspace :is(.r4-field-hint,.r4-help,small.muted,.muted),.vs .vs-design-modal :is(.r4-field-hint,small.muted,.muted,.small){color:#a9b6cb;font-size:12.5px;line-height:1.8}
+.vs .vs-workspace button:not(.r4-ws-tab):not(.r4-ws-subtab),.vs .vs-design-modal button{font-size:13.5px}
+.vs .vs-workspace .r4-field{padding:12px 0}
 
-/* form controls (inspector + global design) */
-.vs .vs-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
-.vs .vs-workspace select,.vs .vs-workspace textarea,
-.vs .vs-design input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
-.vs .vs-design select,.vs .vs-design textarea{width:100%;min-height:38px;padding:7px 11px;background:var(--vs-field);color:var(--vs-text);border:1px solid var(--vs-line-strong);border-radius:10px;font-size:13px}
-.vs .vs-workspace textarea,.vs .vs-design textarea{min-height:76px}
-.vs .vs-workspace input:focus,.vs .vs-workspace select:focus,.vs .vs-workspace textarea:focus,
-.vs .vs-design input:focus,.vs .vs-design select:focus{border-color:#8b82f0;outline:0;box-shadow:0 0 0 2px rgba(124,109,240,.25)}
-.vs .vs-workspace ::placeholder,.vs .vs-design ::placeholder{color:#66748b}
-.vs .vs-workspace label,.vs .vs-design label{color:#c9d3e4}
-.vs .vs-workspace button:not(.r4-ws-tab):not(.r4-ws-subtab):not(.vs-back),.vs .vs-design button{font-size:12.5px}
-.vs .vs-design .rs-more{border:1px solid var(--vs-line);border-radius:12px;background:#142036;margin:0 0 10px}
-.vs .vs-design .rs-more>summary{padding:10px 12px;font-size:12.5px;font-weight:700;color:#dde5f2;display:flex;align-items:center;gap:9px;cursor:pointer}
-.vs .vs-design .rs-more>summary .icon{color:#98a5bb}
-.vs .vs-design .rs-more-body,.vs .vs-design .rs-more>div{padding:4px 12px 12px}
+/* ---------- switches: a clear state, a word next to it, a visible focus ring ---------- */
+.vs input.r4-switch{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 auto;width:48px;height:28px;border-radius:999px;background:#2a3650;border:2px solid #61728f;cursor:pointer;transition:background .15s,border-color .15s}
+.vs input.r4-switch::after{content:"";position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:#dfe6f2;box-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform .15s,background .15s}
+.vs input.r4-switch:checked{background:#1f9d6e;border-color:#3fd19b}
+.vs input.r4-switch:checked::after{transform:translateX(-20px);background:#fff}
+.vs input.r4-switch:focus-visible{outline:3px solid #b7aef8;outline-offset:3px;box-shadow:none}
+.vs input.r4-switch:disabled{cursor:not-allowed;background:repeating-linear-gradient(135deg,#1a2338 0 6px,#212c45 6px 12px);border:2px dashed #4a5873;opacity:.7}
+.vs input.r4-switch:disabled::after{background:#6c7a94;box-shadow:none}
+.vs button.switch{position:relative;flex:0 0 auto;width:48px;height:28px;padding:3px;border-radius:999px;background:#2a3650;border:2px solid #61728f;cursor:pointer;display:inline-flex;align-items:center;justify-content:flex-end}
+.vs button.switch::before{content:"";width:20px;height:20px;border-radius:50%;background:#dfe6f2;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.vs button.switch[aria-pressed="true"]{background:#1f9d6e;border-color:#3fd19b;justify-content:flex-start}
+.vs button.switch[aria-pressed="true"]::before{background:#fff}
+.vs button.switch:focus-visible{outline:3px solid #b7aef8;outline-offset:3px}
+.vs button.switch:disabled{cursor:not-allowed;background:repeating-linear-gradient(135deg,#1a2338 0 6px,#212c45 6px 12px);border-style:dashed;border-color:#4a5873;opacity:.7}
+.vs .vs-sw-text{display:inline-flex;align-items:center;min-width:92px;font-size:13px;font-weight:700;color:#aab6cb;white-space:nowrap}
+.vs .vs-sw-text[data-on="true"]{color:#8de8bf}
+.vs .vs-sw-text[data-disabled="true"]{color:#8190a8;font-weight:600}
+.vs input.r4-switch+.vs-sw-text{margin-inline-start:10px}
+.vs .r4-repeater-subfield:has(>input.r4-switch){display:flex;flex-wrap:wrap;align-items:center;gap:6px 0}
+.vs .r4-repeater-subfield:has(>input.r4-switch)>.r4-field-sublabel{flex:1 1 100%}
+/* section settings: short fields (number, choice, switch, colour) sit two per row in the wide dialog; everything else keeps a full row */
+@media (min-width:900px){
+.vs-workspace .r4-ws-card-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 22px;align-items:start}
+.vs-workspace .r4-ws-card-body>*{grid-column:1/-1}
+.vs-workspace .r4-ws-card-body>:is([data-r4-field-type="integer"],[data-r4-field-type="choice"],[data-r4-field-type="boolean"],[data-r4-field-type="color"]){grid-column:auto}
+}
+.vs .r4-checkbox-row{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 0;cursor:pointer}
+.vs .r4-checkbox-row>span:not(.vs-sw-text){flex:1;font-size:14px;font-weight:600;color:#e4ebf7}
+.vs .toggle-row{display:flex;align-items:center;gap:12px;min-height:44px}
+.vs .toggle-row>span:first-child{flex:1;font-size:14px;font-weight:600;color:#e4ebf7}
+
+/* ---------- design category dialog (the real #r4GlobalDesign, filtered by category) ---------- */
+.vs .vs-dlayer.context-panel{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;width:auto;height:auto;padding:20px;border:0;border-radius:0;transform:none;box-shadow:none;animation:none;background:rgba(4,9,19,.68);backdrop-filter:blur(3px);overflow:hidden}
+.vs .vs-dlayer.context-panel.panel-visible{display:flex}
+.vs .vs-dlayer.context-panel[hidden]{display:none}
+.vs .vs-design-modal{width:min(96vw,960px);height:min(90vh,calc(100dvh - 40px))}
+.vs .vs-design-modal .rs-panel-view{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+.vs .vs-design-modal .rs-panel-view[hidden]{display:none}
+.vs .vs-design-modal #r4GlobalDesign{position:static;width:auto;border:0;background:transparent;box-shadow:none;padding:0}
+.vs .vs-design-modal .global-tabs{display:none}
+/* a category shows only its own controls (vision.js tags and hides the rest; nothing is removed) */
+.vs #r4GlobalDesign .vs-hide{display:none!important}
+.vs[data-vs-cat] #r4GlobalDesign [data-rs-tab-pane="visual"]>:not(.r4-global-design-group):not(.vs-cat-target){display:none}
+.vs[data-vs-cat="header"] #r4GlobalDesign [data-rs-tab-pane="visual"]>.r4-global-design-group,.vs[data-vs-cat="footer"] #r4GlobalDesign [data-rs-tab-pane="visual"]>.r4-global-design-group,.vs[data-vs-cat="bottom_nav"] #r4GlobalDesign [data-rs-tab-pane="visual"]>.r4-global-design-group{display:none}
+.vs #r4GlobalDesign details.vs-flat,.vs #r4GlobalDesign details.vs-cat-target{border:0;background:transparent;margin:0}
+.vs #r4GlobalDesign details.vs-flat>summary,.vs #r4GlobalDesign details.vs-cat-target>summary{display:none}
+.vs #r4GlobalDesign details.vs-flat>.rs-more-body,.vs #r4GlobalDesign details.vs-cat-target>.rs-more-body{padding:0}
+.vs #r4GlobalDesign .rs-more{border:1px solid var(--vs-line);border-radius:12px;background:#13203a;margin:0 0 12px}
+.vs #r4GlobalDesign .rs-more>summary{padding:12px 14px;font-size:14px;font-weight:700;color:#e4ebf7;display:flex;align-items:center;gap:9px;cursor:pointer}
+.vs #r4GlobalDesign .rs-more-body{padding:6px 14px 14px}
+.vs #r4GlobalDesign .section-label{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:4px 0 12px;font-size:15px;font-weight:800;color:#fff}
+.vs #r4GlobalDesign .section-label small{font-size:12.5px;color:#a9b6cb;font-weight:600}
+.vs #r4GlobalDesign h4,.vs #r4GlobalDesign h5{margin:18px 0 8px;font-size:14.5px;font-weight:800;color:#fff}
+.vs #r4GlobalDesign .r4-global-design-group>.visually-hidden{position:absolute}
+.vs #r4GlobalDesign :is(select,input[type="number"],input[type="text"],input:not([type]),textarea){width:100%;min-height:42px;padding:8px 12px;background:var(--vs-field);color:var(--vs-text);border:1px solid #34445f;border-radius:11px;font-size:14px;margin-bottom:6px}
+.vs #r4GlobalDesign :is(select,input):focus-visible{border-color:#a79df7;outline:0;box-shadow:0 0 0 3px rgba(124,109,240,.28)}
+.vs #r4GlobalDesign .r4-field-sublabel{display:block;margin:12px 0 5px;font-size:13.5px;font-weight:700;color:#e4ebf7}
+.vs #r4GlobalDesign .quiet.small,.vs #r4GlobalDesign .r4-icon-btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border:1px solid var(--vs-line-strong);border-radius:9px;background:transparent;color:#c2ccdd;font-size:12.5px;cursor:pointer}
+.vs #r4GlobalDesign .quiet.small:hover,.vs #r4GlobalDesign .r4-icon-btn:hover{background:#1a2640;color:#fff}
+.vs #r4GlobalDesign .section-divider{height:1px;margin:16px 0;background:var(--vs-line)}
+.vs #r4GlobalDesign label.field{display:block;margin:6px 0}
+.vs #r4GlobalDesign label.field>span{display:block;margin-bottom:6px;font-size:13.5px;font-weight:700;color:#e4ebf7}
+.vs #r4GlobalDesign p.small.muted{font-size:12.5px;line-height:1.9;color:#a9b6cb}
+
+/* palette cards: the registry's own colours, side by side */
+.vs #r4GlobalDesign .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:14px;margin:6px 0 14px}
+.vs #r4GlobalDesign label.swatch{position:relative;display:flex;flex-direction:column;gap:9px;padding:9px 9px 11px;border:2px solid #263450;border-radius:16px;background:#13203a;color:#dbe4f2;font-size:13.5px;font-weight:700;cursor:pointer;transition:border-color .15s,transform .15s,background .15s}
+.vs #r4GlobalDesign label.swatch>span:not(.vs-pal){display:none}
+.vs #r4GlobalDesign label.swatch:hover{border-color:#4d5f82;background:#172845;transform:translateY(-2px)}
+.vs #r4GlobalDesign label.swatch:has(input:checked){border-color:#e8dfbe;background:#1a2944;box-shadow:0 0 0 3px rgba(232,223,190,.22)}
+.vs #r4GlobalDesign label.swatch:has(input:checked)::after{content:"✓";position:absolute;top:14px;inset-inline-start:14px;width:24px;height:24px;border-radius:50%;background:#e8dfbe;color:#2b2615;font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.vs #r4GlobalDesign label.swatch:has(input:focus-visible){outline:3px solid #b7aef8;outline-offset:3px}
+.vs #r4GlobalDesign label.swatch.vs-filtered-out{display:none}
+.vs .vs-pal{display:flex;flex-direction:column;height:86px;border-radius:11px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.14)}
+.vs .vs-pal__bar{display:flex;height:22px;flex:0 0 22px}
+.vs .vs-pal__bar i{flex:1}
+.vs .vs-pal__mock{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px}
+.vs .vs-pal__mock b{font-size:17px;font-weight:900;line-height:1}
+.vs .vs-pal__mock em{font-style:normal;display:inline-block;height:20px;min-width:44px;border-radius:7px}
+.vs .vs-pal__name{padding-inline:3px;line-height:1.5}
+.vs #r4GlobalDesign label.swatch>.vs-pal{display:flex;flex-direction:column;width:100%;height:92px;margin:0;border-radius:11px;background:none}
+.vs .vs-pal__bar{height:30px;flex:0 0 30px}
+/* the colour picker (r4_color_picker.js): dark field + popover; its own overlay selector cannot match under .vs */
+.vs .r4-cp-trigger{min-height:46px;padding:6px 12px;border:1px solid #34445f;border-radius:11px;background:#0f1a30;color:#fff}
+.vs .r4-cp-trigger:hover{background:#15233f;border-color:#5a6c8f}
+.vs .r4-cp-trigger:focus-visible,.vs .r4-cp-trigger[aria-expanded="true"]{border-color:#a79df7;outline:0;box-shadow:0 0 0 3px rgba(124,109,240,.28)}
+.vs .r4-cp-name{font-size:13.5px;color:#fff}
+.vs .r4-cp-hex,.vs .r4-cp-caret{color:#c2ccdd;font-size:12.5px}
+.vs .r4-cp-swatch{border:1px solid rgba(255,255,255,.35)}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"]{background:#111c33!important;color:#e8eefb!important;border:1px solid #3a4b6b!important;box-shadow:0 18px 50px rgba(0,0,0,.55)}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] :is(.r4-cp-sec h4,.r4-cp-hexlabel,.r4-cp-note,.r4-cp-chip-text small){color:#b9c5d9}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] :is(.r4-cp-chip,.r4-cp-auto,.r4-cp-hexinput){background:#0b1426;border:1px solid #34445f;color:#fff}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] .r4-cp-auto.is-current{border-color:#a79df7;background:#1b2750}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] .r4-cp-actions{background:#111c33;border-top:1px solid #34445f}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] .r4-cp-apply{background:#7c6df0;color:#fff}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] .r4-cp-apply:disabled{background:#26324d;color:#8fa0bd}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] .r4-cp-cancel{background:transparent;color:#e8eefb;border:1px solid #4a5a78}
+.vs [role="dialog"][aria-label^="انتخاب رنگ"] .r4-cp-sw[aria-pressed="true"]{outline-color:#fff}
+.vs #r4GlobalDesign .pack-options{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:6px 0 14px}
+.vs #r4GlobalDesign label.pack-option{display:flex;align-items:center;gap:10px;min-height:56px;padding:10px 12px;border:2px solid #263450;border-radius:14px;background:#13203a;color:#dbe4f2;font-size:13.5px;font-weight:700;cursor:pointer}
+.vs #r4GlobalDesign label.pack-option:hover{border-color:#4d5f82}
+.vs #r4GlobalDesign label.pack-option:has(input:checked){border-color:#e8dfbe;background:#1a2944;box-shadow:0 0 0 3px rgba(232,223,190,.22)}
+.vs #r4GlobalDesign label.pack-option:has(input:focus-visible){outline:3px solid #b7aef8;outline-offset:3px}
+.vs #r4GlobalDesign .r4-color-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:6px 12px;padding:10px 12px;margin:0 0 8px;border:1px solid var(--vs-line);border-radius:12px;background:#13203a}
+.vs #r4GlobalDesign .r4-color-row .r4-field-sublabel{margin:0}
+.vs #r4GlobalDesign .r4-color-row input[type="color"]{width:46px;min-height:38px;padding:2px;border:2px solid #4a5a78;border-radius:10px;background:transparent;cursor:pointer;margin:0}
+.vs #r4GlobalDesign .r4-color-source{font-size:12px;color:#a9b6cb}
+.vs #r4GlobalDesign .r4-color-source.is-override{color:#f2d792;font-weight:700}
+@media (min-width:900px){
+.vs[data-vs-cat="colors"] #r4GlobalDesign #rsGlobalDetails .rs-more-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px;align-items:start}
+.vs[data-vs-cat="colors"] #r4GlobalDesign #rsGlobalDetails .rs-more-body>:not(.r4-color-row){grid-column:1/-1}
+}
+
+/* the template gallery's "peek" docks beside the preview instead of dimming it */
+.rs-studio.vs[data-rs-drawer="template-preview"] .vs-dlayer.context-panel{background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-end;align-items:stretch;padding:var(--vs-bar-h) 0 0}
+.rs-studio.vs[data-rs-drawer="template-preview"] .vs-design-modal{pointer-events:auto;width:var(--vs-panel-w);height:auto;border-radius:0}
+.rs-studio.vs[data-rs-drawer="template-preview"] .vs-modal__head{display:none}
+.vs .vs-peek{padding:6px 14px 14px}
 
 /* ---------- toasts / modals sit above everything ---------- */
 .vs .rs-toast{z-index:90}
@@ -315,7 +437,6 @@
   .vs .vs-panel{right:0}
   .rs-studio.vs[data-vs-drawer="nav"] .vs-nav{display:flex}
   .rs-studio.vs[data-vs-drawer="panel"] .vs-panel{display:flex}
-  .vs .vs-workspace.rs-workspace{width:min(340px,92vw)}
   .vs .vs-mobile-only{display:inline-flex}
   .vs .vs-bar{grid-template-columns:auto 1fr auto;padding:0 8px;gap:6px}
   .vs .vs-bar__title h1{max-width:34vw;font-size:13px}
@@ -333,5 +454,18 @@
   .vs .vs-bar__group--end .vs-tool{display:none}
   .vs .vs-publish{min-width:64px;padding:0 14px}
   .vs .vs-canvas.canvas{margin:6px 6px 72px}
+}
+@media (max-width:640px){
+  .vs .vs-workspace.rs-workspace,.vs .vs-dlayer.context-panel{padding:0}
+  .vs .vs-workspace .rs-workspace-dialog,.vs .vs-design-modal{width:100vw;height:100dvh;border-radius:0;border:0}
+  .vs .vs-modal__head,.vs .vs-workspace .r4-ws-header{flex-wrap:wrap;padding:12px 14px;gap:10px}
+  .vs .vs-workspace .r4-ws-identity{order:1;flex:1 1 100%}
+  .vs .vs-workspace .r4-ws-save{order:2;flex:1 1 auto}
+  .vs .vs-workspace .r4-ws-close{order:3}
+  .vs .vs-workspace .r4-ws-search{order:4;width:100%}
+  .vs .vs-workspace .r4-ws-tabs,.vs .vs-workspace .r4-ws-footer,.vs .vs-modal__foot{padding-inline:14px}
+  .vs .vs-workspace .r4-ws-body,.vs .vs-modal__scroll,.vs .vs-design-modal .panel-scroll{padding:14px}
+  .vs .vs-modal__tools{padding:10px 14px}
+  .vs #r4GlobalDesign .swatches{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 }
 @media (prefers-reduced-motion:reduce){.vs *{animation:none!important;transition:none!important}}

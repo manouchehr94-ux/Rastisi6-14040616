@@ -236,46 +236,21 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
             </div>
           </section>
 
-          {# ---- طراحی (the real global design panel) ---- #}
+          {# ---- طراحی: a short list of categories; each opens its own large dialog (the real Global Design panel, filtered) ---- #}
           <section class="vs-pane" id="vsPane-design" role="tabpanel" aria-labelledby="vsTab-design" data-vs-pane="design" hidden>
-            {# a global region (header / footer / mobile bar) opened as an element: the reference's «ظاهر عنصر» header with a way back #}
-            <div class="vs-focus-head" data-vs-focus-head hidden>
-              <button type="button" class="vs-back" data-vs-focus-back aria-label="بازگشت به همهٔ بخش‌ها">{% rs_icon "arrow" %}<span>همهٔ بخش‌ها</span></button>
-              <span class="vs-ws-head__title">ظاهر عنصر</span>
-              <strong class="vs-focus-name" data-vs-focus-name></strong>
-            </div>
-            <div class="vs-regions" data-vs-regions role="group" aria-label="بخش‌های مشترک فروشگاه">
-              <button type="button" class="vs-chip-btn" data-vs-region="header">{% rs_icon "header" %}<span>سربرگ</span></button>
-              <button type="button" class="vs-chip-btn" data-vs-region="footer">{% rs_icon "footer" %}<span>پایین صفحه</span></button>
-              <button type="button" class="vs-chip-btn" data-vs-region="bottom_nav">{% rs_icon "mobile" %}<span>ناوبری موبایل</span></button>
-            </div>
-            <div class="context-panel vs-design" id="rsStructureDrawer" role="complementary" aria-label="طراحی سراسری" data-rastisi-panel="structure" data-rs-context-panel>
-              <div class="rs-panel-view" data-rs-view="global" hidden>
-                <div class="panel-head"><div class="row space-between"><span class="eyebrow">تمام فروشگاه</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن طراحی سراسری">{% rs_icon "close" %}</button></div><h2>طراحی سراسری</h2><p>تغییرات این پنل روی تمام پیش‌نویس اعمال می‌شود.</p></div>
-                <div class="global-tabs" role="tablist" aria-label="بخش‌های طراحی سراسری">
-                  <button type="button" data-rastisi-action="global-tab" data-tab="visual" class="active" aria-pressed="true">رنگ و تایپ</button>
-                  <button type="button" data-rastisi-action="global-tab" data-tab="template" aria-pressed="false">قالب</button>
-                  <button type="button" data-rastisi-action="global-tab" data-tab="theme" aria-pressed="false">مناسبت</button>
-                </div>
-                <div class="panel-scroll">
-                  <aside id="r4GlobalDesign" aria-label="طراحی سراسری" hidden>{% include "dashboard/storefront_builder/r4/partials/studio_global_design.html" %}</aside>
-                </div>
-              </div>
-              <div class="rs-panel-view" data-rs-view="template-preview" hidden>
-                <div class="panel-head"><div class="row space-between"><span class="eyebrow">قالب / فقط پیش‌نمایش</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن و بازگشت بدون تغییر">{% rs_icon "close" %}</button></div><h2 data-rs-peek-title></h2><p data-rs-peek-sub></p></div>
-                <div class="panel-scroll">
-                  <span class="pill purple">هنوز اعمال نشده</span>
-                  <div class="template-peek-summary"><h3>با محتوای خودتان ببینید</h3><p>پیش‌نمایش روبه‌رو همان متن‌ها، تصاویر و محصولات شماست؛ با ظاهر این قالب.</p><div class="note">هیچ تغییری در پیش‌نویس یا نسخهٔ عمومی اعمال نشده است.</div></div>
-                  <div class="peek-palette" data-rs-peek-palette></div>
-                  <div class="section-divider"></div>
-                  <button type="button" data-rastisi-action="templates" class="outline full">{% rs_icon "grid" %}بازگشت به قالب‌ها</button>
-                </div>
-                <div class="panel-foot">
-                  <button type="button" data-rastisi-action="switch-template" class="primary full" data-rs-peek-apply>{% rs_icon "check" %}اعمال این قالب</button>
-                  <button type="button" data-rastisi-action="cancel-template-preview" class="full quiet small">{% rs_icon "arrow" %}بازگشت بدون تغییر</button>
-                </div>
-              </div>
-            </div>
+            <h2 class="vs-lead">طراحی فروشگاه</h2>
+            <p class="vs-hint">یک دسته را انتخاب کنید؛ تنظیمات آن در یک پنجرهٔ بزرگ باز می‌شود و همان لحظه روی پیش‌نویس ذخیره می‌شود.</p>
+            <ul class="vs-dlist" role="list" data-vs-design-list>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="colors"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "palette" %}</span><span class="vs-dcard__text"><strong>برند و رنگ‌ها</strong><small data-vs-summary="colors">پالت و رنگ‌های فروشگاه</small></span><span class="vs-dcard__strip" data-vs-strip aria-hidden="true"></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="typography"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "edit" %}</span><span class="vs-dcard__text"><strong>نوع نوشته و فونت‌ها</strong><small data-vs-summary="typography">فونت، اندازه و سبک عنوان‌ها</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="buttons"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "card" %}</span><span class="vs-dcard__text"><strong>دکمه‌ها</strong><small data-vs-summary="buttons">سبک و گردی گوشهٔ دکمه‌ها</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="shape"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "grid" %}</span><span class="vs-dcard__text"><strong>شکل و تراکم</strong><small data-vs-summary="shape">گوشه‌ها، فاصله‌ها، عرض صفحه و کارت‌ها</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="images"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "image" %}</span><span class="vs-dcard__text"><strong>تصاویر و رسانه‌ها</strong><small data-vs-summary="images">نحوهٔ نمایش و افکت تصاویر</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="header"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "header" %}</span><span class="vs-dcard__text"><strong>سربرگ فروشگاه</strong><small data-vs-summary="header">مدل هدر، جست‌وجو، نوار اعلان</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="footer"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "footer" %}</span><span class="vs-dcard__text"><strong>پابرگ فروشگاه</strong><small data-vs-summary="footer">مدل فوتر، ستون‌ها و نمادها</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="bottom_nav"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "mobile" %}</span><span class="vs-dcard__text"><strong>ناوبری موبایل</strong><small data-vs-summary="bottom_nav">نوار پایین صفحه در گوشی</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+              <li><button type="button" class="vs-dcard" data-vs-open-cat="theme"><span class="vs-dcard__icon" aria-hidden="true">{% rs_icon "spark" %}</span><span class="vs-dcard__text"><strong>تم مناسبتی</strong><small data-vs-summary="theme">نوروز، یلدا و مناسبت‌های دیگر</small></span><span class="vs-dcard__chev" aria-hidden="true">{% rs_icon "arrow" %}</span></button></li>
+            </ul>
             <div class="vs-card vs-card--soon vs-soon-list">
               <div class="vs-card__title">{% rs_icon "lock" %}<span>هنوز در موتور طراحی نیست</span><span class="vs-chip vs-chip--soon">در دست توسعه</span></div>
               <ul>
@@ -293,8 +268,7 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
             <div class="vs-card">
               <div class="vs-card__title">{% rs_icon "spark" %}<span>سبک حرکت و افکت‌های کارت</span></div>
               <p>سبک حرکت فروشگاه، افکت هاور کارت محصول و بزرگ‌نمایی تصویر همین حالا در طراحی سراسری فعال و قابل‌ذخیره‌اند.</p>
-              <button type="button" class="vs-btn vs-btn--wide" data-vs-focus="r4GlobalMotion">باز کردن تنظیم حرکت</button>
-              <button type="button" class="vs-btn vs-btn--wide vs-btn--ghost" data-vs-focus="r4GlobalCardHover">افکت هاور کارت محصول</button>
+              <button type="button" class="vs-btn vs-btn--wide" data-vs-open-cat="motion">باز کردن تنظیم حرکت</button>
             </div>
             <div class="vs-card vs-card--soon">
               <div class="vs-card__title">{% rs_icon "lock" %}<span>ظاهر شدن بخش‌ها هنگام اسکرول</span><span class="vs-chip vs-chip--soon">در دست توسعه</span></div>
@@ -332,20 +306,61 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
     </div>
   </div>
 
-  {% comment %}Section settings: the SAME R4 workspace (the Inspector body is rendered into #r4Inspector by r4_editor.js). Vision places this overlay exactly over
-     the properties panel (position:fixed, see vision.css) so a selected element's settings take over the right column, like the reference's «ظاهر عنصر».
-     No live-preview aside: the one canvas is the preview.{% endcomment %}
+  {% comment %}Section / Group settings: the SAME R4 workspace dialog (the Inspector body is rendered into #r4Inspector by r4_editor.js and carries its own
+     header: element title, search, save state, close; and its footer). Vision only dresses it as a large dark modal (vision.css).{% endcomment %}
   <div class="rs-workspace vs-workspace" data-rs-workspace hidden>
     <div class="rs-workspace-backdrop" data-rastisi-action="workspace-backdrop" aria-hidden="true"></div>
-    <div class="rs-workspace-dialog" role="dialog" aria-label="تنظیمات بخش" data-rs-workspace-dialog tabindex="-1">
-      <div class="vs-ws-head"><button type="button" class="vs-back" data-r4-inspector-close aria-label="بازگشت به همهٔ بخش‌ها">{% rs_icon "arrow" %}<span>همهٔ بخش‌ها</span></button><span class="vs-ws-head__title">ظاهر عنصر</span></div>
+    <div class="rs-workspace-dialog" role="dialog" aria-modal="true" aria-label="تنظیمات بخش" data-rs-workspace-dialog tabindex="-1">
       <aside id="r4Inspector" class="rs-workspace-body" hidden aria-label="تنظیمات بخش"></aside>
+    </div>
+  </div>
+
+  {% comment %}Global Design: the SAME #r4GlobalDesign (R4 partial, its hooks and mutations), shown as one large dialog per category. r4_studio.js owns when it is
+     open (mode «global»); vision.js only says which category of the real panel is visible and titles the dialog. The template-peek view of the
+     template gallery lives in the same element (docked at the side, see vision.css).{% endcomment %}
+  <div class="vs-dlayer context-panel vs-design" id="rsStructureDrawer" data-rastisi-panel="structure" data-rs-context-panel data-vs-dlayer>
+    <div class="vs-modal vs-design-modal" aria-labelledby="vsDesignTitle" tabindex="-1" data-vs-design-modal>
+      <header class="vs-modal__head" data-vs-design-head>
+        <button type="button" class="vs-modal__close" data-rastisi-action="panel-close" aria-label="بستن و بازگشت به فهرست طراحی">{% rs_icon "close" %}<span>بستن</span></button>
+        <h2 id="vsDesignTitle" data-vs-design-title>طراحی</h2>
+        <div class="vs-modal__status" data-vs-modal-status role="status" aria-live="polite"></div>
+      </header>
+      <div class="rs-panel-view vs-modal__body" data-rs-view="global" hidden>
+        <div class="vs-modal__tools" data-vs-palette-tools hidden>
+          <label class="vs-search">{% rs_icon "search" %}<span class="visually-hidden">جست‌وجوی پالت</span><input type="search" data-vs-palette-search placeholder="جست‌وجوی نام پالت…" autocomplete="off"></label>
+          <span class="vs-modal__count" data-vs-palette-count></span>
+        </div>
+        <div class="global-tabs" role="tablist" aria-label="بخش‌های طراحی سراسری" hidden>
+          <button type="button" data-rastisi-action="global-tab" data-tab="visual" class="active" aria-pressed="true">رنگ و تایپ</button>
+          <button type="button" data-rastisi-action="global-tab" data-tab="template" aria-pressed="false">قالب</button>
+          <button type="button" data-rastisi-action="global-tab" data-tab="theme" aria-pressed="false">مناسبت</button>
+        </div>
+        <div class="panel-scroll vs-modal__scroll">
+          <aside id="r4GlobalDesign" aria-label="طراحی سراسری" hidden>{% include "dashboard/storefront_builder/r4/partials/studio_global_design.html" %}</aside>
+        </div>
+        <footer class="vs-modal__foot"><span>{% rs_icon "check" %} تغییرات همین لحظه روی پیش‌نویس ذخیره می‌شوند؛ تا «انتشار» نزنید فروشگاه عمومی تغییر نمی‌کند.</span><button type="button" class="vs-btn" data-rastisi-action="panel-close">انجام شد</button></footer>
+      </div>
+      <div class="rs-panel-view vs-peek" data-rs-view="template-preview" hidden>
+        <div class="panel-head"><div class="row space-between"><span class="eyebrow">قالب / فقط پیش‌نمایش</span><button type="button" data-rastisi-action="panel-close" class="icon-btn" aria-label="بستن و بازگشت بدون تغییر">{% rs_icon "close" %}</button></div><h2 data-rs-peek-title></h2><p data-rs-peek-sub></p></div>
+        <div class="panel-scroll">
+          <span class="pill purple">هنوز اعمال نشده</span>
+          <div class="template-peek-summary"><h3>با محتوای خودتان ببینید</h3><p>پیش‌نمایش روبه‌رو همان متن‌ها، تصاویر و محصولات شماست؛ با ظاهر این قالب.</p><div class="note">هیچ تغییری در پیش‌نویس یا نسخهٔ عمومی اعمال نشده است.</div></div>
+          <div class="peek-palette" data-rs-peek-palette></div>
+          <div class="section-divider"></div>
+          <button type="button" data-rastisi-action="templates" class="outline full">{% rs_icon "grid" %}بازگشت به قالب‌ها</button>
+        </div>
+        <div class="panel-foot">
+          <button type="button" data-rastisi-action="switch-template" class="vs-btn vs-btn--accent full" data-rs-peek-apply>{% rs_icon "check" %}اعمال این قالب</button>
+          <button type="button" data-rastisi-action="cancel-template-preview" class="full quiet small">{% rs_icon "arrow" %}بازگشت بدون تغییر</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="rs-modal-root" data-rs-modal-root></div>
   <div class="rs-toast" data-rs-toast role="status" aria-live="polite"></div>
 
+  {{ studio.palettes|json_script:"vsPalettes" }}
   {{ studio.icon_paths|json_script:"rsStudioIcons" }}
   {{ studio.client|json_script:"rsStudioData" }}
 </div>

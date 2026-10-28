@@ -111,6 +111,25 @@ class VisionStudioTests(StorefrontBuilderViewsTestCase):
         self.assertIsNotNone(design.select_one("#rsGlobalHeader"))
         self.assertIsNotNone(design.select_one("#rsGlobalFooter"))
 
+    def test_the_design_tab_lists_the_categories_and_the_modal_reuses_the_one_global_design_panel(self):
+        html = self._vision().content.decode()
+        soup = BeautifulSoup(html, "html.parser")
+        categories = [button["data-vs-open-cat"] for button in soup.select('[data-vs-pane="design"] button[data-vs-open-cat]')]
+        self.assertEqual(
+            categories[:8], ["colors", "typography", "buttons", "shape", "images", "header", "footer", "bottom_nav"]
+        )
+        titles = [card.select_one("strong").get_text(strip=True) for card in soup.select('[data-vs-pane="design"] .vs-dcard')]
+        self.assertEqual(titles[:3], ["برند و رنگ‌ها", "نوع نوشته و فونت‌ها", "دکمه‌ها"])
+        # one real Global Design panel (no second form, no duplicated ids) inside the large dialog
+        self.assertEqual(len(soup.select("#r4GlobalDesign")), 1)
+        self.assertIsNotNone(soup.select_one('.vs-design-modal #r4GlobalDesign'))
+        ids = [node["id"] for node in soup.find_all(id=True)]
+        self.assertEqual(sorted({i for i in ids if ids.count(i) > 1}), [], "no duplicated DOM ids")
+        # the palette cards are drawn from the registry's own colours, handed over as data
+        palettes = json.loads(soup.find(id="vsPalettes").string)
+        self.assertGreaterEqual(len(palettes), 24)
+        self.assertTrue(all(len(item["swatches"]) == 6 and all(item["swatches"]) for item in palettes))
+
     def test_unsupported_reference_settings_are_labelled_as_in_development_not_offered_as_controls(self):
         html = self._vision().content.decode()
         self.assertGreaterEqual(html.count("در دست توسعه"), 3)

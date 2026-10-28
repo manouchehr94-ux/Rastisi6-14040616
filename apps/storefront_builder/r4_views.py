@@ -917,6 +917,10 @@ def _build_studio_context(
             "accent": colors.get("primary", "#2c6251"),
             "soft": colors.get("secondary", colors.get("accent", "#e9f1e9")),
             "bg": colors.get("background", "#ffffff"),
+            # additive (Vision Studio's colour cards): the palette's own registry colours, in display order; nothing reads them but the Vision template
+            "swatches": [
+                colors.get(key, "") for key in ("primary", "secondary", "accent", "background", "surface", "text")
+            ],
         })
 
     history_entries = [
