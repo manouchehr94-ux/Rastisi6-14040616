@@ -52,6 +52,28 @@ A second **presentation** of the one R4 Design Studio session, shaped after the 
 * The generated dark overlay's `:is(.rs-studio,html)` selectors cannot match under `.vs`; the colour picker and the slider's «default
   slides» box are therefore themed explicitly in `vision.css`.
 
+## Clarity phase: switches by real key, model galleries, plain wording
+* **Switch meaning comes from the real stored key, never from label text** (`vision.js`, `vsUx` from `vision_ux.py`). Properties that are stored as
+  «hidden» (`hide_on_tablet`, `hide_on_mobile`: the key starts with `hide_`) are shown inverted as «visible»: stored `false` ⇒ ON / green /
+  «نمایش داده می‌شود», stored `true` ⇒ OFF / grey / «پنهان است». An inverted switch is a real `role="switch"` button (`aria-checked` = what is
+  shown, keyboard + focus ring) layered over **R4's own checkbox, which stays the one source of truth**: a click on the proxy clicks that
+  checkbox, so R4's ordinary change handler sends the same `header.update` / `footer.update` mutation (Revision, History, Undo/Redo). Positive
+  keys (`show_*`, `sticky`, …) keep their native switch. Disabled is hatched / dashed + «غیرفعال» (distinct from OFF).
+* **Header / footer model galleries.** The `<select>` of `r4GlobalHeaderVariant` / `r4GlobalFooterVariant` stays in the DOM (hidden) and is the
+  only thing written; the gallery is built from `global_region_registry` (keys, Persian names) + `vision_ux.VARIANT_COPY` (one sentence per
+  distinct look) + pre-rendered thumbnails. Choosing a card sets the select and fires its change event (⇒ the R4 mutation).
+  * Thumbnails are photographs of the REAL renderer: `python manage.py capture_global_region_previews --base-url <demo store host> --user <staff>`
+    opens the read-only `vision-studio/region-preview/?region=…&variant=…` (the Store's own shell with exactly one region swapped for the asked
+    registry model; writes nothing, creates no Draft, 400 for unknown input) at 1280 px and 390 px and stores
+    `static/storefront_builder/vision/region_previews/<region>/<key>.<device>.webp` + `manifest.json` (fingerprint of the renderer and the
+    templates it includes, and `same_as` for models that render identically). A missing / stale picture is shown as «پیش‌نمایش موجود نیست»,
+    never drawn by hand. `test_vision_studio` fails when a registry model has no fresh thumbnail or description.
+  * «مشاهده بزرگ‌تر» opens that same preview live (the seller's own logo / menu / colours), desktop and phone width, without any mutation.
+  * Models that render pixel-identically to another are grouped under «مدل‌های هم‌ظاهر» (`same_as`), not presented as distinct choices.
+* **Wording** (`vision_ux.SETTING_COPY`, keyed by real field key): a plain Persian name + one sentence of effect under each control, a scope bar
+  (اثر: کل فروشگاه · devices · «ذخیره در پیش‌نویس · منتشر نمی‌شود») in every design dialog, and a per-control saving → «✓ در پیش‌نویس ذخیره شد»
+  badge. `test_vision_studio` fails when a control of the Global Design partial has no wording.
+
 ## Honest gaps (shown as «در دست توسعه», never as working controls)
 Custom templates, store SEO score / Google preview / keywords, scroll-reveal motion, global icon style, separate heading font / text weight,
 glass background / page background image, order-tracking and checkout pages. They need new engine or service work; see the feasibility report.

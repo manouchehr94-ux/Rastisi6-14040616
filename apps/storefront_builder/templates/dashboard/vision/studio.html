@@ -1,6 +1,6 @@
 {% extends "dashboard/base_admin.html" %}
 {% load static %}
-{% load storefront_builder_extras persian %}
+{% load storefront_builder_extras persian vision_extras %}
 {% block title %}ویژن استودیو — {{ studio.store_name }}{% endblock %}
 {% block page_title %}ویژن استودیو{% endblock %}
 {% block page_sub %}{{ studio.store_name }}{% endblock %}
@@ -325,6 +325,7 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
         <h2 id="vsDesignTitle" data-vs-design-title>طراحی</h2>
         <div class="vs-modal__status" data-vs-modal-status role="status" aria-live="polite"></div>
       </header>
+      <div class="vs-modal__scopebar" data-vs-scopebar aria-label="محدودهٔ اثر این تنظیمات"></div>
       <div class="rs-panel-view vs-modal__body" data-rs-view="global" hidden>
         <div class="vs-modal__tools" data-vs-palette-tools hidden>
           <label class="vs-search">{% rs_icon "search" %}<span class="visually-hidden">جست‌وجوی پالت</span><input type="search" data-vs-palette-search placeholder="جست‌وجوی نام پالت…" autocomplete="off"></label>
@@ -361,6 +362,29 @@ The layout (top bar / navigator / canvas / properties panel / floating device ba
   <div class="rs-toast" data-rs-toast role="status" aria-live="polite"></div>
 
   {{ studio.palettes|json_script:"vsPalettes" }}
+  {% vision_gallery_data as vision_gallery %}{{ vision_gallery|json_script:"vsVariantGallery" }}
+  {% vision_ux_data as vision_ux %}{{ vision_ux|json_script:"vsUx" }}
+  {# large, read-only model preview (header / footer gallery): the live store with ONE region swapped for the asked registry model; closing it writes nothing #}
+  <div class="vs-vp" data-vs-vp hidden>
+    <div class="vs-vp__box" role="dialog" aria-modal="true" aria-labelledby="vsVpTitle" tabindex="-1" data-vs-vp-box>
+      <header class="vs-modal__head">
+        <button type="button" class="vs-modal__close" data-vs-vp-close aria-label="بستن پیش‌نمایش">{% rs_icon "close" %}<span>بستن</span></button>
+        <div class="vs-vp__titles"><h2 id="vsVpTitle" data-vs-vp-title></h2><p data-vs-vp-desc></p></div>
+        <div class="vs-vp__devices" role="group" aria-label="دستگاه پیش‌نمایش">
+          <button type="button" class="vs-vp__dev is-on" data-vs-vp-device="desktop" aria-pressed="true">{% rs_icon "desktop" %}<span>دسکتاپ</span></button>
+          <button type="button" class="vs-vp__dev" data-vs-vp-device="mobile" aria-pressed="false">{% rs_icon "mobile" %}<span>موبایل</span></button>
+        </div>
+      </header>
+      <div class="vs-vp__note" data-vs-vp-note>پیش‌نمایش زنده با اطلاعات همین فروشگاه است. هیچ تغییری روی پیش‌نویس ذخیره نمی‌شود.</div>
+      <div class="vs-vp__stage" data-vs-vp-stage>
+        <div class="vs-vp__frame" data-vs-vp-framebox><iframe title="پیش‌نمایش مدل" data-vs-vp-frame data-vs-vp-url="{% url 'dashboard:vision-studio-region-preview' %}" loading="lazy"></iframe></div>
+      </div>
+      <footer class="vs-modal__foot">
+        <span data-vs-vp-status></span>
+        <button type="button" class="vs-btn vs-btn--accent" data-vs-vp-choose>انتخاب این مدل</button>
+      </footer>
+    </div>
+  </div>
   {{ studio.icon_paths|json_script:"rsStudioIcons" }}
   {{ studio.client|json_script:"rsStudioData" }}
 </div>

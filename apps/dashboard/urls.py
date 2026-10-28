@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.storefront_builder import media_views as storefront_builder_media_views
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
+from apps.storefront_builder import vision_views as storefront_builder_vision_views
 from apps.storefront_builder import views as storefront_builder_views
 
 from . import cod_views, engagement_views, journal_views, payment_reconciliation_views, views
@@ -34,6 +35,8 @@ VISION_STUDIO_ROUTES = [
         name="vision-studio",
     ),
     *[path("vision-studio/" + rel, view, name=name) for rel, view, name in VISION_STUDIO_R4_ALIASES],
+    # read-only «how would this header / footer model look» preview (Vision only; writes nothing)
+    path("vision-studio/region-preview/", storefront_builder_vision_views.region_variant_preview, name="vision-studio-region-preview"),
 ]
 
 urlpatterns = [

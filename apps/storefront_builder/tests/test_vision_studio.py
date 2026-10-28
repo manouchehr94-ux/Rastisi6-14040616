@@ -18,6 +18,8 @@ from django.utils import timezone
 
 from apps.dashboard import navigation
 from apps.dashboard import urls as dashboard_urls
+from apps.storefront_builder import global_region_registry, vision_ux
+from apps.storefront_builder.models import FOOTER_RESPONSIVE_AWARE_KEYS, FOOTER_TOGGLE_FIELDS, HEADER_RESPONSIVE_AWARE_KEYS, HEADER_TOGGLE_FIELDS
 from apps.storefront_builder.models import StorefrontLayoutVersion, StorefrontPage
 from apps.storefront_builder.services import layout_service as svc
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE, ROLE_PERMISSIONS
@@ -323,3 +325,153 @@ class VisionSidebarEntryTests(StorefrontBuilderViewsTestCase):
         soup = BeautifulSoup(self.client.get(reverse("dashboard:vision-studio")).content.decode(), "html.parser")
         active = soup.select('.sidebar nav.nav a.nav-item.active')
         self.assertEqual([a["data-section"] for a in active], ["studio"])
+
+
+class VisionModelGalleryTests(StorefrontBuilderViewsTestCase):
+    """The header / footer model galleries: registry-driven, real pictures, read-only large preview."""
+
+    def setUp(self):
+        super().setUp()
+        svc.get_or_create_draft(self.store, user=self.staff)   # the Studio always has a Draft; the preview itself never creates one
+
+    def _preview(self, region, variant, client=None):
+        return (client or self.client).get(reverse("dashboard:vision-studio-region-preview"), {"region": region, "variant": variant})
+
+    def _registry(self):
+        return {"header": global_region_registry.GLOBAL_HEADER_REGION, "footer": global_region_registry.GLOBAL_FOOTER_REGION}
+
+    # ---- the data: the registry, with a real picture and a sentence for every model ---------------------------------------------
+    def test_every_registered_model_has_a_fresh_real_thumbnail_and_a_description(self):
+        manifest = vision_ux.load_manifest()
+        for region_key, region in self._registry().items():
+            for variant in region.variants:
+                state = vision_ux.thumbnail_state(region_key, variant, manifest)
+                self.assertEqual(
+                    state["status"], "ok",
+                    f"{region_key}/{variant.key}: thumbnail {state['status']} - run `manage.py capture_global_region_previews` (see the command's docstring)",
+                )
+                for device in vision_ux.DEVICES:
+                    self.assertTrue((vision_ux.STATIC_DIR / vision_ux.thumbnail_relpath(region_key, variant.key, device)).is_file(), (region_key, variant.key, device))
+        for region_key, data in vision_ux.gallery_data().items():
+            for item in data["items"]:
+                self.assertTrue(item["description"], f"{region_key}/{item['key']} has no description")
+
+    def test_the_gallery_lists_exactly_the_registry_models_in_registry_order(self):
+        data = vision_ux.gallery_data()
+        for region_key, region in self._registry().items():
+            self.assertEqual([i["key"] for i in data[region_key]["items"]], [v.key for v in region.variants])
+            self.assertEqual([i["label"] for i in data[region_key]["items"]], [v.label_fa for v in region.variants])
+            self.assertEqual(data[region_key]["default"], region.default_variant)
+        # and the page hands exactly that to the browser
+        soup = BeautifulSoup(self.client.get(reverse("dashboard:vision-studio")).content.decode(), "html.parser")
+        self.assertEqual(json.loads(soup.find(id="vsVariantGallery").string), json.loads(json.dumps(data)))
+
+    def test_models_that_look_the_same_are_declared_and_nothing_else_shares_a_picture(self):
+        """No hidden look-alikes: two models whose pictures are byte-identical must be declared (``same_as``), and a declared twin must exist."""
+        for region_key, data in vision_ux.gallery_data().items():
+            keys = {item["key"] for item in data["items"]}
+            seen = {}
+            for item in data["items"]:
+                if item["same_as"]:
+                    self.assertIn(item["same_as"], keys)
+                    self.assertFalse(next(i for i in data["items"] if i["key"] == item["same_as"])["same_as"], "a twin points at a primary model")
+                raw = (vision_ux.STATIC_DIR / vision_ux.thumbnail_relpath(region_key, item["key"], "desktop")).read_bytes()
+                if raw in seen:
+                    self.assertTrue(item["same_as"] or next(i for i in data["items"] if i["key"] == seen[raw])["same_as"], f"{region_key}: {item['key']} looks like {seen[raw]} but is not declared")
+                seen.setdefault(raw, item["key"])
+
+    # ---- the read-only large preview -----------------------------------------------------------------------------------------
+    def test_the_preview_swaps_only_the_asked_region_for_the_registry_renderer(self):
+        footer_dark = self._preview("footer", "dark_tech")
+        self.assertEqual(footer_dark.status_code, 200)
+        self.assertIn("gf--dark", footer_dark.content.decode())
+        self.assertNotIn("gf--dark", self._preview("footer", "legacy_default").content.decode())
+        soup = BeautifulSoup(self._preview("header", "boutique_centered").content.decode(), "html.parser")
+        self.assertEqual(soup.select_one('[data-vs-region="header"]')["data-vs-candidate"], "1")
+        self.assertEqual(soup.select_one('[data-vs-region="footer"]')["data-vs-candidate"], "0")
+
+    def test_distinct_models_render_distinct_markup(self):
+        for region_key, region in self._registry().items():
+            data = {i["key"]: i for i in vision_ux.gallery_data()[region_key]["items"]}
+            rendered = {}
+            for variant in region.variants:
+                if data[variant.key]["same_as"]:
+                    continue
+                soup = BeautifulSoup(self._preview(region_key, variant.key).content.decode(), "html.parser")
+                html = re.sub(r"\s+", " ", str(soup.select_one('[data-vs-candidate="1"]')))
+                self.assertGreater(len(html), 200, f"{region_key}/{variant.key} rendered nothing")
+                self.assertNotIn(html, rendered.values(), f"{region_key}/{variant.key} renders like {[k for k, v in rendered.items() if v == html]}")
+                rendered[variant.key] = html
+
+    def test_the_preview_validates_its_input_and_never_writes(self):
+        draft = svc.get_or_create_draft(self.store, user=self.staff)
+        before = (draft.edit_revision, dict(draft.header_config or {}), dict(draft.footer_config or {}), StorefrontLayoutVersion.objects.count())
+        for params in (
+            {"region": "body", "variant": "minimal"}, {"region": "footer", "variant": "nope"}, {"region": "footer", "variant": "../../x"},
+            {"region": "footer", "variant": "storefront_builder/partials/page_shell_header.html"}, {"region": "", "variant": ""}, {},
+        ):
+            self.assertEqual(self.client.get(reverse("dashboard:vision-studio-region-preview"), params).status_code, 400, params)
+        self.assertEqual(self.client.post(reverse("dashboard:vision-studio-region-preview"), {"region": "footer", "variant": "minimal"}).status_code, 405)
+        for region_key, region in self._registry().items():
+            for variant in region.variants:
+                self.assertEqual(self._preview(region_key, variant.key).status_code, 200)
+        draft.refresh_from_db()
+        self.assertEqual(before, (draft.edit_revision, dict(draft.header_config or {}), dict(draft.footer_config or {}), StorefrontLayoutVersion.objects.count()))
+
+    def test_the_preview_is_staff_only_and_tenant_scoped_and_does_not_create_a_draft(self):
+        from apps.core.models import ShopSettings
+
+        anon = Client(HTTP_HOST=HOST)
+        self.assertNotEqual(self._preview("footer", "minimal", anon).status_code, 200)
+        analyst = User.objects.create_user(username="vs_gal_analyst", password="pass12345", is_staff=True)
+        StoreMembership.objects.create(
+            store=self.store, user=analyst, role=StoreMembership.Role.ANALYST,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        analyst_client = Client(HTTP_HOST=HOST)
+        analyst_client.login(username="vs_gal_analyst", password="pass12345")
+        self.assertNotEqual(self._preview("footer", "minimal", analyst_client).status_code, 200)
+        other = Store.objects.create(name="فروشگاه ویژن گ", slug="vision-gal-b", status=Store.Status.ACTIVE, admin_subdomain="vision-gal-b")
+        ShopSettings.provision_for(other)
+        owner_b = User.objects.create_user(username="vs_gal_owner_b", password="pass12345", is_staff=True)
+        StoreMembership.objects.create(
+            store=other, user=owner_b, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        intruder = Client(HTTP_HOST=HOST)
+        intruder.login(username="vs_gal_owner_b", password="pass12345")
+        self.assertNotEqual(self._preview("footer", "minimal", intruder).status_code, 200)
+        # a store with no Draft yet: a read-only preview must not bootstrap one
+        own = Client(HTTP_HOST="vision-gal-b.rastisi.localhost")
+        own.login(username="vs_gal_owner_b", password="pass12345")
+        draft_count = StorefrontLayoutVersion.objects.filter(layout__store=other, status=StorefrontLayoutVersion.Status.DRAFT).count()
+        self.assertEqual(own.get(reverse("dashboard:vision-studio-region-preview"), {"region": "footer", "variant": "minimal"}).status_code, 404)
+        self.assertEqual(StorefrontLayoutVersion.objects.filter(layout__store=other, status=StorefrontLayoutVersion.Status.DRAFT).count(), draft_count)
+
+    def test_the_preview_route_is_not_an_r4_endpoint_alias(self):
+        names = {name for _rel, _view, name in dashboard_urls.VISION_STUDIO_R4_ALIASES}
+        self.assertNotIn("vision-studio-region-preview", names)
+        self.assertEqual(reverse("dashboard:vision-studio-region-preview"), "/admin-portal/vision-studio/region-preview/")
+
+
+class VisionSettingWordingTests(TestCase):
+    """Switch polarity is decided by the REAL stored key, and every control the Design modals offer has plain wording."""
+
+    def test_every_hidden_style_property_is_inverted_and_every_toggle_has_wording(self):
+        ux = vision_ux.ux_data()
+        for prop in vision_ux.RESPONSIVE_PROPS:
+            self.assertTrue(any(prop.startswith(prefix) for prefix in ux["inverted_prefixes"]), prop)
+            self.assertIn("نمایش", ux["responsive"][prop]["title"])
+        for key in (*HEADER_TOGGLE_FIELDS, *FOOTER_TOGGLE_FIELDS, *HEADER_RESPONSIVE_AWARE_KEYS, *FOOTER_RESPONSIVE_AWARE_KEYS):
+            self.assertIn(key, ux["settings"], key)
+            self.assertTrue(ux["settings"][key]["title"] and ux["settings"][key]["effect"], key)
+        # the positive toggles are never inverted
+        for key in (*HEADER_TOGGLE_FIELDS, *FOOTER_TOGGLE_FIELDS):
+            self.assertFalse(any(key.startswith(prefix) for prefix in ux["inverted_prefixes"]), key)
+
+    def test_the_design_modal_controls_have_wording(self):
+        template = (APP / "templates" / "dashboard" / "storefront_builder" / "r4" / "partials" / "studio_global_design.html").read_text(encoding="utf-8")
+        keys = set(re.findall(r'data-r4-global-field="([a-z_]+)"', template))
+        # palette / template radios, the colour rows and the geometry rows (shell_geometry) carry their own names; everything else is explained
+        for key in sorted(keys - {"palette_slug", "template_slug", "color_overrides", "theme_overrides", "geometry"}):
+            self.assertIn(key, vision_ux.SETTING_COPY, f"{key} has no plain-language wording")

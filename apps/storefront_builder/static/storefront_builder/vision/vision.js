@@ -159,6 +159,7 @@
   root.addEventListener('click', closeInspectorGuarded, true);
   document.addEventListener('keydown', function (evt) {
     if (evt.key !== 'Escape') return;
+    if (vpOpen()) { evt.stopPropagation(); closePreview(); return; }
     if (R4.inspectorOpen && !$('.vs-workspace').hidden) guardClose(evt, function () { R4.closeInspector(); });
     else if (!$('.vs-dlayer').hidden && root.dataset.rsDrawer === 'global') guardClose(evt, closeDesignDialog);
   }, true);
@@ -184,6 +185,12 @@
       });
     });
     enhanceSwitches(inspector);
+    // «ذخیره خودکار» says where: in the Draft, not on the live store
+    $all('.r4-ws-footnote', inspector).forEach(function (note) {
+      Array.prototype.forEach.call(note.childNodes, function (node) {
+        if (node.nodeType === 3 && node.textContent.trim()) node.textContent = 'تغییرات خودکار در پیش‌نویس ذخیره می‌شوند؛ تا «انتشار» نزنید فروشگاه عمومی تغییر نمی‌کند.';
+      });
+    });
   }
   function markOpenRow() {
     var id = R4.inspectorOpen ? String(R4.selected) : null;
@@ -206,58 +213,101 @@
     new MutationObserver(function () { enhanceInspector(); }).observe(inspectorHost, { childList: true });
   }
 
-  // ---- switches: a word for the state, next to the control -------------------------
-  // The wording follows the field's own meaning: «پنهان …» fields are ON when the thing is hidden. Only the label next to the switch is added; the
-  // checkbox / aria-pressed value that R4 reads and writes is never touched.
-  function switchLabel(ctl) {
-    var text = '';
-    var wrap = ctl.closest('label');
-    if (wrap) {
-      var own = wrap.querySelector('span:not(.vs-sw-text)');
-      text = (own || wrap).textContent;
-    } else if (ctl.id) {
-      var forLabel = document.querySelector('label[for="' + ctl.id + '"]');
-      text = forLabel ? forLabel.textContent : '';
-    }
-    if (!text) {
-      var row = ctl.closest('.toggle-row, .r4-field');
-      var first = row && row.querySelector('span, label');
-      text = (ctl.getAttribute('aria-label') || (first && first !== ctl ? first.textContent : '') || '');
-    }
-    return String(text).replace(/\s+/g, ' ').trim();
+  // ---- switches: one meaning per control, decided by the REAL field key -------------------------
+  // R4 owns the value: its checkbox (or aria-pressed button) is what R4 reads and writes, and it is never replaced. Vision only decides how that
+  // value is SHOWN. A control's identity comes from the attributes R4 itself uses (data-r4-global-field / -responsive-prop / data-r4-field-key /
+  // data-rastisi-action), never from its label text. Fields stored as "hidden" (hide_on_tablet, hide_on_mobile - the vsUx rule: key starts with
+  // «hide_») are shown INVERTED, as «visible»: stored false => ON / green / «نمایش داده می‌شود», stored true => OFF / grey / «پنهان است».
+  // An inverted switch gets a real role="switch" proxy button whose aria-checked is the shown state; a click on it clicks R4's checkbox, so the
+  // ordinary R4 change handler (the same mutation, Revision and History) does the saving. Nothing is stored by Vision.
+  var UX = readJson('vsUx') || { settings: {}, responsive: {}, inverted_prefixes: ['hide_'] };
+  function isInvertedKey(key) {
+    return (UX.inverted_prefixes || []).some(function (prefix) { return key.indexOf(prefix) === 0; });
   }
-  function switchWords(label, on) {
-    if (/^(پنهان|مخفی)/.test(label)) return on ? 'پنهان است' : 'نمایش داده می‌شود';
-    if (/^نمایش/.test(label)) return on ? 'نمایش داده می‌شود' : 'پنهان است';
-    if (/قفل/.test(label)) return on ? 'قفل است' : 'باز است';
-    return on ? 'روشن' : 'خاموش';
+  function switchSpec(ctl) {
+    var prop = ctl.getAttribute('data-r4-global-responsive-prop');
+    if (prop) {
+      var resp = (UX.responsive || {})[prop] || {};
+      return { key: prop, group: ctl.getAttribute('data-r4-global-responsive-key') || '', inverted: isInvertedKey(prop), kind: 'visibility', title: resp.title || '', device: resp.device || '' };
+    }
+    var key = ctl.getAttribute('data-r4-global-field') || ctl.getAttribute('data-r4-field-key') || ctl.getAttribute('data-r4-repeater-subfield');
+    if (key) {
+      var copy = (UX.settings || {})[key];
+      return { key: key, inverted: isInvertedKey(key), kind: /^(show_|visible_)/.test(key) ? 'visibility' : 'toggle', title: copy ? copy.title : '' };
+    }
+    var action = ctl.getAttribute('data-rastisi-action');
+    if (action === 'section-enable') return { key: 'is_active', inverted: false, kind: 'visibility', title: '' };
+    if (action === 'section-lock') return { key: 'locked', inverted: false, kind: 'lock', title: '' };
+    return { key: '', inverted: false, kind: 'toggle', title: '' };
   }
-  function switchOn(ctl) { return ctl.tagName === 'INPUT' ? ctl.checked : ctl.getAttribute('aria-pressed') === 'true'; }
+  var SWITCH_WORDS = {
+    visibility: ['نمایش داده می‌شود', 'پنهان است'],
+    lock: ['قفل است', 'باز است'],
+    toggle: ['روشن', 'خاموش']
+  };
+  function storedValue(ctl) { return ctl.tagName === 'INPUT' ? ctl.checked : ctl.getAttribute('aria-pressed') === 'true'; }
+  function shownValue(ctl) { return ctl.__vsSpec && ctl.__vsSpec.inverted ? !storedValue(ctl) : storedValue(ctl); }
   function paintSwitch(ctl) {
     var text = ctl.__vsText;
-    if (!text) return;
-    var on = switchOn(ctl);
-    var disabled = ctl.disabled;
+    var spec = ctl.__vsSpec;
+    if (!text || !spec) return;
+    var on = shownValue(ctl);
+    var disabled = !!ctl.disabled;
     text.dataset.on = on ? 'true' : 'false';
     text.dataset.disabled = disabled ? 'true' : 'false';
-    text.textContent = disabled ? 'غیرفعال' : switchWords(switchLabel(ctl), on);
+    text.textContent = disabled ? 'غیرفعال' : (SWITCH_WORDS[spec.kind] || SWITCH_WORDS.toggle)[on ? 0 : 1];
+    ctl.dataset.vsShown = on ? 'on' : 'off';           // what the seller sees (tests read this; R4 never does)
+    var proxy = ctl.__vsProxy;
+    if (proxy) {
+      proxy.setAttribute('aria-checked', on ? 'true' : 'false');
+      proxy.dataset.on = on ? 'true' : 'false';
+      proxy.disabled = disabled;
+    }
+  }
+  function buildSwitch(ctl) {
+    var spec = switchSpec(ctl);
+    ctl.__vsSpec = spec;
+    var text = document.createElement('span');
+    text.className = 'vs-sw-text';
+    text.setAttribute('aria-hidden', 'true');
+    var after = ctl;
+    if (spec.inverted && ctl.tagName === 'INPUT') {
+      var proxy = document.createElement('button');
+      proxy.type = 'button';
+      proxy.className = 'vs-sw';
+      proxy.setAttribute('role', 'switch');
+      proxy.setAttribute('aria-label', spec.title || 'نمایش');
+      proxy.addEventListener('click', function () { if (!ctl.disabled) ctl.click(); });
+      ctl.classList.add('vs-sw-native');
+      ctl.tabIndex = -1;
+      ctl.setAttribute('aria-hidden', 'true');
+      ctl.insertAdjacentElement('afterend', proxy);
+      ctl.__vsProxy = proxy;
+      after = proxy;
+    } else if (ctl.tagName === 'INPUT') {
+      ctl.setAttribute('role', 'switch');
+    }
+    after.insertAdjacentElement('afterend', text);
+    ctl.__vsText = text;
+    // the visible name: the plain-language title of the real key (the original wording is kept in data-vs-orig)
+    var wrap = ctl.closest('label.r4-checkbox-row');
+    var nameNode = wrap && wrap.querySelector('span:not(.vs-sw-text)');
+    if (nameNode && spec.title) {
+      if (!nameNode.dataset.vsOrig) nameNode.dataset.vsOrig = nameNode.textContent;
+      nameNode.textContent = spec.title;
+    }
+    if (ctl.tagName === 'INPUT') ctl.addEventListener('change', function () { paintSwitch(ctl); });
+    else if (window.MutationObserver) new MutationObserver(function () { paintSwitch(ctl); }).observe(ctl, { attributes: true, attributeFilter: ['aria-pressed', 'disabled'] });
+    if (window.MutationObserver && ctl.tagName === 'INPUT') new MutationObserver(function () { paintSwitch(ctl); }).observe(ctl, { attributes: true, attributeFilter: ['disabled', 'checked'] });
   }
   function enhanceSwitches(scope) {
     $all('input.r4-switch, button.switch', scope || root).forEach(function (ctl) {
       if (ctl.closest('template')) return;
-      if (!ctl.__vsText) {
-        var text = document.createElement('span');
-        text.className = 'vs-sw-text';
-        text.setAttribute('aria-hidden', 'true');
-        ctl.insertAdjacentElement('afterend', text);
-        ctl.__vsText = text;
-        if (ctl.tagName === 'INPUT') ctl.addEventListener('change', function () { paintSwitch(ctl); });
-        else if (window.MutationObserver) new MutationObserver(function () { paintSwitch(ctl); }).observe(ctl, { attributes: true, attributeFilter: ['aria-pressed', 'disabled'] });
-      }
+      if (!ctl.__vsText) buildSwitch(ctl);
       paintSwitch(ctl);
     });
   }
-  // a click on a button switch is repainted after R4 has toggled aria-pressed; inputs repaint on change; a refreshed form is re-dressed
+  // a click on a button switch is repainted after R4 has toggled aria-pressed
   document.addEventListener('click', function (evt) {
     var btn = evt.target.closest && evt.target.closest('button.switch');
     if (btn) later(function () { paintSwitch(btn); }, 30);
@@ -471,6 +521,8 @@
     tagCategories();
     enhancePalettes();
     enhanceSwitches(gd());
+    enhanceClarity();
+    enhanceGalleries();
     updateSummaries();
     if (currentCat) { applyCategory(currentCat); filterPalettes(); }
   }
@@ -486,9 +538,11 @@
     var title = $('[data-vs-design-title]');
     if (title) title.textContent = info.title;
     setDialogRole(true);
+    paintScope(cat);
     if (info.palette) filterPalettes();
     var scroller = $('.vs-modal__scroll', designModal);
     if (scroller) scroller.scrollTop = 0;
+    keptScroll = 0;
     mirrorSaveState();
     later(function () { if (designModal) designModal.focus({ preventScroll: true }); }, 40);
   }
@@ -532,14 +586,27 @@
       applyCategory(cat);
       setTitle(cat);
       setDialogRole(true);
+      paintScope(cat);
       mirrorSaveState();
     }, 20);
   });
   root.addEventListener('r4:global-closed', clearCategory);
   root.addEventListener('r4:global-refreshed', function () { later(refreshDesign, 0); });
   var designHost = gd();
+  // R4 replaces the panel's innerHTML after a save. Re-dress it in the same microtask (before the browser paints) and keep the dialog where the seller
+  // was: a frame without the gallery would shrink the content and throw the scroll position to the top.
+  var keptScroll = 0;
+  function dialogScroller() { return $('.vs-modal__scroll', designModal); }
+  if (designModal) {
+    var scroller = dialogScroller();
+    if (scroller) scroller.addEventListener('scroll', function () { keptScroll = scroller.scrollTop; }, { passive: true });
+  }
+  function restoreScroll() {
+    var scroller = dialogScroller();
+    if (scroller && keptScroll > 0 && Math.abs(scroller.scrollTop - keptScroll) > 4) scroller.scrollTop = keptScroll;
+  }
   if (designHost && window.MutationObserver) {
-    new MutationObserver(function () { later(refreshDesign, 0); }).observe(designHost, { childList: true });
+    new MutationObserver(function () { refreshDesign(); restoreScroll(); later(restoreScroll, 60); later(restoreScroll, 400); }).observe(designHost, { childList: true });
   }
   if (designHost) designHost.addEventListener('change', function () { later(updateSummaries, 500); });
 
@@ -558,6 +625,317 @@
 
   // «باز کردن تنظیم حرکت»: the real appearance controls of motion
   // (the buttons carry data-vs-open-cat, handled above)
+
+  // ---- clarity: plain names, one sentence of effect, where it acts, what state it is in ------------------------
+  // Wording only (vsUx, keyed by the real field key). Controls without an entry keep R4's own label. Nothing here changes a value.
+  var SCOPES = {
+    colors: 'کل فروشگاه', typography: 'کل فروشگاه', buttons: 'کل فروشگاه', shape: 'کل فروشگاه', images: 'کل فروشگاه', motion: 'کل فروشگاه',
+    header: 'کل فروشگاه · بالای همهٔ صفحه‌ها', footer: 'کل فروشگاه · پایین همهٔ صفحه‌ها', bottom_nav: 'کل فروشگاه · نوار پایین صفحه',
+    theme: 'کل فروشگاه'
+  };
+  var DEVICES_OF = { bottom_nav: 'فقط موبایل' };
+  function paintScope(cat) {
+    var bar = $('[data-vs-scopebar]');
+    if (!bar) return;
+    bar.innerHTML = '';
+    function chip(text, cls) {
+      var el = document.createElement('span');
+      el.className = 'vs-scopechip' + (cls ? ' ' + cls : '');
+      el.textContent = text;
+      bar.appendChild(el);
+    }
+    chip('اثر: ' + (SCOPES[cat] || 'کل فروشگاه'));
+    chip(DEVICES_OF[cat] || 'دسکتاپ، تبلت و موبایل');
+    chip('ذخیره در پیش‌نویس · منتشر نمی‌شود', 'vs-scopechip--draft');
+  }
+  function labelNodeFor(panel, ctl) {
+    var label = ctl.id ? panel.querySelector('label[for="' + ctl.id + '"]') : null;
+    if (label) return label.children.length ? null : label;
+    var wrap = ctl.closest('label.field');
+    return wrap ? wrap.querySelector(':scope > span') : null;
+  }
+  function addHelp(after, text) {
+    var p = document.createElement('p');
+    p.className = 'vs-help';
+    p.textContent = text;
+    after.insertAdjacentElement('afterend', p);
+  }
+  function enhanceClarity() {
+    var panel = gd();
+    if (!panel) return;
+    $all('[data-r4-global-field]', panel).forEach(function (ctl) {
+      if (ctl.type === 'radio' || ctl.dataset.vsHelp) return;
+      var copy = (UX.settings || {})[ctl.getAttribute('data-r4-global-field')];
+      if (!copy) return;
+      ctl.dataset.vsHelp = '1';
+      var isSwitch = ctl.classList.contains('r4-switch');
+      if (!isSwitch) {
+        var node = labelNodeFor(panel, ctl);
+        if (node) { if (!node.dataset.vsOrig) node.dataset.vsOrig = node.textContent; node.textContent = copy.title; }
+      }
+      var wrap = ctl.closest('label.r4-checkbox-row');
+      addHelp(wrap || ctl, copy.effect);
+    });
+    // header / footer «نمایش در دستگاه‌ها»: one row per component, two switches (tablet, mobile); the desktop always shows it
+    $all('.r4-responsive-row', panel).forEach(function (row) {
+      if (row.dataset.vsHelp) return;
+      row.dataset.vsHelp = '1';
+      var first = row.querySelector('[data-r4-global-responsive-key]');
+      var item = first && (UX.settings || {})[first.getAttribute('data-r4-global-responsive-key')];
+      var head = row.querySelector('.r4-field-sublabel');
+      if (head && item) { if (!head.dataset.vsOrig) head.dataset.vsOrig = head.textContent; head.textContent = item.title; }
+      var p = document.createElement('p');
+      p.className = 'vs-help';
+      p.textContent = 'هر دستگاهی که خاموش شود، این بخش فقط روی همان دستگاه پنهان می‌شود؛ روی دسکتاپ همیشه دیده می‌شود.';
+      row.appendChild(p);
+    });
+  }
+  // a change shows its own small state next to the control: saving -> saved in the Draft (or failed)
+  var touched = null;
+  function describeControl(ctl) {
+    if (ctl.hasAttribute('data-r4-global-responsive-prop')) {
+      return '[data-r4-global-responsive-key="' + ctl.getAttribute('data-r4-global-responsive-key') + '"][data-r4-global-responsive-prop="' + ctl.getAttribute('data-r4-global-responsive-prop') + '"]';
+    }
+    var key = ctl.getAttribute('data-r4-global-field');
+    return key && ctl.type !== 'radio' ? '[data-r4-global-field="' + key + '"]' : null;
+  }
+  function setBadge(ctl, state, text) {
+    var anchor = ctl.__vsText || ctl;
+    var old = anchor.parentNode && anchor.parentNode.querySelector(':scope > .vs-rowbadge');
+    if (old) old.remove();
+    if (!state) return;
+    var badge = document.createElement('span');
+    badge.className = 'vs-rowbadge vs-rowbadge--' + state;
+    badge.setAttribute('role', 'status');
+    badge.textContent = text;
+    anchor.insertAdjacentElement('afterend', badge);
+    if (state === 'saved') later(function () { if (badge.parentNode) badge.remove(); }, 2600);
+  }
+  if (gd()) {
+    gd().addEventListener('change', function (evt) {
+      var ctl = evt.target;
+      var selector = ctl && ctl.matches && describeControl(ctl);
+      if (!selector) return;
+      touched = { selector: selector };
+      setBadge(ctl, 'saving', 'در حال ذخیره…');
+    });
+  }
+  function settleTouched() {
+    if (!touched) return;
+    var ctl = gd() && gd().querySelector(touched.selector);
+    var state = saveState();
+    if (!ctl) return;
+    if (state === 'saved') { setBadge(ctl, 'saved', '✓ در پیش‌نویس ذخیره شد'); touched = null; }
+    else if (state === 'error' || state === 'conflict') { setBadge(ctl, 'error', state === 'conflict' ? 'تعارض: صفحه را تازه کنید' : 'ذخیره نشد'); touched = null; }
+  }
+  root.addEventListener('r4:savestate', function () { later(settleTouched, 700); });
+  root.addEventListener('r4:global-refreshed', function () { later(settleTouched, 50); });
+
+  // ---- model galleries (header / footer): real pictures of the registry's own models ------------------
+  // The cards come from vsVariantGallery (registry key, Persian name, description, thumbnails photographed from the REAL renderer). The original
+  // <select> stays in the DOM and is the only thing that is written: choosing a card sets it and fires its change event, so R4's own handler sends
+  // header.update / footer.update (Revision, History, Undo, Preview refresh - unchanged). «مشاهده بزرگ‌تر» opens a read-only live preview and writes nothing.
+  var GALLERY = readJson('vsVariantGallery') || {};
+  var GALLERY_SELECT = { header: 'r4GlobalHeaderVariant', footer: 'r4GlobalFooterVariant' };
+  var galleryFlash = null;
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  function thumb(item) {
+    var media = el('div', 'vs-gcard__media');
+    if (item.status === 'ok' && item.desktop) {
+      var img = el('img');
+      img.src = item.desktop;
+      img.alt = '';
+      img.loading = 'lazy';
+      media.appendChild(img);
+      if (item.mobile) {
+        var phone = el('span', 'vs-gcard__phone');
+        var pimg = el('img');
+        pimg.src = item.mobile;
+        pimg.alt = '';
+        pimg.loading = 'lazy';
+        phone.appendChild(pimg);
+        media.appendChild(phone);
+      }
+    } else {
+      var none = el('div', 'vs-gcard__none');
+      none.appendChild(el('strong', null, 'پیش‌نمایش موجود نیست'));
+      none.appendChild(el('small', null, item.status === 'stale' ? 'تصویر این مدل قدیمی است؛ با «مشاهده بزرگ‌تر» نمای زندهٔ آن را ببینید.' : 'تصویر این مدل هنوز ساخته نشده؛ با «مشاهده بزرگ‌تر» نمای زندهٔ آن را ببینید.'));
+      media.appendChild(none);
+    }
+    return media;
+  }
+  function card(region, item, currentKey, isTwin) {
+    var li = el('li', 'vs-gcard' + (item.key === currentKey ? ' is-current' : '') + (isTwin ? ' is-twin' : ''));
+    li.dataset.key = item.key;
+    li.appendChild(thumb(item));
+    var body = el('div', 'vs-gcard__body');
+    var head = el('div', 'vs-gcard__head');
+    head.appendChild(el('h5', null, item.label));
+    if (item.key === currentKey) head.appendChild(el('span', 'vs-badge', 'مدل فعلی'));
+    body.appendChild(head);
+    if (item.description) body.appendChild(el('p', 'vs-gcard__desc', item.description));
+    if (item.same_as_label) body.appendChild(el('p', 'vs-gcard__twin', 'ظاهر این مدل با «' + item.same_as_label + '» یکسان است.'));
+    var actions = el('div', 'vs-gcard__actions');
+    var view = el('button', 'vs-btn', 'مشاهده بزرگ‌تر');
+    view.type = 'button';
+    view.dataset.vsGalView = item.key;
+    view.setAttribute('aria-label', 'مشاهده بزرگ‌تر مدل ' + item.label);
+    var pick = el('button', 'vs-btn vs-btn--accent', item.key === currentKey ? 'مدل فعلی' : 'انتخاب این مدل');
+    pick.type = 'button';
+    pick.dataset.vsGalPick = item.key;
+    pick.setAttribute('aria-label', (item.key === currentKey ? 'مدل فعلی: ' : 'انتخاب مدل ') + item.label);
+    if (item.key === currentKey) { pick.disabled = true; pick.setAttribute('aria-pressed', 'true'); }
+    actions.appendChild(view);
+    actions.appendChild(pick);
+    body.appendChild(actions);
+    if (galleryFlash && galleryFlash.region === region && galleryFlash.key === item.key && item.key === currentKey) {
+      body.appendChild(el('p', 'vs-gcard__flash', '✓ اعمال شد و در پیش‌نویس ذخیره شد'));
+    }
+    li.appendChild(body);
+    return li;
+  }
+  function enhanceGalleries() {
+    Object.keys(GALLERY_SELECT).forEach(function (region) {
+      var select = document.getElementById(GALLERY_SELECT[region]);
+      var data = GALLERY[region];
+      if (!select || !data || select.dataset.vsGallery) return;
+      select.dataset.vsGallery = '1';
+      select.classList.add('vs-gal-native');
+      var current = select.value;
+      var wrap = el('div', 'vs-gal');
+      wrap.dataset.vsGal = region;
+      wrap.appendChild(el('p', 'vs-gal__lead', 'یک مدل را انتخاب کنید. تصویر هر مدل از نمای واقعی همین سیستم برداشته شده است. «مشاهده بزرگ‌تر» فقط نشان می‌دهد و چیزی را تغییر نمی‌دهد؛ «انتخاب این مدل» آن را در پیش‌نویس ذخیره می‌کند.'));
+      var distinct = data.items.filter(function (item) { return !item.same_as; });
+      // the model in use comes first, so the seller sees it without scrolling
+      distinct.sort(function (a, b) { return (b.key === current) - (a.key === current); });
+      var twins = data.items.filter(function (item) { return item.same_as; });
+      var grid = el('ul', 'vs-gal__grid');
+      distinct.forEach(function (item) { grid.appendChild(card(region, item, current, false)); });
+      wrap.appendChild(grid);
+      if (twins.length) {
+        var more = el('details', 'vs-gal__twins');
+        if (twins.some(function (item) { return item.key === current; })) more.open = true;
+        more.appendChild(el('summary', null, 'مدل‌های هم‌ظاهر (' + faDigits(twins.length) + ') — ظاهرشان با یکی از مدل‌های بالا یکسان است'));
+        var tgrid = el('ul', 'vs-gal__grid');
+        twins.forEach(function (item) { tgrid.appendChild(card(region, item, current, true)); });
+        more.appendChild(tgrid);
+        wrap.appendChild(more);
+      }
+      var help = select.nextElementSibling;
+      (help && help.classList.contains('vs-help') ? help : select).insertAdjacentElement('afterend', wrap);
+      if (galleryFlash && galleryFlash.region === region) later(function () { galleryFlash = null; var f = wrap.querySelector('.vs-gcard__flash'); if (f) f.remove(); }, 3200);
+    });
+  }
+  function pickModel(region, key) {
+    var select = document.getElementById(GALLERY_SELECT[region]);
+    if (!select || select.value === key) return;
+    select.value = key;
+    galleryFlash = { region: region, key: key };
+    var li = gd() && gd().querySelector('.vs-gal[data-vs-gal="' + region + '"] .vs-gcard[data-key="' + key + '"]');
+    if (li) { li.classList.add('is-pending'); li.setAttribute('aria-busy', 'true'); }
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  // ---- the large read-only preview of one model ------------------------------------------------------
+  var vp = $('[data-vs-vp]');
+  var vpBox = vp && $('[data-vs-vp-box]', vp);
+  var vpFrame = vp && $('[data-vs-vp-frame]', vp);
+  var vpState = { region: null, key: null, device: 'desktop', opener: null };
+  function vpOpen() { return !!vp && !vp.hidden; }
+  function pageType() { return root.getAttribute('data-r4-page-type') || 'home'; }
+  function layoutPreview() {
+    if (!vpOpen() || !vpFrame) return;
+    var stage = $('[data-vs-vp-stage]', vp);
+    var box = $('[data-vs-vp-framebox]', vp);
+    var width = vpState.device === 'mobile' ? 390 : 1280;
+    var scale = Math.min(1, Math.max(0.2, (stage.clientWidth - 24) / width));
+    var height = Math.max(320, stage.clientHeight - 24) / scale;
+    vpFrame.style.width = width + 'px';
+    vpFrame.style.height = height + 'px';
+    vpFrame.style.transform = 'scale(' + scale + ')';
+    box.style.width = Math.round(width * scale) + 'px';
+    box.style.height = Math.round(height * scale) + 'px';
+  }
+  function setPreviewDevice(device) {
+    vpState.device = device;
+    $all('[data-vs-vp-device]', vp).forEach(function (btn) {
+      var on = btn.getAttribute('data-vs-vp-device') === device;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    layoutPreview();
+  }
+  function openPreview(region, key, opener) {
+    var data = GALLERY[region];
+    var item = data && data.items.filter(function (it) { return it.key === key; })[0];
+    if (!vp || !item) return;
+    vpState.region = region;
+    vpState.key = key;
+    vpState.opener = opener || null;
+    $('[data-vs-vp-title]', vp).textContent = data.title + ': ' + item.label;
+    $('[data-vs-vp-desc]', vp).textContent = item.description || '';
+    var select = document.getElementById(GALLERY_SELECT[region]);
+    var isCurrent = !!select && select.value === key;
+    var choose = $('[data-vs-vp-choose]', vp);
+    choose.disabled = isCurrent;
+    choose.textContent = isCurrent ? 'مدل فعلی' : 'انتخاب این مدل';
+    $('[data-vs-vp-status]', vp).textContent = isCurrent ? 'این مدل همین حالا روی پیش‌نویس شما اعمال است.' : 'فقط پیش‌نمایش است؛ پیش‌نویس تغییر نکرده.';
+    vp.hidden = false;
+    vpFrame.src = vpFrame.getAttribute('data-vs-vp-url') + '?region=' + encodeURIComponent(region) + '&variant=' + encodeURIComponent(key) + '&page=' + encodeURIComponent(pageType());
+    setPreviewDevice(window.matchMedia('(max-width:700px)').matches ? 'mobile' : 'desktop');   // a phone looks at the phone layout first
+    later(function () { layoutPreview(); vpBox.focus({ preventScroll: true }); }, 30);
+  }
+  function closePreview() {
+    if (!vpOpen()) return;
+    vp.hidden = true;
+    vpFrame.src = 'about:blank';
+    var opener = vpState.opener;
+    vpState.opener = null;
+    later(function () { if (opener && document.contains(opener)) opener.focus({ preventScroll: true }); }, 30);
+  }
+  if (vp) {
+    vp.addEventListener('click', function (evt) {
+      if (evt.target === vp || evt.target.closest('[data-vs-vp-close]')) { closePreview(); return; }
+      var dev = evt.target.closest('[data-vs-vp-device]');
+      if (dev) { setPreviewDevice(dev.getAttribute('data-vs-vp-device')); return; }
+      if (evt.target.closest('[data-vs-vp-choose]')) {
+        var region = vpState.region;
+        var key = vpState.key;
+        vpState.opener = null;                       // the gallery is rebuilt after saving: focus goes to the dialog's category instead
+        closePreview();
+        pickModel(region, key);
+      }
+    });
+    window.addEventListener('resize', layoutPreview);
+    // Tab stays inside the preview dialog
+    vp.addEventListener('keydown', function (evt) {
+      if (evt.key !== 'Tab') return;
+      var items = $all('button:not(:disabled)', vpBox).filter(function (n) { return n.getClientRects().length > 0; });
+      if (!items.length) return;
+      var first = items[0];
+      var last = items[items.length - 1];
+      if (evt.shiftKey && (document.activeElement === first || document.activeElement === vpBox)) { evt.preventDefault(); last.focus(); }
+      else if (!evt.shiftKey && document.activeElement === last) { evt.preventDefault(); first.focus(); }
+    });
+  }
+  root.addEventListener('click', function (evt) {
+    var view = evt.target.closest('[data-vs-gal-view]');
+    if (view) {
+      var holder = view.closest('[data-vs-gal]');
+      openPreview(holder.getAttribute('data-vs-gal'), view.getAttribute('data-vs-gal-view'), view);
+      return;
+    }
+    var pickBtn = evt.target.closest('[data-vs-gal-pick]');
+    if (pickBtn && !pickBtn.disabled) {
+      var pickHolder = pickBtn.closest('[data-vs-gal]');
+      pickModel(pickHolder.getAttribute('data-vs-gal'), pickBtn.getAttribute('data-vs-gal-pick'));
+    }
+  });
 
   // ---- first Preview load ------------------------------------------------------
   var loading = $('[data-vs-loading]');
