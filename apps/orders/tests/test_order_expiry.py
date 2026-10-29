@@ -256,10 +256,15 @@ class ExpirySettingsViewTests(ExpiryBase):
         with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
             page = self.client.get(reverse("dashboard:settings") + "?section=unpaid-orders")
             self.assertContains(page, "مدیریت سفارش‌های پرداخت‌نشده")
-            self.assertContains(page, "اگر مشتری سفارش آنلاین ثبت کند ولی پرداخت را کامل نکند، می‌توانید تعیین کنید سفارش پس از مدت مشخصی خودکار لغو شود.")
-            self.assertContains(page, "مهلت تکمیلی پرداخت در حال انجام")      # advanced
-            self.assertContains(page, "ارسال پیامک اطلاع‌رسانی هنگام لغو")
-            self.assertContains(page, "پرداخت در محل (COD)")
+            # plain-language copy (rewritten in the modernization pass): what it does, why a time, what the grace period is, who is never cancelled
+            self.assertContains(page, "این بخش چه کاری می‌کند؟")
+            self.assertContains(page, "چرا مهلت لازم است؟")
+            self.assertContains(page, "مهلت تکمیلی یعنی چه؟")                  # advanced
+            self.assertContains(page, "به مشتری پیامک هم بفرست")
+            self.assertContains(page, "هرگز خودکار لغو نمی‌شوند")
+            self.assertContains(page, "پرداخت در محل")
+            self.assertContains(page, "کارت‌به‌کارت")
+            self.assertContains(page, "expire_unpaid_orders")
             shop = ShopSettings.load(store=self.store)
             self.assertEqual((shop.unpaid_online_order_ttl_minutes, shop.unpaid_expiry_notify_sms), (0, False))   # defaults: everything off
             self.assertNotContains(self.client.get(reverse("dashboard:settings") + "?section=finance"), "settings-order-expiry")   # no duplicate editor
@@ -322,3 +327,29 @@ class JobReliabilityTests(ExpiryBase):
         self.assertEqual(ctx.exception.code, 1)
         detail = next(c for c in json.loads(out.getvalue())["checks"] if c["check"].startswith("order_expiry:"))
         self.assertEqual(detail["level"], "WARNING")
+
+
+class ExpiryCopyAndWiringTests(ExpiryBase):
+    """The settings text promises specific behaviour; these tests keep the promises true."""
+
+    def test_cancel_sms_uses_the_existing_order_canceled_template_when_enabled(self):
+        self.enable(sms=True)
+        order = self.old_order()
+        self.run_job()
+        log = SmsLog.objects.get(event_key="order_canceled")
+        self.assertIn(order.code, log.message)
+        self.assertIn("لغو شد", log.message)
+
+    def test_sms_toggle_defaults_to_off(self):
+        self.assertFalse(ShopSettings.load(store=self.store).unpaid_expiry_notify_sms)
+
+    def test_card_to_card_orders_never_expire_even_when_ancient(self):
+        self.enable()
+        cfg = PaymentGatewayConfig.objects.create(store=self.store, gateway_code="card_to_card", is_active=True)
+        cfg.set_credentials({"destination_card": "6037997000000019", "holder_name": "علی"})
+        cfg.save()
+        c2c = PaymentGateway.objects.create(store=self.store, name="کارت‌به‌کارت", slug="card_to_card")
+        order = self.old_order(gateway=c2c, age=timedelta(days=30))
+        stats = self.run_job()
+        self.assertEqual(stats["expired"], 0)
+        self.assertEqual(self.status(order), Order.Status.PENDING)

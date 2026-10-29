@@ -207,3 +207,19 @@ class ShippingSingleReferenceTests(ShippingTaxOrderIntegrationTestCase):
         # the legacy toggle route still answers (and keeps its permission + tenant rules) although nothing links to it any more
         self.assertEqual(self.admin.get(reverse("dashboard:settings-shipping-toggle", args=[self.shipping.pk])).status_code, 405)
         self.assertEqual(self.admin.get("/admin-panel/settings/?section=delivery-payment").status_code, 302)   # old admin-panel prefix
+
+
+class FinancePageOrderTests(TestCase):
+    def test_tax_summary_is_the_last_block_of_the_finance_page(self):
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.create_user(username="fin-order", password="pass12345", is_staff=True)
+        store = Store.objects.get(slug="akhlaghi")
+        StoreMembership.objects.create(store=store, user=user, role=StoreMembership.Role.OWNER,
+                                       status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now())
+        self.client.login(username="fin-order", password="pass12345")
+        html = self.client.get(reverse("dashboard:settings") + "?section=finance").content.decode()
+        self.assertGreater(html.index('data-testid="finance-tax-summary"'), html.index("آستانه‌ی ارسال رایگان"))
+        self.assertGreater(html.index('data-testid="finance-tax-summary"'), html.index("کادوپیچی"))
+        self.assertIn(reverse("dashboard:tax-settings"), html)
+        for editor_hint in ('name="tax_percent"', 'name="tax_enabled"'):
+            self.assertNotIn(editor_hint, html)

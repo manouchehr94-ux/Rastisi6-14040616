@@ -1,23 +1,6 @@
 {% load image_guide %}
 {% load persian %}
 <div class="au-page" style="max-width:none;margin-bottom:16px">
-  <div class="au-card">
-    <div class="au-card__head">
-      <h2>💰 مالیات</h2>
-      <span class="au-badge {% if shop.tax_enabled %}au-badge--ok{% endif %}">{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</span>
-    </div>
-    <div class="au-card__body">
-      <div class="au-stats">
-        <div class="au-stat {% if shop.tax_enabled %}au-stat--ok{% endif %}"><b>{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</b><span>وضعیت مالیات</span></div>
-        <div class="au-stat"><b>{% if shop.tax_enabled %}{% if tax_has_granular_rates %}بر اساس دسته‌ی مالیاتی{% else %}{{ shop.tax_percent|floatformat:"-2" }}٪{% endif %}{% else %}—{% endif %}</b><span>نرخ مالیات</span></div>
-      </div>
-      <p class="au-hint" style="margin:0">وضعیت و نرخِ مالیات فقط در صفحه‌ی «مدیریت مالیات» ویرایش می‌شود تا هیچ‌گاه دو مقدارِ متفاوت وجود نداشته باشد. اینجا فقط خلاصه‌ی وضعیت را می‌بینید.</p>
-    </div>
-    <div class="au-card__foot">{% if can_view_tax_page %}<a class="au-btn au-btn--primary" href="{% url 'dashboard:tax-settings' %}">مدیریت مالیات</a>{% else %}<span class="au-hint">برای مدیریتِ مالیات به دسترسیِ «مالیات» نیاز دارید.</span>{% endif %}</div>
-  </div>
-</div>
-
-<div class="au-page" style="max-width:none;margin-bottom:16px">
   <form method="post" action="{% url 'dashboard:settings-finance' %}" class="au-card" novalidate>
     {% csrf_token %}
     <div class="au-card__head"><h2>🚚 آستانه‌ی ارسال رایگان</h2><span class="au-sub">برای کلِ فروشگاه</span></div>
@@ -85,3 +68,21 @@
     </form>
   </div>
 </div>
+
+<div class="au-page" data-testid="finance-tax-summary" style="max-width:none;margin-top:16px">
+  <div class="au-card">
+    <div class="au-card__head">
+      <h2>💰 مالیات</h2>
+      <span class="au-badge {% if shop.tax_enabled %}au-badge--ok{% endif %}">{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</span>
+    </div>
+    <div class="au-card__body">
+      <div class="au-stats">
+        <div class="au-stat {% if shop.tax_enabled %}au-stat--ok{% endif %}"><b>{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</b><span>وضعیت مالیات</span></div>
+        <div class="au-stat"><b>{% if shop.tax_enabled %}{% if tax_has_granular_rates %}بر اساس دسته‌ی مالیاتی{% else %}{{ shop.tax_percent|floatformat:"-2" }}٪{% endif %}{% else %}—{% endif %}</b><span>نرخ مالیات</span></div>
+      </div>
+      <p class="au-hint" style="margin:0">وضعیت و نرخِ مالیات فقط در صفحه‌ی «مدیریت مالیات» ویرایش می‌شود تا هیچ‌گاه دو مقدارِ متفاوت وجود نداشته باشد. اینجا فقط خلاصه‌ی وضعیت را می‌بینید.</p>
+    </div>
+    <div class="au-card__foot">{% if can_view_tax_page %}<a class="au-btn au-btn--primary" href="{% url 'dashboard:tax-settings' %}">مدیریت مالیات</a>{% else %}<span class="au-hint">برای مدیریتِ مالیات به دسترسیِ «مالیات» نیاز دارید.</span>{% endif %}</div>
+  </div>
+</div>
+
