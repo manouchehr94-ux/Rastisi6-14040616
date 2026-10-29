@@ -523,7 +523,7 @@
 /* ---------- large read-only model preview ---------- */
 .vs .vs-vp{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(4,9,19,.8);backdrop-filter:blur(3px)}
 .vs .vs-vp[hidden]{display:none}
-.vs .vs-vp__box{display:flex;flex-direction:column;width:min(96vw,1240px);height:min(92vh,calc(100dvh - 40px));background:#0f192c;border:1px solid var(--vs-line-strong);border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.vs .vs-vp__box{display:flex;flex-direction:column;width:min(96vw,1240px);height:auto;max-height:min(92vh,calc(100dvh - 40px));background:#0f192c;border:1px solid var(--vs-line-strong);border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
 .vs .vs-vp__box:focus{outline:0}
 .vs .vs-vp__titles{flex:1;min-width:0}
 .vs .vs-vp__titles h2{margin:0;font-size:18px;font-weight:800;color:#fff}
@@ -534,12 +534,12 @@
 .vs .vs-vp__dev:focus-visible{outline:3px solid #b7aef8;outline-offset:2px}
 .vs .vs-vp__dev .icon{width:16px;height:16px}
 .vs .vs-vp__note{padding:8px 22px;background:#0d1628;border-bottom:1px solid var(--vs-line);font-size:13px;color:#f0dc91}
-.vs .vs-vp__stage{flex:1;min-height:0;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:12px;background:#0a1222}
+.vs .vs-vp__stage{flex:0 1 auto;min-height:0;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:12px;background:#0a1222}
 .vs .vs-vp__frame{position:relative;flex:0 0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .vs .vs-vp__frame iframe{position:absolute;left:0;top:0;border:0;background:#fff;transform-origin:0 0}
 @media (max-width:640px){
   .vs .vs-vp{padding:0}
-  .vs .vs-vp__box{width:100vw;height:100dvh;border-radius:0;border:0}
+  .vs .vs-vp__box{width:100vw;height:auto;max-height:100dvh;border-radius:0;border:0}
   .vs .vs-vp .vs-modal__head{flex-wrap:wrap}
   .vs .vs-vp__titles{flex:1 1 100%;order:3}
   .vs .vs-gal__grid{grid-template-columns:minmax(0,1fr)}

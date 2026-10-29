@@ -219,7 +219,7 @@ class VisionBrowserTests(_VisionPage, _composer.ComposerBrowserTests):
         titles = [t.strip() for t in cards.evaluate_all("els=>els.map(e=>e.querySelector('strong').textContent)")]
         self.assertEqual(
             titles[:8],
-            ["برند و رنگ‌ها", "نوع نوشته و فونت‌ها", "دکمه‌ها", "شکل و تراکم", "تصاویر و رسانه‌ها", "سربرگ فروشگاه", "پابرگ فروشگاه", "ناوبری موبایل"],
+            ["برند و رنگ‌ها", "نوع نوشته و فونت‌ها", "دکمه‌ها", "شکل و تراکم", "تصاویر و رسانه‌ها", "سربرگ (هدر)", "پابرگ (فوتر)", "ناوبری موبایل"],
         )
         self.assertEqual(page.locator("[data-vs-summary]").first.inner_text().strip() != "", True, "each row summarises the current value")
         self._shot(page, "vision_06_design_list")
@@ -319,6 +319,8 @@ class VisionBrowserTests(_VisionPage, _composer.ComposerBrowserTests):
             if key == prefer:
                 self.assertGreater(frame.locator(marker).count(), 0, "the preview shows the REAL renderer of that model")
             self.assertIn(page.locator(self._card(region_key, key) + " h5").inner_text(), page.locator("[data-vs-vp-title]").inner_text())
+            self.assertTrue(page.locator("[data-vs-vp-title]").inner_text().startswith(self.REGION_NAME[region_key]), "the dialog uses the one region name")
+            self._only_this_region(page, frame, region_key)
             self.assertIn("فقط پیش‌نمایش", page.locator("[data-vs-vp-status]").inner_text())
             self.assertEqual(page.locator("[data-vs-vp-choose]").inner_text().strip(), "انتخاب این مدل")
             page.click('[data-vs-vp-device="mobile"]')
@@ -337,6 +339,189 @@ class VisionBrowserTests(_VisionPage, _composer.ComposerBrowserTests):
         self.assertFalse([r for r in seen if "mutate" in r[1] or r[0] in ("POST", "PUT", "PATCH", "DELETE")], "no write request while looking")
         self.assertEqual(self.errors, [])
         context.close()
+
+    REGION_NAME = {"header": "سربرگ (هدر)", "footer": "پابرگ (فوتر)"}
+
+    def _only_this_region(self, page, frame, region_key):
+        """The preview document holds exactly the asked region (nothing else rendered) and the iframe is as tall as that region."""
+        other = "footer" if region_key == "header" else "header"
+        info = frame.locator("body").evaluate(
+            """(body, args) => ({
+                 regions: [...document.querySelectorAll('[data-vs-region]')].map(n => n.dataset.vsRegion),
+                 otherTag: document.querySelectorAll(args.other === 'footer' ? 'footer' : 'header, .gh-shell, .gh-announce').length,
+                 placeholder: document.body.innerText.includes('محتوای صفحه'),
+                 content: document.querySelectorAll('.rcontainer, .rsec, .sfb-preview-sections, .vs-rp-body').length,
+                 height: Math.ceil(document.querySelector('[data-vs-region]').getBoundingClientRect().height),
+                 overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                 regionOverflowX: document.querySelector('[data-vs-region]').scrollWidth - document.querySelector('[data-vs-region]').clientWidth,
+               })""",
+            {"other": other},
+        )
+        self.assertEqual(info["regions"], [region_key])
+        self.assertEqual((info["otherTag"], info["placeholder"], info["content"]), (0, False, 0), info)
+        self.assertLessEqual(info["overflowX"], 1, f"{region_key}: nothing is cut at the side: {info}")
+        self.assertLessEqual(info["regionOverflowX"], 1, info)
+        frame_height = page.eval_on_selector("[data-vs-vp-frame]", "f => parseFloat(f.style.height)")
+        self.assertAlmostEqual(frame_height, info["height"], delta=4, msg=f"the frame is as tall as the region: {info}")
+        return info
+
+    def test_the_large_view_frames_every_model_without_cutting_it_on_desktop_and_phone(self):
+        from apps.storefront_builder import vision_ux
+
+        context, page = self._studio()
+        samples = {"header": ("legacy_default", "stationery_search", "premium_three_column", "boutique_centered", "dark_tech", "floating_card", "kawaii_center"),
+                   "footer": ("legacy_default", "dark_tech", "premium_columns", "centered_contact", "stationery_dark", "kawaii_minimal")}
+        for region_key, keys in samples.items():
+            self._open_category(page, region_key)
+            for key in keys:
+                card = page.locator(self._card(region_key, key))
+                card.scroll_into_view_if_needed()
+                card.locator("[data-vs-gal-view]").click()
+                page.wait_for_selector("[data-vs-vp]:not([hidden])")
+                frame = page.frame_locator("[data-vs-vp-frame]")
+                frame.locator(f'[data-vs-region="{region_key}"]').wait_for(state="attached", timeout=15000)
+                page.wait_for_timeout(1300)
+                heights = {}
+                for device in ("desktop", "mobile"):
+                    page.click(f'[data-vs-vp-device="{device}"]')
+                    page.wait_for_timeout(500)
+                    info = self._only_this_region(page, frame, region_key)
+                    heights[device] = info["height"]
+                    box = page.evaluate("()=>{const b=document.querySelector('[data-vs-vp-box]').getBoundingClientRect();const s=document.querySelector('[data-vs-vp-stage]');return {l:b.left,r:b.right,t:b.top,b:b.bottom,vw:innerWidth,vh:innerHeight,scrolls:s.scrollHeight>s.clientHeight+1}}")
+                    self.assertTrue(box["l"] >= 0 and box["r"] <= box["vw"] + 1 and box["t"] >= 0 and box["b"] <= box["vh"] + 1, f"{region_key}/{key}/{device}: {box}")
+                self.assertGreater(heights["desktop"], 40, f"{region_key}/{key}: a real region, not an empty frame")
+                page.keyboard.press("Escape")
+                page.wait_for_selector("[data-vs-vp]", state="hidden")
+            self._close_category(page)
+        self.assertEqual(self.errors, [])
+        context.close()
+
+    def test_the_large_view_dialog_hugs_a_short_header_and_scrolls_a_tall_footer(self):
+        context, page = self._studio(viewport=(1440, 900))
+        self._open_category(page, "header")
+        page.locator(self._card("header", "legacy_default") + " [data-vs-gal-view]").click()
+        page.wait_for_selector("[data-vs-vp]:not([hidden])")
+        page.frame_locator("[data-vs-vp-frame]").locator('[data-vs-region="header"]').wait_for(state="attached", timeout=15000)
+        page.wait_for_timeout(1300)
+        short = page.eval_on_selector("[data-vs-vp-box]", "b => b.getBoundingClientRect().height")
+        self.assertLess(short, 560, "a header preview does not leave a big empty dialog")
+        self._shot(page, "vision_16_large_view_header_only")
+        page.keyboard.press("Escape")
+        self._close_category(page)
+        # a short window: the footer (taller than the room the dialog has) must scroll INSIDE the dialog, never past the window
+        page.set_viewport_size({"width": 1280, "height": 520})
+        self._open_category(page, "footer")
+        page.locator(self._card("footer", "legacy_default") + " [data-vs-gal-view]").click()
+        page.wait_for_selector("[data-vs-vp]:not([hidden])")
+        page.frame_locator("[data-vs-vp-frame]").locator('[data-vs-region="footer"]').wait_for(state="attached", timeout=15000)
+        page.click('[data-vs-vp-device="mobile"]')
+        page.wait_for_timeout(1800)
+        geometry = page.evaluate(
+            """()=>{const s=document.querySelector('[data-vs-vp-stage]');const b=document.querySelector('[data-vs-vp-box]').getBoundingClientRect();
+                    const f=document.querySelector('[data-vs-vp-framebox]').getBoundingClientRect();
+                    s.scrollTop = 99999;
+                    return {scrolls:s.scrollHeight>s.clientHeight+1, moved:s.scrollTop>0, frameH:f.height, stageH:s.clientHeight, boxH:b.height, vh:innerHeight}}"""
+        )
+        self.assertLessEqual(geometry["boxH"], geometry["vh"], geometry)
+        self.assertGreater(geometry["frameH"], 150, "a real footer is framed")
+        self.assertEqual(geometry["scrolls"], geometry["frameH"] + 24 > geometry["stageH"] + 1, geometry)
+        if geometry["scrolls"]:
+            self.assertTrue(geometry["moved"], "the stage really scrolls to the end of the footer")
+        self._shot(page, "vision_17_large_view_footer_only_phone")
+        context.close()
+
+    def test_opening_and_closing_the_large_view_changes_nothing_in_the_database(self):
+        from apps.storefront_builder.models import StorefrontLayoutVersion, StorefrontSection
+
+        def snapshot():
+            draft = self._draft()
+            return (draft.edit_revision, dict(draft.header_config or {}), dict(draft.footer_config or {}), StorefrontLayoutVersion.objects.count(),
+                    StorefrontSection.objects.count())
+
+        context, page = self._studio()
+        before = snapshot()
+        for region_key in ("header", "footer"):
+            self._open_category(page, region_key)
+            for key in (self._other_key(page, region_key, "dark_tech"), "legacy_default"):
+                page.locator(self._card(region_key, key) + " [data-vs-gal-view]").click()
+                page.wait_for_selector("[data-vs-vp]:not([hidden])")
+                page.frame_locator("[data-vs-vp-frame]").locator(f'[data-vs-region="{region_key}"]').wait_for(state="attached", timeout=15000)
+                page.keyboard.press("Escape")
+                page.wait_for_selector("[data-vs-vp]", state="hidden")
+            self._close_category(page)
+        self.assertEqual(snapshot(), before)
+        context.close()
+
+    # ---- the names ---------------------------------------------------------------------------------------------------------------------
+    def test_the_region_and_history_names_are_uniform_and_undo_redo_keep_working(self):
+        context, page = self._studio()
+        # top bar: Undo / Redo (text only; ids and actions unchanged)
+        undo, redo = page.locator("#r4UndoButton"), page.locator("#r4RedoButton")
+        self.assertEqual((undo.get_attribute("aria-label"), redo.get_attribute("aria-label")), ("Undo", "Redo"))
+        self.assertTrue(undo.get_attribute("title").startswith("Undo (Ctrl+Z)"))
+        self.assertTrue(redo.get_attribute("title").startswith("Redo"))
+        self.assertEqual((undo.get_attribute("data-rastisi-action"), redo.get_attribute("data-rastisi-action")), ("undo", "redo"))
+        bar = page.locator(".vs-bar").evaluate("b => b.innerText + ' ' + [...b.querySelectorAll('*')].map(e => [...e.attributes].map(a => a.value).join(' ')).join(' ')")
+        for old in ("واگرد", "ازنو", "از نو"):
+            self.assertNotIn(old, bar)
+        # navigator rows, design list, dialog title, panel heading, gallery title
+        rows = page.locator(".common-region").all_inner_texts()
+        self.assertTrue(any("سربرگ (هدر)" in r for r in rows) and any("پابرگ (فوتر)" in r for r in rows), rows)
+        self.assertFalse(any("سربرگ فروشگاه" in r or "پایین صفحه" in r for r in rows), rows)
+        self.assertIn("تنظیم ظاهر مشترک سربرگ (هدر)", page.locator('.common-region [data-rs-global-focus="header"]').get_attribute("aria-label"))
+        page.click('[data-vs-tab-button="design"]')
+        cards = page.locator('[data-vs-pane="design"] .vs-dcard strong').all_inner_texts()
+        self.assertIn("سربرگ (هدر)", cards)
+        self.assertIn("پابرگ (فوتر)", cards)
+        for region_key, name in self.REGION_NAME.items():
+            page.click(f'[data-vs-open-cat="{region_key}"]')
+            page.wait_for_selector(".vs-design-modal", state="visible")
+            page.wait_for_timeout(500)
+            self.assertEqual(page.locator("[data-vs-design-title]").inner_text().strip(), name)
+            self.assertEqual(page.locator(f'[data-r4-global-mutation="{region_key}.update"] > h4').first.inner_text().strip(), name)
+            key = self._other_key(page, region_key, "dark_tech")
+            page.locator(self._card(region_key, key) + " [data-vs-gal-view]").click()
+            page.wait_for_selector("[data-vs-vp]:not([hidden])")
+            self.assertTrue(page.locator("[data-vs-vp-title]").inner_text().startswith(name + ":"))
+            page.keyboard.press("Escape")
+            self._close_category(page)
+        # the history dialog (R4-rendered) shows the same two words
+        page.click('.vs-tool[data-rastisi-action="history"]')
+        page.wait_for_selector('[data-rastisi-action="history-undo"]')
+        page.wait_for_timeout(300)
+        self.assertEqual(page.locator('[data-rastisi-action="history-undo"]').inner_text().strip(), "Undo")
+        self.assertEqual(page.locator('[data-rastisi-action="history-redo"]').inner_text().strip(), "Redo")
+        page.keyboard.press("Escape")
+        # the shortcuts and the buttons still drive the real R4 History
+        self._open_category(page, "shape")
+        select = page.locator("#r4GlobalDensity")
+        options = page.eval_on_selector("#r4GlobalDensity", "s=>[...s.options].map(o=>o.value)")
+        original = select.input_value()
+        target = next(v for v in options if v != original)
+        select.select_option(target)
+        self._settled(page)
+        self._close_category(page)
+        page.wait_for_timeout(1500)
+        self.assertFalse(page.locator("#r4UndoButton").is_disabled())
+        page.evaluate("document.activeElement && document.activeElement.blur()")
+        page.keyboard.press("Control+z")
+        page.wait_for_timeout(2500)
+        self.assertEqual(self._settings_density(), original, "Ctrl+Z is still R4's Undo")
+        self.assertFalse(page.locator("#r4RedoButton").is_disabled())
+        page.keyboard.press("Control+Shift+z")
+        page.wait_for_timeout(2500)
+        self.assertEqual(self._settings_density(), target, "Ctrl+Shift+Z is still R4's Redo")
+        page.click("#r4UndoButton")
+        page.wait_for_timeout(2500)
+        self.assertEqual(self._settings_density(), original, "the Undo button is still R4's Undo")
+        page.click("#r4RedoButton")
+        page.wait_for_timeout(2500)
+        self.assertEqual(self._settings_density(), target, "the Redo button is still R4's Redo")
+        self.assertEqual(self.errors, [])
+        context.close()
+
+    def _settings_density(self):
+        return (self._draft().effective_appearance_config() or {}).get("density")
 
     def test_choosing_a_model_goes_through_the_real_variant_mutation_with_history(self):
         import json as _json

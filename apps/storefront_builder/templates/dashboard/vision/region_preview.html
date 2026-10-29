@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static storefront_builder_extras %}
-{% comment %}Read-only model preview (see vision_views.py): the Store's own shell with ONE region swapped for the asked registry variant. The page body is a
-neutral placeholder band so the model is seen in context (header above the content, footer below it).{% endcomment %}
+{% comment %}Read-only model preview (see vision_views.py): the asked region ONLY, rendered by the registry renderer of the asked model with the Store's own
+data. The other region and the page body are not rendered (no markup, no placeholder), so the dialog frames exactly the model.{% endcomment %}
 
 {% block title %}پیش‌نمایش مدل — {{ SHOP_NAME }}{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
@@ -12,16 +12,16 @@ neutral placeholder band so the model is seen in context (header above the conte
 <link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% sfb_static 'css/storefront_builder_preview_v22.css' %}">
 <style>
-  .vs-rp-body{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--muted,#6b6b76);font-size:13px;background:repeating-linear-gradient(135deg,transparent 0 12px,rgba(0,0,0,.03) 12px 24px)}
-  .vs-rp-body span{padding:6px 14px;border-radius:999px;background:rgba(255,255,255,.85);border:1px dashed rgba(0,0,0,.2)}
+  /* the frame is sized to the region itself: no viewport-high body, no margin */
+  html,body{margin:0;min-height:0!important;height:auto!important}
 </style>
 {% endblock %}
 
-{% block header %}<div data-vs-region="header" data-vs-candidate="{% if region == 'header' %}1{% else %}0{% endif %}">{% include header_variant_template with header_config=version.effective_header_config is_live_storefront=False is_builder_preview=True %}</div>{% endblock %}
+{% block header %}{% if region == "header" %}<div data-vs-region="header" data-vs-candidate="1">{% include variant_template with header_config=version.effective_header_config is_live_storefront=False is_builder_preview=True %}</div>{% endif %}{% endblock %}
 
-{% block content %}<div class="vs-rp-body"><span>محتوای صفحه</span></div>{% endblock %}
+{% block content %}{% endblock %}
 
-{% block footer %}<div data-vs-region="footer" data-vs-candidate="{% if region == 'footer' %}1{% else %}0{% endif %}">{% include footer_variant_template with footer_config=version.effective_footer_config is_live_storefront=False is_builder_preview=True %}</div>{% endblock %}
+{% block footer %}{% if region == "footer" %}<div data-vs-region="footer" data-vs-candidate="1">{% include variant_template with footer_config=version.effective_footer_config is_live_storefront=False is_builder_preview=True %}</div>{% endif %}{% endblock %}
 
 {% block extra_js %}
 <script>

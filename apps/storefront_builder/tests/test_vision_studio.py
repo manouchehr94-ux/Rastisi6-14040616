@@ -132,6 +132,34 @@ class VisionStudioTests(StorefrontBuilderViewsTestCase):
         self.assertGreaterEqual(len(palettes), 24)
         self.assertTrue(all(len(item["swatches"]) == 6 and all(item["swatches"]) for item in palettes))
 
+    def test_the_region_and_history_names_are_uniform_in_the_vision_text(self):
+        soup = BeautifulSoup(self._vision().content.decode(), "html.parser")
+        titles = [card.select_one("strong").get_text(strip=True) for card in soup.select('[data-vs-pane="design"] .vs-dcard')]
+        self.assertIn("سربرگ (هدر)", titles)
+        self.assertIn("پابرگ (فوتر)", titles)
+        design = soup.select_one('[data-vs-pane="design"]').get_text()
+        for old in ("سربرگ فروشگاه", "پابرگ فروشگاه", "پا برگ"):
+            self.assertNotIn(old, design)
+        undo, redo = soup.select_one("#r4UndoButton"), soup.select_one("#r4RedoButton")
+        self.assertEqual((undo["aria-label"], redo["aria-label"]), ("Undo", "Redo"))
+        self.assertTrue(undo["title"].startswith("Undo (Ctrl+Z)"), undo["title"])
+        self.assertTrue(redo["title"].startswith("Redo"), redo["title"])
+        bar = soup.select_one(".vs-bar")
+        for old in ("واگرد", "ازنو", "از نو"):
+            self.assertNotIn(old, bar.get_text() + " ".join(str(v) for tag in bar.find_all(True) for v in tag.attrs.values()))
+        # only the TEXT changed: the keys / ids / actions R4 binds to are exactly as before
+        self.assertEqual((undo["id"], undo["data-rastisi-action"], redo["id"], redo["data-rastisi-action"]), ("r4UndoButton", "undo", "r4RedoButton", "redo"))
+        self.assertEqual([c for c in (b["data-vs-open-cat"] for b in soup.select('[data-vs-pane="design"] button[data-vs-open-cat]'))][5:7], ["header", "footer"])
+        self.assertEqual(vision_ux.REGION_TITLES, {"header": "سربرگ (هدر)", "footer": "پابرگ (فوتر)"})
+
+    def test_no_wording_table_names_a_region_with_the_old_short_words(self):
+        import inspect
+
+        source = inspect.getsource(vision_ux)
+        table = source[source.index("VARIANT_COPY = {"):]
+        self.assertEqual(re.findall(r"(?<![\u0600-\u06FF])سربرگ(?!\s*\(هدر\))", table), [])
+        self.assertEqual(re.findall(r"(?<![\u0600-\u06FF])پابرگ(?!\s*\(فوتر\))", table), [])
+
     def test_unsupported_reference_settings_are_labelled_as_in_development_not_offered_as_controls(self):
         html = self._vision().content.decode()
         self.assertGreaterEqual(html.count("در دست توسعه"), 3)
@@ -388,7 +416,22 @@ class VisionModelGalleryTests(StorefrontBuilderViewsTestCase):
         self.assertNotIn("gf--dark", self._preview("footer", "legacy_default").content.decode())
         soup = BeautifulSoup(self._preview("header", "boutique_centered").content.decode(), "html.parser")
         self.assertEqual(soup.select_one('[data-vs-region="header"]')["data-vs-candidate"], "1")
-        self.assertEqual(soup.select_one('[data-vs-region="footer"]')["data-vs-candidate"], "0")
+
+    def test_a_header_preview_renders_only_the_header_and_a_footer_preview_only_the_footer(self):
+        """The other region is not rendered at all (not merely hidden), and neither is a body / placeholder between them."""
+        for region_key, other_key in (("header", "footer"), ("footer", "header")):
+            for variant in self._registry()[region_key].variants:
+                soup = BeautifulSoup(self._preview(region_key, variant.key).content.decode(), "html.parser")
+                where = f"{region_key}/{variant.key}"
+                self.assertEqual([n["data-vs-region"] for n in soup.select("[data-vs-region]")], [region_key], where)
+                self.assertIsNone(soup.select_one(f'[data-vs-region="{other_key}"]'), where)
+                self.assertIsNone(soup.select_one("footer" if region_key == "header" else "header, .gh-shell, .gh-announce"), f"{where}: the other region's markup is absent")
+                self.assertNotIn("محتوای صفحه", soup.get_text(), f"{where}: no placeholder content")
+                self.assertIsNone(soup.select_one(".vs-rp-body, .sfb-preview-sections, .rcontainer, .rsec, main .wrap.sfb-preview-sections"), where)
+        # the store's own data is still what is rendered (name + the real renderer of the model)
+        text = BeautifulSoup(self._preview("footer", "legacy_default").content.decode(), "html.parser").get_text()
+        self.assertIn("ارتباط با ما", text)
+        self.assertIn("info@digimarket.ir", text)
 
     def test_distinct_models_render_distinct_markup(self):
         for region_key, region in self._registry().items():

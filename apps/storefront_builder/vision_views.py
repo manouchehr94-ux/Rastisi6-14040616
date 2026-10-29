@@ -1,7 +1,7 @@
 """Vision Studio only: the read-only «what would this header / footer model look like» preview.
 
-It renders the Store's own Draft through the very same shell templates as the Studio Preview, with exactly ONE difference: the renderer of the
-asked region comes from ``global_region_registry`` for the asked variant key instead of the one the Draft stores. Nothing is written, no Draft
+It renders ONLY the asked region (the other region and the page body are not rendered at all), with the Store's own Draft data and the very same
+shell templates as the Studio Preview; the renderer comes from ``global_region_registry`` for the asked variant key instead of the one the Draft stores. Nothing is written, no Draft
 is created, and the variant is never taken from the request as a path - only as a registry key that must resolve (anything else is a 400).
 The Studio gallery shows it in a large dialog (live, with the Store's own logo / menu / colours) and the build-time command
 ``capture_global_region_previews`` photographs it with fixed sample data for the gallery thumbnails."""
@@ -17,7 +17,7 @@ from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 
 from . import global_region_registry
 from .services import layout_service
-from .services.render_service import resolved_store_appearance_for_request, store_appearance_global_renderer_template
+from .services.render_service import resolved_store_appearance_for_request
 from .views import _resolve_page_type, _resolve_store
 
 PREVIEW_TEMPLATE = "dashboard/vision/region_preview.html"
@@ -80,14 +80,8 @@ def region_variant_preview(request):
     request.storefront_appearance_version = draft
     request.storefront_appearance_page = draft.get_page(page_type)
 
-    def renderer_for(key, config):
-        if key == region_key:
-            return variant.renderer
-        return store_appearance_global_renderer_template(store_appearance, key, config)
-
     return render(request, PREVIEW_TEMPLATE, {
         "store": store, "version": version, "page_type": page_type, "store_appearance": store_appearance,
-        "header_variant_template": renderer_for("header", header_config),
-        "footer_variant_template": renderer_for("footer", footer_config),
-        "region": region_key, "variant": variant, "is_preview": True,
+        # ONLY the asked region is rendered: the other one (and the page body between them) is not even resolved
+        "region": region_key, "variant": variant, "variant_template": variant.renderer, "is_preview": True,
     })

@@ -328,8 +328,8 @@
     shape: { title: 'شکل و تراکم' },
     images: { title: 'تصاویر و رسانه‌ها' },
     motion: { title: 'حرکت و افکت‌ها' },
-    header: { title: 'سربرگ فروشگاه', region: 'rsGlobalHeader' },
-    footer: { title: 'پابرگ فروشگاه', region: 'rsGlobalFooter' },
+    header: { title: 'سربرگ (هدر)', region: 'rsGlobalHeader' },
+    footer: { title: 'پابرگ (فوتر)', region: 'rsGlobalFooter' },
     bottom_nav: { title: 'ناوبری موبایل', region: 'rsGlobalMobileNav' },
     theme: { title: 'تم مناسبتی', tab: 'theme' }
   };
@@ -523,6 +523,7 @@
     enhanceSwitches(gd());
     enhanceClarity();
     enhanceGalleries();
+    renameRegions();
     updateSummaries();
     if (currentCat) { applyCategory(currentCat); filterPalettes(); }
   }
@@ -625,6 +626,57 @@
 
   // «باز کردن تنظیم حرکت»: the real appearance controls of motion
   // (the buttons carry data-vs-open-cat, handled above)
+
+  // ---- names: one wording for the two regions and the two history commands (display text only) ---------------------------
+  // R4 renders «سربرگ فروشگاه» / «پایین صفحه» (navigator rows), «هدر» / «فوتر» (headings of the design panel) and «واگرد» / «بازگردانی» (history dialog);
+  // Vision shows the same things under one name each. Only the visible text / aria-label changes - never a key, an id, a route or an action.
+  var REGION_NAME = { header: 'سربرگ (هدر)', footer: 'پابرگ (فوتر)' };
+  function setLabelText(node, text) {
+    var done = false;
+    Array.prototype.forEach.call(node.childNodes, function (child) {
+      if (child.nodeType === 3 && child.textContent.trim()) { if (!done) { child.textContent = ' ' + text + ' '; done = true; } else child.textContent = ''; }
+    });
+  }
+  function renameRegions() {
+    $all('.common-region').forEach(function (row) {
+      var button = row.querySelector('[data-rs-global-focus]');
+      var region = button && button.getAttribute('data-rs-global-focus');
+      if (!REGION_NAME[region] || row.dataset.vsNamed === region) return;
+      row.dataset.vsNamed = region;
+      setLabelText(row, REGION_NAME[region]);
+      button.setAttribute('aria-label', 'تنظیم ظاهر مشترک ' + REGION_NAME[region]);
+    });
+    var panel = gd();
+    if (panel) {
+      $all('[data-r4-global-mutation="header.update"]>h4', panel).forEach(function (h) { h.textContent = REGION_NAME.header; });
+      $all('[data-r4-global-mutation="footer.update"]>h4', panel).forEach(function (h) { h.textContent = REGION_NAME.footer; });
+    }
+  }
+  // the history dialog and the shortcut help are rendered by R4 into the modal root
+  var HISTORY_WORDS = [[/واگرد/g, 'Undo'], [/بازگردانی/g, 'Redo'], [/از ?نو(?![\u0600-\u06FF])/g, 'Redo']];
+  function renameHistoryWords(scope) {
+    var targets = $all('[data-rastisi-action="history-undo"], [data-rastisi-action="history-redo"], .modal p.small.muted', scope);
+    var historyButton = scope.querySelector('[data-rastisi-action="history-undo"]');
+    var historyModal = historyButton && historyButton.closest('.modal, [role="dialog"]');
+    if (historyModal) targets.push(historyModal);                 // the whole history dialog, and only that dialog
+    targets.forEach(function (node) {
+      var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      var text;
+      while ((text = walker.nextNode())) {
+        var value = text.nodeValue;
+        HISTORY_WORDS.forEach(function (pair) { value = value.replace(pair[0], pair[1]); });
+        if (value !== text.nodeValue) text.nodeValue = value;
+      }
+    });
+  }
+  var modalRoot = $('[data-rs-modal-root]');
+  if (modalRoot && window.MutationObserver) {
+    new MutationObserver(function () { renameHistoryWords(modalRoot); }).observe(modalRoot, { childList: true, subtree: true });
+  }
+  var structureHost = document.getElementById('r4Structure');
+  if (structureHost && window.MutationObserver) {
+    new MutationObserver(function () { renameRegions(); }).observe(structureHost, { childList: true, subtree: true });
+  }
 
   // ---- clarity: plain names, one sentence of effect, where it acts, what state it is in ------------------------
   // Wording only (vsUx, keyed by the real field key). Controls without an entry keep R4's own label. Nothing here changes a value.
@@ -848,14 +900,24 @@
   var vpState = { region: null, key: null, device: 'desktop', opener: null };
   function vpOpen() { return !!vp && !vp.hidden; }
   function pageType() { return root.getAttribute('data-r4-page-type') || 'home'; }
+  // The preview page holds ONE region and nothing else, so the frame is as tall as that region really is (at the chosen device width); a tall
+  // footer scrolls inside the stage, a short header leaves no empty space. Re-measured after load, fonts and images.
+  function regionHeight() {
+    try {
+      var doc = vpFrame.contentDocument;
+      var region = doc && doc.querySelector('[data-vs-region]');
+      return region ? Math.ceil(region.getBoundingClientRect().height) : 0;
+    } catch (e) { return 0; }
+  }
   function layoutPreview() {
     if (!vpOpen() || !vpFrame) return;
     var stage = $('[data-vs-vp-stage]', vp);
     var box = $('[data-vs-vp-framebox]', vp);
     var width = vpState.device === 'mobile' ? 390 : 1280;
     var scale = Math.min(1, Math.max(0.2, (stage.clientWidth - 24) / width));
-    var height = Math.max(320, stage.clientHeight - 24) / scale;
     vpFrame.style.width = width + 'px';
+    var natural = regionHeight();                       // measured after the width is applied, so it is the height at THIS device width
+    var height = natural > 0 ? natural : 160;
     vpFrame.style.height = height + 'px';
     vpFrame.style.transform = 'scale(' + scale + ')';
     box.style.width = Math.round(width * scale) + 'px';
@@ -912,6 +974,12 @@
       }
     });
     window.addEventListener('resize', layoutPreview);
+    vpFrame.addEventListener('load', function () {
+      if (!vpOpen()) return;
+      layoutPreview();
+      later(layoutPreview, 250);
+      later(layoutPreview, 900);                        // late web fonts / images can change the region's height
+    });
     // Tab stays inside the preview dialog
     vp.addEventListener('keydown', function (evt) {
       if (evt.key !== 'Tab') return;
@@ -974,6 +1042,7 @@
   });
 
   // ---- first paint -------------------------------------------------------------
+  renameRegions();
   refreshDesign();
   enhanceSwitches(root);
 })();

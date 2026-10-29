@@ -22,6 +22,7 @@ PREVIEWS_SUBDIR = "storefront_builder/vision/region_previews"
 PREVIEWS_DIR = STATIC_DIR / PREVIEWS_SUBDIR
 MANIFEST_PATH = PREVIEWS_DIR / "manifest.json"
 MANIFEST_VERSION = 1
+PREVIEW_TEMPLATE = "dashboard/vision/region_preview.html"
 
 REGIONS = {
     "header": global_region_registry.GLOBAL_HEADER_REGION,
@@ -54,11 +55,14 @@ def _closure(name, seen):
 
 
 def variant_fingerprint(region_key, variant):
-    """Identity of what a thumbnail depicts: the registry entry + the source of its renderer and of the templates it includes."""
+    """Identity of what a thumbnail depicts: the registry entry + the source of its renderer, of the templates it includes and of the preview page."""
     seen = {}
     _closure(variant.renderer, seen)
+    # the thumbnails are photographs of the read-only preview page, so a change to it makes them stale too
+    preview = _template_source(PREVIEW_TEMPLATE) or ""
     payload = json.dumps(
         {"region": region_key, "key": variant.key, "label": variant.label_fa, "caps": sorted(variant.capabilities),
+         "preview": hashlib.sha256(preview.encode("utf-8")).hexdigest(),
          "templates": {name: hashlib.sha256(src.encode("utf-8")).hexdigest() for name, src in sorted(seen.items())}},
         sort_keys=True, ensure_ascii=False,
     )
@@ -105,18 +109,18 @@ VARIANT_COPY = {
         "marketplace_search_first": "جست‌وجوی عریض در مرکز، نام فروشگاه سمت راست و حساب و سبد سمت چپ؛ منوی دسته‌ها زیر آن.",
         "premium_three_column": "سه بخش در یک ردیف باریک: نام فروشگاه، منوی کوتاه و جست‌وجوی کوچک با آیکن‌ها.",
         "boutique_centered": "نام و لوگوی فروشگاه در مرکز، آیکن‌ها دو طرف آن و منوی دسته‌ها در ردیف جدا.",
-        "dark_tech": "سربرگ تیره با جست‌وجو و منوی کوتاه در یک نوار؛ مناسب فروشگاه‌های دیجیتال.",
+        "dark_tech": "سربرگ (هدر) تیره با جست‌وجو و منوی کوتاه در یک نوار؛ مناسب فروشگاه‌های دیجیتال.",
         "promo_search_nav": "نوار پیشنهاد رنگی در بالا، جست‌وجو و دکمه‌های ورود و سبد، و منوی دسته‌ها زیر آن.",
         "beauty_search_nav": "جست‌وجوی عریض با دکمهٔ پررنگ و ردیف ناوبری فروشگاهی زیر آن.",
         "chocolate_centered_search": "نوار رنگی برند با کادر جست‌وجوی سفید در مرکز و منوی دسته‌ها زیر آن.",
         "atelier_nav": "مینیمال: نام فروشگاه و منو در یک ردیف و آیکن‌های جست‌وجو، حساب و سبد در گوشه.",
-        "luxury_search": "جست‌وجوی برجستهٔ گرد در مرکز سربرگ، آیکن‌های حساب و سبد دو طرف آن.",
+        "luxury_search": "جست‌وجوی برجستهٔ گرد در مرکز سربرگ (هدر)، آیکن‌های حساب و سبد دو طرف آن.",
         "stationery_search": "جست‌وجوی عریض، نوار اطلاعات تماس در بالا و ردیف ناوبری زیر آن.",
         "kawaii_center": "برند در مرکز با نوار اعلان رنگیِ دوگانه؛ ملایم و بوتیک‌وار.",
         "floating_card": "برند و منو روی یک کارت شناور بزرگ، با دکمه‌های رنگی بالای صفحه.",
         "editorial_row": "ردیف نشریه‌ای: نام فروشگاه و منو در یک خط با آیکن‌های حساب و سبد.",
         "centered_brand": "برند و منو در یک ردیف جمع‌وجور همراه با جست‌وجوی کوچک.",
-        "promo_bar": "نوار کمپینی پررنگ بالای سربرگ و زیر آن جست‌وجو و دسته‌بندی‌ها.",
+        "promo_bar": "نوار کمپینی پررنگ بالای سربرگ (هدر) و زیر آن جست‌وجو و دسته‌بندی‌ها.",
     },
     "footer": {
         "legacy_default": "چهار ستون راهنما، دسته‌بندی‌ها، تماس و آدرس؛ زیر آن معرفی فروشگاه، نمادها و کپی‌رایت.",
@@ -132,7 +136,7 @@ VARIANT_COPY = {
         "centered_contact": "همه‌چیز در مرکز: برند، پیوندها و شمارهٔ تماس در یک کادر.",
     },
 }
-REGION_TITLES = {"header": "سربرگ", "footer": "پابرگ"}
+REGION_TITLES = {"header": "سربرگ (هدر)", "footer": "پابرگ (فوتر)"}
 
 
 def _describe(region_key, variant, same_as_variant):
@@ -190,26 +194,26 @@ SETTING_COPY = {
     "card_shadow": ("سایهٔ کارت‌ها", "کارت‌های محصول با سایهٔ ملایم، پررنگ یا بدون سایه."),
     "card_hover": ("حرکت کارت با رفتن موس", "با رفتن موس، کارت بالا بیاید، بزرگ شود یا ثابت بماند."),
     "hero_style": ("شکل بخش بزرگ بالای صفحه", "اسلایدر یا بنر اصلی عریض، بلند یا دوبخشی نمایش داده شود."),
-    "header_variant": ("مدل سربرگ", "چیدمان لوگو، جست‌وجو، منو و آیکن‌ها در بالای همهٔ صفحه‌ها."),
-    "footer_variant": ("مدل پابرگ", "چیدمان بخش پایین همهٔ صفحه‌ها: لینک‌ها، تماس و نمادها."),
+    "header_variant": ("مدل سربرگ (هدر)", "چیدمان لوگو، جست‌وجو، منو و آیکن‌ها در بالای همهٔ صفحه‌ها."),
+    "footer_variant": ("مدل پابرگ (فوتر)", "چیدمان بخش پایین همهٔ صفحه‌ها: لینک‌ها، تماس و نمادها."),
     "mobile_nav_variant": ("مدل نوار پایین موبایل", "نوار میان‌بر ثابت پایین صفحه فقط در گوشی (خانه، دسته‌ها، سبد…)."),
     # header toggles
-    "show_search": ("نمایش جست‌وجو", "کادر یا آیکن جست‌وجو در سربرگ دیده شود."),
-    "show_account": ("نمایش حساب کاربری", "آیکن ورود / حساب کاربر در سربرگ دیده شود."),
-    "show_cart": ("نمایش سبد خرید", "آیکن سبد خرید در سربرگ دیده شود. (سبد از دسترس خارج نمی‌شود: همیشه یک راه رسیدن به آن می‌ماند.)"),
-    "show_wishlist": ("نمایش علاقه‌مندی‌ها", "آیکن علاقه‌مندی‌ها در سربرگ دیده شود."),
-    "sticky": ("چسبان بودن سربرگ", "با اسکرول صفحه، سربرگ بالای صفحه می‌ماند."),
-    "announcement_enabled": ("نمایش نوار اعلان", "نوار اعلان بالای سربرگ دیده شود."),
+    "show_search": ("نمایش جست‌وجو", "کادر یا آیکن جست‌وجو در سربرگ (هدر) دیده شود."),
+    "show_account": ("نمایش حساب کاربری", "آیکن ورود / حساب کاربر در سربرگ (هدر) دیده شود."),
+    "show_cart": ("نمایش سبد خرید", "آیکن سبد خرید در سربرگ (هدر) دیده شود. (سبد از دسترس خارج نمی‌شود: همیشه یک راه رسیدن به آن می‌ماند.)"),
+    "show_wishlist": ("نمایش علاقه‌مندی‌ها", "آیکن علاقه‌مندی‌ها در سربرگ (هدر) دیده شود."),
+    "sticky": ("چسبان بودن سربرگ (هدر)", "با اسکرول صفحه، سربرگ (هدر) بالای صفحه می‌ماند."),
+    "announcement_enabled": ("نمایش نوار اعلان", "نوار اعلان بالای سربرگ (هدر) دیده شود."),
     # footer toggles
-    "show_about": ("نمایش معرفی فروشگاه", "توضیح کوتاه دربارهٔ فروشگاه در پابرگ دیده شود."),
-    "show_contact": ("نمایش اطلاعات تماس", "تلفن، ایمیل و ساعت کاری در پابرگ دیده شود."),
-    "show_quick_links": ("نمایش لینک‌های مفید", "لینک‌های راهنمای خرید در پابرگ دیده شود."),
-    "show_categories": ("نمایش دسته‌بندی‌ها", "فهرست دسته‌بندی‌ها در پابرگ دیده شود."),
-    "show_social": ("نمایش شبکه‌های اجتماعی", "آیکن شبکه‌های اجتماعی در پابرگ دیده شود."),
-    "show_trust_badges": ("نمایش نشان‌های اعتماد", "نمادهای اعتماد (مثل نماد الکترونیکی) در پابرگ دیده شود."),
-    "show_payment_logos": ("نمایش لوگوی روش‌های پرداخت", "لوگوی درگاه‌ها و روش‌های پرداخت در پابرگ دیده شود."),
-    "show_newsletter": ("نمایش عضویت در خبرنامه", "فرم عضویت خبرنامه در پابرگ دیده شود."),
-    "show_copyright": ("نمایش کپی‌رایت", "سطر حقوق و نام فروشگاه در پایین پابرگ دیده شود."),
+    "show_about": ("نمایش معرفی فروشگاه", "توضیح کوتاه دربارهٔ فروشگاه در پابرگ (فوتر) دیده شود."),
+    "show_contact": ("نمایش اطلاعات تماس", "تلفن، ایمیل و ساعت کاری در پابرگ (فوتر) دیده شود."),
+    "show_quick_links": ("نمایش لینک‌های مفید", "لینک‌های راهنمای خرید در پابرگ (فوتر) دیده شود."),
+    "show_categories": ("نمایش دسته‌بندی‌ها", "فهرست دسته‌بندی‌ها در پابرگ (فوتر) دیده شود."),
+    "show_social": ("نمایش شبکه‌های اجتماعی", "آیکن شبکه‌های اجتماعی در پابرگ (فوتر) دیده شود."),
+    "show_trust_badges": ("نمایش نشان‌های اعتماد", "نمادهای اعتماد (مثل نماد الکترونیکی) در پابرگ (فوتر) دیده شود."),
+    "show_payment_logos": ("نمایش لوگوی روش‌های پرداخت", "لوگوی درگاه‌ها و روش‌های پرداخت در پابرگ (فوتر) دیده شود."),
+    "show_newsletter": ("نمایش عضویت در خبرنامه", "فرم عضویت خبرنامه در پابرگ (فوتر) دیده شود."),
+    "show_copyright": ("نمایش کپی‌رایت", "سطر حقوق و نام فروشگاه در پایین پابرگ (فوتر) دیده شود."),
 }
 #: Responsive rows: the REAL stored property -> (device title, device word, devices it acts on). ``hide_on_*`` is stored as "hidden", so the
 #: control that shows «visible» is the inverse of the stored boolean (the adapter in vision.js keeps R4's checkbox as the one source of truth).
