@@ -52,6 +52,20 @@ SAMPLE_NEW = {
     "status": "فعال", "requires_shipping": "بله",
 }
 SAMPLE_UPDATE = {"sku": "TSH-001", "price": "275000", "stock": "55"}
+# نمونه‌یِ آموزشیِ «تنوع»: یک کالایِ فرضی «TSH-001» با دو ویژگیِ «رنگ» و «سایز». ردیفِ ۱ و ۲ تنوعِ تازه را با نامِ ویژگی/مقدار می‌سازند؛
+# ردیفِ ۳ فقط ستون‌هایِ لازم را دارد (ستونِ خالی = بدونِ تغییر/پیش‌فرض). هر سه ردیف تنوعِ تازه‌اند تا نمونه همیشه بدونِ وابستگی به داده‌یِ
+# قبلی در پیش‌نمایش معتبر باشد؛ بروزرسانیِ تنوعِ موجود در متنِ راهنما با مثال توضیح داده شده است.
+SAMPLE_VARIANT_ROWS = [
+    {"product_sku": "TSH-001", "variant_sku": "TSH-001-RED-L", "option_1_code": "رنگ", "option_1_value_code": "قرمز",
+     "option_2_code": "سایز", "option_2_value_code": "L", "price": "0", "stock": "12", "weight_grams": "260", "is_active": "بله", "is_default": "بله"},
+    {"product_sku": "TSH-001", "variant_sku": "TSH-001-BLUE-M", "option_1_code": "رنگ", "option_1_value_code": "آبی",
+     "option_2_code": "سایز", "option_2_value_code": "M", "price": "20000", "stock": "8", "is_active": "بله"},
+    {"product_sku": "TSH-001", "option_1_code": "رنگ", "option_1_value_code": "قرمز", "option_2_code": "سایز", "option_2_value_code": "M", "stock": "5"},
+]
+SAMPLE_ROWS = {
+    ImportJob.ImportType.PRODUCTS: [SAMPLE_NEW, SAMPLE_UPDATE],
+    ImportJob.ImportType.VARIANTS: SAMPLE_VARIANT_ROWS,
+}
 TEMPLATE_VALIDATION_ROWS = 1000
 
 
@@ -713,6 +727,14 @@ def build_template_xlsx(import_type: str, store) -> bytes:
             "مشخصاتِ فنی و ویژگی‌ها: در هر سلول چند مورد به شکلِ «عنوان: مقدار» بنویسید و با «؛» جدا کنید. نمونه: «جنس: پنبه؛ وزن: ۲۵۰ گرم» و «رنگ: قرمز؛ سایز: L». برایِ ویژگیِ چندانتخابی مقدارها را با «،» جدا کنید.",
             "شیتِ «نمونه» دو ردیفِ نمونه دارد (یک کالایِ تازه و یک بروزرسانی). آن شیت خوانده نمی‌شود؛ فقط ردیف‌هایِ شیتِ «داده‌ها» وارد می‌شوند.",
         ]
+    if import_type == ImportJob.ImportType.VARIANTS:
+        intro[0:0] = [
+            "پیش از ورودِ تنوع: کالا و «ویژگی‌هایِ تنوع‌دار» آن (مثلاً رنگ و سایز با مقدارهایِ فعال) باید از قبل در صفحه‌ی کالا تعریف شده باشند. این ورود، ویژگی یا مقدارِ تازه نمی‌سازد؛ فقط تنوع‌هایِ همان ترکیب‌ها را می‌سازد یا بروزرسانی می‌کند.",
+            "تنوعِ تازه: «SKU کالا» (کالایِ مادر) و برایِ هر ویژگیِ تنوع، «نام ویژگی» و «مقدار ویژگی» را بنویسید (مثلاً رنگ ← قرمز، سایز ← L). نام و مقدار باید دقیقاً با ویژگی‌هایِ فعالِ همان کالا یکی باشد. اگر ترکیبی هنوز ساخته نشده باشد، سیستم تنوع‌هایِ همه‌ی ترکیب‌هایِ ممکنِ ویژگی‌هایِ فعالِ آن کالا را می‌سازد.",
+            "بروزرسانیِ تنوعِ موجود: «شناسه تنوع» یا «SKU تنوع» را بنویسید (نیازی به نامِ ویژگی نیست) و فقط ستون‌هایی را پر کنید که می‌خواهید عوض شوند؛ ستونِ خالی یعنی «بدونِ تغییر». مثال: فقط «SKU تنوع = TSH-001-RED-L» و «موجودی = ۳۰» موجودیِ همان تنوعِ موجود را ۳۰ می‌کند.",
+            "«تغییر قیمت» مبلغی است که به قیمتِ پایه‌یِ کالا اضافه (یا با عددِ منفی کم) می‌شود، نه قیمتِ نهاییِ تنوع. موجودی با ثبتِ حرکتِ انبار اعمال می‌شود.",
+            "شیتِ «نمونه» سه ردیفِ آموزشی دارد (سه تنوعِ تازه برایِ کالایِ فرضیِ TSH-001؛ ردیفِ سوم فقط ستون‌هایِ لازم را دارد). آن شیت خوانده نمی‌شود؛ فقط ردیف‌هایِ شیتِ «داده‌ها» وارد می‌شوند.",
+        ]
 
     rows = [
         (c.label, REQUIRED_TEXT[c.required], c.help, c.accepted, c.example, c.blank)
@@ -725,14 +747,14 @@ def build_template_xlsx(import_type: str, store) -> bytes:
         table_header=("ستون", "الزامی؟", "توضیح", "مقدارهایِ مجاز", "مثال", "اگر خالی بماند"),
         table_rows=rows, widths=(22, 18, 44, 34, 22, 40),
     )
-    if import_type == ImportJob.ImportType.PRODUCTS:
+    if import_type in SAMPLE_ROWS:
         sample_ws = wb.create_sheet(SHEET_SAMPLE)
         sample_columns = [Column(c.base_label, width=c.width, text_format=c.text_format, tier="tech") for c in specs]
-        sample_rows = [[SAMPLE_NEW.get(c.key, "") for c in specs], [SAMPLE_UPDATE.get(c.key, "") for c in specs]]
+        sample_rows = [[sample.get(c.key, "") for c in specs] for sample in SAMPLE_ROWS[import_type]]
         xlsx_utils.write_table_sheet(sample_ws, sample_columns, sample_rows, header_height=34)
         sample_ws.sheet_properties.tabColor = xlsx_utils.TECH_HEADER_FILL
     # ترتیبِ شیت‌ها: داده‌ها (فعال)، راهنما، فهرست‌ها، (نمونه)
-    order = [SHEET_DATA, SHEET_GUIDE, SHEET_LISTS] + ([SHEET_SAMPLE] if import_type == ImportJob.ImportType.PRODUCTS else [])
+    order = [SHEET_DATA, SHEET_GUIDE, SHEET_LISTS] + ([SHEET_SAMPLE] if import_type in SAMPLE_ROWS else [])
     wb._sheets = [wb[name] for name in order]
     wb.active = wb._sheets.index(wb[SHEET_DATA])
     return xlsx_utils.workbook_to_bytes(wb)

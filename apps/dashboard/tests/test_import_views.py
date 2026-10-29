@@ -192,7 +192,7 @@ class TemplateDownloadTests(ImportViewTestCase):
                 self.assertEqual(response["Content-Type"], XLSX_MIME)
                 self.assertIn(f"{import_type}-import-template.xlsx", response["Content-Disposition"])
                 self.assertEqual(response.content[:2], b"PK")
-                expected_sheets = ["داده‌ها", "راهنما", "فهرست‌ها"] + (["نمونه"] if import_type == "products" else [])
+                expected_sheets = ["داده‌ها", "راهنما", "فهرست‌ها"] + (["نمونه"] if import_type in ("products", "variants") else [])
                 self.assertEqual(wb.sheetnames, expected_sheets)
                 self.assertTrue(wb["داده‌ها"].sheet_view.rightToLeft)
                 self.assertEqual(wb["داده‌ها"].freeze_panes, "A2")

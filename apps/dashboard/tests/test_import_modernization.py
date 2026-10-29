@@ -117,3 +117,80 @@ class MessageWordingTests(ProposalFlowBase):
         html = self.detail(job).content.decode()
         for glued in ("برندبرند", "دسته‌بندیزیردسته‌بندی", "دسته‌بندیدسته‌بندی"):
             self.assertNotIn(glued, html)
+
+
+class QuickGuideAndVariantSampleTests(ProposalFlowBase):
+    """«راهنمای سریع» on the upload page and the schema-true educational variant sample (no engine change)."""
+
+    def test_upload_page_has_the_four_step_guide_and_every_template_link(self):
+        page = self.client.get(reverse("dashboard:import-upload"))
+        self.assertContains(page, 'data-testid="import-quick-guide"')
+        self.assertContains(page, "راهنمای سریع ورود گروهی کالاها")
+        for text in ("قالب را بگیرید", "فایل را پر و بارگذاری کنید", "مواردِ جدید را تأیید کنید", "تأیید نهایی بزنید"):
+            self.assertContains(page, text)
+        for kind in ("products", "variants", "inventory"):
+            self.assertContains(page, reverse("dashboard:import-template", args=[kind]))
+        self.assertContains(page, "با نمونه‌یِ آموزشی")
+
+    def _variant_product(self):
+        from apps.catalog.services.variant_engine_service import add_product_option
+
+        product = Product.objects.create(store=self.store, vendor=self.vendor, category=self.leaf, name="تیشرت آموزشی", slug="tee-sample",
+                                         sku="TSH-001", price=Decimal("250000"), stock=0, product_type=Product.ProductType.VARIABLE)
+        add_product_option(product, label="رنگ", values=["قرمز", "آبی"])
+        add_product_option(product, label="سایز", values=["L", "M"])
+        return product
+
+    def _template(self):
+        from apps.dashboard.tests.xlsx_helpers import open_workbook
+
+        response = self.client.get(reverse("dashboard:import-template", args=["variants"]))
+        self.assertEqual(response.status_code, 200)
+        return open_workbook(b"".join(response.streaming_content) if hasattr(response, "streaming_content") else response.content)
+
+    def test_variant_template_has_a_sample_sheet_that_is_not_part_of_the_data_and_a_schema_true_guide(self):
+        wb = self._template()
+        self.assertEqual(wb.sheetnames, ["داده‌ها", "راهنما", "فهرست‌ها", "نمونه"])
+        data, sample = wb["داده‌ها"], wb["نمونه"]
+        self.assertEqual([r for r in data.iter_rows(min_row=2, values_only=True) if any(r)], [])  # the data sheet is empty: nothing to import by accident
+        headers = [c.value for c in sample[1]]
+        self.assertEqual(sample.max_row, 4)                                                   # header + 3 teaching rows
+        self.assertIn("SKU کالا", headers[:2] + headers)
+        guide_text = " ".join(str(c.value) for row in wb["راهنما"].iter_rows() for c in row if c.value)
+        for phrase in ("ویژگی‌هایِ تنوع‌دار", "SKU تنوع", "بدونِ تغییر", "تغییر قیمت"):
+            self.assertIn(phrase, guide_text)
+
+    def test_sample_rows_run_through_the_real_variant_preview_and_execution(self):
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import load_workbook
+        from apps.catalog.models import ProductVariant
+
+        product = self._variant_product()
+        wb = load_workbook(BytesIO(self._template_bytes()))
+        data, sample = wb["داده‌ها"], wb["نمونه"]
+        for row in sample.iter_rows(min_row=1, values_only=True):
+            data.append(list(row)) if row[0] != data.cell(1, 1).value else None
+        buf = BytesIO(); wb.save(buf)
+        before = ProductVariant.objects.filter(product=product).count()
+        resp = self.client.post(reverse("dashboard:import-upload"), {
+            "import_type": "variants", "mode": "upsert",
+            "file": SimpleUploadedFile("variants-sample.xlsx", buf.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        })
+        self.assertEqual(resp.status_code, 302)
+        job = ImportJob.objects.filter(store=self.store).latest("pk")
+        self.assertEqual(job.status, ImportJob.Status.PREVIEW_READY)
+        self.assertEqual((job.total_rows, job.valid_rows, job.invalid_rows), (3, 3, 0))
+        self.assertEqual(ProductVariant.objects.filter(product=product).count(), before)       # the preview changed nothing
+        import_service.run_execution(job, actor=self.owner)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+        red_l = ProductVariant.objects.get(product=product, sku="TSH-001-RED-L")
+        blue_m = ProductVariant.objects.get(product=product, sku="TSH-001-BLUE-M")
+        self.assertEqual((red_l.stock, blue_m.stock), (12, 8))
+        self.assertEqual(blue_m.extra_price, Decimal("20000"))
+        self.assertEqual(ProductVariant.objects.filter(product=product, stock=5).count(), 1)     # the third (partial) row
+
+    def _template_bytes(self):
+        response = self.client.get(reverse("dashboard:import-template", args=["variants"]))
+        return b"".join(response.streaming_content) if hasattr(response, "streaming_content") else response.content
