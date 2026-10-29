@@ -158,14 +158,22 @@ class SettingsShopInfoViewTests(SettingsViewsTestCase):
 
 
 class SettingsFinanceViewTests(SettingsViewsTestCase):
-    def test_valid_post_updates_tax_and_threshold(self):
+    def test_valid_post_updates_threshold_only_and_never_the_tax_rate(self):
+        """نرخِ مالیات یک ویرایشگرِ واحد دارد («تنظیماتِ مالیات»): ``tax_percent``ِ فرمِ قدیمی نادیده گرفته می‌شود."""
+        before = ShopSettings.load().tax_percent
         response = self.client.post(reverse("dashboard:settings-finance"), {
             "tax_percent": "۷", "free_shipping_threshold": "۷۰۰۰۰۰",
         })
         self.assertRedirects(response, "/admin-portal/settings/?section=finance")
         shop = ShopSettings.load()
-        self.assertEqual(shop.tax_percent, Decimal("7"))
+        self.assertEqual(shop.tax_percent, before)
         self.assertEqual(shop.free_shipping_threshold, Decimal("700000"))
+
+    def test_finance_section_is_a_summary_with_a_link_to_the_tax_page(self):
+        page = self.client.get(reverse("dashboard:settings") + "?section=finance")
+        self.assertContains(page, "مدیریت مالیات")
+        self.assertContains(page, reverse("dashboard:tax-settings"))
+        self.assertNotContains(page, 'name="tax_percent"')          # no second rate editor
 
     def test_updated_tax_percent_affects_pricing_service(self):
         from decimal import Decimal as D
@@ -175,9 +183,7 @@ class SettingsFinanceViewTests(SettingsViewsTestCase):
         from apps.catalog.models import Category, Product, Vendor
         from apps.stores.models import Store
 
-        self.client.post(reverse("dashboard:settings-finance"), {
-            "tax_percent": "5", "free_shipping_threshold": "1000000",
-        })
+        self.client.post(reverse("dashboard:tax-settings"), {"tax_enabled": "on", "tax_percent": "5"})
         store = Store.objects.get(slug="akhlaghi")
         vendor = Vendor.objects.create(store=store, name="فروشگاه", slug="shop-sf")
         category = Category.objects.create(store=store, name="دسته", slug="cat-sf")
@@ -190,12 +196,18 @@ class SettingsFinanceViewTests(SettingsViewsTestCase):
         totals = cart_totals(cart, store=store, shipping_method=self.shipping)
         self.assertEqual(totals["tax"], D("5000"))
 
-    def test_out_of_range_tax_percent_rejected(self):
-        response = self.client.post(reverse("dashboard:settings-finance"), {
-            "tax_percent": "150", "free_shipping_threshold": "500000",
-        })
+    def test_out_of_range_tax_percent_rejected_on_the_tax_page(self):
+        before = ShopSettings.load().tax_percent
+        response = self.client.post(reverse("dashboard:tax-settings"), {"tax_enabled": "on", "tax_percent": "150"})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "تنظیمات مالی و مالیات")  # Stays on finance section
+        self.assertContains(response, "نرخ مالیات باید بین ۰ تا ۱۰۰ باشد")
+        self.assertEqual(ShopSettings.load().tax_percent, before)        # nothing was saved
+
+    def test_invalid_threshold_stays_on_finance_section(self):
+        response = self.client.post(reverse("dashboard:settings-finance"), {"free_shipping_threshold": "abc"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["active_section"], "finance")
+        self.assertContains(response, "آستانه‌ی ارسال رایگان")
 
 
 class SettingsGiftWrapViewTests(SettingsViewsTestCase):
@@ -752,9 +764,7 @@ class ThemeSectionNavigationTests(SettingsViewsTestCase):
             self.assertContains(response, 'aria-current="page"')
 
     def test_finance_validation_error_stays_on_finance_section(self):
-        response = self.client.post(reverse("dashboard:settings-finance"), {
-            "tax_percent": "150", "free_shipping_threshold": "500000",
-        })
+        response = self.client.post(reverse("dashboard:settings-finance"), {"free_shipping_threshold": "-5"})
         self.assertEqual(response.context["active_section"], "finance")
 
     def test_appearance_validation_error_keeps_active_section_appearance(self):

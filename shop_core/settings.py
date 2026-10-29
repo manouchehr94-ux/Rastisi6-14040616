@@ -396,7 +396,14 @@ LOGGING = {
 
 # Business defaults (Stage 2 will read these in the pricing service)
 SHOP_FREE_SHIPPING_THRESHOLD = 500_000
+# Legacy platform-wide rate. No new store reads it any more (see SHOP_NEW_STORE_TAX_* below); it only remains because the
+# historical backfill migration core/0006 and external imports referenced the name.
 SHOP_TAX_PERCENT = 9
+# Tax defaults for a store created from now on (``ShopSettings.provision_for`` and the model field defaults read these two
+# values - one source). New stores start WITHOUT tax; the merchant opts in on /admin-portal/tax/settings/ and the suggested
+# rate is already filled in. Existing stores and past orders are never touched by a change here.
+SHOP_NEW_STORE_TAX_ENABLED = env_bool("RASTISI_NEW_STORE_TAX_ENABLED", default=False)
+SHOP_NEW_STORE_TAX_PERCENT = env_str("RASTISI_NEW_STORE_TAX_PERCENT", "10.00")
 
 # هویت عمومی پلتفرم (نه یک فروشنده‌ی خاص) — مطابق اصل جنریک‌بودن سند مشخصات
 SHOP_NAME = "دیجی‌مارکت"

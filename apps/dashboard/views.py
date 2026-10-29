@@ -217,6 +217,7 @@ from apps.orders.models import (
     TaxRate,
     Transaction,
 )
+from apps.orders.services import tax_service
 from apps.orders.services.order_service import change_order_status
 from apps.orders.services.shipping_service import ensure_default_shipping_methods
 from apps.orders.services.refund_service import (
@@ -336,6 +337,7 @@ from .forms import (
     CategoryEditForm,
     CollectionForm,
     FinanceSettingsForm,
+    TaxGeneralRateForm,
     GiftWrapSettingsForm,
     OrderExpirySettingsForm,
     MainCategoryForm,
@@ -4279,8 +4281,10 @@ def _settings_context(
             "description": shop.description,
         }),
         "finance_form": finance_form or FinanceSettingsForm(initial={
-            "tax_percent": shop.tax_percent, "free_shipping_threshold": shop.free_shipping_threshold,
+            "free_shipping_threshold": shop.free_shipping_threshold,
         }),
+        "tax_has_granular_rates": SimpleLazyObject(lambda: tax_service.store_has_granular_tax_rates(store)),  # lazy: only the finance section reads it
+        "can_view_tax_page": membership_has_permission(request.store_membership, TAX_SETTINGS_VIEW),
         "order_expiry_form": OrderExpirySettingsForm(initial={
             "expiry_enabled": shop.unpaid_online_order_ttl_minutes > 0,
             # خاموش ⇒ مهلتِ ذخیره‌شده ۰ است؛ فرم عددِ پیشنهادی را نشان می‌دهد تا با روشن‌کردن آماده باشد.
@@ -4498,9 +4502,9 @@ def settings_finance(request):
     form = FinanceSettingsForm(request.POST)
     if form.is_valid():
         shop = ShopSettings.load(store=request.store)
-        shop.tax_percent = form.cleaned_data["tax_percent"]
+        # نرخِ مالیات فقط در «تنظیماتِ مالیات» ویرایش می‌شود؛ هر ``tax_percent``ِ رسیده از فرمِ قدیمی نادیده است.
         shop.free_shipping_threshold = form.cleaned_data["free_shipping_threshold"]
-        shop.save()
+        shop.save(update_fields=["free_shipping_threshold", "updated_at"])
         messages.success(request, "تنظیمات مالی ذخیره شد")
         return redirect("/admin-portal/settings/?section=finance")
     context = _settings_context(request, finance_form=form)
@@ -7721,10 +7725,19 @@ def tax_settings(request):
     if request.method == "POST" and not membership_has_permission(request.store_membership, TAX_SETTINGS_MANAGE):
         return render(request, "dashboard/403.html", status=403)
 
-    if request.method == "POST":
+    rate_form = TaxGeneralRateForm(request.POST or None, initial={"tax_percent": settings_row.tax_percent})
+
+    if request.method == "POST" and rate_form.is_valid():
         from django.utils import timezone
 
+        before = {
+            "enabled": settings_row.tax_enabled, "rate": str(settings_row.tax_percent),
+            "prices_include_tax": settings_row.prices_include_tax, "shipping_taxable": settings_row.shipping_taxable,
+        }
         settings_row.tax_enabled = request.POST.get("tax_enabled") == "on"
+        new_rate = rate_form.cleaned_data["tax_percent"]
+        if new_rate is not None:
+            settings_row.tax_percent = new_rate
         settings_row.prices_include_tax = request.POST.get("prices_include_tax") == "on"
         settings_row.shipping_taxable = request.POST.get("shipping_taxable") == "on"
         settings_row.tax_rounding_policy = request.POST.get(
@@ -7741,20 +7754,30 @@ def tax_settings(request):
         # از «صراحتاً روشن نگه‌داشته شده» تشخیص دهد).
         settings_row.tax_setup_confirmed_at = timezone.now()
         settings_row.save(update_fields=[
-            "tax_enabled", "prices_include_tax", "shipping_taxable", "tax_rounding_policy", "default_tax_class",
-            "tax_setup_confirmed_at",
+            "tax_enabled", "tax_percent", "prices_include_tax", "shipping_taxable", "tax_rounding_policy",
+            "default_tax_class", "tax_setup_confirmed_at",
         ])
         record_audit_event(
             store=store, actor=request.user, action_code="tax_settings.updated",
             object_type="ShopSettings", object_id=settings_row.pk, object_label="تنظیماتِ مالیات",
+            before=before, after={
+                "enabled": settings_row.tax_enabled, "rate": str(settings_row.tax_percent),
+                "prices_include_tax": settings_row.prices_include_tax, "shipping_taxable": settings_row.shipping_taxable,
+            },
         )
         messages.success(request, "تنظیماتِ مالیات ذخیره شد")
         return redirect("dashboard:tax-settings")
 
+    has_granular = tax_service.store_has_granular_tax_rates(store)
+    sample_base = Decimal("1000000")
     return render(request, "dashboard/tax_settings.html", {
-        "settings": settings_row, "active_page": "tax",
+        "settings": settings_row, "active_page": "tax", "rate_form": rate_form,
         "tax_classes": TaxClass.objects.filter(store=store, is_active=True),
         "rounding_choices": ShopSettings.TaxRoundingPolicy.choices,
+        "has_granular": has_granular,
+        "sample_base": sample_base,
+        "sample_tax": (sample_base * settings_row.tax_percent / Decimal("100")).quantize(Decimal("1")) if not has_granular else None,
+        "can_manage_tax": membership_has_permission(request.store_membership, TAX_SETTINGS_MANAGE),
     })
 
 

@@ -617,16 +617,36 @@ class ShopInfoForm(forms.Form):
 
 
 class FinanceSettingsForm(NumericCleanMixin, forms.Form):
-    tax_percent = forms.CharField(label="نرخ مالیات (٪)", widget=forms.TextInput(attrs={"class": "inp"}))
-    free_shipping_threshold = forms.CharField(
-        label="آستانه‌ی ارسال رایگان (تومان)", widget=forms.TextInput(attrs={"class": "inp"})
-    )
+    """تنظیماتِ مالیِ غیرمالیاتی. نرخِ مالیات عمداً اینجا نیست: تنها ویرایشگرِ آن «تنظیماتِ مالیات» است
+    (``TaxGeneralRateForm``)؛ اگر فرمِ قدیمی ``tax_percent`` بفرستد، نادیده گرفته می‌شود."""
 
-    def clean_tax_percent(self):
-        return self._clean_decimal("tax_percent", min_value=0, max_value=100)
+    free_shipping_threshold = forms.CharField(
+        label="آستانه‌ی ارسال رایگان (تومان)", widget=forms.TextInput(attrs={"class": "au-input au-input--ltr", "dir": "ltr", "inputmode": "numeric"})
+    )
 
     def clean_free_shipping_threshold(self):
         return self._clean_int("free_shipping_threshold", min_value=0)
+
+
+class TaxGeneralRateForm(NumericCleanMixin, forms.Form):
+    """نرخِ کلیِ مالیات (٪) — تنها ویرایشگرِ آن، در «تنظیماتِ مالیات». خالی = بدونِ تغییر (فرم‌هایِ قدیمیِ بدونِ این فیلد)."""
+
+    tax_percent = forms.CharField(
+        label="نرخ کلی مالیات", required=False,
+        widget=forms.TextInput(attrs={"class": "au-input au-input--ltr", "dir": "ltr", "inputmode": "decimal", "autocomplete": "off"}),
+    )
+
+    def clean_tax_percent(self):
+        raw = normalize_digits(self.cleaned_data.get("tax_percent", "")).replace("٫", ".").replace("٪", "").replace("%", "").strip()
+        if raw == "":
+            return None
+        try:
+            value = Decimal(raw)
+        except InvalidOperation:
+            raise forms.ValidationError("نرخ مالیات باید یک عدد باشد (مثلاً ۱۰ یا ۹٫۵).")
+        if value < 0 or value > 100:
+            raise forms.ValidationError("نرخ مالیات باید بین ۰ تا ۱۰۰ باشد.")
+        return value.quantize(Decimal("0.01"))
 
 
 class GiftWrapSettingsForm(NumericCleanMixin, forms.Form):

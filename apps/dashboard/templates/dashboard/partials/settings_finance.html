@@ -1,26 +1,36 @@
 {% load image_guide %}
 {% load persian %}
-<div class="card">
-  <div class="card-head"><h3>💰 تنظیمات مالی و مالیات</h3><span class="hint">نرخ مالیات و آستانه ارسال رایگان</span></div>
-  <div class="card-body">
-    <form method="post" action="{% url 'dashboard:settings-finance' %}">
-      {% csrf_token %}
-      <div class="form-row">
-        <div class="form-group">
-          <label>نرخ مالیات (٪)</label>
-          {{ finance_form.tax_percent }}
-          {% for error in finance_form.tax_percent.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
-        </div>
-        <div class="form-group">
-          <label>آستانه‌ی ارسال رایگان (تومان)</label>
-          {{ finance_form.free_shipping_threshold }}
-          {% for error in finance_form.free_shipping_threshold.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
-        </div>
+<div class="au-page" style="max-width:none;margin-bottom:16px">
+  <div class="au-card">
+    <div class="au-card__head">
+      <h2>💰 مالیات</h2>
+      <span class="au-badge {% if shop.tax_enabled %}au-badge--ok{% endif %}">{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</span>
+    </div>
+    <div class="au-card__body">
+      <div class="au-stats">
+        <div class="au-stat {% if shop.tax_enabled %}au-stat--ok{% endif %}"><b>{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</b><span>وضعیت مالیات</span></div>
+        <div class="au-stat"><b>{% if shop.tax_enabled %}{% if tax_has_granular_rates %}بر اساس دسته‌ی مالیاتی{% else %}{{ shop.tax_percent|floatformat:"-2" }}٪{% endif %}{% else %}—{% endif %}</b><span>نرخ مالیات</span></div>
       </div>
-      <p style="font-size:11.5px;color:var(--muted);margin-bottom:14px">این دو مقدار در سرویس قیمت‌گذاری (سبد خرید و تسویه‌حساب) استفاده می‌شوند.</p>
-      <button type="submit" class="btn btn-primary">ذخیره تنظیمات مالی</button>
-    </form>
+      <p class="au-hint" style="margin:0">وضعیت و نرخِ مالیات فقط در صفحه‌ی «مدیریت مالیات» ویرایش می‌شود تا هیچ‌گاه دو مقدارِ متفاوت وجود نداشته باشد. اینجا فقط خلاصه‌ی وضعیت را می‌بینید.</p>
+    </div>
+    <div class="au-card__foot">{% if can_view_tax_page %}<a class="au-btn au-btn--primary" href="{% url 'dashboard:tax-settings' %}">مدیریت مالیات</a>{% else %}<span class="au-hint">برای مدیریتِ مالیات به دسترسیِ «مالیات» نیاز دارید.</span>{% endif %}</div>
   </div>
+</div>
+
+<div class="au-page" style="max-width:none;margin-bottom:16px">
+  <form method="post" action="{% url 'dashboard:settings-finance' %}" class="au-card" novalidate>
+    {% csrf_token %}
+    <div class="au-card__head"><h2>🚚 آستانه‌ی ارسال رایگان</h2><span class="au-sub">برای کلِ فروشگاه</span></div>
+    <div class="au-card__body">
+      <div class="au-field">
+        <label for="id_free_shipping_threshold">خرید بالای این مبلغ، ارسال رایگان است</label>
+        <div class="au-unit">{{ finance_form.free_shipping_threshold }}<span>تومان</span></div>
+        {% for error in finance_form.free_shipping_threshold.errors %}<span class="au-error">{{ error }}</span>{% endfor %}
+        <span class="au-hint">این مقدار در سبد خرید و تسویه‌حساب استفاده می‌شود. هر روشِ ارسال می‌تواند آستانه‌ی رایگانِ خودش را هم داشته باشد؛ هر کدام زودتر برقرار شود ارسال رایگان است. هزینه‌ها و روش‌ها در «مدیریت ارسال».</span>
+      </div>
+    </div>
+    <div class="au-card__foot"><button type="submit" class="au-btn au-btn--primary">ذخیره آستانه</button></div>
+  </form>
 </div>
 
 <div class="card" style="margin-top:16px">

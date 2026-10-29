@@ -35,6 +35,25 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+def new_store_tax_enabled() -> bool:
+    """پیش‌فرضِ «مالیات فعال است؟» برای Storeِ تازه — از ``settings.SHOP_NEW_STORE_TAX_ENABLED`` (پیش‌فرض: خاموش)."""
+    from django.conf import settings as django_settings
+
+    return bool(getattr(django_settings, "SHOP_NEW_STORE_TAX_ENABLED", False))
+
+
+def new_store_tax_percent():
+    """نرخِ پیشنهادیِ مالیات برای Storeِ تازه — از ``settings.SHOP_NEW_STORE_TAX_PERCENT`` (پیش‌فرض ۱۰٫۰۰)."""
+    from decimal import Decimal, InvalidOperation
+    from django.conf import settings as django_settings
+
+    try:
+        value = Decimal(str(getattr(django_settings, "SHOP_NEW_STORE_TAX_PERCENT", "10.00")))
+    except InvalidOperation:
+        return Decimal("10.00")
+    return value if Decimal("0") <= value <= Decimal("100") else Decimal("10.00")
+
+
 class ShopSettings(TimeStampedModel):
     """تنظیمات هر فروشگاه — دقیقاً یک رکورد به‌ازای هر Store.
 
@@ -76,7 +95,9 @@ class ShopSettings(TimeStampedModel):
     contact_email = models.EmailField("ایمیل فروشگاه", blank=True)
     contact_address = models.CharField("آدرس", max_length=300, blank=True)
 
-    tax_percent = models.DecimalField("نرخ مالیات (٪)", max_digits=5, decimal_places=2, default=9)
+    # نرخِ کلی (وقتی هیچ نرخِ دسته‌ای ثبت نشده). پیش‌فرضِ Storeِ تازه از settings.SHOP_NEW_STORE_TAX_PERCENT می‌آید؛
+    # ردیف‌هایِ موجود دست‌نخورده‌اند (تغییرِ default هیچ دیتایی را به‌روز نمی‌کند).
+    tax_percent = models.DecimalField("نرخ مالیات (٪)", max_digits=5, decimal_places=2, default=new_store_tax_percent)
     free_shipping_threshold = models.DecimalField(
         "آستانه‌ی ارسال رایگان (تومان)", max_digits=12, decimal_places=0, default=500_000
     )
@@ -85,11 +106,10 @@ class ShopSettings(TimeStampedModel):
         ON_TOTAL = "on_total", "گردکردنِ مجموع"
         PER_LINE = "per_line", "گردکردنِ هر ردیف"
 
-    # ``tax_enabled`` پیش‌فرضش True است — نه یک انتخابِ دلخواه، بلکه بازتابِ
-    # رفتارِ همیشگیِ این کدبیس پیش از checkpoint 3B: tax_percent همیشه و
-    # بدونِ قید روی هر سبدی اعمال می‌شد (نگاه کنید به ADR-44). خاموش‌کردنِ
-    # آن اکنون یک اقدامِ صریحِ مدیر است، نه رفتارِ پیش‌فرضِ جدید.
-    tax_enabled = models.BooleanField("فعال‌سازیِ مالیات", default=True)
+    # Storeِ تازه بدونِ مالیات شروع می‌کند (``settings.SHOP_NEW_STORE_TAX_ENABLED``، پیش‌فرض False)؛ مدیر در
+    # «تنظیماتِ مالیات» صراحتاً روشنش می‌کند. Storeهایِ موجود پیش‌تر با True ساخته شده بودند (رفتارِ پیش از checkpoint 3B،
+    # ADR-44) و همان‌طور می‌مانند — این default فقط ردیف‌هایِ *تازه* را تعیین می‌کند.
+    tax_enabled = models.BooleanField("فعال‌سازیِ مالیات", default=new_store_tax_enabled)
     # False یعنی قیمت‌ها بدونِ مالیات‌اند و مالیات جداگانه افزوده می‌شود —
     # دقیقاً همان محاسبه‌ی قبلیِ ``cart_totals`` (مالیات روی after_coupon
     # افزوده می‌شد، نه جزئی از آن).
@@ -264,9 +284,9 @@ class ShopSettings(TimeStampedModel):
         تنظیمات — تا مرچنت هیچ‌گاه محتوایِ مثالی را به‌اشتباه به‌عنوانِ دادهٔ
         واقعیِ خودش ذخیره نکند (ویزاردِ آنبوردینگ، ``OnboardingIdentityForm``،
         این مقادیرِ خالی را به‌عنوانِ placeholder نشان می‌دهد، نه value).
-        مقادیرِ عددیِ کسب‌وکار (``tax_percent``/``free_shipping_threshold``)
-        همچنان از settings.py می‌آیند — آن‌ها پیش‌فرضِ کسب‌وکاری‌اند، نه متنِ
-        هویتی/مثالی.
+        مقادیرِ عددیِ کسب‌وکار از settings.py می‌آیند — آن‌ها پیش‌فرضِ کسب‌وکاری‌اند، نه متنِ
+        هویتی/مثالی: ``free_shipping_threshold`` از ``SHOP_FREE_SHIPPING_THRESHOLD`` و مالیاتِ Storeِ تازه از
+        ``SHOP_NEW_STORE_TAX_ENABLED`` (پیش‌فرض خاموش) / ``SHOP_NEW_STORE_TAX_PERCENT`` (پیش‌فرض ۱۰٫۰۰).
         """
         from django.conf import settings as django_settings
 
@@ -278,7 +298,8 @@ class ShopSettings(TimeStampedModel):
                 "contact_phone": "",
                 "contact_email": "",
                 "contact_address": "",
-                "tax_percent": getattr(django_settings, "SHOP_TAX_PERCENT", 9),
+                "tax_enabled": new_store_tax_enabled(),
+                "tax_percent": new_store_tax_percent(),
                 "free_shipping_threshold": getattr(
                     django_settings, "SHOP_FREE_SHIPPING_THRESHOLD", 500_000
                 ),
