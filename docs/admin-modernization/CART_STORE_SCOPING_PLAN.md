@@ -17,7 +17,8 @@ Status: proposal for approval. No migration has been created or run anywhere; QA
 
 QA data audit (isolated copy of the QA DB, read-only): 34 carts / 31 items; 32 customer carts, 2 guest carts; **1 customer with 2 carts**; 0 carts mixing stores; 0 carts with a `checkout_token`; 3 empty carts. The Windows QA/Production data must be audited with the same read-only command BEFORE any migration (§5).
 
-Related latent defect found while reading `checkout_service.finalize_order` (to be confirmed end-to-end before fixing): `Cart.checkout_token` is created once and never rotated. A service-level probe (create order from a cart, delete its items, add an item, create the order again with the same token) returned the **first order** and created no second one — i.e. a repeat purchase from the same cart row would be treated as a replay. Proposed fix (inside this change set): clear the token in `add_item_to_cart` when the cart is empty (a new purchase cycle starts when the first item is added), which keeps double-click replay protection right after an order.
+Related defect (CONFIRMED end-to-end and FIXED separately, see `CHECKOUT_TOKEN_CYCLE_FIX.md`, independent of this migration): `Cart.checkout_token` was never rotated, so a repeat purchase returned the first order.
+Also confirmed on PostgreSQL: two simultaneous first adds create two `Cart` rows for one customer (no unique constraint) — the cause of the 30 carts of one demo customer in the QA copy; the `(customer, store)` constraint below fixes it.
 
 ## 2. Target model
 - `Cart.store` FK → `stores.Store` (`on_delete=CASCADE`, `related_name="carts"`, indexed).
@@ -35,22 +36,25 @@ Related latent defect found while reading `checkout_service.finalize_order` (to 
 6. `finalize_order`, cart views, coupon code: unchanged apart from receiving the store-scoped cart; coupon stays session-based and store-validated.
 7. `seed_shop`, Django admin (`list_display`/filters) get `store`.
 
-## 4. Migration + backfill design (reversible, in the same 3-step pattern as `cart/0004–0006` for `Coupon.store`)
-- **0010 schema**: add `store` NULLABLE + index. No constraints yet. Reversible (drop column).
-- **Backfill** (idempotent function, also exposed as `manage.py backfill_cart_store --dry-run | --apply`, which prints a per-cart report and writes a CSV next to the DB backup; the data migration calls the same function):
-  1. **Mixed-store carts**: group items by `product.store`. The group of the most recently touched item stays on the original cart (keeps id and `checkout_token`); every other group moves to a NEW cart `(same customer/session_key, store=that store, empty token)`. Items are re-pointed (`CartItem.cart`), never copied or deleted: quantity, `unit_price` snapshot, variant, gift-wrap fields and messages are untouched. Order/Transaction rows are not linked to carts (only `Order.idempotency_key == token`), so no financial record changes.
-  2. **Single-store carts**: `store = that store`.
-  3. **Empty carts**: customer carts → store of the order whose `idempotency_key == checkout_token` if any, else the customer's latest order store, else the customer's only `CustomerProfile` store, else delete (no items ⇒ no data); guest empty carts ⇒ delete unless they hold a token (then store from the order by token).
-  4. **Duplicates per `(customer, store)` or `(session_key, store)`** (e.g. the QA customer with 2 carts): merge into the newest cart; same `(product, variant)` lines add their quantities (same rule as `merge_guest_cart`), destination snapshot price/gift-wrap kept; the retained cart keeps its token; a checkout token of a cart that already produced an order is preserved on the surviving cart. Merging may exceed stock — the customer sees the normal stock error at checkout (existing behaviour).
-  5. Everything runs in `transaction.atomic()` per customer/session; the function is re-runnable (second run = no changes).
-- **0011 constraints**: refuses to run if any `store IS NULL` remains (clear message with the count), then sets NOT NULL and adds the three constraints. Reversible (drops constraints, makes the column nullable).
-- Performance: one pass over carts; QA scale is trivial; production scale to be read from the audit (§5) — chunked by `iterator(2000)`.
+## 4. Migration + backfill design (reversible, staged like `cart/0004–0006` for `Coupon.store`) — NOTHING is deleted or merged without an explicit policy you approve
+Principles: no cart line is deleted or duplicated; price snapshots (`unit_price`), gift-wrap fields, messages, discounts (session coupon is untouched), and valid `checkout_token`s are preserved; every destructive-looking step is a **policy decision** listed by the read-only audit first.
+- **0010 schema**: add `store` NULLABLE + index. No constraints. Reversible (drop column).
+- **Backfill** — a re-runnable function exposed as `manage.py backfill_cart_store --dry-run | --apply`. `--apply` is refused unless a policy file (reviewed by you, derived from the audit) is passed and a backup marker exists. Only the **unambiguous** cases are automatic:
+  1. *Single-store, non-empty carts* → `store = that store` (no other change).
+  2. *Mixed-store carts* (policy: which store keeps the original cart/token; default proposal = store of the most recently touched line): lines of the other stores are **moved** (`CartItem.cart` re-pointed, never copied/deleted) to a new cart `(same customer/session_key, that store, empty token)`.
+  3. *Empty carts* → `store` derived only when exact (token ↔ `Order.idempotency_key` of the same customer, else the customer's only order store). Otherwise **left NULL and reported** — they are NOT deleted by the migration; deletion/keep is your policy decision (a separate, explicit, logged cleanup command later).
+  4. *Duplicates per (customer, store) / (session_key, store)*: **not merged automatically**. The audit lists them; your policy decides per case (e.g. keep newest + move/merge lines with the `merge_guest_cart` rule: same product+variant adds quantities, destination snapshot price/gift-wrap kept). Until resolved the unique constraint is not created.
+  Every applied change is written to a CSV ledger (cart id, action, from→to, line ids) so the whole backfill is auditable and can be reversed by script.
+- **0011 constraints**: refuses to run while any `store IS NULL` or any duplicate pair remains (message with counts); then NOT NULL + the three constraints. Reversible (drops the constraints, relaxes NOT NULL).
+- Performance: one pass, chunked (`iterator(2000)`); scale known from the audit.
 
-## 5. Rollout gates (each needs your separate approval)
-1. Read-only audit command on the Windows QA DB (counts above + the list of mixed/duplicate carts) — no writes.
-2. File-level backup of the QA DB (`copy db.sqlite3 db.sqlite3.bak-<timestamp>`) and verification that it opens.
-3. `backfill_cart_store --dry-run`, review the report, then migrate on QA-Windows only.
-4. Production: untouched until a separate decision (pg_dump backup, dry-run on a restored copy first).
+## 5. Rollout gates (each needs your separate approval; Production is out of scope)
+1. **Ship the read-only audit command** (`audit_cart_scope`, this branch) to QA-Windows:
+   `cd D:\Projects\RastiSi\QA_ADMIN_PANEL_20261029` → stop the 8008 server → `git status --short` (must be clean) → `git fetch origin feature/admin-panel-modernization-20261029` → `git merge --ff-only <SHA I give you after you approve the push>` → run with the QA environment/venv exactly as for the server (same `DJANGO_MEDIA_ROOT` etc.): `python manage.py audit_cart_scope --limit 100 > ..\audit_cart_scope_QA.txt` (a `--json` variant exists). It opens the DB through a read-only guard and prints only counts, internal ids and 8-hex fingerprints — safe to paste back. It needs no migration and does not write.
+2. Review the audit together; decide the policies for mixed / duplicate / empty carts.
+3. File-level backup of the QA DB (`copy db.sqlite3 db.sqlite3.bak-<yyyymmdd-hhmm>`, verify it opens) — before any real change.
+4. `backfill_cart_store --dry-run` → review the ledger → apply on QA-Windows only → run the two-store regression.
+5. Production: untouched until a separate decision (pg_dump backup, dry run on a restored copy first).
 
 ## 6. Tests to write with the change
 Two stores + one shared customer: separate carts per store; badge/mini-cart/cart page/checkout show only the current store; switching host (A↔B) keeps each cart intact; guest cart on A merges only into A's customer cart on login (B's guest cart untouched); logout/login cycle; checkout on A succeeds while B holds items (today: blocked) and does not touch B's cart or stock; coupon applied on A is not applied on B; concurrent `get_cart(create=True)` (get_or_create under the new unique constraint), `merge_guest_cart` + checkout lock-order tests (reuse the CAT-002 ones); backfill: mixed cart split without losing a line/price/gift-wrap/token, duplicates merged, empty carts handled, second run no-op, NOT NULL gate refuses when NULL remain; repeat purchase from the same cart creates a second order (token rotation) while a double-click right after the first order still returns it; no-order-created-cross-store assertions kept.
