@@ -13,12 +13,17 @@
 ``dry_run`` تعیین می‌کند که آیا در انتها چیزی در دیتابیس نوشته شود یا نه."""
 
 import logging
+import re
 from dataclasses import dataclass, field as dataclass_field
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.utils import timezone
 
-from apps.catalog.models import Brand, Category, Product, ProductOption, ProductVariant, StockMovement, Warehouse
+from apps.catalog.models import (
+    Attribute, Brand, Category, Product, ProductAttributeValue, ProductOption, ProductVariant, Specification, StockMovement, Warehouse,
+)
+from apps.catalog.services import attribute_service
 from apps.catalog.services.inventory_service import (
     InsufficientStockError,
     InvalidRestockWarehouseError,
@@ -38,7 +43,8 @@ from apps.core.services.csv_utils import (
     parse_import_int,
     read_csv_rows_bounded,
 )
-from apps.core.utils import normalization_key
+from apps.core.utils import normalization_key, normalize_digits
+from apps.dashboard.services import import_proposals
 from apps.dashboard.services.catalog_admin_service import default_vendor, generate_unique_slug
 from apps.orders.models import TaxClass
 
@@ -125,7 +131,90 @@ def _product_lookup_cache(store, rows: list[dict]) -> dict:
         "categories_by_slug": {c.slug: c for c in Category.objects.filter(store=store, parent__isnull=False)},
         "tax_classes_by_code": {t.code: t for t in TaxClass.objects.filter(store=store)},
         "default_vendor": default_vendor(store),
+        # مواردِ مرجعِ پیشنهادی (برند/دسته/ویژگی): نمایه‌یِ هم‌ارزیِ Store + وضعیتِ پیشنهادهایِ Job (``_validate_all``/``_apply_all`` پرش می‌کنند)
+        "ref_index": import_proposals.ReferenceIndex(store),
+        "proposal_book": import_proposals.ProposalBook(None),
     }
+
+
+_PAIR_SPLIT = re.compile(r"[;؛\n\r]+")
+MAX_PAIRS_PER_CELL = 40
+
+
+def _parse_pairs(raw, *, column: str):
+    """سلولِ «عنوان: مقدار؛ عنوان: مقدار» → ``([(عنوان، مقدار)], [خطا])``. نویسه‌هایِ جداکننده: «؛» ،«;» و خطِ جدید."""
+    pairs, errors, seen = [], [], set()
+    for chunk in _PAIR_SPLIT.split(str(raw or "")):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        label, sep, value = chunk.replace("：", ":").partition(":")
+        label, value = import_proposals.display_name(label), import_proposals.display_name(value)
+        if not sep or not label or not value:
+            errors.append(f"«{chunk[:40]}» در ستونِ «{column}» به شکلِ «عنوان: مقدار» نیست.")
+            continue
+        if len(label) > 100 or len(value) > 300:
+            errors.append(f"عنوان یا مقدارِ «{label[:30]}» در ستونِ «{column}» بیش از حدِ مجاز طولانی است.")
+            continue
+        key = import_proposals.entity_key(label)
+        if key in seen:
+            errors.append(f"عنوانِ «{label}» در ستونِ «{column}» تکرار شده است.")
+            continue
+        seen.add(key)
+        pairs.append((label, value))
+    if len(pairs) > MAX_PAIRS_PER_CELL:
+        errors.append(f"در ستونِ «{column}» حداکثر {MAX_PAIRS_PER_CELL} مورد مجاز است.")
+    return pairs, errors
+
+
+def _need_reference(cache, kind, name, parent, *, label: str, errors: list, awaiting: list):
+    """مرجعِ ناموجود: اگر ردشده باشد خطای قابل‌اصلاح، وگرنه «منتظرِ تأیید» (پیشنهاد در پیش‌نمایش ثبت می‌شود)."""
+    existing = cache["proposal_book"].get(kind, name, parent)
+    if existing is not None and existing.status == import_proposals.S.REJECTED:
+        errors.append(f"{label} «{name}» رد شد؛ نام را اصلاح کنید (یا ستون را خالی بگذارید) و فایل را دوباره بارگذاری کنید.")
+        return
+    awaiting.append(import_proposals.proposal_ref(kind, name, parent))
+    errors.append(f"{label} «{name}» در این فروشگاه نیست و هنوز تأیید نشده است؛ پس از تأییدِ مورد جدید این ردیف معتبر می‌شود.")
+
+
+def _resolve_attribute_ops(pairs, *, cache, errors: list, awaiting: list):
+    """جفت‌هایِ «ویژگی: مقدار» → عملیاتِ انتسابِ توصیفی. ویژگی/مقدارِ ناموجود ⇒ منتظرِ تأیید (هرگز ساخته نمی‌شود)."""
+    index, ops = cache["ref_index"], []
+    for label, raw in pairs:
+        attribute = index.attribute(label)
+        if attribute is None:
+            _need_reference(cache, import_proposals.K.ATTRIBUTE, label, "", label="ویژگیِ", errors=errors, awaiting=awaiting)
+            continue
+        dt = attribute.data_type
+        if dt == Attribute.DataType.TEXT:
+            if len(raw) > 500:
+                errors.append(f"مقدارِ ویژگیِ «{attribute.label}» بیش از ۵۰۰ نویسه است.")
+            else:
+                ops.append(("text", attribute, raw))
+        elif dt == Attribute.DataType.NUMBER:
+            try:
+                ops.append(("number", attribute, Decimal(normalize_digits(raw).replace("٬", "").replace(",", "").strip())))
+            except InvalidOperation:
+                errors.append(f"مقدارِ «{raw}» برایِ ویژگیِ «{attribute.label}» عدد نیست.")
+        elif dt == Attribute.DataType.BOOLEAN:
+            try:
+                ops.append(("boolean", attribute, parse_import_bool(raw)))
+            except ValueError:
+                errors.append(f"مقدارِ «{raw}» برایِ ویژگیِ «{attribute.label}» باید «بله» یا «خیر» باشد.")
+        elif dt in Attribute.CHOICE_DATA_TYPES:
+            names = [import_proposals.display_name(v) for v in re.split(r"[،,|]", raw)] if dt == Attribute.DataType.MULTISELECT else [raw]
+            picked = []
+            for name in filter(None, names):
+                value = index.attribute_value(attribute, name)
+                if value is None:
+                    _need_reference(cache, import_proposals.K.ATTRIBUTE_VALUE, name, attribute.label, label=f"مقدارِ ویژگیِ «{attribute.label}»:", errors=errors, awaiting=awaiting)
+                else:
+                    picked.append(value)
+            if picked:
+                ops.append(("multi" if dt == Attribute.DataType.MULTISELECT else "choice", attribute, picked))
+        else:
+            errors.append(f"ویژگیِ «{attribute.label}» از نوعِ تاریخ است و در ورودِ گروهی پشتیبانی نمی‌شود؛ آن را از صفحه‌ی کالا وارد کنید.")
+    return ops
 
 
 def _resolve_product_identity(store, row: dict, *, cache: dict):
@@ -219,21 +308,38 @@ def _validate_product_row(row_number: int, row: dict, *, store, mode: str, cache
     except ValueError as exc:
         errors.append(str(exc))
 
+    awaiting: list = []
+    index = cache["ref_index"]
+
     brand = None
     brand_code = normalize_import_text(row.get("brand_code"))
     if brand_code:
-        brand = cache["brands_by_slug"].get(brand_code)
+        brand = cache["brands_by_slug"].get(brand_code) or index.brand(brand_code)
         if brand is None:
-            errors.append(f"برندِ «{brand_code}» در این فروشگاه یافت نشد.")
+            _need_reference(cache, import_proposals.K.BRAND, brand_code, "", label="برندِ", errors=errors, awaiting=awaiting)
 
     category = None
     category_code = normalize_import_text(row.get("category_code"))
     if category_code:
         category = cache["categories_by_slug"].get(category_code)
         if category is None:
-            errors.append(f"دسته‌بندیِ «{category_code}» در این فروشگاه یافت نشد (یا زیردسته نیست).")
+            resolution = index.resolve_category(category_code)
+            if resolution.category is not None:
+                category = resolution.category
+            elif resolution.error:
+                errors.append(f"دسته‌بندیِ «{category_code}»: {resolution.error}")
+            else:
+                for kind, name, parent in resolution.proposals:
+                    label = "دسته‌بندیِ اصلیِ" if kind == import_proposals.K.CATEGORY else "زیردسته‌بندیِ"
+                    _need_reference(cache, kind, name, parent, label=label, errors=errors, awaiting=awaiting)
     elif not is_update:
         errors.append("«category_code» برایِ ایجادِ کالایِ تازه الزامی است.")
+
+    specs, spec_errors = _parse_pairs(row.get("specifications"), column="مشخصات فنی")
+    errors.extend(spec_errors)
+    attr_pairs, attr_errors = _parse_pairs(row.get("attributes_text"), column="ویژگی‌ها")
+    errors.extend(attr_errors)
+    attribute_ops = _resolve_attribute_ops(attr_pairs, cache=cache, errors=errors, awaiting=awaiting)
 
     tax_class = None
     tax_class_code = normalize_import_text(row.get("tax_class_code"))
@@ -255,10 +361,14 @@ def _validate_product_row(row_number: int, row: dict, *, store, mode: str, cache
         outcome = RowOutcome(
             row_number=row_number, source_identifier=source_identifier, status=ImportRowResult.RowStatus.INVALID,
             errors=errors, warnings=warnings,
+            # ردیفی که *فقط* به‌خاطرِ مواردِ تازه (پیشنهادی) معتبر نیست؛ اگر خطایِ دیگری هم دارد (نامِ خالی، قیمتِ نامعتبر،
+            # مورد رد‌شده ...) یک ردیفِ خطادار است و پیشنهادی ثبت نمی‌شود تا فایل اصلاح شود. ``sync_from_outcomes`` از این می‌خواند.
+            normalized_data_summary={"awaiting": awaiting} if awaiting and len(errors) == len(awaiting) else {},
         )
         return outcome, None, existing_product
 
     normalized = {
+        "specs": specs, "attribute_ops": attribute_ops,
         "name": name, "sku": sku, "slug": normalize_import_text(row.get("slug")),
         "barcode": normalize_import_text(row.get("barcode")),
         "status": status, "price": price, "stock": stock, "weight_grams": weight_grams,
@@ -316,7 +426,38 @@ def _apply_product_row(*, store, normalized: dict, existing_product, vendor, act
     if normalized["stock"] is not None:
         adjust_stock_manually(store=store, product=product, new_stock=normalized["stock"], actor=actor, note="Import")
 
+    _apply_specs_and_attributes(product, normalized)
     return product, is_create
+
+
+def _apply_specs_and_attributes(product, normalized: dict) -> None:
+    """مشخصاتِ فنی (به‌روزرسانیِ هم‌عنوان، افزودنِ تازه؛ هیچ موردی حذف نمی‌شود) و ویژگی‌هایِ توصیفی — از سرویس‌هایِ خودِ کاتالوگ."""
+    specs = normalized.get("specs") or []
+    if specs:
+        existing = {import_proposals.entity_key(s.label): s for s in Specification.objects.filter(product=product)}
+        order = max([s.order for s in existing.values()] or [0])
+        for label, value in specs:
+            spec = existing.get(import_proposals.entity_key(label))
+            if spec is not None:
+                if spec.value != value:
+                    spec.value = value
+                    spec.save(update_fields=["value", "updated_at"])
+            else:
+                order += 1
+                existing[import_proposals.entity_key(label)] = Specification.objects.create(product=product, label=label, value=value, order=order)
+    for kind, attribute, payload in normalized.get("attribute_ops") or []:
+        if kind == "text":
+            attribute_service.set_product_attribute_value(product, attribute, text_value=payload)
+        elif kind == "number":
+            attribute_service.set_product_attribute_value(product, attribute, number_value=payload)
+        elif kind == "boolean":
+            attribute_service.set_product_attribute_value(product, attribute, boolean_value=payload)
+        elif kind == "choice":
+            attribute_service.set_product_attribute_value(product, attribute, value=payload[0])
+        elif kind == "multi":
+            ProductAttributeValue.objects.filter(product=product, attribute=attribute).exclude(value__in=payload).delete()
+            for value in payload:
+                attribute_service.add_product_attribute_multiselect_value(product, attribute, value)
 
 
 # ================================================================== تنوع (Variant)
@@ -994,6 +1135,8 @@ def _validate_all(job: ImportJob, rows: list[dict], *, actor, batch_size: int = 
         raise ImportServiceError(f"نوعِ اطلاعاتِ «{job.import_type}» پشتیبانی نمی‌شود.")
     build_cache, _execute = _BATCH_EXECUTORS[job.import_type]
     cache = build_cache(job.store, rows)
+    if job.import_type == ImportJob.ImportType.PRODUCTS:
+        cache["proposal_book"] = import_proposals.ProposalBook(job)
     numbered_rows, pre_rejected = _plan_rows(rows)
     outcomes = list(pre_rejected) + _run_batches(
         job, numbered_rows, cache, dry_run=True, actor=actor, batch_size=batch_size,
@@ -1075,6 +1218,8 @@ def build_preview(job: ImportJob, rows: list[dict], *, actor, batch_size: int = 
     job.save(update_fields=["status", "started_at", "dry_run"])
     outcomes, limit_message = _validate_all(job, rows, actor=actor, batch_size=batch_size)
     _save_preview(job, outcomes, limit_message)
+    if job.import_type == ImportJob.ImportType.PRODUCTS:
+        import_proposals.sync_from_outcomes(job, outcomes)   # فقط صفِ تأیید؛ هیچ برند/دسته‌ای ساخته نمی‌شود
     record_audit_event(
         store=job.store, actor=actor, action_code="import.preview_completed",
         object_type="ImportJob", object_id=str(job.pk),
@@ -1183,12 +1328,19 @@ def job_execution_blockers(job: ImportJob) -> list[str]:
     reasons = []
     if job.total_rows == 0:
         reasons.append("فایل هیچ ردیفی نداشت.")
-    problem_rows = job.invalid_rows + job.failed_rows
-    if problem_rows:
+    awaiting_rows = _awaiting_row_count(job)
+    problem_rows = job.invalid_rows + job.failed_rows - awaiting_rows
+    if problem_rows > 0:
         reasons.append(f"{problem_rows} ردیف خطا دارد.")
+    if awaiting_rows:
+        reasons.append(f"{awaiting_rows} ردیف منتظرِ تأییدِ موردِ جدید (برند/دسته/ویژگی) است.")
     if job.error_summary:
         reasons.append(job.error_summary)
     return reasons
+
+
+def _awaiting_row_count(job: ImportJob) -> int:
+    return job.row_results.filter(status=ImportRowResult.RowStatus.INVALID, normalized_data_summary__has_key="awaiting").count()
 
 
 def _reject_execution(job, outcomes, limit_message, *, previous, actor, reason: str):
@@ -1231,6 +1383,7 @@ def _apply_all(job, rows, *, actor, batch_size):
     if job.import_type == ImportJob.ImportType.PRODUCTS:
         from apps.subscriptions.services.enforcement import product_creation_budget
 
+        cache["proposal_book"] = import_proposals.ProposalBook(job)
         cache["_product_create_budget"] = product_creation_budget(job.store)
     numbered_rows, pre_rejected = _plan_rows(rows)
     if pre_rejected:
@@ -1441,9 +1594,14 @@ def job_preview_summary(job: ImportJob) -> dict:
     will_create = rows.filter(normalized_data_summary__action="create").count()
     will_update = rows.filter(normalized_data_summary__action="update").count()
     with_warnings = sum(1 for warnings in rows.values_list("warnings", flat=True) if warnings)
+    awaiting = _awaiting_row_count(job)
+    proposals_summary = import_proposals.proposal_summary(job) if job.import_type == ImportJob.ImportType.PRODUCTS else {
+        "pending": 0, "approved": 0, "rejected": 0, "total": 0,
+    }
     return {
         "total": job.total_rows, "will_create": will_create, "will_update": will_update,
-        "invalid": job.invalid_rows + job.failed_rows, "warnings": with_warnings,
+        "invalid": job.invalid_rows + job.failed_rows - awaiting, "awaiting": awaiting, "warnings": with_warnings,
+        "proposals": proposals_summary,
         "blockers": job_execution_blockers(job) if job.status == ImportJob.Status.PREVIEW_READY else [],
     }
 

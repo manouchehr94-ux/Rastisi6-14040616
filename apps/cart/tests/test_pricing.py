@@ -202,6 +202,7 @@ class PricingTwoStoreIsolationTests(TestCase):
         shop_a.save()
 
         shop_b = ShopSettings.provision_for(self.store_b)
+        shop_b.tax_enabled = True   # a new store starts without tax (Admin upgrade M2); this test is about per-store rates
         shop_b.tax_percent = Decimal("20")
         shop_b.free_shipping_threshold = Decimal("100000")
         shop_b.save()

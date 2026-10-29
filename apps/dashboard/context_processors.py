@@ -23,6 +23,8 @@ from apps.stores.authorization import (
     CUSTOMER_SEGMENT_VIEW,
     CUSTOMER_VIEW,
     DISCOUNT_MANAGE,
+    IMPORT_EXPORT_MANAGE,
+    ORDER_REVIEW_CARD_TRANSFER,
     IMPORT_EXPORT_VIEW,
     INVENTORY_MANAGE,
     MEDIA_MANAGE,
@@ -85,6 +87,8 @@ def merchant_permissions(request):
             or membership_has_permission(membership, CUSTOMER_EXPORT)
         ),
         "can_view_imports": membership_has_permission(membership, IMPORT_EXPORT_VIEW),
+        "can_manage_imports": membership_has_permission(membership, IMPORT_EXPORT_MANAGE),
+        "can_review_card_transfer": membership_has_permission(membership, ORDER_REVIEW_CARD_TRANSFER),
         "can_view_segments": membership_has_permission(membership, CUSTOMER_SEGMENT_VIEW),
         "can_view_subscription": membership_has_permission(membership, SUBSCRIPTION_VIEW),
         "can_change_subscription": membership_has_permission(membership, SUBSCRIPTION_CHANGE),

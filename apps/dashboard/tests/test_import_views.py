@@ -192,7 +192,8 @@ class TemplateDownloadTests(ImportViewTestCase):
                 self.assertEqual(response["Content-Type"], XLSX_MIME)
                 self.assertIn(f"{import_type}-import-template.xlsx", response["Content-Disposition"])
                 self.assertEqual(response.content[:2], b"PK")
-                self.assertEqual(wb.sheetnames, ["داده‌ها", "راهنما", "فهرست‌ها"])
+                expected_sheets = ["داده‌ها", "راهنما", "فهرست‌ها"] + (["نمونه"] if import_type == "products" else [])
+                self.assertEqual(wb.sheetnames, expected_sheets)
                 self.assertTrue(wb["داده‌ها"].sheet_view.rightToLeft)
                 self.assertEqual(wb["داده‌ها"].freeze_panes, "A2")
                 # the editable sheet holds only the header row (the rest is pre-formatted but empty)
@@ -202,15 +203,18 @@ class TemplateDownloadTests(ImportViewTestCase):
     def test_product_template_columns_and_required_markers(self):
         _response, wb = self._template("products")
         header = [c.value for c in wb["داده‌ها"][1]]
+        # الزامی‌ها کنارِ هم و در ابتدا، سپس شناسایی (برایِ بروزرسانی)، سپس اختیاری‌ها
         self.assertEqual(header, [
-            "شناسه کالا", "SKU", "نام کالا *", "وضعیت", "برند", "دسته‌بندی *", "قیمت (تومان) *", "موجودی",
-            "بارکد", "وزن (گرم)", "نیاز به ارسال", "دسته مالیاتی", "عنوان سئو", "توضیحات سئو",
+            "نام کالا *", "دسته‌بندی (اصلی یا مسیر کامل) *", "زیردسته‌بندی", "قیمت (تومان) *",
+            "شناسه کالا", "SKU", "برند", "موجودی", "مشخصات فنی", "ویژگی‌ها",
+            "وضعیت", "بارکد", "وزن (گرم)", "نیاز به ارسال", "دسته مالیاتی", "عنوان سئو", "توضیحات سئو",
         ])
-        required_fill = wb["داده‌ها"]["C1"].fill.start_color.rgb
-        optional_fill = wb["داده‌ها"]["A1"].fill.start_color.rgb
+        required_fill = wb["داده‌ها"]["A1"].fill.start_color.rgb
+        optional_fill = wb["داده‌ها"]["E1"].fill.start_color.rgb
         self.assertNotEqual(required_fill, optional_fill)
-        self.assertIn("الزامی", wb["داده‌ها"]["C1"].comment.text)
-        self.assertIn("اختیاری", wb["داده‌ها"]["A1"].comment.text)
+        self.assertEqual({wb["داده‌ها"][f"{c}1"].fill.start_color.rgb for c in "ABD"}, {required_fill})   # الزامی‌هایِ مجاور هم‌رنگ
+        self.assertIn("الزامی", wb["داده‌ها"]["A1"].comment.text)
+        self.assertIn("اختیاری", wb["داده‌ها"]["E1"].comment.text)
 
     def test_no_internal_column_names_are_exposed_anywhere(self):
         for import_type in ("products", "variants", "inventory"):
@@ -279,7 +283,11 @@ class TemplateDownloadTests(ImportViewTestCase):
             self.assertIn("'فهرست‌ها'!", validation.formula1)
             self.assertTrue(validation.showErrorMessage)
         covered = {str(rng).split(":")[0][0] for v in lists for rng in v.sqref.ranges}
-        self.assertTrue({"D", "E", "F", "K", "L"} <= covered, covered)  # وضعیت، برند، دسته‌بندی، نیاز به ارسال، دسته مالیاتی
+        # دسته‌بندی(B)، زیردسته(C)، برند(G)، وضعیت(K)، نیاز به ارسال(N)، دسته مالیاتی(O)
+        self.assertTrue({"B", "C", "G", "K", "N", "O"} <= covered, covered)
+        # ستون‌هایِ «نامِ تازه مجاز» فقط هشدار می‌دهند (پیشنهادِ تازه)، بقیه ممنوع می‌کنند
+        soft = {str(rng).split(":")[0][0] for v in lists if v.errorStyle == "warning" for rng in v.sqref.ranges}
+        self.assertEqual(soft, {"B", "C", "G"})
         numeric = [v for v in validations if v.type in ("whole", "decimal")]
         self.assertTrue(numeric)
         _r, inv = self._template("inventory")
@@ -289,8 +297,8 @@ class TemplateDownloadTests(ImportViewTestCase):
     def test_text_columns_are_formatted_as_text_so_leading_zeros_survive(self):
         _response, wb = self._template("products")
         ws = wb["داده‌ها"]
-        self.assertEqual(ws["B2"].number_format, "@")  # SKU
-        self.assertEqual(ws["I2"].number_format, "@")  # barcode
+        self.assertEqual(ws["F2"].number_format, "@")  # SKU
+        self.assertEqual(ws["L2"].number_format, "@")  # barcode
 
     def test_template_download_is_audited(self):
         from apps.core.models import AuditLogEntry
@@ -381,7 +389,8 @@ class XlsxUploadFlowTests(ImportViewTestCase):
         self.assertContains(detail, "ساخته می‌شود")
         self.assertContains(detail, "ردیف در اکسل")
         self.assertEqual(detail.context["summary"], {
-            "total": 1, "will_create": 1, "will_update": 0, "invalid": 0, "warnings": 0, "blockers": [],
+            "total": 1, "will_create": 1, "will_update": 0, "invalid": 0, "awaiting": 0, "warnings": 0, "blockers": [],
+            "proposals": {"pending": 0, "approved": 0, "rejected": 0, "total": 0},
         })
 
         self.client.post(reverse("dashboard:import-execute", args=[job.pk]))

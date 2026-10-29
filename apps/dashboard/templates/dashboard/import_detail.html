@@ -2,7 +2,7 @@
 {% load persian %}
 {% block title %}ورود اطلاعات #{{ job.pk }} | پنل مدیریت{% endblock %}
 {% block page_title %}ورود اطلاعات: {{ job.get_import_type_display }} (شماره {{ job.pk|fa_number }}){% endblock %}
-{% block page_sub %}{% if uses_mode %}{{ mode_label }} — {% endif %}فایل: {{ job.original_filename }}{% endblock %}
+{% block page_sub %}{% if uses_mode %}{{ mode_label }} — {% endif %}فایل: <bdi dir="ltr">{{ job.original_filename }}</bdi>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -51,6 +51,7 @@
       <div class="imp-tile"><b>{{ summary.total|fa_number }}</b><span>کلِ ردیف‌ها</span></div>
       <div class="imp-tile is-good"><b>{{ summary.will_create|fa_number }}</b><span>ساخته می‌شوند</span></div>
       <div class="imp-tile is-info"><b>{{ summary.will_update|fa_number }}</b><span>بروزرسانی می‌شوند</span></div>
+      <div class="imp-tile is-warn" data-testid="tile-awaiting"><b>{{ summary.awaiting|fa_number }}</b><span>منتظرِ تأییدِ مورد جدید</span></div>
       <div class="imp-tile is-bad"><b>{{ summary.invalid|fa_number }}</b><span>ردیفِ دارایِ خطا</span></div>
       <div class="imp-tile is-warn"><b>{{ summary.warnings|fa_number }}</b><span>ردیفِ دارایِ هشدار</span></div>
     </div>
@@ -68,7 +69,12 @@
 
   {% if job.status == "preview_ready" %}
   <div class="card-body" style="padding-top:0">
-    {% if summary.blockers %}
+    {% if summary.blockers and summary.awaiting and not summary.invalid %}
+    <div class="imp-banner is-warn" role="status">
+      <b>این فایل مواردِ جدیدی (برند/دسته/ویژگی) دارد که هنوز در فروشگاه نیستند.</b>
+      <div>در بخشِ «مواردِ جدیدِ پیشنهادی» پایین، هر مورد را تأیید یا رد کنید. با تأیید، مورد در فروشگاه ساخته می‌شود و ردیف‌هایِ وابسته معتبر می‌شوند؛ سپس می‌توانید فایل را اجرا کنید. تا آن زمان هیچ تغییری روی فروشگاه اعمال نشده است.</div>
+    </div>
+    {% elif summary.blockers %}
     <div class="imp-banner is-bad" role="alert">
       <b>این فایل قابل اجرا نیست. ابتدا همه خطاها را اصلاح و فایل را دوباره بارگذاری کنید.</b>
       <ul class="imp-blockers">{% for reason in summary.blockers %}<li>{{ reason }}</li>{% endfor %}</ul>
@@ -100,9 +106,56 @@
     {% endif %}
     {% if job.error_report_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-errors' job.pk %}">دریافتِ گزارشِ خطا (اکسل)</a>{% endif %}
     {% if job.source_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-source' job.pk %}">دریافتِ فایلِ بارگذاری‌شده ({{ source_format|upper }})</a>{% endif %}
+    {% if job.status == "completed" and job.import_type == "products" %}<a class="btn btn-primary" href="{% url 'dashboard:product-list' %}" data-testid="to-product-list">مشاهده‌یِ فهرستِ کالاها</a>{% endif %}
     {% if can_manage_imports and job.status != "preview_ready" %}<a class="btn btn-sm" href="{% url 'dashboard:import-upload' %}?type={{ job.import_type }}">ورودِ اطلاعاتِ تازه</a>{% endif %}
   </div>
 </div>
+
+{% if proposals %}
+<div class="card" style="margin-bottom:16px" id="proposals" data-testid="proposals-card">
+  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <div><b>مواردِ جدیدِ پیشنهادی</b>
+      <div style="font-size:12px;color:var(--muted)">نام‌هایی که در فایل بود ولی در فروشگاه شما وجود ندارد. تا تأیید نشوند ساخته نمی‌شوند و فایل اجرا نمی‌شود. نام‌هایِ موجود (حتی با تفاوتِ نیم‌فاصله/فاصله) دوباره ساخته نمی‌شوند.</div>
+    </div>
+    {% if job.status == "preview_ready" and can_decide_any %}
+    <form method="post" action="{% url 'dashboard:import-proposals-approve-all' job.pk %}">{% csrf_token %}
+      <button type="submit" class="btn btn-primary" data-au-confirm="همه‌یِ مواردِ در انتظار تأیید می‌شوند و در فروشگاه ساخته می‌شوند. ادامه می‌دهید؟">تأییدِ همه</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>نوع</th><th>نام / مسیر</th><th>ردیف‌ها در فایل</th><th>فایل</th><th>درخواست‌دهنده</th><th>وضعیت</th><th>تصمیم</th><th></th></tr></thead>
+    <tbody>
+    {% for p in proposals %}
+      <tr data-proposal="{{ p.pk }}" data-status="{{ p.status }}">
+        <td>{{ p.get_kind_display }}</td>
+        <td><b>{{ p.name }}</b>{% if p.parent_name %}<div style="font-size:11.5px;color:var(--muted)">زیرِ «{{ p.parent_name }}»</div>{% endif %}</td>
+        <td style="font-size:12px">{% for n in p.source_rows|slice:":12" %}{{ n|fa_number }}{% if not forloop.last %}، {% endif %}{% endfor %}{% if p.source_rows|length > 12 %}…{% endif %}</td>
+        <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis"><bdi dir="ltr" title="{{ p.source_filename }}">{{ p.source_filename|default:"—" }}</bdi></td>
+        <td style="font-size:12px">{{ p.requested_by.get_full_name|default:p.requested_by.username|default:"—" }}</td>
+        <td>
+          {% if p.status == "pending" %}<span class="badge b-amber">در انتظارِ تأیید</span>
+          {% elif p.status == "approved" %}<span class="badge b-green">تأییدشده</span>
+          {% else %}<span class="badge b-red">ردشده</span>{% endif %}
+        </td>
+        <td style="font-size:12px">{% if p.decided_by %}{{ p.decided_by.get_full_name|default:p.decided_by.username }}<div style="color:var(--muted)">{{ p.decided_at|jalali_dt }}</div>{% if p.decision_note %}<div style="color:var(--muted)">{{ p.decision_note }}</div>{% endif %}{% else %}—{% endif %}</td>
+        <td style="white-space:nowrap">
+          {% if p.status == "pending" and job.status == "preview_ready" %}
+            {% if p.can_decide %}
+            <form method="post" action="{% url 'dashboard:import-proposal-decide' job.pk p.pk 'approve' %}" style="display:inline">{% csrf_token %}<button type="submit" class="btn btn-sm btn-primary">تأیید</button></form>
+            <form method="post" action="{% url 'dashboard:import-proposal-decide' job.pk p.pk 'reject' %}" style="display:inline-flex;gap:4px">{% csrf_token %}
+              <input type="text" name="note" class="inp" placeholder="دلیل (اختیاری)" style="width:130px;padding:4px 8px" maxlength="300">
+              <button type="submit" class="btn btn-sm" data-au-confirm="این مورد رد می‌شود و ردیف‌هایِ وابسته تا اصلاحِ فایل اجرا نمی‌شوند. ادامه می‌دهید؟">رد</button>
+            </form>
+            {% else %}<span style="font-size:11.5px;color:var(--muted)">مجوزِ تأیید ندارید</span>{% endif %}
+          {% elif p.status == "approved" and p.created_object_type %}<span style="font-size:11.5px;color:var(--muted)">ساخته شد</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -127,6 +180,7 @@
             {% elif row.normalized_data_summary.action == "update" %}<span class="badge b-blue">بروزرسانی می‌شود</span>
             {% else %}<span class="badge b-blue">معتبر</span>{% endif %}
           {% elif row.status == "skipped" %}<span class="badge b-gray">بدونِ تغییر</span>
+          {% elif row.status == "invalid" and row.is_awaiting %}<span class="badge b-blue">منتظرِ تأیید</span>
           {% elif row.status == "invalid" %}<span class="badge b-amber">دارایِ خطا</span>
           {% else %}<span class="badge b-red">ناموفق</span>{% endif %}
         </td>

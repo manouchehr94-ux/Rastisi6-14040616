@@ -113,7 +113,7 @@ from apps.core.services.audit_service import list_audit_events, record_audit_eve
 from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
-from apps.dashboard.services import import_service, import_xlsx
+from apps.dashboard.services import import_proposals, import_service, import_xlsx
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
 from apps.cart.services.coupon_service import (
@@ -194,7 +194,7 @@ from apps.catalog.services.variant_service import (
 )
 from apps.core.color_utils import safe_hex
 from apps.core.utils import normalize_digits
-from apps.core.models import ExportJob, ImportJob, ImportRowResult, ShopSettings
+from apps.core.models import ExportJob, ImportJob, ImportProposal, ImportRowResult, ShopSettings
 from apps.core.services.xlsx_utils import XLSX_CONTENT_TYPE, safe_download_filename
 from apps.core.theme_presets import THEME_PRESETS, matching_preset_key
 from apps.customers.models import (
@@ -6743,8 +6743,18 @@ def _import_detail_context(request, job):
         row.described_errors = import_xlsx.describe_errors(job.import_type, row.errors)
     source_format = import_service.job_source_format(job)
     summary = import_service.job_preview_summary(job)
+    proposals = []
+    if job.import_type == ImportJob.ImportType.PRODUCTS:
+        proposals = list(job.proposals.select_related("requested_by", "decided_by").order_by("status", "kind", "name"))
+        for proposal in proposals:
+            proposal.can_decide = membership_has_permission(
+                request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind],
+            ) and membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE)
+    for row in page_obj:
+        row.is_awaiting = bool((row.normalized_data_summary or {}).get("awaiting"))
     return {
-        "job": job, "active_page": "imports",
+        "job": job, "active_page": "imports", "proposals": proposals,
+        "can_decide_any": any(p.can_decide and p.status == "pending" for p in proposals),
         "row_results": page_obj, "page_obj": page_obj, "paginator": paginator,
         "can_manage_imports": membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE),
         "summary": summary,
@@ -6793,6 +6803,76 @@ def import_execute(request, pk):
             )
         else:
             messages.error(request, job.error_summary or "ورودِ اطلاعات انجام نشد؛ هیچ تغییری اعمال نشد.")
+    return redirect("dashboard:import-detail", pk=job.pk)
+
+
+def _refresh_import_preview(request, job):
+    """پس از تصمیم‌گیریِ پیشنهادها، پیش‌نمایش با همان فایل دوباره ساخته می‌شود تا ردیف‌هایِ وابسته به‌روز شوند (بدونِ نوشتنِ کاتالوگ)."""
+    if job.status != ImportJob.Status.PREVIEW_READY:
+        return
+    try:
+        import_service.run_preview(job, actor=request.user)
+    except ImportServiceError as exc:
+        messages.error(request, str(exc))
+
+
+@require_POST
+@staff_required
+@permission_required(IMPORT_EXPORT_MANAGE)
+def import_proposal_decide(request, pk, proposal_pk, action):
+    """تأیید/ردِ یک موردِ مرجعِ پیشنهادی (برند/دسته/ویژگی). مجوزِ لازم همان مجوزِ ساختنِ آن موجودیت است؛ همه چیز Store-scoped."""
+    store = _resolve_dashboard_store(request)
+    job = get_object_or_404(ImportJob, pk=pk, store=store)
+    proposal = get_object_or_404(ImportProposal, pk=proposal_pk, job=job, store=store)
+    if action not in ("approve", "reject"):
+        raise Http404
+    if not membership_has_permission(request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind]):
+        return render(request, "dashboard/403.html", status=403)
+    try:
+        if action == "approve":
+            done = import_proposals.approve(proposal.pk, store=store, actor=request.user)
+            messages.success(request, f"«{done.path_label}» تأیید شد و در فروشگاه ساخته شد (یا با مورد موجود یکی شد).")
+        else:
+            done = import_proposals.reject(proposal.pk, store=store, actor=request.user, note=request.POST.get("note", ""))
+            messages.info(request, f"«{done.path_label}» رد شد. ردیف‌هایِ وابسته تا اصلاحِ فایل اجرا نمی‌شوند.")
+    except import_proposals.ProposalAlreadyDecided as exc:
+        messages.info(request, str(exc))
+    except import_proposals.ProposalError as exc:
+        messages.error(request, str(exc))
+    _refresh_import_preview(request, job)
+    return redirect("dashboard:import-detail", pk=job.pk)
+
+
+@require_POST
+@staff_required
+@permission_required(IMPORT_EXPORT_MANAGE)
+def import_proposals_approve_all(request, pk):
+    """همه‌یِ پیشنهادهایِ در انتظارِ این فایل را که کاربر مجوزِ تأییدشان را دارد تأیید می‌کند (هر مورد یک تراکنشِ جدا)."""
+    store = _resolve_dashboard_store(request)
+    job = get_object_or_404(ImportJob, pk=pk, store=store)
+    # دسته‌یِ اصلی پیش از زیردسته (ترتیبِ الفبایِ مقدارِ kind: attribute, attribute_value, brand, category, subcategory)
+    pending = sorted(
+        job.proposals.filter(status=ImportProposal.Status.PENDING),
+        key=lambda p: (p.kind == ImportProposal.Kind.SUBCATEGORY, p.kind, p.name),
+    )
+    approved = skipped = 0
+    for proposal in pending:
+        if not membership_has_permission(request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind]):
+            skipped += 1
+            continue
+        try:
+            import_proposals.approve(proposal.pk, store=store, actor=request.user)
+            approved += 1
+        except import_proposals.ProposalAlreadyDecided:
+            continue
+        except import_proposals.ProposalError as exc:
+            messages.error(request, f"«{proposal.path_label}»: {exc}")
+            skipped += 1
+    if approved:
+        messages.success(request, f"{approved} مورد تأیید شد و در فروشگاه ساخته شد.")
+    if skipped:
+        messages.warning(request, f"{skipped} مورد تأیید نشد (مجوز یا خطا).")
+    _refresh_import_preview(request, job)
     return redirect("dashboard:import-detail", pk=job.pk)
 
 

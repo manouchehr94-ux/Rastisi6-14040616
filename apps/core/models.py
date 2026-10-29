@@ -584,3 +584,71 @@ class ImportRowResult(models.Model):
 
     def __str__(self):
         return f"ردیفِ {self.row_number} — {self.get_status_display()}"
+
+
+class ImportProposal(models.Model):
+    """مورد مرجعِ *پیشنهادی* در یک فایلِ ورودِ اطلاعات (برند/دسته/ویژگی/مقدارِ ویژگیِ تازه).
+
+    فایلِ اکسل هیچ‌وقت مستقیم برند یا دسته نمی‌سازد: نامِ ناشناخته به‌صورتِ یک پیشنهادِ ``pending`` ثبت می‌شود و فقط پس از
+    تأییدِ مدیرِ دارایِ مجوزِ همان موجودیت (برند/دسته/ویژگی) در جدولِ واقعیِ همان Store ساخته می‌شود. رد‌شدن هیچ رکوردی نمی‌سازد
+    و ردیف‌هایِ وابسته خطایِ قابل‌اصلاح می‌مانند. به‌ازایِ هر (job، نوع، والد، نامِ نرمال‌شده) فقط یک پیشنهاد وجود دارد؛ ردیف‌هایِ
+    فایل که یک نام را تکرار می‌کنند در ``source_rows`` جمع می‌شوند. هم‌ارزی نام‌ها با ``import_proposals.entity_key`` (فارسی/نیم‌فاصله/
+    شکلِ حروف) سنجیده می‌شود، پس «میشود»، «می‌شود» و «می شود» یک مورد هستند."""
+
+    class Kind(models.TextChoices):
+        BRAND = "brand", "برند"
+        CATEGORY = "category", "دسته‌بندیِ اصلی"
+        SUBCATEGORY = "subcategory", "زیردسته‌بندی"
+        ATTRIBUTE = "attribute", "ویژگی"
+        ATTRIBUTE_VALUE = "attribute_value", "مقدارِ ویژگی"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "در انتظارِ تأیید"
+        APPROVED = "approved", "تأییدشده"
+        REJECTED = "rejected", "ردشده"
+
+    store = models.ForeignKey(
+        "stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="import_proposals",
+    )
+    job = models.ForeignKey(
+        ImportJob, verbose_name="درخواستِ ورودِ اطلاعات", on_delete=models.CASCADE, related_name="proposals",
+    )
+    kind = models.CharField("نوع", max_length=20, choices=Kind.choices)
+    name = models.CharField("نامِ پیشنهادی", max_length=150)
+    name_key = models.CharField("کلیدِ نرمال‌شده", max_length=160, db_index=True)
+    parent_name = models.CharField("نامِ والد", max_length=150, blank=True, default="")
+    parent_key = models.CharField("کلیدِ والد", max_length=160, blank=True, default="")
+    source_rows = models.JSONField("ردیف‌هایِ منبع در فایل", blank=True, default=list)
+    source_filename = models.CharField("نامِ فایلِ منبع", max_length=255, blank=True, default="")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="درخواست‌دهنده", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="import_proposals_requested",
+    )
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="تصمیم‌گیرنده", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="import_proposals_decided",
+    )
+    decided_at = models.DateTimeField("زمانِ تصمیم", null=True, blank=True)
+    decision_note = models.CharField("یادداشتِ تصمیم", max_length=300, blank=True, default="")
+    created_object_type = models.CharField("نوعِ رکوردِ ساخته‌شده", max_length=30, blank=True, default="")
+    created_object_id = models.PositiveBigIntegerField("شناسه‌ی رکوردِ ساخته‌شده", null=True, blank=True)
+    created_at = models.DateTimeField("زمانِ ایجاد", auto_now_add=True)
+    updated_at = models.DateTimeField("زمانِ به‌روزرسانی", auto_now=True)
+
+    class Meta:
+        verbose_name = "پیشنهادِ موردِ مرجع در ورودِ اطلاعات"
+        verbose_name_plural = "پیشنهادهایِ مواردِ مرجع در ورودِ اطلاعات"
+        ordering = ["job_id", "kind", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["job", "kind", "parent_key", "name_key"], name="uniq_import_proposal_per_job"),
+        ]
+        indexes = [models.Index(fields=["store", "status"], name="idx_importprop_store_status")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.name} ({self.get_status_display()})"
+
+    @property
+    def path_label(self) -> str:
+        """مسیرِ نمایشی: «والد > نام» برایِ زیردسته/مقدارِ ویژگی، وگرنه فقط نام."""
+        return f"{self.parent_name} > {self.name}" if self.parent_name else self.name
