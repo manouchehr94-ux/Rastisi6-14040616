@@ -8,11 +8,11 @@ def cart_badge(request):
     """شمارنده‌ی زنده‌ی سبد و علاقه‌مندی — بدون ساخت سبد جدید، فقط برای نمایش."""
     cart_count = 0
     wishlist_count = 0
+    store = getattr(request, "store", None)
 
     if request.user.is_authenticated and hasattr(request.user, "customer_profile"):
         customer = request.user.customer_profile
         cart = Cart.objects.filter(customer=customer).first()
-        store = getattr(request, "store", None)
         if store is not None:
             wishlist_count = Wishlist.objects.filter(customer=customer, product__store=store).count()
     else:
@@ -20,7 +20,11 @@ def cart_badge(request):
         cart = Cart.objects.filter(session_key=session_key, customer=None).first() if session_key else None
 
     if cart is not None:
-        cart_count = cart.items.aggregate(total=Sum("quantity"))["total"] or 0
+        items = cart.items.all()
+        if store is not None and request.user.is_authenticated:
+            # سبدِ مشتری سراسری است؛ شمارنده فقط اقلامِ همین فروشگاه را می‌شمارد (اقلامِ فروشگاهِ دیگر درز نمی‌کند).
+            items = items.filter(product__store=store)
+        cart_count = items.aggregate(total=Sum("quantity"))["total"] or 0
 
     # Phase 7: پیش‌تر این پیش‌فرض بر اساسِ Familyِ فعال تعیین می‌شد
     # (heritage_premium=mini_cart)؛ با بازنشستگیِ سیستمِ Family، پیش‌فرضِ

@@ -39,7 +39,7 @@
 </form>
 
 <div class="acc-stats">
-  <div class="acc-stat"><b>{{ customer.orders_count|fa_number }}</b><span>تعداد سفارش</span></div>
-  <div class="acc-stat"><b>{{ customer.total_spent|toman }}</b><span>مجموع خرید</span></div>
-  <div class="acc-stat"><b>{% if customer.is_vip %}ویژه 🌟{% else %}عادی{% endif %}</b><span>سطح مشتری</span></div>
+  <div class="acc-stat"><b>{{ store_summary.orders_count|fa_number }}</b><span>تعداد سفارش</span></div>
+  <div class="acc-stat"><b>{{ store_summary.total_spent|toman }}</b><span>مجموع خرید</span></div>
+  <div class="acc-stat"><b>{% if store_summary.is_vip %}ویژه 🌟{% else %}عادی{% endif %}</b><span>سطح مشتری</span></div>
 </div>

@@ -15,7 +15,7 @@ from apps.core.services.client_ip import get_client_ip_bucket
 from apps.customers.models import Customer
 from apps.customers.services import auth_service
 from apps.sms.services import otp_service
-from apps.stores.resolution import resolve_store_for_service
+from apps.stores.resolution import CompatibilityFallbackUnavailableError, resolve_store_for_service
 
 from .forms import CheckoutAddressForm
 from .models import Order
@@ -33,7 +33,12 @@ def _get_own_order(request, code, queryset=None):
     if not (request.user.is_authenticated and hasattr(request.user, "customer_profile")):
         raise Http404
     queryset = Order.objects.all() if queryset is None else queryset
-    order = queryset.filter(code=code, customer=request.user.customer_profile).first()
+    # Store isolation: سفارشِ فروشگاهِ دیگر (حتی از همان مشتریِ سراسری) هرگز از این میزبان در دسترس نیست.
+    try:
+        store = resolve_store_for_service(request)
+    except CompatibilityFallbackUnavailableError as exc:
+        raise Http404 from exc
+    order = queryset.filter(code=code, customer=request.user.customer_profile, store=store).first()
     if order is None:
         raise Http404
     return order

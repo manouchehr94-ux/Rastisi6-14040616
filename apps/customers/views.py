@@ -2,6 +2,7 @@ import json
 
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -11,7 +12,7 @@ from apps.orders.models import Order
 from apps.orders.services.order_tracker import build as build_order_tracker
 from apps.sms.services import otp_service
 from apps.storefront_builder.services.storefront_context_service import render_domain_page
-from apps.stores.resolution import resolve_store_for_service, resolve_store_for_storefront
+from apps.stores.resolution import CompatibilityFallbackUnavailableError, resolve_store_for_service, resolve_store_for_storefront
 
 from apps.core.services.client_ip import get_client_ip_bucket
 
@@ -19,7 +20,7 @@ from .forms import AddressForm, LoginForm, OtpRequestForm, OtpVerifyForm, Profil
 from .models import Address, Customer, Wishlist
 from apps.cart.services import coupon_service
 
-from .services import auth_service, profile_service
+from .services import account_service, auth_service, profile_service
 
 _OTP_REMEMBER_SESSION_KEY = "customers_otp_remember_me"
 
@@ -251,9 +252,19 @@ def logout_view(request):
     return redirect("catalog:home")
 
 
+def _account_store(request):
+    """فروشگاهِ جاریِ درخواست برای صفحه‌های حساب؛ میزبانِ نامشخص ⇒ ۴۰۴ (هرگز تجمیعِ همه‌ی فروشگاه‌ها)."""
+    try:
+        return resolve_store_for_service(request)
+    except CompatibilityFallbackUnavailableError as exc:
+        raise Http404("no storefront for this host") from exc
+
+
 def _account_context(request, *, profile_form=None, address_form=None):
     customer = request.user.customer_profile
+    store = _account_store(request)
     return {
+        "store_summary": account_service.store_summary(store, customer),
         "can_view": True,
         "customer": customer,
         "profile_form": profile_form or ProfileForm(initial={
@@ -263,7 +274,7 @@ def _account_context(request, *, profile_form=None, address_form=None):
             "accepts_promotional_email": customer.accepts_promotional_email,
         }),
         "address_form": address_form or AddressForm(),
-        "orders": Order.objects.filter(customer=customer).select_related("shipping_method").order_by("-created_at"),
+        "orders": account_service.store_orders(store, customer).select_related("shipping_method").order_by("-created_at"),
         "addresses": customer.addresses.all(),
         "my_coupons": coupon_service.customer_coupons(resolve_store_for_service(request), customer),
     }
@@ -300,7 +311,8 @@ def account_profile_update(request):
         customer.refresh_from_db()
         response = render(
             request, "customers/partials/account_profile.html",
-            {"customer": customer, "profile_form": ProfileForm(initial={
+            {"customer": customer, "store_summary": account_service.store_summary(_account_store(request), customer),
+             "profile_form": ProfileForm(initial={
                 **form.cleaned_data, "birth_date": customer.birth_date,
                 "accepts_promotional_sms": customer.accepts_promotional_sms,
                 "accepts_promotional_email": customer.accepts_promotional_email,
@@ -309,7 +321,8 @@ def account_profile_update(request):
         response["HX-Trigger"] = json.dumps({"toast": {"message": "پروفایل به‌روزرسانی شد", "type": "ok"}})
         return response
     response = render(
-        request, "customers/partials/account_profile.html", {"customer": customer, "profile_form": form}
+        request, "customers/partials/account_profile.html",
+        {"customer": customer, "profile_form": form, "store_summary": account_service.store_summary(_account_store(request), customer)},
     )
     response["HX-Trigger"] = json.dumps({"toast": {"message": "لطفاً خطاهای فرم را برطرف کنید", "type": "err"}})
     return response
@@ -377,7 +390,7 @@ def account_order_detail(request, code):
         Order.objects.select_related("shipping_method", "payment_gateway").prefetch_related(
             "items", "status_history", "transactions", "card_transfers"
         ),
-        code=code, customer=request.user.customer_profile,
+        code=code, customer=request.user.customer_profile, store=_account_store(request),
     )
     tracker = build_order_tracker(order)
     return render_domain_page(
