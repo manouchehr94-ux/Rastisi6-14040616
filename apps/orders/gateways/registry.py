@@ -27,10 +27,16 @@ def _load_cod():
     return CodAdapter()
 
 
+def _load_card_to_card():
+    from .card_to_card import CardToCardAdapter
+    return CardToCardAdapter()
+
+
 # Registry: gateway_code → loader function
 _ADAPTER_LOADERS: dict[str, callable] = {
     "zibal": _load_zibal,
     "cod": _load_cod,
+    "card_to_card": _load_card_to_card,
 }
 
 # Cached adapter instances (stateless, safe to reuse)
@@ -40,6 +46,7 @@ _ADAPTER_CACHE: dict[str, PaymentGatewayAdapter] = {}
 GATEWAY_CHOICES = [
     ("zibal", "زیبال"),
     ("cod", "پرداخت در محل"),
+    ("card_to_card", "کارت‌به‌کارت"),
 ]
 
 

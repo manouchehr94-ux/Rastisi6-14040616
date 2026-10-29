@@ -125,6 +125,16 @@ class PaymentGatewayAdapter(ABC):
         """True for online payment gateways, False for offline (COD)."""
 
     @property
+    def requires_manual_confirmation(self) -> bool:
+        """True when the payment is confirmed by a human (card-to-card): the attempt stays PENDING until an admin approves."""
+        return False
+
+    @property
+    def credential_fields(self) -> list[dict]:
+        """Field metadata for the admin form. Default: every required credential is a secret (password-type) field."""
+        return [{"name": n, "label": n, "secret": True, "ltr": True} for n in self.required_credentials]
+
+    @property
     def required_credentials(self) -> list[str]:
         """List of credential field names required for this gateway.
 

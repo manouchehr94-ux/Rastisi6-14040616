@@ -122,8 +122,17 @@ def active_shipping_methods(*, store, address: dict | None = None):
     )
 
 
+MANUAL_GATEWAY_SLUGS = ("card_to_card",)
+
+
 def active_payment_gateways(*, store):
-    return list(PaymentGateway.objects.filter(is_active=True, store=store))
+    """درگاه‌هایِ فعالِ Store؛ روشِ کارت‌به‌کارت فقط وقتی نمایش داده می‌شود که پیکربندیِ واقعیِ آن فعال و کامل باشد."""
+    from apps.orders.services import card_transfer_service
+
+    gateways = list(PaymentGateway.objects.filter(is_active=True, store=store))
+    if any(g.slug in MANUAL_GATEWAY_SLUGS for g in gateways) and card_transfer_service.active_config(store) is None:
+        gateways = [g for g in gateways if g.slug not in MANUAL_GATEWAY_SLUGS]
+    return gateways
 
 
 def get_selected_shipping_method(request):
@@ -166,7 +175,7 @@ def set_payment_gateway(request, gateway_id) -> None:
     """یک POST دستکاری‌شده هرگز نمی‌تواند درگاه پرداخت متعلق به Store دیگری
     را انتخاب کند — استخر گزینه‌های مجاز همیشه با ``store`` فعلی فیلتر می‌شود."""
     store = resolve_store_for_service(request)
-    gateway = PaymentGateway.objects.filter(pk=gateway_id, is_active=True, store=store).first()
+    gateway = next((g for g in active_payment_gateways(store=store) if g.pk == gateway_id), None)
     if gateway:
         _state(request)["payment_gateway_id"] = gateway.pk
         request.session.modified = True

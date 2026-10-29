@@ -12,7 +12,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;gap:10px;align-items:center">
           <div style="width:38px;height:38px;border-radius:10px;background:var(--card);display:grid;place-items:center;font-size:18px">
-            {% if gw.code == "zibal" %}💳{% elif gw.code == "cod" %}🚪{% else %}💰{% endif %}
+            {% if gw.code == "zibal" %}💳{% elif gw.code == "cod" %}🚪{% elif gw.code == "card_to_card" %}🏦{% else %}💰{% endif %}
           </div>
           <div>
             <b style="font-size:13.5px">{{ gw.label }}</b>
@@ -67,19 +67,28 @@
         </label>
         {% endif %}
 
-        <!-- فیلدهای اعتبارنامه -->
-        {% for cred_field in gw.required_credentials %}
+        <!-- فیلدهای اعتبارنامه / مشخصاتِ حساب -->
+        {% if gw.manual %}
+        <div class="au-note" style="font-size:12px">شماره‌ی کارتِ مقصد را مشتری در صفحه‌ی پرداخت می‌بیند و پس از واریز ۴ رقمِ آخرِ کارتِ خودش و شماره‌ی پیگیری را ثبت می‌کند. سفارش فقط پس از «تأیید پرداخت» شما در «بررسی کارت‌به‌کارت» پرداخت‌شده می‌شود.</div>
+        {% endif %}
+        {% for field in gw.credential_fields %}
         <div>
           <label style="font-size:11.5px;color:var(--muted);display:block;margin-bottom:4px">
-            {% if cred_field == "merchant" %}شناسه مرچنت (Merchant ID){% else %}{{ cred_field }}{% endif %}
+            {% if field.label == "merchant" %}شناسه مرچنت (Merchant ID){% else %}{{ field.label }}{% endif %}
           </label>
-          <input type="password" name="credential_{{ cred_field }}"
+          {% if field.secret %}
+          <input type="password" name="credential_{{ field.name }}"
                  placeholder="{% if gw.is_configured %}••••••• (مقدار موجود حفظ می‌شود){% else %}وارد کنید{% endif %}"
                  autocomplete="off"
                  style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12.5px">
           <div style="font-size:10.5px;color:var(--muted);margin-top:3px">
             خالی بگذارید تا مقدار فعلی حفظ شود
           </div>
+          {% else %}
+          <input type="text" name="credential_{{ field.name }}" value="{{ field.value }}" autocomplete="off" maxlength="{{ field.max_length|default:100 }}"
+                 {% if field.ltr %}dir="ltr"{% endif %} placeholder="{{ field.placeholder }}"
+                 style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12.5px">
+          {% endif %}
         </div>
         {% endfor %}
 
@@ -111,6 +120,7 @@
   <div class="card-body" style="font-size:12px;line-height:2;color:var(--muted)">
     <p><b>زیبال:</b> شناسه مرچنت را از پنل زیبال دریافت و وارد کنید. حالت آزمایشی بدون پرداخت واقعی عمل می‌کند.</p>
     <p><b>پرداخت در محل:</b> نیازی به اعتبارنامه ندارد — فقط فعال کنید.</p>
+    <p><b>کارت‌به‌کارت:</b> شماره‌ی کارت (۱۶ رقم) و نامِ صاحبِ کارت را وارد کنید. مشتری واریز می‌کند و رسید را ثبت می‌کند؛ شما پس از دیدنِ واریز در حسابتان در «بررسی کارت‌به‌کارت» تأیید می‌کنید.</p>
     <p><b>امنیت:</b> اعتبارنامه‌ها رمزنگاری‌شده ذخیره می‌شوند و هرگز به‌صورت کامل نمایش داده نمی‌شوند.</p>
   </div>
 </div>

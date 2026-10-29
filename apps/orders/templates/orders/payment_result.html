@@ -30,7 +30,7 @@
 <div class="content"><div class="wrap">
   <div class="res-wrap">
     <div class="res">
-      <div class="res-top {% if order.payment_status == 'paid' %}ok{% else %}no{% endif %}">
+      <div class="res-top {% if order.payment_status == 'paid' or order.payment_review_label %}ok{% else %}no{% endif %}">
         <div class="chk">
           {% if order.payment_status == "paid" %}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
@@ -41,6 +41,9 @@
         {% if order.payment_status == "paid" %}
         <h2>پرداخت با موفقیت انجام شد</h2>
         <p>سفارش شما ثبت شد و پس از پردازش ارسال می‌گردد. از خریدتان سپاسگزاریم 🌹</p>
+        {% elif order.payment_review_label and order.status != "canceled" %}
+        <h2>{{ order.payment_review_label }}</h2>
+        <p>پرداخت شما هنوز تأیید نشده است. پس از بررسی و تأییدِ فروشگاه، سفارش پرداخت‌شده می‌شود.</p>
         {% elif order.status == "canceled" %}
         <h2>این سفارش لغو شده است</h2>
         <p>سفارشِ لغوشده قابل پرداخت نیست. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.</p>
@@ -66,6 +69,9 @@
         <div class="acts">
           {% if order.payment_status == "paid" %}
           <a class="btn btn-primary" href="{% url 'customers:account-order-detail' order.code %}">پیگیری سفارش</a>
+          <a class="btn btn-ghost" href="{% url 'catalog:product-list' %}">بازگشت به فروشگاه</a>
+          {% elif order.payment_review_label %}
+          <a class="btn btn-primary" href="{% url 'orders:card-transfer' order.code %}">اطلاعات واریز</a>
           <a class="btn btn-ghost" href="{% url 'catalog:product-list' %}">بازگشت به فروشگاه</a>
           {% else %}
           <a class="btn btn-primary" href="{% url 'orders:checkout-step1' %}">تلاش دوباره</a>

@@ -9,7 +9,7 @@
       <td>{{ order.created_at|jalali }}</td>
       <td>{{ order.items.count|fa_number }} قلم</td>
       <td><b>{{ order.grand_total|toman }}</b></td>
-      <td><span class="badge {{ order.payment_status|payment_status_badge }}">{{ order.get_payment_status_display }}</span></td>
+      <td>{% with review=order.payment_review_label %}{% if review and order.payment_status == "pending" %}<span class="badge b-amber" data-testid="payment-review">{{ review }}</span>{% else %}<span class="badge {{ order.payment_status|payment_status_badge }}">{{ order.get_payment_status_display }}</span>{% endif %}{% endwith %}</td>
       <td><span class="badge {{ order.status|order_status_badge }}">{{ order.get_status_display }}</span></td>
       <td><a class="btn btn-sm" href="{% url 'dashboard:order-detail' order.code %}">👁️ مشاهده</a></td>
     </tr>

@@ -5,7 +5,7 @@ from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import vision_views as storefront_builder_vision_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import cod_views, engagement_views, journal_views, payment_reconciliation_views, views
+from . import card_transfer_views, cod_views, engagement_views, journal_views, payment_reconciliation_views, views
 
 app_name = "dashboard"
 
@@ -166,6 +166,8 @@ urlpatterns = [
 
     path("orders/", views.order_list, name="order-list"),
     path("orders/table/", views.order_table, name="order-table"),
+    path("orders/card-transfers/", card_transfer_views.card_transfer_list, name="card-transfer-list"),
+    path("orders/card-transfers/<int:pk>/<str:action>/", card_transfer_views.card_transfer_decide, name="card-transfer-decide"),
     path("orders/<str:code>/", views.order_detail, name="order-detail"),
 
     path("invoices/", views.invoice_list, name="invoice-list"),

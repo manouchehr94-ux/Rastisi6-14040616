@@ -80,6 +80,11 @@ def gateway_configs_context(*, store):
             "is_configured": config.is_configured if config else False,
             "is_online": adapter.is_online,
             "required_credentials": adapter.required_credentials,
+            "credential_fields": [
+                {**f, "value": (config.get_credentials().get(f["name"], "") if (config and not f.get("secret", True)) else "")}
+                for f in adapter.credential_fields
+            ],
+            "manual": adapter.requires_manual_confirmation,
             "display_order": config.display_order if config else 0,
             "display_title": config.display_title if config else "",
             "is_sandbox": config.is_sandbox if config else False,

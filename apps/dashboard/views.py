@@ -3735,6 +3735,17 @@ def order_detail(request, code):
         (m, dict(order.transactions.model.Method.choices)[m]) for m in cod_payment_service.METHODS
     ]
     context["payment_transactions"] = order.transactions.filter(status="ok").select_related("confirmed_by")
+    from apps.orders.services import card_transfer_service as c2c
+    from apps.stores.authorization import ORDER_REVIEW_CARD_TRANSFER
+
+    if c2c.is_card_transfer_order(order):
+        state = c2c.review_state(order)
+        context["c2c_state"], context["c2c_state_label"] = state, c2c.REVIEW_LABELS.get(state, "")
+        context["c2c_submissions"] = list(order.card_transfers.select_related("reviewed_by"))
+        context["can_review_c2c"] = (
+            membership_has_permission(request.store_membership, ORDER_REVIEW_CARD_TRANSFER)
+            and order.status != "canceled" and order.payment_status == "pending"
+        )
     return render(request, "dashboard/order_detail.html", context)
 
 
@@ -5950,6 +5961,21 @@ def footer_payment_logo_toggle(request, pk):
 # ===========================================================================
 
 
+def _sync_legacy_gateway_row(store, config, adapter):
+    """کارت‌به‌کارت: ردیفِ ``PaymentGateway`` که تسویه‌حساب فهرست می‌کند همیشه با پیکربندیِ واقعی هم‌وضعیت است (یک کلیدِ مدیر)."""
+    if not adapter.requires_manual_confirmation:
+        return
+    from apps.orders.models import PaymentGateway
+
+    PaymentGateway.objects.update_or_create(
+        store=store, slug=config.gateway_code,
+        defaults={
+            "name": config.effective_title, "description": "واریز به کارت و ثبتِ رسید؛ پس از تأییدِ فروشگاه نهایی می‌شود",
+            "icon": "💳", "is_active": bool(config.is_active),
+        },
+    )
+
+
 @require_POST
 @staff_required
 @permission_required(PAYMENT_SETTINGS_MANAGE)
@@ -5989,12 +6015,15 @@ def settings_gateway_config_save(request, gateway_code):
     credentials = config.get_credentials()  # Start with existing
     credential_errors = []
 
-    for field_name in adapter.required_credentials:
+    for field in adapter.credential_fields:
+        field_name = field["name"]
         new_value = request.POST.get(f"credential_{field_name}", "").strip()
         if new_value:
             # New value provided — update
             credentials[field_name] = new_value
-        # If empty and existing value exists, keep existing (don't clear on blank)
+        elif not field.get("secret", True) and f"credential_{field_name}" in request.POST:
+            credentials.pop(field_name, None)   # non-secret fields are shown prefilled: an emptied box means "remove"
+        # Secret field left empty with an existing value: keep existing (don't clear on blank)
 
     # Validate credentials before activation
     if is_active and adapter.required_credentials:
@@ -6009,6 +6038,11 @@ def settings_gateway_config_save(request, gateway_code):
     config.is_sandbox = is_sandbox
 
     if credentials and adapter.required_credentials:
+        if adapter.requires_manual_confirmation:
+            from apps.orders.gateways.card_to_card import clean_card_number
+
+            if credentials.get("destination_card"):
+                credentials["destination_card"] = clean_card_number(credentials["destination_card"])
         try:
             config.set_credentials(credentials)
         except CredentialEncryptionError as exc:
@@ -6017,6 +6051,7 @@ def settings_gateway_config_save(request, gateway_code):
 
     config.is_active = is_active
     config.save()
+    _sync_legacy_gateway_row(store, config, adapter)
 
     # Build response
     if credential_errors:
@@ -6063,6 +6098,7 @@ def settings_gateway_config_toggle(request, gateway_code):
         config.is_active = False
         config.save(update_fields=["is_active", "updated_at"])
         toast_msg = f"{adapter.display_name} غیرفعال شد"
+        _sync_legacy_gateway_row(store, config, adapter)
     else:
         # Activate — only if configured
         if adapter.required_credentials:
@@ -6076,6 +6112,7 @@ def settings_gateway_config_toggle(request, gateway_code):
         config.is_active = True
         config.save(update_fields=["is_active", "updated_at"])
         toast_msg = f"{adapter.display_name} فعال شد"
+    _sync_legacy_gateway_row(store, config, adapter)
 
     response = HttpResponse(status=204)
     response["HX-Trigger"] = json.dumps({

@@ -41,7 +41,7 @@
     <h1 dir="ltr" style="text-align:start">{{ order.code }}</h1>
     <p>
       <span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span>
-      <span class="badge badge-pay-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span>
+      {% with review=order.payment_review_label %}{% if review and order.payment_status == "pending" %}<span class="badge badge-pay-pending" data-testid="payment-review">{{ review }}</span> <a href="{% url 'orders:card-transfer' order.code %}">ثبت / مشاهده اطلاعات واریز</a>{% else %}<span class="badge badge-pay-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span>{% endif %}{% endwith %}
       — ثبت‌شده در {{ order.created_at|jalali }}
     </p>
   </div>

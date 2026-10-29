@@ -449,6 +449,16 @@ class Order(TimeStampedModel):
     def __str__(self):
         return self.code
 
+    @property
+    def payment_review_label(self) -> str:
+        """«در انتظار بررسی پرداخت» و … برایِ سفارش‌هایِ کارت‌به‌کارت (مشتق از ثبت‌هایِ واریز؛ ``payment_status`` دست‌نخورده است).
+        برایِ هر روشِ دیگر ``""``."""
+        if not self.payment_gateway_id or self.payment_gateway.slug != "card_to_card":
+            return ""
+        from apps.orders.services import card_transfer_service
+
+        return card_transfer_service.REVIEW_LABELS.get(card_transfer_service.review_state(self), "")
+
     def clean(self):
         """سفارش باید دقیقاً هم‌راستا با Store فروشنده‌اش باشد.
 
@@ -579,6 +589,7 @@ class Transaction(TimeStampedModel):
         GATEWAY = "gateway", "درگاه پرداخت"
         COD_CASH = "cod_cash", "نقدیِ پرداخت در محل"
         COD_POS = "cod_pos", "کارتخوانِ پرداخت در محل"
+        CARD_TRANSFER = "card_xfer", "کارت‌به‌کارت (تأییدِ دستی)"
 
     method = models.CharField("روش دریافت", max_length=10, choices=Method.choices, default=Method.GATEWAY)
     confirmed_by = models.ForeignKey(
@@ -624,6 +635,7 @@ class PaymentGatewayConfig(TimeStampedModel):
     class GatewayCode(models.TextChoices):
         ZIBAL = "zibal", "زیبال"
         COD = "cod", "پرداخت در محل"
+        CARD_TO_CARD = "card_to_card", "کارت‌به‌کارت"
 
     store = models.ForeignKey(
         "stores.Store",
@@ -923,6 +935,47 @@ class PaymentAttempt(TimeStampedModel):
     @property
     def is_successful(self) -> bool:
         return self.status == self.Status.SUCCEEDED
+
+
+class CardTransferSubmission(TimeStampedModel):
+    """اطلاعاتِ واریزِ کارت‌به‌کارت که مشتری ثبت کرده و منتظرِ بررسیِ مدیر است (یا بررسی شده).
+
+    فقط ۴ رقمِ آخرِ کارتِ *مبدأ* و شماره‌ی پیگیری نگه داشته می‌شود — شماره‌ی کاملِ کارتِ مشتری، CVV2 و رمز هرگز. مقصد (کارتِ خودِ
+    فروشگاه) به‌صورتِ اسنپ‌شاتِ برچسب و ۴ رقمِ آخر ذخیره می‌شود تا تغییرِ بعدیِ تنظیمات تاریخچه را عوض نکند. ثبتِ اطلاعات سفارش را
+    پرداخت‌شده نمی‌کند؛ فقط تأییدِ مدیر (``card_transfer_service.approve``) از مسیرِ ``lifecycle.apply_payment_success`` این کار را می‌کند."""
+
+    class Status(models.TextChoices):
+        SUBMITTED = "submitted", "در انتظار بررسی"
+        APPROVED = "approved", "تأییدشده"
+        REJECTED = "rejected", "ردشده"
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="card_transfer_submissions")
+    order = models.ForeignKey(Order, verbose_name="سفارش", on_delete=models.PROTECT, related_name="card_transfers")
+    attempt = models.ForeignKey(PaymentAttempt, verbose_name="تلاش پرداخت", on_delete=models.PROTECT, related_name="card_transfers")
+    amount = models.DecimalField("مبلغِ سفارش (اسنپ‌شات)", max_digits=14, decimal_places=0)
+    destination_last4 = models.CharField("۴ رقمِ آخرِ کارتِ مقصد (اسنپ‌شات)", max_length=4)
+    destination_label = models.CharField("بانک/صاحبِ کارتِ مقصد (اسنپ‌شات)", max_length=160, blank=True, default="")
+    source_last4 = models.CharField("۴ رقمِ آخرِ کارتِ مبدأ", max_length=4)
+    tracking_number = models.CharField("شماره‌ی پیگیری", max_length=40)
+    submitted_by = models.ForeignKey("customers.Customer", verbose_name="ثبت‌کننده", on_delete=models.SET_NULL, null=True, blank=True, related_name="card_transfer_submissions")
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.SUBMITTED, db_index=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="بررسی‌کننده", on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_card_transfers")
+    reviewed_at = models.DateTimeField("زمانِ بررسی", null=True, blank=True)
+    review_note = models.CharField("دلیلِ رد / یادداشت", max_length=300, blank=True, default="")
+    transaction = models.OneToOneField(Transaction, verbose_name="تراکنشِ تأیید", on_delete=models.SET_NULL, null=True, blank=True, related_name="card_transfer")
+
+    class Meta:
+        verbose_name = "ثبتِ پرداختِ کارت‌به‌کارت"
+        verbose_name_plural = "ثبت‌هایِ پرداختِ کارت‌به‌کارت"
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["order"], condition=models.Q(status="submitted"), name="uniq_open_card_transfer_per_order"),
+            models.UniqueConstraint(fields=["order"], condition=models.Q(status="approved"), name="uniq_approved_card_transfer_per_order"),
+        ]
+        indexes = [models.Index(fields=["store", "status", "-created_at"], name="idx_c2c_store_status")]
+
+    def __str__(self):
+        return f"{self.order.code} — {self.get_status_display()}"
 
 
 class PaymentReconciliation(TimeStampedModel):

@@ -1,0 +1,81 @@
+{% extends "storefront_shell.html" %}
+{% load static persian %}
+
+{% block title %}پرداخت کارت‌به‌کارت | {{ SHOP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/cart.css' %}">
+<link rel="stylesheet" href="{% static 'css/checkout.css' %}">
+<style>
+.c2c-card{margin:14px 0;padding:16px;border:2px dashed #b9c2d6;border-radius:16px;background:#f7f9fd}
+.c2c-card .num{display:block;direction:ltr;text-align:center;font-size:24px;font-weight:800;letter-spacing:2px;font-variant-numeric:tabular-nums;margin:8px 0}
+.c2c-card .meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:#475467}
+.c2c-warn{margin:12px 0;padding:12px 14px;border-radius:12px;background:#fff4db;color:#7a4b00;font-size:13px;line-height:1.9}
+.c2c-state{margin:12px 0;padding:12px 14px;border-radius:12px;font-size:14px;font-weight:700}
+.c2c-state.review{background:#e6f0ff;color:#1c4ea0}.c2c-state.rejected{background:#fde8e8;color:#9b1c1c}
+.c2c-form label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+.c2c-form input{width:100%;min-height:48px;padding:10px 14px;border:1.5px solid #cfd6e4;border-radius:12px;font-size:16px;direction:ltr;text-align:left}
+.c2c-copy{border:0;background:#e9edf6;border-radius:999px;padding:6px 14px;font-size:12px;cursor:pointer}
+</style>
+{% endblock %}
+
+{% block header %}
+<div class="top"><div class="wrap">
+  <a class="logo" href="/"><span><b>{{ SHOP_NAME }}</b><small>تسویه‌حساب امن</small></span></a>
+</div></div>
+<div class="stepper-bar"><div class="steps">
+  <div class="step done"><span class="num">۱</span>سبد خرید</div><span class="line done"></span>
+  <div class="step active"><span class="num">۲</span>پرداخت</div><span class="line"></span>
+  <div class="step"><span class="num">۳</span>پایان</div>
+</div></div>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="content"><div class="wrap"><div class="res-wrap"><div class="res">
+  <div class="res-top ok" style="background:none">
+    <h2>پرداخت کارت‌به‌کارت</h2>
+    <p>سفارش <b dir="ltr">{{ order.code }}</b> ثبت شد. مبلغ را به کارتِ زیر واریز کنید، سپس اطلاعاتِ واریز را همین‌جا ثبت کنید. سفارش پس از بررسی و تأییدِ فروشگاه نهایی می‌شود.</p>
+    {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+    {% if error %}<p role="alert" style="color:#9b1c1c;font-weight:700">{{ error }}</p>{% endif %}
+  </div>
+  <div class="res-b">
+    <div class="res-rows">
+      <div class="r"><span>مبلغِ قابل پرداخت</span><b>{{ order.grand_total|toman }}</b></div>
+    </div>
+
+    {% if destination %}
+    <div class="c2c-card" aria-label="کارت مقصد">
+      <div class="meta"><span>کارتِ مقصد</span>{% if destination.bank %}<span>{{ destination.bank }}</span>{% endif %}</div>
+      <span class="num" id="c2cNumber">{{ destination.card_grouped }}</span>
+      <div class="meta"><span>به نامِ <b>{{ destination.holder }}</b></span><button type="button" class="c2c-copy" onclick="navigator.clipboard&&navigator.clipboard.writeText('{{ destination.card }}');this.textContent='کپی شد'">کپی شماره کارت</button></div>
+      {% if destination.sheba %}<div class="meta" style="margin-top:8px"><span>شبا:</span><b dir="ltr">{{ destination.sheba }}</b></div>{% endif %}
+    </div>
+    {% else %}
+    <p class="c2c-warn">پرداختِ کارت‌به‌کارت در حالِ حاضر برایِ این فروشگاه فعال نیست. لطفاً با فروشگاه تماس بگیرید.</p>
+    {% endif %}
+
+    {% if state == "under_review" %}
+    <div class="c2c-state review" role="status">در انتظار بررسی پرداخت — اطلاعاتِ شما ثبت شد (۴ رقم آخر کارت: <span dir="ltr">{{ latest.source_last4 }}</span> · پیگیری: <span dir="ltr">{{ latest.tracking_number }}</span>). پس از تأییدِ فروشگاه، سفارش پرداخت‌شده می‌شود.</div>
+    {% elif state == "rejected" %}
+    <div class="c2c-state rejected" role="alert">پرداختِ ثبت‌شده تأیید نشد{% if latest.review_note %}: {{ latest.review_note }}{% endif %}. در صورتِ واریز، اطلاعاتِ درست را دوباره ثبت کنید.</div>
+    {% endif %}
+
+    {% if can_submit %}
+    <form method="post" class="c2c-form" novalidate>
+      {% csrf_token %}
+      <div class="c2c-warn">فقط <b>۴ رقمِ آخرِ</b> کارتی را که از آن واریز کرده‌اید بنویسید. شماره‌ی کاملِ کارت، CVV2، تاریخِ انقضا و رمزِ دوم را <b>هرگز</b> وارد نکنید؛ فروشگاه هیچ‌وقت آن‌ها را نمی‌خواهد.</div>
+      <label for="id_source_last4">۴ رقمِ آخرِ کارتِ پرداخت‌کننده</label>
+      <input type="text" id="id_source_last4" name="source_last4" inputmode="numeric" pattern="[0-9۰-۹]{4}" maxlength="4" autocomplete="off" required>
+      <label for="id_tracking_number">شماره‌ی پیگیریِ رسیدِ بانکی</label>
+      <input type="text" id="id_tracking_number" name="tracking_number" maxlength="40" autocomplete="off" required>
+      <div class="acts" style="margin-top:16px"><button type="submit" class="btn btn-primary">ثبتِ اطلاعاتِ واریز</button></div>
+    </form>
+    {% endif %}
+    <div class="acts" style="margin-top:12px">
+      <a class="btn btn-ghost" href="{% url 'customers:account-order-detail' order.code %}">پیگیریِ سفارش</a>
+    </div>
+  </div>
+</div></div></div></div>
+{% endblock %}

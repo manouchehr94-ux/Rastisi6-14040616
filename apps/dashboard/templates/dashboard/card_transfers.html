@@ -1,0 +1,96 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}بررسی پرداخت کارت‌به‌کارت | پنل مدیریت{% endblock %}
+{% block page_title %}بررسی پرداخت کارت‌به‌کارت{% endblock %}
+{% block page_sub %}فقط پس از دیدنِ واریزِ واقعی در حسابِ بانکی تأیید کنید{% endblock %}
+{% block content %}
+<div class="au-page">
+  <div class="au-intro">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <p>مشتری پس از واریز، ۴ رقمِ آخرِ کارتِ مبدأ و شماره‌ی پیگیری را ثبت می‌کند. <b>شماره‌ی پیگیری به‌تنهایی مدرکِ پرداخت نیست</b>؛ مبلغ و زمانِ واریز را در حسابِ بانکی خودتان ببینید و سپس تأیید کنید. تا تأیید نکنید سفارش «پرداخت‌شده» نمی‌شود و پیامِ «پرداخت تأیید شد» برای مشتری نمی‌رود.</p>
+  </div>
+
+  <div class="au-stats">
+    <div class="au-stat {% if open_count %}au-stat--warn{% endif %}"><b>{{ open_count|fa_number }}</b><span>در انتظار بررسی</span></div>
+    <div class="au-stat"><b>{{ open_total|toman }}</b><span>جمعِ مبلغِ در انتظار</span></div>
+    <div class="au-stat au-stat--ok"><b>{{ approved_count|fa_number }}</b><span>تأییدشده</span></div>
+    <div class="au-stat"><b>{{ rejected_count|fa_number }}</b><span>ردشده</span></div>
+  </div>
+
+  <nav class="au-tabs" aria-label="فیلتر وضعیت">
+    {% for key, label in filters %}<a href="?status={{ key }}" class="au-tab{% if status == key %} is-on{% endif %}"{% if status == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
+
+  <div class="au-tablewrap">
+    <table class="au-table" data-testid="c2c-table">
+      <thead><tr>
+        <th>سفارش</th><th>مبلغ</th><th>زمان ثبت</th><th>۴ رقم آخر کارت مبدأ</th><th>شماره پیگیری</th><th>وضعیت</th><th>بررسی‌کننده</th><th>تاریخ و نتیجه</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for s in rows %}
+        <tr data-submission="{{ s.pk }}" data-status="{{ s.status }}">
+          <td><a href="{% url 'dashboard:order-detail' s.order.code %}" dir="ltr"><b>{{ s.order.code }}</b></a><div class="au-hint">{{ s.order.customer.full_name }}</div></td>
+          <td class="au-num">{{ s.amount|toman }}</td>
+          <td style="white-space:nowrap">{{ s.created_at|jalali_dt }}</td>
+          <td class="au-num" dir="ltr">{{ s.source_last4 }}</td>
+          <td dir="ltr" style="text-align:right">{{ s.tracking_number }}{% if s.duplicate_tracking %}<div class="au-badge au-badge--danger" style="margin-top:4px">شماره پیگیری تکراری</div>{% endif %}</td>
+          <td>
+            {% if s.status == "submitted" %}<span class="au-badge au-badge--warn">در انتظار بررسی</span>
+            {% elif s.status == "approved" %}<span class="au-badge au-badge--ok">تأییدشده</span>
+            {% else %}<span class="au-badge au-badge--danger">ردشده</span>{% endif %}
+            {% if s.is_canceled %}<div class="au-badge au-badge--danger" style="margin-top:4px">سفارش لغو شده</div>{% endif %}
+          </td>
+          <td>{% if s.reviewed_by %}{{ s.reviewed_by.get_full_name|default:s.reviewed_by.username }}{% else %}—{% endif %}</td>
+          <td style="font-size:12px">{% if s.reviewed_at %}{{ s.reviewed_at|jalali_dt }}{% if s.review_note %}<div class="au-hint">{{ s.review_note }}</div>{% endif %}{% else %}—{% endif %}</td>
+          <td style="white-space:nowrap">
+            {% if s.status == "submitted" and not s.is_canceled and can_review_card_transfer %}
+            <form method="post" action="{% url 'dashboard:card-transfer-decide' s.pk 'approve' %}" style="display:inline" data-au-confirm="مبلغ {{ s.amount|toman }} را در حسابِ بانکی دیدید و تأیید می‌کنید؟{% if s.duplicate_tracking %} هشدار: همین شماره پیگیری پیش‌تر برای سفارشِ دیگری تأیید شده است!{% endif %} پس از تأیید سفارش «پرداخت‌شده» می‌شود و قابلِ بازگشت نیست.">
+              {% csrf_token %}{% if s.duplicate_tracking %}<input type="hidden" name="allow_duplicate" value="1">{% endif %}
+              <button type="submit" class="au-btn au-btn--success au-btn--sm">تأیید پرداخت</button>
+            </form>
+            <button type="button" class="au-btn au-btn--ghost au-btn--sm" data-c2c-reject="{{ s.pk }}" data-order="{{ s.order.code }}">رد</button>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="9" class="au-empty">{% if status == "submitted" %}پرداختی در انتظارِ بررسی نیست.{% else %}موردی پیدا نشد.{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.paginator.num_pages > 1 %}
+  <div style="display:flex;gap:8px;justify-content:center;align-items:center">
+    {% if page.has_previous %}<a class="au-btn au-btn--sm" href="?status={{ status }}&amp;page={{ page.previous_page_number }}">قبلی</a>{% endif %}
+    <span class="au-hint">صفحه‌ی {{ page.number|fa_number }} از {{ page.paginator.num_pages|fa_number }}</span>
+    {% if page.has_next %}<a class="au-btn au-btn--sm" href="?status={{ status }}&amp;page={{ page.next_page_number }}">بعدی</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<dialog class="au-modal" id="c2cRejectDialog" aria-labelledby="c2cRejectTitle">
+  <form method="post" id="c2cRejectForm">
+    {% csrf_token %}
+    <div class="au-modal__head"><h3 id="c2cRejectTitle">رد پرداخت</h3><button type="button" class="au-x" data-au-close aria-label="بستن">×</button></div>
+    <div class="au-modal__body">
+      <p class="au-hint" id="c2cRejectOrder" style="margin:0"></p>
+      <div class="au-field">
+        <label for="c2cRejectReason">دلیلِ رد (برایِ مشتری نمایش داده می‌شود)</label>
+        <textarea class="au-textarea" id="c2cRejectReason" name="reason" required minlength="3" maxlength="300" placeholder="مثلاً: واریزی با این شماره پیگیری در حساب دیده نشد."></textarea>
+      </div>
+      <div class="au-note">با رد، سفارش همچنان پرداخت‌نشده می‌ماند و مشتری می‌تواند اطلاعاتِ درست را دوباره ثبت کند.</div>
+    </div>
+    <div class="au-modal__foot"><button type="submit" class="au-btn au-btn--danger">رد پرداخت</button><button type="button" class="au-btn au-btn--ghost" data-au-close>انصراف</button></div>
+  </form>
+</dialog>
+<script>
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-c2c-reject]');
+  if (!b) return;
+  var f = document.getElementById('c2cRejectForm');
+  f.action = "{% url 'dashboard:card-transfer-decide' 0 'reject' %}".replace('/0/', '/' + b.getAttribute('data-c2c-reject') + '/');
+  document.getElementById('c2cRejectOrder').textContent = 'سفارش ' + b.getAttribute('data-order');
+  document.getElementById('c2cRejectReason').value = '';
+  document.getElementById('c2cRejectDialog').showModal();
+});
+</script>
+{% endblock %}

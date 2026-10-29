@@ -111,6 +111,30 @@
   </div>
 </div>
 
+{% if c2c_state %}
+<div class="card" style="margin-bottom:16px" data-testid="c2c-panel">
+  <div class="card-head"><h3>🏦 پرداخت کارت‌به‌کارت</h3>
+    <span class="badge {% if c2c_state == 'approved' %}b-green{% elif c2c_state == 'rejected' %}b-red{% else %}b-amber{% endif %}">{{ c2c_state_label }}</span></div>
+  <div class="card-body">
+    {% for s in c2c_submissions %}
+    <div style="padding:10px 0;{% if not forloop.last %}border-bottom:1px solid var(--border){% endif %};font-size:12.5px;line-height:2">
+      مبلغ <b>{{ s.amount|toman }}</b> — ۴ رقم آخر کارت مبدأ: <b dir="ltr">{{ s.source_last4 }}</b> — شماره پیگیری: <b dir="ltr">{{ s.tracking_number }}</b> — ثبت در {{ s.created_at|jalali_dt }}
+      <span class="badge {% if s.status == 'approved' %}b-green{% elif s.status == 'rejected' %}b-red{% else %}b-amber{% endif %}">{{ s.get_status_display }}</span>
+      {% if s.reviewed_by %}<div style="color:var(--muted)">{{ s.reviewed_by.get_full_name|default:s.reviewed_by.username }}، {{ s.reviewed_at|jalali_dt }}{% if s.review_note %} — {{ s.review_note }}{% endif %}</div>{% endif %}
+      {% if s.status == "submitted" and can_review_c2c %}
+      <form method="post" action="{% url 'dashboard:card-transfer-decide' s.pk 'approve' %}" style="display:inline" data-au-confirm="مبلغِ {{ s.amount|toman }} را در حسابِ بانکی دیدید و تأیید می‌کنید؟ پس از تأیید سفارش پرداخت‌شده می‌شود.">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="btn btn-sm btn-primary">تأیید پرداخت</button></form>
+      <form method="post" action="{% url 'dashboard:card-transfer-decide' s.pk 'reject' %}" style="display:inline-flex;gap:4px">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><input class="inp" name="reason" placeholder="دلیل رد (الزامی)" style="width:170px;padding:4px 8px" required minlength="3"><button class="btn btn-sm">رد</button></form>
+      {% endif %}
+    </div>
+    {% empty %}
+    <p style="font-size:12.5px;color:var(--muted);margin:0">مشتری هنوز اطلاعاتِ واریز را ثبت نکرده است. تا تأییدِ شما سفارش پرداخت‌نشده می‌ماند.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% if can_confirm_cod %}
 <div class="card" style="margin-bottom:16px">
   <div class="card-head"><h3>💵 تأیید دریافتِ وجه (پرداخت در محل)</h3></div>

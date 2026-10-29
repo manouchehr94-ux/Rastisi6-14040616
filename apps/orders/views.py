@@ -246,6 +246,42 @@ def payment_callback(request, code, status):
     return redirect("orders:payment-result", code=order.code)
 
 
+def card_transfer(request, code):
+    """صفحه‌ی کارت‌به‌کارت: مبلغ و کارتِ مقصد را نشان می‌دهد و ۴ رقمِ آخرِ کارتِ مبدأ + شماره‌ی پیگیری را می‌گیرد.
+    فقط مالکِ سفارش (همان Store)؛ ثبتِ اطلاعات سفارش را پرداخت‌شده نمی‌کند — تأییدِ مدیر لازم است."""
+    from .services import card_transfer_service as c2c
+
+    order = _get_own_order(request, code, queryset=Order.objects.select_related("payment_gateway", "store"))
+    store = resolve_store_for_service(request)
+    if order.store_id != store.pk or not c2c.is_card_transfer_order(order):
+        raise Http404
+    if order.payment_status == Order.PaymentStatus.PAID:
+        return redirect("orders:payment-result", code=order.code)
+    error = ""
+    if request.method == "POST" and order.status != Order.Status.CANCELED:
+        try:
+            c2c.submit(
+                order.pk, store=store, customer=request.user.customer_profile,
+                source_last4=request.POST.get("source_last4", ""), tracking_number=request.POST.get("tracking_number", ""),
+            )
+        except c2c.CardTransferError as exc:
+            error = str(exc)
+        else:
+            messages.success(request, "اطلاعاتِ واریزِ شما ثبت شد و در انتظارِ بررسیِ پرداخت است.")
+            return redirect("orders:card-transfer", code=order.code)
+    config = c2c.active_config(store)
+    state = c2c.review_state(order)
+    latest = order.card_transfers.order_by("-created_at", "-pk").first()
+    return render_domain_page(request, "orders/card_transfer.html", {
+        "order": order, "error": error, "state": state, "state_label": c2c.REVIEW_LABELS.get(state, ""),
+        "destination": c2c.destination_for(config) if config is not None else None,
+        "latest": latest, "can_submit": (
+            config is not None and order.status != Order.Status.CANCELED and state in ("awaiting_transfer", "rejected")
+            and order.card_transfers.count() < c2c.MAX_SUBMISSIONS_PER_ORDER
+        ),
+    })
+
+
 def payment_result(request, code):
     order = _get_own_order(
         request, code,
@@ -464,6 +500,10 @@ def payment_initiate(request, code):
             sandbox=gateway_config.is_sandbox,
         )
         return redirect(redirect_url)
+
+    # Card-to-card: the customer reports the transfer; an admin confirms it (the order stays unpaid until then)
+    if get_adapter(gateway_config.gateway_code).requires_manual_confirmation:
+        return redirect("orders:card-transfer", code=order.code)
 
     # COD — go straight to result
     return redirect("orders:payment-result", code=order.code)

@@ -129,6 +129,16 @@ def initiate_payment(
     if not gateway_config.is_configured:
         raise PaymentConfigError("پیکربندی درگاه ناقص است")
 
+    # Manual (admin-confirmed) methods such as card-to-card: one open PENDING attempt per order, reused on every visit.
+    try:
+        _manual_adapter = get_adapter(gateway_config.gateway_code)
+    except KeyError:
+        _manual_adapter = None
+    if _manual_adapter is not None and _manual_adapter.requires_manual_confirmation:
+        from apps.orders.services.card_transfer_service import ensure_attempt
+
+        return ensure_attempt(order, gateway_config)
+
     # Idempotency: check for existing attempt
     if idempotency_key:
         existing = PaymentAttempt.objects.filter(idempotency_key=idempotency_key).first()
