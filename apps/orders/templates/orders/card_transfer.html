@@ -15,6 +15,9 @@
 .c2c-state.review{background:#e6f0ff;color:#1c4ea0}.c2c-state.rejected{background:#fde8e8;color:#9b1c1c}
 .c2c-form label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
 .c2c-form input{width:100%;min-height:48px;padding:10px 14px;border:1.5px solid #cfd6e4;border-radius:12px;font-size:16px;direction:ltr;text-align:left}
+.c2c-head{padding:22px 20px 6px;text-align:center}.c2c-head h2{margin:0 0 8px;font-size:20px;color:#1d2433}.c2c-head p{margin:6px 0;font-size:14px;line-height:2;color:#475467}
+@media(max-width:480px){.c2c-card .num{font-size:19px;letter-spacing:1px;white-space:nowrap}}
+.c2c-ltr{white-space:nowrap;direction:ltr;unicode-bidi:isolate}
 .c2c-copy{border:0;background:#e9edf6;border-radius:999px;padding:6px 14px;font-size:12px;cursor:pointer}
 </style>
 {% endblock %}
@@ -34,7 +37,7 @@
 
 {% block content %}
 <div class="content"><div class="wrap"><div class="res-wrap"><div class="res">
-  <div class="res-top ok" style="background:none">
+  <div class="c2c-head">
     <h2>پرداخت کارت‌به‌کارت</h2>
     <p>سفارش <b dir="ltr">{{ order.code }}</b> ثبت شد. مبلغ را به کارتِ زیر واریز کنید، سپس اطلاعاتِ واریز را همین‌جا ثبت کنید. سفارش پس از بررسی و تأییدِ فروشگاه نهایی می‌شود.</p>
     {% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
@@ -57,7 +60,7 @@
     {% endif %}
 
     {% if state == "under_review" %}
-    <div class="c2c-state review" role="status">در انتظار بررسی پرداخت — اطلاعاتِ شما ثبت شد (۴ رقم آخر کارت: <span dir="ltr">{{ latest.source_last4 }}</span> · پیگیری: <span dir="ltr">{{ latest.tracking_number }}</span>). پس از تأییدِ فروشگاه، سفارش پرداخت‌شده می‌شود.</div>
+    <div class="c2c-state review" role="status">در انتظار بررسی پرداخت — اطلاعاتِ شما ثبت شد (۴ رقم آخر کارت: <bdi class="c2c-ltr">{{ latest.source_last4 }}</bdi> · پیگیری: <bdi class="c2c-ltr">{{ latest.tracking_number }}</bdi>). پس از تأییدِ فروشگاه، سفارش پرداخت‌شده می‌شود.</div>
     {% elif state == "rejected" %}
     <div class="c2c-state rejected" role="alert">پرداختِ ثبت‌شده تأیید نشد{% if latest.review_note %}: {{ latest.review_note }}{% endif %}. در صورتِ واریز، اطلاعاتِ درست را دوباره ثبت کنید.</div>
     {% endif %}
