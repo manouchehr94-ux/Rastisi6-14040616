@@ -306,12 +306,12 @@ class PermissionIsolationAndAuditTests(ProposalFlowBase):
 
     def test_the_store_list_and_upload_flow_entry_points(self):
         listing = self.client.get(reverse("dashboard:product-list"))
-        self.assertContains(listing, "ورود گروهی کالا با اکسل")
+        self.assertContains(listing, "ورود گروهی کالاها")
         self.assertContains(listing, reverse("dashboard:import-upload") + "?type=products")
         upload = self.client.get(reverse("dashboard:import-upload") + "?type=products")
         self.assertContains(upload, reverse("dashboard:import-template", args=["products"]))
         self._login_as(StoreMembership.Role.ANALYST, "an2")
-        self.assertNotContains(self.client.get(reverse("dashboard:product-list")), "ورود گروهی کالا با اکسل")
+        self.assertNotContains(self.client.get(reverse("dashboard:product-list")), "ورود گروهی کالاها")
 
     def test_a_store_specific_template_lists_its_own_references_only(self):
         from apps.dashboard.services import import_xlsx

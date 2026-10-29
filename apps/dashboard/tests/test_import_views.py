@@ -424,7 +424,7 @@ class XlsxUploadFlowTests(ImportViewTestCase):
         html = self.client.get(reverse("dashboard:import-detail", args=[job.pk])).content.decode()
         self.assertIn(">3<", html.replace("۳", "3"))  # Excel row 3
         for column in ("نام کالا", "برند", "دسته‌بندی", "قیمت"):
-            self.assertIn(f'class="imp-col">{column}<', html)
+            self.assertIn(f'class="imp-col">{column}:<', html)
         for term in INTERNAL_TERMS + ("«name»", "«price»", "Traceback", "Exception", "ValueError"):
             self.assertNotIn(term, html)
         only = self.client.get(reverse("dashboard:import-detail", args=[job.pk]) + "?only=problems")
@@ -513,7 +513,8 @@ class XlsxUploadFlowTests(ImportViewTestCase):
         self.assertEqual(report["Content-Type"], XLSX_MIME)
         ws = open_workbook(b"".join(report.streaming_content))["خطاها"]
         self.assertEqual(ws["A2"].value, 3)
-        self.assertEqual(ws["B2"].value, "نامعتبر")
+        self.assertEqual(ws["B2"].value, "شناسه: XU-BAD")        # no product name in the row → the honest identifier label
+        self.assertEqual(ws["C2"].value, "نامعتبر")
 
     def test_formula_cells_in_upload_are_rejected_row_wise(self):
         self._post([self._good("OK-1"), self._good("EV-1")[:1] + ["=1+1"] + self._good()[2:]])
