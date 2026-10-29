@@ -1904,6 +1904,8 @@ _SESSION_PENDING_ACTIVATE_DOMAIN_ID_KEY = "portal_pending_activate_domain_id"
 
 
 def _domains_view_context(store):
+    from apps.stores.services import domain_guide_service as guide
+
     domains = store.domains.filter(domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN).order_by("-created_at")
     rows = []
     for domain in domains:
@@ -1912,13 +1914,19 @@ def _domains_view_context(store):
             f"{domain_verification_service.VERIFICATION_VALUE_PREFIX}{domain.verification_token}"
             if domain.verification_token else ""
         )
+        connection = domain_verification_service.custom_domain_connection_instructions(domain.hostname)
+        steps = guide.steps(domain, targets_configured=connection["configured"])
         rows.append({
             "domain": domain,
             "record_name": record_name,
             "expected_value": expected_value,
-            "connection": domain_verification_service.custom_domain_connection_instructions(
-                domain.hostname
-            ),
+            "connection": connection,
+            "txt": guide.txt_record(domain),
+            "routing": guide.routing_records(domain.hostname),
+            "steps": steps,
+            "overall": guide.overall_state(steps),
+            "fresh_ready": guide.readiness_is_fresh(domain),
+            "live_url": f"https://{domain.hostname}/" if domain.is_primary else "",
         })
     return rows
 
@@ -1950,6 +1958,8 @@ def custom_domains(request, store_public_id):
 
     return render(request, "portal/app/custom_domains.html", {
         "store": store, "rows": _domains_view_context(store),
+        "targets_configured": domain_verification_service.custom_domain_connection_instructions("")["configured"],
+        "can_manage_domains": portal_action_allowed(request, store, DOMAIN_MANAGE),
     })
 
 
