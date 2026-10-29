@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from apps.cart.models import Coupon
+from apps.cart.models import Cart, Coupon
 from apps.cart.services.cart_service import reprice_cart_items
 from apps.cart.services.pricing import cart_totals, coupon_is_applicable
 from apps.catalog.services.pricing_service import resolve_regular_price
@@ -186,11 +186,29 @@ def get_or_create_checkout_token(cart) -> str:
     مشارکت کاربر (نه فیلد مخفی فرم، نه ورودی جدا). چون هر درخواست تسویه‌حساب
     (اعم از کلیک دوم/retry شبکه) همان Cart را دوباره resolve می‌کند
     (``apps.cart.services.cart_service.get_cart``)، همین یک کلید ذخیره‌شده
-    روی خودِ Cart برای تمام تلاش‌های متوالی/هم‌زمانِ همان کاربر یکسان
-    می‌ماند — بدون این‌که کلاینت هیچ مقداری بفرستد یا کنترل کند."""
-    if not cart.checkout_token:
-        cart.checkout_token = secrets.token_urlsafe(CHECKOUT_TOKEN_BYTES)
-        cart.save(update_fields=["checkout_token", "updated_at"])
+    روی خودِ Cart برای تمام تلاش‌های متوالی/هم‌زمانِ همان چرخه‌ی خرید یکسان
+    می‌ماند — بدون این‌که کلاینت هیچ مقداری بفرستد یا کنترل کند.
+
+    چرخه‌ی خرید: کلید تا وقتی سبد پس از سفارش خالی است می‌ماند (replay همان سفارش را برمی‌گرداند)؛ با افزودنِ نخستین قلمِ خریدِ بعدی
+    پاک می‌شود (``cart_service.start_new_checkout_cycle_if_empty``) و این تابع کلیدِ تازه می‌سازد.
+
+    ساخت/خواندنِ کلید زیرِ قفلِ ردیفِ Cart انجام می‌شود تا دو درخواستِ هم‌زمانِ «اولین تسویه‌حساب» دو کلیدِ متفاوت نسازند
+    (قفل فقط درونِ این تراکنشِ کوتاه گرفته و رها می‌شود؛ ترتیبِ قفلِ Product/Variant → Cart → CartItem دست‌نخورده است)."""
+    with transaction.atomic():
+        locked = Cart.objects.select_for_update().get(pk=cart.pk)
+        if not locked.checkout_token:
+            locked.checkout_token = secrets.token_urlsafe(CHECKOUT_TOKEN_BYTES)
+            locked.save(update_fields=["checkout_token", "updated_at"])
+        cart.checkout_token = locked.checkout_token
+    return cart.checkout_token
+
+
+def _rotate_checkout_token(cart) -> str:
+    with transaction.atomic():
+        locked = Cart.objects.select_for_update().get(pk=cart.pk)
+        locked.checkout_token = secrets.token_urlsafe(CHECKOUT_TOKEN_BYTES)
+        locked.save(update_fields=["checkout_token", "updated_at"])
+        cart.checkout_token = locked.checkout_token
     return cart.checkout_token
 
 
@@ -317,9 +335,14 @@ def finalize_order(request, cart, customer):
         raise CheckoutError("سبد خرید شما خالی است")
 
     token = get_or_create_checkout_token(cart)
+    store = resolve_store_for_service(request)
     existing_order = Order.objects.filter(idempotency_key=token).first()
     if existing_order is not None:
-        return existing_order
+        if existing_order.customer_id == customer.pk and existing_order.store_id == store.pk:
+            return existing_order
+        # کلیدی که به سفارشِ مشتری/فروشگاهِ دیگری تعلق دارد replay نیست (برخوردِ تقریباً ناممکن، ولی هرگز سفارشِ دیگران برنمی‌گردد).
+        logger.warning("checkout token of cart %s matched an order of another customer/store; rotating it", cart.pk)
+        token = _rotate_checkout_token(cart)
 
     if not cart.items.exists():
         raise CheckoutError("سبد خرید شما خالی است")
@@ -348,7 +371,6 @@ def finalize_order(request, cart, customer):
         raise CheckoutError("هیچ درگاه پرداخت فعالی موجود نیست")
 
     coupon = get_applied_coupon(request, cart, customer)
-    store = resolve_store_for_service(request)
     birth_date_raw = _state(request).get("birth_date", "")
     expected_total = _state(request).get("expected_total")
     promo_consent = dict(_state(request).get("promo_consent") or {})
