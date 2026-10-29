@@ -238,12 +238,45 @@ class ExpirySettingsViewTests(ExpiryBase):
             shop = ShopSettings.load(store=self.store)
             self.assertEqual((shop.unpaid_online_order_ttl_minutes, shop.unpaid_online_order_grace_minutes, shop.unpaid_expiry_notify_sms), (60, 30, False))
             self.assertEqual(AuditLogEntry.objects.filter(action_code="settings.order_expiry_updated").count(), 1)
-            page = self.client.get(reverse("dashboard:settings") + "?section=finance")
-            self.assertContains(page, "انقضای سفارش‌های پرداخت‌نشده")
+            page = self.client.get(reverse("dashboard:settings") + "?section=unpaid-orders")
+            self.assertContains(page, "مدیریت سفارش‌های پرداخت‌نشده")
             from apps.stores.models import StoreMembership
 
             analyst = self.login_other(StoreMembership.Role.ANALYST)
             self.assertEqual(analyst.post(url, {"unpaid_online_order_ttl_minutes": "0", "unpaid_online_order_grace_minutes": "30"}).status_code, 403)
+
+    def _post_ui(self, **data):
+        from django.urls import reverse
+
+        return self.client.post(reverse("dashboard:settings-order-expiry"), {"expiry_ui": "1", **data})
+
+    def test_new_category_page_default_off_with_plain_language(self):
+        from django.urls import reverse
+
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            page = self.client.get(reverse("dashboard:settings") + "?section=unpaid-orders")
+            self.assertContains(page, "مدیریت سفارش‌های پرداخت‌نشده")
+            self.assertContains(page, "اگر مشتری سفارش آنلاین ثبت کند ولی پرداخت را کامل نکند، می‌توانید تعیین کنید سفارش پس از مدت مشخصی خودکار لغو شود.")
+            self.assertContains(page, "مهلت تکمیلی پرداخت در حال انجام")      # advanced
+            self.assertContains(page, "ارسال پیامک اطلاع‌رسانی هنگام لغو")
+            self.assertContains(page, "پرداخت در محل (COD)")
+            shop = ShopSettings.load(store=self.store)
+            self.assertEqual((shop.unpaid_online_order_ttl_minutes, shop.unpaid_expiry_notify_sms), (0, False))   # defaults: everything off
+            self.assertNotContains(self.client.get(reverse("dashboard:settings") + "?section=finance"), "settings-order-expiry")   # no duplicate editor
+
+    def test_switch_enable_disable_and_validation(self):
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            self._post_ui(expiry_enabled="on", unpaid_online_order_ttl_minutes="")           # on, no number -> suggested 60
+            self.assertEqual(ShopSettings.load(store=self.store).unpaid_online_order_ttl_minutes, 60)
+            self._post_ui(expiry_enabled="on", unpaid_online_order_ttl_minutes="10")         # too short -> rejected, previous value kept
+            self.assertEqual(ShopSettings.load(store=self.store).unpaid_online_order_ttl_minutes, 60)
+            self._post_ui(expiry_enabled="on", unpaid_online_order_ttl_minutes="120", unpaid_online_order_grace_minutes="45")
+            shop = ShopSettings.load(store=self.store)
+            self.assertEqual((shop.unpaid_online_order_ttl_minutes, shop.unpaid_online_order_grace_minutes), (120, 45))
+            self._post_ui(unpaid_online_order_ttl_minutes="120")                              # switch off -> disabled (0), advanced value kept
+            shop = ShopSettings.load(store=self.store)
+            self.assertEqual((shop.unpaid_online_order_ttl_minutes, shop.unpaid_online_order_grace_minutes), (0, 45))
+            self.assertEqual(self.run_job()["expired"] if hasattr(self, "run_job") else 0, 0)
 
     def login_other(self, role):
         from django.contrib.auth import get_user_model

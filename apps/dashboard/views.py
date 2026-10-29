@@ -4282,10 +4282,13 @@ def _settings_context(
             "tax_percent": shop.tax_percent, "free_shipping_threshold": shop.free_shipping_threshold,
         }),
         "order_expiry_form": OrderExpirySettingsForm(initial={
-            "unpaid_online_order_ttl_minutes": shop.unpaid_online_order_ttl_minutes,
+            "expiry_enabled": shop.unpaid_online_order_ttl_minutes > 0,
+            # خاموش ⇒ مهلتِ ذخیره‌شده ۰ است؛ فرم عددِ پیشنهادی را نشان می‌دهد تا با روشن‌کردن آماده باشد.
+            "unpaid_online_order_ttl_minutes": shop.unpaid_online_order_ttl_minutes or OrderExpirySettingsForm.DEFAULT_TTL_MINUTES,
             "unpaid_online_order_grace_minutes": shop.unpaid_online_order_grace_minutes,
             "unpaid_expiry_notify_sms": shop.unpaid_expiry_notify_sms,
         }),
+        "expiry_enabled": shop.unpaid_online_order_ttl_minutes > 0,
         "gift_wrap_form": gift_wrap_form or GiftWrapSettingsForm(initial={
             "gift_wrap_available": shop.gift_wrap_available, "gift_wrap_price": shop.gift_wrap_price,
             "gift_wrap_pricing_scope": shop.gift_wrap_pricing_scope, "gift_wrap_title": shop.gift_wrap_title,
@@ -4346,7 +4349,8 @@ def _industry_installation_context(store):
 
 SETTINGS_SECTIONS = [
     ("general", "اطلاعات فروشگاه", "🏪", "نام، شعار و اطلاعات تماس فروشگاه"),
-    ("finance", "مالی و مالیات", "💰", "نرخ مالیات و آستانه‌ی ارسال رایگان"),
+    ("finance", "مالی و مالیات", "💰", "وضعیتِ مالیات، آستانه‌ی ارسال رایگان و کادوپیچی"),
+    ("unpaid-orders", "مدیریت سفارش‌های پرداخت‌نشده", "⏱", "لغوِ خودکارِ سفارش‌های آنلاینی که پرداخت‌شان کامل نشده"),
     ("delivery-payment", "ارسال و درگاه", "🚚", "روش‌های ارسال و درگاه‌های پرداخت"),
     ("payment-config", "پیکربندی درگاه", "🔐", "تنظیمات اعتبارنامه و فعال‌سازی درگاه‌های پرداخت"),
     ("sms", "پیامک", "📲", "اتصال و قالب‌های پیامک"),
@@ -4515,8 +4519,9 @@ def settings_order_expiry(request):
         shop = ShopSettings.load(store=request.store)
         before = shop.unpaid_online_order_ttl_minutes
         cd = form.cleaned_data
-        shop.unpaid_online_order_ttl_minutes = cd["unpaid_online_order_ttl_minutes"]
-        shop.unpaid_online_order_grace_minutes = cd["unpaid_online_order_grace_minutes"]
+        shop.unpaid_online_order_ttl_minutes = cd["effective_ttl"]
+        if cd.get("unpaid_online_order_grace_minutes") is not None:
+            shop.unpaid_online_order_grace_minutes = cd["unpaid_online_order_grace_minutes"]
         shop.unpaid_expiry_notify_sms = cd["unpaid_expiry_notify_sms"]
         shop.save(update_fields=["unpaid_online_order_ttl_minutes", "unpaid_online_order_grace_minutes", "unpaid_expiry_notify_sms", "updated_at"])
         record_audit_event(
@@ -4525,10 +4530,13 @@ def settings_order_expiry(request):
             before={"ttl_minutes": before}, after={"ttl_minutes": shop.unpaid_online_order_ttl_minutes,
                                                    "grace_minutes": shop.unpaid_online_order_grace_minutes},
         )
-        messages.success(request, "تنظیمات انقضای سفارش ذخیره شد")
+        messages.success(request, (
+            "لغوِ خودکارِ سفارش‌های پرداخت‌نشده فعال شد." if shop.unpaid_online_order_ttl_minutes
+            else "لغوِ خودکارِ سفارش‌های پرداخت‌نشده غیرفعال شد."
+        ))
     else:
         messages.error(request, "؛ ".join(sum((list(v) for v in form.errors.values()), [])) or "مقدار نامعتبر است")
-    return redirect("/admin-portal/settings/?section=finance")
+    return redirect("/admin-portal/settings/?section=unpaid-orders")
 
 
 @require_POST

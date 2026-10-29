@@ -276,10 +276,10 @@ SECTIONS: tuple = (
                 query="?section=finance",
                 matches=(
                     _m("settings", get={"section": ("finance",)}),
-                    _m("settings-finance", "settings-gift-wrap", "settings-order-expiry",
+                    _m("settings-finance", "settings-gift-wrap",
                        "gift-wrap-products", "gift-wrap-product-update"),
                 ),
-                keywords="مالی تنظیمات مالی کادوپیچی بسته بندی هدیه انقضای سفارش finance gift wrap"),
+                keywords="مالی تنظیمات مالی کادوپیچی بسته بندی هدیه finance gift wrap"),
             Tab("sms", "پیامک", "settings", perms=("can_manage_settings",), query="?section=sms",
                 matches=(
                     _m("settings", get={"section": ("sms",)}),

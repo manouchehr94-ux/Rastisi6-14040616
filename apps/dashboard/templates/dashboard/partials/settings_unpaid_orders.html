@@ -1,0 +1,71 @@
+<div class="au-page" x-data="{ on: {{ expiry_enabled|yesno:'true,false' }} }">
+  <div class="au-intro">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <p>اگر مشتری سفارش آنلاین ثبت کند ولی پرداخت را کامل نکند، می‌توانید تعیین کنید سفارش پس از مدت مشخصی خودکار لغو شود.</p>
+  </div>
+
+  <form method="post" action="{% url 'dashboard:settings-order-expiry' %}" class="au-card" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="expiry_ui" value="1">
+    <div class="au-card__head">
+      <h2>لغو خودکار سفارش‌های پرداخت‌نشده</h2>
+      <span class="au-badge {% if expiry_enabled %}au-badge--ok{% endif %}">{% if expiry_enabled %}فعال — مهلت {{ shop.unpaid_online_order_ttl_minutes }} دقیقه{% else %}غیرفعال{% endif %}</span>
+    </div>
+    <div class="au-card__body">
+      <label class="au-switch">
+        <input type="checkbox" name="expiry_enabled" role="switch" x-model="on" {% if expiry_enabled %}checked{% endif %}>
+        <span class="au-switch__track"></span>
+        <span class="au-switch__text" data-on="فعال" data-off="غیرفعال"></span>
+        <span class="au-switch__label">لغو خودکار سفارش پرداخت‌نشده
+          <small>پیش‌فرض: غیرفعال. تا وقتی روشن نکنید هیچ سفارشی به‌صورت خودکار لغو نمی‌شود.</small>
+        </span>
+      </label>
+
+      <div class="au-field" x-show="on" x-cloak>
+        <label for="id_unpaid_online_order_ttl_minutes">مهلت پرداخت</label>
+        <div class="au-unit">
+          {{ order_expiry_form.unpaid_online_order_ttl_minutes }}
+          <span>دقیقه</span>
+        </div>
+        <span class="au-hint">پیشنهاد: ۶۰ دقیقه (حداقل ۱۵). این مدت باید از عمر نشست درگاه پرداخت (زیبال) بیشتر باشد، تا سفارشِ مشتریِ در حال پرداخت اشتباهی لغو نشود.</span>
+        {% for error in order_expiry_form.unpaid_online_order_ttl_minutes.errors %}<span class="au-error">{{ error }}</span>{% endfor %}
+      </div>
+      <div class="au-note" x-show="!on" x-cloak>با خاموش‌بودنِ این گزینه، سفارش‌های پرداخت‌نشده تا زمانی که خودتان لغو نکنید یا مشتری پرداخت نکند، باقی می‌مانند و موجودی کالا را نگه می‌دارند.</div>
+
+      <label class="au-switch">
+        <input type="checkbox" name="unpaid_expiry_notify_sms" role="switch" {% if order_expiry_form.unpaid_expiry_notify_sms.value %}checked{% endif %}>
+        <span class="au-switch__track"></span>
+        <span class="au-switch__text" data-on="فعال" data-off="غیرفعال"></span>
+        <span class="au-switch__label">ارسال پیامک اطلاع‌رسانی هنگام لغو
+          <small>پیش‌فرض: غیرفعال. ایمیل لغوِ سفارش در هر حال برای مشتری ارسال می‌شود.</small>
+        </span>
+      </label>
+
+      <details class="au-card au-card--advanced" style="box-shadow:none">
+        <summary>تنظیمات پیشرفته</summary>
+        <div class="au-card__body">
+          <div class="au-field">
+            <label for="id_unpaid_online_order_grace_minutes">مهلت تکمیلی پرداخت در حال انجام</label>
+            <div class="au-unit">
+              {{ order_expiry_form.unpaid_online_order_grace_minutes }}
+              <span>دقیقه</span>
+            </div>
+            <span class="au-hint">اگر مشتری درست در همین لحظه در صفحه‌ی درگاه است (تلاش پرداختِ باز با فعالیتِ کمتر از این مدت)، سفارش لغو نمی‌شود. مقدار پیش‌فرض ۳۰ دقیقه است و معمولاً نیازی به تغییر ندارد.</span>
+            {% for error in order_expiry_form.unpaid_online_order_grace_minutes.errors %}<span class="au-error">{{ error }}</span>{% endfor %}
+          </div>
+        </div>
+      </details>
+
+      <div class="au-note au-note--ok">
+        <b>چه سفارش‌هایی هرگز لغو نمی‌شوند؟</b><br>
+        پرداخت در محل (COD)؛ سفارشِ کارت‌به‌کارتِ در انتظارِ بررسیِ شما (از مسیر درگاه آنلاین لغو نمی‌شود)؛ و هر سفارشی که پرداختِ تأییدشده یا پرداختِ در حال انجام دارد. با لغو، موجودی کالا و ظرفیت کد تخفیف به فروشگاه برمی‌گردد.
+      </div>
+      <div class="au-note">
+        اجرای خودکار به یک زمان‌بندی دوره‌ای برای دستور <code dir="ltr">manage.py expire_unpaid_orders</code> نیاز دارد که توسط مدیر سرور تنظیم می‌شود؛ ذخیره‌ی این صفحه آن را فعال نمی‌کند.
+      </div>
+    </div>
+    <div class="au-card__foot">
+      <button type="submit" class="au-btn au-btn--primary">ذخیره تنظیمات</button>
+    </div>
+  </form>
+</div>

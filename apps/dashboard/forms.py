@@ -895,19 +895,45 @@ class IdentityAssetsForm(forms.Form):
 
 
 class OrderExpirySettingsForm(forms.Form):
-    """مهلتِ پرداختِ سفارش‌هایِ آنلاین (۰ = غیرفعال). COD هرگز منقضی نمی‌شود."""
+    """مدیریتِ سفارش‌هایِ پرداخت‌نشده. COD هرگز منقضی نمی‌شود.
 
+    دو شکلِ ارسال پذیرفته می‌شود:
+
+    * فرمِ جدید (``expiry_ui`` در POST): یک کلیدِ «فعال‌سازیِ لغوِ خودکار» + مهلت به دقیقه. خاموش ⇒ مهلتِ ذخیره‌شده ۰ (همان معنایِ
+      «غیرفعال» که ``order_expiry_service`` از قبل می‌شناسد — هیچ فیلدِ دیتابیسیِ تازه‌ای لازم نیست)؛ روشن بدونِ عدد ⇒ ``DEFAULT_TTL_MINUTES``.
+    * فرمِ قدیمی (فقط ``unpaid_online_order_ttl_minutes``، ۰ = غیرفعال) برایِ سازگاریِ عقب‌رو.
+    """
+
+    DEFAULT_TTL_MINUTES = 60
+    MIN_TTL_MINUTES = 15
+
+    expiry_ui = forms.CharField(required=False)
+    expiry_enabled = forms.BooleanField(label="لغوِ خودکارِ سفارشِ پرداخت‌نشده", required=False)
     unpaid_online_order_ttl_minutes = forms.IntegerField(
-        label="مهلتِ پرداخت (دقیقه؛ ۰ = غیرفعال)", min_value=0, max_value=10080, widget=forms.NumberInput(attrs={"class": "inp", "dir": "ltr"}),
+        label="مهلتِ پرداخت (دقیقه)", min_value=0, max_value=10080, required=False,
+        widget=forms.NumberInput(attrs={"class": "au-input au-input--ltr", "dir": "ltr", "inputmode": "numeric"}),
     )
     unpaid_online_order_grace_minutes = forms.IntegerField(
-        label="مهلتِ تکمیلی (دقیقه)", min_value=0, max_value=1440, widget=forms.NumberInput(attrs={"class": "inp", "dir": "ltr"}),
+        label="مهلتِ تکمیلیِ پرداختِ در حال انجام (دقیقه)", min_value=0, max_value=1440, required=False,
+        widget=forms.NumberInput(attrs={"class": "au-input au-input--ltr", "dir": "ltr", "inputmode": "numeric"}),
     )
     unpaid_expiry_notify_sms = forms.BooleanField(label="ارسالِ پیامکِ لغو", required=False)
 
     def clean(self):
         cleaned = super().clean()
         ttl = cleaned.get("unpaid_online_order_ttl_minutes")
-        if ttl and ttl < 15:
-            self.add_error("unpaid_online_order_ttl_minutes", "مهلت باید ۰ (غیرفعال) یا حداقل ۱۵ دقیقه باشد.")
+        if cleaned.get("expiry_ui"):
+            if cleaned.get("expiry_enabled"):
+                ttl = ttl or self.DEFAULT_TTL_MINUTES
+                if ttl < self.MIN_TTL_MINUTES:
+                    self.add_error("unpaid_online_order_ttl_minutes", "مهلتِ پرداخت باید حداقل ۱۵ دقیقه باشد.")
+            else:
+                ttl = 0
+            cleaned["effective_ttl"] = ttl
+        else:
+            if ttl is None:
+                self.add_error("unpaid_online_order_ttl_minutes", "مهلتِ پرداخت را وارد کنید (۰ = غیرفعال).")
+            elif ttl and ttl < self.MIN_TTL_MINUTES:
+                self.add_error("unpaid_online_order_ttl_minutes", "مهلت باید ۰ (غیرفعال) یا حداقل ۱۵ دقیقه باشد.")
+            cleaned["effective_ttl"] = ttl
         return cleaned
