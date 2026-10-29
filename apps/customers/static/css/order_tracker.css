@@ -1,0 +1,46 @@
+/* ردیابِ سفارشِ مشتری — فقط از توکن‌هایِ تمِ فروشگاه (tokens.css) استفاده می‌کند تا با هر تمی هماهنگ و خوانا بماند. */
+.otk { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius, 14px); padding: 18px; margin-bottom: 16px; color: var(--ink); }
+.otk__title { margin: 0 0 4px; font-size: 16px; font-weight: 800; }
+.otk__summary { margin: 0 0 14px; color: var(--ink); font-size: 14px; line-height: 1.9; font-weight: 600; }
+.otk__reject { border: 1px solid var(--danger-text); border-radius: var(--radius, 12px); padding: 12px 14px; margin-bottom: 14px; display: grid; gap: 8px; justify-items: start; }
+.otk__reject b { color: var(--danger-text); }
+.otk__reject p { margin: 0; overflow-wrap: anywhere; }
+.otk__reject--todo { border-color: var(--line); }
+.otk__tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.otk__track { border: 1px solid var(--line); border-radius: var(--radius, 12px); padding: 14px; }
+.otk__track-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.otk__track-h h3 { margin: 0; font-size: 14px; font-weight: 800; }
+.otk__tag { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.otk__tag--ok { color: var(--green-text); border-color: var(--green-text); }
+.otk__tag--warn { color: var(--amber-text); border-color: var(--amber-text); }
+.otk__tag--danger { color: var(--danger-text); border-color: var(--danger-text); }
+.otk__desc { margin: 6px 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.8; }
+.otk__steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 0; }
+.otk__step { position: relative; flex: 1 1 0; display: grid; justify-items: center; gap: 4px; text-align: center; font-size: 12px; color: var(--muted); padding-top: 2px; }
+.otk__step::before { content: ""; position: absolute; top: 14px; inset-inline-start: calc(50% + 16px); inset-inline-end: calc(-50% + 16px); height: 2px; background: var(--line); }
+.otk__step:last-child::before { display: none; }
+.otk__step--done::before { background: var(--green-text); }
+.otk__dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line); background: var(--card); font-size: 14px; font-weight: 800; position: relative; z-index: 1; }
+.otk__step--done .otk__dot { background: var(--green-text); border-color: var(--green-text); color: var(--card); }
+.otk__step--current .otk__dot { border-color: var(--violet); box-shadow: 0 0 0 4px color-mix(in srgb, var(--violet) 22%, transparent); }
+.otk__step--current .otk__dot::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--violet); }
+.otk__step--failed .otk__dot { background: var(--danger-text); border-color: var(--danger-text); color: var(--card); }
+.otk__step--current .otk__label { color: var(--ink); font-weight: 800; }
+.otk__step--done .otk__label { color: var(--ink); }
+.otk__step--failed .otk__label { color: var(--danger-text); font-weight: 800; }
+.otk__time { font-size: 11px; color: var(--muted); }
+.otk__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.otk__hist { margin-top: 12px; font-size: 12.5px; }
+.otk__hist summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+.otk__hist ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.otk__hist li { display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.otk__note { color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .otk__tracks { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  /* موبایل: مراحل عمودی */
+  .otk__steps { flex-direction: column; gap: 14px; }
+  .otk__step { grid-template-columns: 28px 1fr auto; justify-items: start; align-items: center; gap: 10px; text-align: start; font-size: 13px; }
+  .otk__step::before { top: 30px; bottom: -14px; height: auto; width: 2px; inset-inline-start: 13px; inset-inline-end: auto; }
+}

@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from apps.catalog.services.product_publish_service import storefront_visible_products
 from apps.core.services import session_service
 from apps.orders.models import Order
+from apps.orders.services.order_tracker import build as build_order_tracker
 from apps.sms.services import otp_service
 from apps.storefront_builder.services.storefront_context_service import render_domain_page
 from apps.stores.resolution import resolve_store_for_service, resolve_store_for_storefront
@@ -374,8 +375,12 @@ def account_order_detail(request, code):
         return render_domain_page(request, "customers/order_detail.html", {"can_view": False})
     order = get_object_or_404(
         Order.objects.select_related("shipping_method", "payment_gateway").prefetch_related(
-            "items", "status_history", "transactions"
+            "items", "status_history", "transactions", "card_transfers"
         ),
         code=code, customer=request.user.customer_profile,
     )
-    return render_domain_page(request, "customers/order_detail.html", {"can_view": True, "order": order})
+    tracker = build_order_tracker(order)
+    return render_domain_page(
+        request, "customers/order_detail.html",
+        {"can_view": True, "order": order, "tracker": tracker, "tracker_tracks": [tracker.payment, tracker.fulfillment]},
+    )
