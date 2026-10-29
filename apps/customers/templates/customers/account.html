@@ -5,12 +5,10 @@
 {% block title %}حساب کاربری | {{ SHOP_NAME }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/product_card.css' %}">
-<link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 <link rel="stylesheet" href="{% static 'css/cart.css' %}">
 <link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
 <link rel="stylesheet" href="{% static 'css/checkout.css' %}">
-<link rel="stylesheet" href="{% static 'css/account.css' %}">
+<link rel="stylesheet" href="{% static 'css/account.css' %}?v=acct-2">
 {% endblock %}
 
 {% block content %}
@@ -43,20 +41,26 @@
     </form>
   </div>
 
-  <div class="pdp-tabs" x-data="{ tab: 'profile' }" style="margin-top:0">
-    <div class="tabline">
-      <button type="button" class="t" :class="{ active: tab === 'profile' }" @click="tab = 'profile'">پروفایل</button>
-      <button type="button" class="t" :class="{ active: tab === 'orders' }" @click="tab = 'orders'">سفارش‌های من</button>
-      <button type="button" class="t" :class="{ active: tab === 'addresses' }" @click="tab = 'addresses'">آدرس‌ها</button>
-      <button type="button" class="t" :class="{ active: tab === 'coupons' }" @click="tab = 'coupons'">کدهای تخفیف من{% if my_coupons %} ({{ my_coupons|length|fa_number }}){% endif %}</button>
-      <a class="t" href="{% url 'customers:wishlist' %}">علاقه‌مندی‌ها</a>
+  <div class="acct" data-testid="account-tabs"
+       x-data="{ tab: 'profile', tabs: ['profile','orders','addresses','coupons','security'],
+                 init() { const h = location.hash.slice(1); if (this.tabs.includes(h)) this.tab = h; },
+                 go(t) { this.tab = t; try { history.replaceState(null, '', '#' + t); } catch (e) {} },
+                 move(step) { const i = (this.tabs.indexOf(this.tab) + step + this.tabs.length) % this.tabs.length; this.go(this.tabs[i]); this.$nextTick(() => document.getElementById('acct-tab-' + this.tab).focus()); } }"
+       @hashchange.window="const h = location.hash.slice(1); if (tabs.includes(h)) tab = h">
+    <div class="acct-tabs" role="tablist" aria-label="بخش‌های حساب کاربری" @keydown.arrow-left.prevent="move(1)" @keydown.arrow-right.prevent="move(-1)">
+      <button type="button" role="tab" class="acct-tab" id="acct-tab-profile" aria-controls="acct-panel-profile" :aria-selected="tab === 'profile'" :tabindex="tab === 'profile' ? 0 : -1" :class="{ 'is-on': tab === 'profile' }" @click="go('profile')">پروفایل</button>
+      <button type="button" role="tab" class="acct-tab" id="acct-tab-orders" aria-controls="acct-panel-orders" :aria-selected="tab === 'orders'" :tabindex="tab === 'orders' ? 0 : -1" :class="{ 'is-on': tab === 'orders' }" @click="go('orders')">سفارش‌های من</button>
+      <button type="button" role="tab" class="acct-tab" id="acct-tab-addresses" aria-controls="acct-panel-addresses" :aria-selected="tab === 'addresses'" :tabindex="tab === 'addresses' ? 0 : -1" :class="{ 'is-on': tab === 'addresses' }" @click="go('addresses')">آدرس‌ها</button>
+      <button type="button" role="tab" class="acct-tab" id="acct-tab-coupons" aria-controls="acct-panel-coupons" :aria-selected="tab === 'coupons'" :tabindex="tab === 'coupons' ? 0 : -1" :class="{ 'is-on': tab === 'coupons' }" @click="go('coupons')">کدهای تخفیف من{% if my_coupons %} ({{ my_coupons|length|fa_number }}){% endif %}</button>
+      <button type="button" role="tab" class="acct-tab" id="acct-tab-security" aria-controls="acct-panel-security" :aria-selected="tab === 'security'" :tabindex="tab === 'security' ? 0 : -1" :class="{ 'is-on': tab === 'security' }" @click="go('security')">امنیت حساب</button>
+      <a class="acct-tab acct-tab--link" href="{% url 'customers:wishlist' %}">علاقه‌مندی‌ها</a>
     </div>
 
-    <div class="tabpane" :class="{ active: tab === 'profile' }" id="account-profile">
-      {% include "customers/partials/account_profile.html" %}
-    </div>
+    <section class="acct-panel" id="acct-panel-profile" role="tabpanel" aria-labelledby="acct-tab-profile" :hidden="tab !== 'profile'">
+      <div id="account-profile">{% include "customers/partials/account_profile.html" %}</div>
+    </section>
 
-    <div class="tabpane" :class="{ active: tab === 'orders' }">
+    <section class="acct-panel" id="acct-panel-orders" role="tabpanel" aria-labelledby="acct-tab-orders" hidden :hidden="tab !== 'orders'">
       {% if orders %}
       <div class="ord-table">
         <div class="ord-row ord-head">
@@ -64,26 +68,31 @@
         </div>
         {% for order in orders %}
         <div class="ord-row">
-          <span dir="ltr">{{ order.code }}</span>
-          <span>{{ order.created_at|jalali }}</span>
-          <span>{{ order.grand_total|toman }}</span>
+          <span dir="ltr" data-label="کد سفارش">{{ order.code }}</span>
+          <span data-label="تاریخ">{{ order.created_at|jalali }}</span>
+          <span data-label="مبلغ نهایی">{{ order.grand_total|toman }}</span>
           <span><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></span>
           <span><span class="badge badge-pay-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span></span>
-          <span><a class="t" style="padding:0" href="{% url 'customers:account-order-detail' order.code %}">جزئیات</a></span>
+          <span><a class="acct-link" href="{% url 'customers:account-order-detail' order.code %}">جزئیات</a></span>
         </div>
         {% endfor %}
       </div>
       {% else %}
-      <p style="color:var(--muted);font-size:13px">هنوز سفارشی ثبت نکرده‌اید.</p>
+      <p class="acct-empty">هنوز در این فروشگاه سفارشی ثبت نکرده‌اید.</p>
       {% endif %}
-    </div>
+    </section>
 
-    <div class="tabpane" :class="{ active: tab === 'coupons' }" id="account-coupons">
+    <section class="acct-panel" id="acct-panel-addresses" role="tabpanel" aria-labelledby="acct-tab-addresses" hidden :hidden="tab !== 'addresses'">
+      <div id="account-addresses">{% include "customers/partials/account_addresses.html" %}</div>
+    </section>
+
+    <section class="acct-panel" id="acct-panel-coupons" role="tabpanel" aria-labelledby="acct-tab-coupons" hidden :hidden="tab !== 'coupons'">
+      <div id="account-coupons">
       {% if my_coupons %}
       <div class="ord-table">
         <div class="ord-row ord-head"><span>کد</span><span>تخفیف</span><span>حداقل سفارش</span><span>اعتبار تا</span><span>وضعیت</span></div>
         {% for row in my_coupons %}
-        <div class="ord-row">
+        <div class="ord-row ord-row--coupon">
           <span dir="ltr"><b>{{ row.coupon.code }}</b></span>
           <span>{{ row.label }}</span>
           <span>{% if row.coupon.min_order %}{{ row.coupon.min_order|toman }}{% else %}—{% endif %}</span>
@@ -96,15 +105,16 @@
         </div>
         {% endfor %}
       </div>
-      <p style="color:var(--muted);font-size:12px;margin-top:8px">این کدها اختصاصیِ شماست و در مرحله‌ی پرداخت وارد می‌شوند.</p>
+      <p class="acct-note">این کدها اختصاصیِ شماست و در مرحله‌ی پرداخت وارد می‌شوند.</p>
       {% else %}
-      <p style="color:var(--muted);font-size:13px">هنوز کد تخفیف اختصاصی‌ای برای شما صادر نشده است.</p>
+      <p class="acct-empty">هنوز کد تخفیف اختصاصی‌ای برای شما صادر نشده است.</p>
       {% endif %}
-    </div>
+      </div>
+    </section>
 
-    <div class="tabpane" :class="{ active: tab === 'addresses' }" id="account-addresses">
-      {% include "customers/partials/account_addresses.html" %}
-    </div>
+    <section class="acct-panel" id="acct-panel-security" role="tabpanel" aria-labelledby="acct-tab-security" hidden :hidden="tab !== 'security'">
+      <div id="account-security">{% include "customers/partials/account_security.html" %}</div>
+    </section>
   </div>
   {% endif %}
 </div>

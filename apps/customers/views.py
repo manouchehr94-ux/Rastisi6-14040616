@@ -2,6 +2,7 @@ import json
 
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
+from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -20,7 +21,7 @@ from .forms import AddressForm, LoginForm, OtpRequestForm, OtpVerifyForm, Profil
 from .models import Address, Customer, Wishlist
 from apps.cart.services import coupon_service
 
-from .services import account_service, auth_service, profile_service
+from .services import account_security_service, account_service, auth_service, profile_service
 
 _OTP_REMEMBER_SESSION_KEY = "customers_otp_remember_me"
 
@@ -326,6 +327,65 @@ def account_profile_update(request):
     )
     response["HX-Trigger"] = json.dumps({"toast": {"message": "لطفاً خطاهای فرم را برطرف کنید", "type": "err"}})
     return response
+
+
+@require_POST
+def _security_context(request, **extra):
+    errors = {("general" if key == "" else key): msg for key, msg in (extra.pop("security_errors", None) or {}).items()}
+    return {"customer": request.user.customer_profile, "security_errors": errors, "security_stage": "idle", **extra}
+
+
+def _security_response(request, *, ok_message="", err_message="", **extra):
+    response = render(request, "customers/partials/account_security.html", _security_context(request, **extra))
+    message, kind = (ok_message, "ok") if ok_message else (err_message, "err")
+    if message:
+        response["HX-Trigger"] = json.dumps({"toast": {"message": message, "type": kind}})
+    return response
+
+
+def _customer_or_403(request):
+    if not _can_use_wishlist(request):
+        raise PermissionDenied
+    return request.user.customer_profile
+
+
+@require_POST
+def account_password_change(request):
+    customer = _customer_or_403(request)
+    try:
+        account_security_service.change_password(
+            request, customer, current=request.POST.get("current_password", ""), new=request.POST.get("new_password", ""),
+            confirm=request.POST.get("confirm_password", ""), store=_account_store(request),
+        )
+    except account_security_service.PasswordChangeError as exc:
+        return _security_response(request, err_message="رمز تغییر نکرد؛ خطاها را بررسی کنید", security_errors=exc.errors, security_form="change")
+    return _security_response(request, ok_message="رمز عبور شما تغییر کرد", security_done="changed")
+
+
+@require_POST
+def account_password_code_request(request):
+    customer = _customer_or_403(request)
+    try:
+        account_security_service.request_password_code(
+            customer, store=_account_store(request), ip_address=get_client_ip_bucket(request),
+        )
+    except account_security_service.PasswordChangeError as exc:
+        return _security_response(request, err_message=str(exc), security_errors=exc.errors, security_form="code")
+    return _security_response(request, ok_message="کد تأیید به موبایل شما ارسال شد", security_stage="code")
+
+
+@require_POST
+def account_password_set(request):
+    customer = _customer_or_403(request)
+    try:
+        account_security_service.set_password_with_code(
+            request, customer, code=request.POST.get("code", ""), new=request.POST.get("new_password", ""),
+            confirm=request.POST.get("confirm_password", ""), store=_account_store(request),
+        )
+    except account_security_service.PasswordChangeError as exc:
+        return _security_response(request, err_message="رمز تعیین نشد؛ خطاها را بررسی کنید", security_errors=exc.errors,
+                                  security_stage="code", security_form="set")
+    return _security_response(request, ok_message="رمز جدید شما ثبت شد", security_done="set")
 
 
 @require_POST

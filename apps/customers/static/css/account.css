@@ -40,3 +40,52 @@
   .ord-row{grid-template-columns:1fr 1fr;row-gap:4px}
   .ord-head{display:none}
 }
+
+/* ───── حساب کاربری: تب‌های مستقل (هرگز از pdp-tabs / product_detail.css استفاده نمی‌کند) — فقط توکن‌های تمِ فروشگاه ───── */
+.acct{margin:8px 0 56px;min-width:0}
+.acct *,.acct *::before,.acct *::after{box-sizing:border-box}
+.acct-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.acct-tab{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border:1.5px solid var(--line);border-radius:var(--button-radius,999px);
+  background:var(--card);color:var(--ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s,color .15s}
+.acct-tab:hover{border-color:var(--violet)}
+.acct-tab:focus-visible{outline:3px solid var(--focus-ink,var(--violet));outline-offset:2px}
+.acct-tab.is-on{background:var(--violet);border-color:var(--violet);color:var(--on-violet,#fff)}
+.acct-tab--link{margin-inline-start:auto;color:var(--violet-text,var(--violet))}
+.acct-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius,16px);padding:24px}
+.acct-panel[hidden]{display:none!important}
+.acct-empty{color:var(--muted);font-size:13px;margin:0}
+.acct-note,.acct-hint{color:var(--muted);font-size:12px;line-height:1.9;margin:6px 0 0}
+.acct-link{color:var(--violet-text,var(--violet));font-weight:700;font-size:12.5px;text-decoration:none}
+.acct-h{margin:0 0 4px;font-size:15px;font-weight:800;color:var(--ink)}
+.acct-alert{padding:12px 14px;border-radius:var(--radius,12px);font-size:13px;font-weight:700;margin-bottom:16px;border:1px solid var(--line)}
+.acct-alert--ok{border-color:var(--green-text);color:var(--green-text)}
+
+/* فرم‌ها: دسکتاپ دو ستون تمام‌عرض، موبایل یک ستون */
+.acct .frow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+.acct .fg{margin:0 0 14px;min-width:0}
+.acct .fg label{display:block;font-size:12.5px;font-weight:700;margin-bottom:6px;color:var(--ink)}
+.acct .inp{width:100%;min-height:46px;padding:10px 14px;border:1.5px solid var(--line);border-radius:var(--radius,12px);background:var(--bg);color:var(--ink);font:inherit;font-size:14px;outline:0}
+.acct textarea.inp{min-height:84px;resize:vertical}
+.acct .inp:focus{border-color:var(--violet);background:var(--card);box-shadow:0 0 0 3px color-mix(in srgb,var(--violet) 22%,transparent)}
+.acct .inp[aria-invalid="true"]{border-color:var(--danger-text,#c0392b)}
+.acct .inp:disabled{opacity:.7}
+.acct .coup-err{color:var(--danger-text,#c0392b);font-size:12px;font-weight:600;margin-top:5px}
+.acct .btn{min-height:46px}
+.acct .acc-stats{margin-top:20px}
+.acct-secgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.acct-card{border:1px solid var(--line);border-radius:var(--radius,14px);padding:20px;background:var(--bg)}
+.acct-card .inp{background:var(--card)}
+
+@media(max-width:900px){.acct-secgrid{grid-template-columns:1fr}}
+@media(max-width:720px){
+  .acct-panel{padding:16px}
+  .acct .frow{grid-template-columns:1fr}
+  .acct-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .acct-tab{padding:0 10px;font-size:12.5px;text-align:center}
+  .acct-tab--link{margin-inline-start:0}
+  /* جدول سفارش‌ها در موبایل: کارت‌های ساده با برچسبِ ستون */
+  .acct .ord-row{grid-template-columns:1fr 1fr;row-gap:6px;border:1px solid var(--line);border-radius:var(--radius,12px);padding:12px;margin-bottom:8px}
+  .acct .ord-row [data-label]::before{content:attr(data-label) ": ";color:var(--muted);font-size:11px}
+  .acct .addr-badge{position:static;display:inline-block;margin-bottom:6px}
+}
+@media(prefers-reduced-motion:reduce){.acct-tab{transition:none}}

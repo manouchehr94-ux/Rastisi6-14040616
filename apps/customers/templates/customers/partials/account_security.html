@@ -1,0 +1,67 @@
+{# امنیت حساب: تغییر رمز با رمز فعلی، و تعیین/بازنشانی رمز با کد پیامکی (برای حساب‌های ساخته‌شده هنگام تسویه‌حساب). رمزها هرگز در پاسخ برگردانده نمی‌شوند. #}
+{% load persian %}
+{% if security_done %}
+<div class="acct-alert acct-alert--ok" role="status" data-testid="security-done">{% if security_done == "changed" %}رمز عبور شما تغییر کرد. نشست‌های دیگرِ حساب شما بسته شد.{% else %}رمز جدید شما ثبت شد؛ از این پس می‌توانید با موبایل و این رمز وارد شوید.{% endif %}</div>
+{% endif %}
+<div class="acct-secgrid">
+  <form class="acct-card acct-form" hx-post="{% url 'customers:account-password-change' %}" hx-target="#account-security" hx-swap="innerHTML" data-testid="password-change-form" autocomplete="off">
+    {% csrf_token %}
+    <h2 class="acct-h">تغییر رمز عبور</h2>
+    <p class="acct-note">رمز فعلی خود را بدانید؟ رمز جدید را اینجا ثبت کنید.</p>
+    <div class="fg">
+      <label for="acct_cur_pw">رمز فعلی</label>
+      <input class="inp" id="acct_cur_pw" type="password" name="current_password" autocomplete="current-password" required{% if security_form == "change" and security_errors.current_password %} aria-invalid="true" aria-describedby="acct_cur_pw_err"{% endif %}>
+      {% if security_form == "change" and security_errors.current_password %}<div class="coup-err" id="acct_cur_pw_err" role="alert">{{ security_errors.current_password }}</div>{% endif %}
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label for="acct_new_pw">رمز جدید</label>
+        <input class="inp" id="acct_new_pw" type="password" name="new_password" autocomplete="new-password" required{% if security_form == "change" and security_errors.new_password %} aria-invalid="true"{% endif %}>
+        {% if security_form == "change" and security_errors.new_password %}<div class="coup-err" role="alert">{{ security_errors.new_password }}</div>{% endif %}
+      </div>
+      <div class="fg">
+        <label for="acct_conf_pw">تکرار رمز جدید</label>
+        <input class="inp" id="acct_conf_pw" type="password" name="confirm_password" autocomplete="new-password" required>
+        {% if security_form == "change" and security_errors.confirm_password %}<div class="coup-err" role="alert">{{ security_errors.confirm_password }}</div>{% endif %}
+      </div>
+    </div>
+    {% if security_form == "change" and security_errors.general %}<div class="coup-err" role="alert">{{ security_errors.general }}</div>{% endif %}
+    <p class="acct-hint">حداقل ۸ نویسه؛ رمزِ رایج، فقط عدد، یا شبیه به نام/موبایل‌تان پذیرفته نمی‌شود.</p>
+    <button type="submit" class="btn btn-primary">تغییر رمز</button>
+  </form>
+
+  <div class="acct-card acct-form" data-testid="password-code-block">
+    <h2 class="acct-h">رمز فعلی را ندارید؟</h2>
+    <p class="acct-note">اگر حسابتان هنگام خرید ساخته شده و رمزی از ما ندیده‌اید، با کد پیامکی که به موبایل <bdi dir="ltr">{{ customer.phone }}</bdi> می‌فرستیم هویتتان را تأیید و رمز جدید تعیین کنید.</p>
+    {% if security_stage != "code" %}
+    {% if security_form == "code" and security_errors.general %}<div class="coup-err" role="alert">{{ security_errors.general }}</div>{% endif %}
+    <form hx-post="{% url 'customers:account-password-code' %}" hx-target="#account-security" hx-swap="innerHTML">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost" data-testid="send-code">ارسال کد تأیید به موبایل</button>
+    </form>
+    {% else %}
+    <form hx-post="{% url 'customers:account-password-set' %}" hx-target="#account-security" hx-swap="innerHTML" autocomplete="off" data-testid="password-set-form">
+      {% csrf_token %}
+      <div class="fg">
+        <label for="acct_code">کد تأیید</label>
+        <input class="inp" id="acct_code" name="code" inputmode="numeric" autocomplete="one-time-code" dir="ltr" maxlength="6" required{% if security_form == "set" and security_errors.code %} aria-invalid="true"{% endif %}>
+        {% if security_form == "set" and security_errors.code %}<div class="coup-err" role="alert">{{ security_errors.code }}</div>{% endif %}
+      </div>
+      <div class="frow">
+        <div class="fg">
+          <label for="acct_set_pw">رمز جدید</label>
+          <input class="inp" id="acct_set_pw" type="password" name="new_password" autocomplete="new-password" required>
+          {% if security_form == "set" and security_errors.new_password %}<div class="coup-err" role="alert">{{ security_errors.new_password }}</div>{% endif %}
+        </div>
+        <div class="fg">
+          <label for="acct_set_conf">تکرار رمز جدید</label>
+          <input class="inp" id="acct_set_conf" type="password" name="confirm_password" autocomplete="new-password" required>
+          {% if security_form == "set" and security_errors.confirm_password %}<div class="coup-err" role="alert">{{ security_errors.confirm_password }}</div>{% endif %}
+        </div>
+      </div>
+      {% if security_form == "set" and security_errors.general %}<div class="coup-err" role="alert">{{ security_errors.general }}</div>{% endif %}
+      <button type="submit" class="btn btn-primary">ثبت رمز جدید</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
