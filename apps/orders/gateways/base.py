@@ -134,6 +134,18 @@ class PaymentGatewayAdapter(ABC):
         """Field metadata for the admin form. Default: every required credential is a secret (password-type) field."""
         return [{"name": n, "label": n, "secret": True, "ltr": True} for n in self.required_credentials]
 
+    def field_errors(self, credentials: dict[str, str]) -> dict[str, str]:
+        """``validate_credentials`` mapped to the form field each message belongs to (``""`` = a message about the whole form).
+
+        Lets the admin page show the error under the exact input. Default: with a single required credential every error belongs to it."""
+        errors = self.validate_credentials(credentials)
+        if not errors:
+            return {}
+        required = self.required_credentials
+        if len(required) == 1:
+            return {required[0]: " ".join(errors)}
+        return {"": " ".join(errors)}
+
     @property
     def required_credentials(self) -> list[str]:
         """List of credential field names required for this gateway.

@@ -66,19 +66,22 @@ class CardToCardAdapter(PaymentGatewayAdapter):
             {"name": "sheba", "label": "شماره شبا (اختیاری)", "secret": False, "ltr": True, "max_length": 30, "optional": True, "placeholder": "IR000000000000000000000000"},
         ]
 
-    def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
-        errors = []
+    def field_errors(self, credentials: dict[str, str]) -> dict[str, str]:
+        out: dict[str, str] = {}
         card = clean_card_number(credentials.get("destination_card"))
         if not card:
-            errors.append("شماره کارت مقصد را وارد کنید.")
+            out["destination_card"] = "شماره کارت مقصد را وارد کنید."
         elif not (card.isdigit() and len(card) == 16 and luhn_valid(card)):
-            errors.append("شماره کارت مقصد باید یک شماره کارت معتبر ۱۶ رقمی باشد.")
+            out["destination_card"] = "شماره کارت مقصد باید یک شماره کارت معتبر ۱۶ رقمی باشد."
         if not str(credentials.get("holder_name") or "").strip():
-            errors.append("نام صاحب کارت را وارد کنید.")
+            out["holder_name"] = "نام صاحب کارت را وارد کنید."
         sheba = re.sub(r"\s", "", str(credentials.get("sheba") or "")).upper()
         if sheba and not re.fullmatch(r"IR\d{24}", sheba):
-            errors.append("شماره شبا باید با IR شروع شود و ۲۴ رقم داشته باشد.")
-        return errors
+            out["sheba"] = "شماره شبا باید با IR شروع شود و ۲۴ رقم داشته باشد."
+        return out
+
+    def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
+        return list(self.field_errors(credentials).values())
 
     def create_payment(self, *, amount: Decimal, currency: str, callback_url: str, credentials: dict[str, str],
                        order_code: str, description: str = "", sandbox: bool = False) -> PaymentCreationResult:

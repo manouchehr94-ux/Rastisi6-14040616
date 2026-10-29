@@ -392,7 +392,7 @@ class CardTransferViewsTests(CardTransferBase):
         PaymentGateway.objects.filter(store=self.store, slug="card_to_card").delete()
         url = reverse("dashboard:settings-gateway-config-save", args=["card_to_card"])
         bad = self.admin_client.post(url, {"is_active": "on", "credential_destination_card": "1234567812345678", "credential_holder_name": "x"})
-        self.assertEqual(bad.status_code, 204)
+        self.assertEqual(bad.status_code, 200)
         self.assertFalse(PaymentGatewayConfig.objects.get(store=self.store, gateway_code="card_to_card").is_active)     # invalid card -> not activated
         self.admin_client.post(url, {
             "is_active": "on", "credential_destination_card": "6037 9970 0000 0019", "credential_holder_name": "علی رضایی",

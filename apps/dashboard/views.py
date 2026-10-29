@@ -5976,63 +5976,65 @@ def _sync_legacy_gateway_row(store, config, adapter):
     )
 
 
+def _gateway_card_response(request, store, gateway_code, *, toast, toast_type, posted=None, errors=None, open_card=False):
+    """یک کارتِ درگاه را از وضعیتِ واقعیِ پایگاه‌داده دوباره رندر می‌کند؛ کلیدِ فعال/غیرفعال فقط پس از موفقیتِ سرور تغییر می‌کند."""
+    gateways = settings_admin_service.gateway_configs_context(
+        store=store, only=gateway_code, posted=posted, errors=errors, open_code=gateway_code if open_card else "",
+    )
+    response = render(request, "dashboard/partials/settings_gateway_card.html", {"gw": gateways[0]})
+    response["HX-Trigger"] = json.dumps({"toast": {"message": toast, "type": toast_type}})
+    return response
+
+
 @require_POST
 @staff_required
 @permission_required(PAYMENT_SETTINGS_MANAGE)
 def settings_gateway_config_save(request, gateway_code):
-    """ذخیره‌ی پیکربندی یک درگاه پرداخت (Zibal/COD) برای فروشگاه فعلی."""
-    from apps.orders.encryption import CredentialEncryptionError, mask_credential
+    """ذخیره‌ی پیکربندی یک درگاه پرداخت (Zibal/COD/کارت‌به‌کارت) برای فروشگاه فعلی؛ خطاها کنارِ همان فیلد برمی‌گردند."""
+    from apps.orders.encryption import CredentialEncryptionError
     from apps.orders.gateways import get_adapter, GATEWAY_CHOICES
     from apps.orders.models import PaymentGatewayConfig
 
     store = _resolve_dashboard_store(request)
 
-    # Validate gateway code
     valid_codes = [code for code, _ in GATEWAY_CHOICES]
     if gateway_code not in valid_codes:
         return HttpResponse(status=404)
 
-    # Get or create config for this store+gateway
     config, _created = PaymentGatewayConfig.objects.get_or_create(
-        store=store,
-        gateway_code=gateway_code,
-        defaults={"display_order": len(valid_codes)},
+        store=store, gateway_code=gateway_code, defaults={"display_order": len(valid_codes)},
     )
-
     adapter = get_adapter(gateway_code)
 
-    # Process form data
-    is_active = request.POST.get("is_active") == "on"
+    wants_active = request.POST.get("is_active") == "on"
+    is_active = wants_active
     is_sandbox = request.POST.get("is_sandbox") == "on"
     display_title = request.POST.get("display_title", "").strip()
-    display_order = request.POST.get("display_order", "0")
     try:
-        display_order = int(display_order)
+        display_order = int(request.POST.get("display_order", "0"))
     except (TypeError, ValueError):
         display_order = 0
 
-    # Process credentials (only for gateways that need them)
-    credentials = config.get_credentials()  # Start with existing
-    credential_errors = []
-
+    credentials = config.get_credentials()
     for field in adapter.credential_fields:
         field_name = field["name"]
         new_value = request.POST.get(f"credential_{field_name}", "").strip()
         if new_value:
-            # New value provided — update
             credentials[field_name] = new_value
         elif not field.get("secret", True) and f"credential_{field_name}" in request.POST:
             credentials.pop(field_name, None)   # non-secret fields are shown prefilled: an emptied box means "remove"
         # Secret field left empty with an existing value: keep existing (don't clear on blank)
 
-    # Validate credentials before activation
-    if is_active and adapter.required_credentials:
-        validation_errors = adapter.validate_credentials(credentials)
-        if validation_errors:
-            credential_errors = validation_errors
-            is_active = False  # Cannot activate with invalid credentials
+    field_errors: dict[str, str] = {}
+    if adapter.required_credentials:
+        # Incomplete / invalid data is always reported next to the field when it is typed or when activation is asked for.
+        problems = adapter.field_errors(credentials)
+        typed_any = any(request.POST.get(f"credential_{f['name']}", "").strip() for f in adapter.credential_fields)
+        if problems and (wants_active or typed_any):
+            field_errors = problems
+        if problems and wants_active:
+            is_active = False   # cannot be activated with invalid / incomplete credentials
 
-    # Update config
     config.display_title = display_title
     config.display_order = display_order
     config.is_sandbox = is_sandbox
@@ -6045,36 +6047,27 @@ def settings_gateway_config_save(request, gateway_code):
                 credentials["destination_card"] = clean_card_number(credentials["destination_card"])
         try:
             config.set_credentials(credentials)
-        except CredentialEncryptionError as exc:
-            credential_errors.append("خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید.")
+        except CredentialEncryptionError:
+            field_errors[""] = "خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید."
             is_active = False
 
     config.is_active = is_active
     config.save()
     _sync_legacy_gateway_row(store, config, adapter)
 
-    # Build response
-    if credential_errors:
-        toast_msg = " | ".join(credential_errors)
-        toast_type = "err"
-    else:
-        state = "فعال" if config.is_active else "ذخیره"
-        toast_msg = f"پیکربندی {adapter.display_name} با موفقیت {state} شد"
-        toast_type = "ok"
-
-    response = HttpResponse(status=204)
-    response["HX-Trigger"] = json.dumps({
-        "toast": {"message": toast_msg, "type": toast_type},
-        "settings-reload": {},
-    })
-    return response
+    if field_errors:
+        message = "ذخیره انجام شد، اما «%s» فعال نشد؛ خطاهای زیر را اصلاح کنید." % adapter.display_name if wants_active else \
+            "برخی مقدارها نامعتبرند؛ خطاهای زیر را اصلاح کنید."
+        return _gateway_card_response(request, store, gateway_code, toast=message, toast_type="err", posted=request.POST.dict(), errors=field_errors, open_card=True)
+    state = "فعال" if config.is_active else "ذخیره"
+    return _gateway_card_response(request, store, gateway_code, toast=f"پیکربندی {adapter.display_name} با موفقیت {state} شد", toast_type="ok", open_card=True)
 
 
 @require_POST
 @staff_required
 @permission_required(PAYMENT_SETTINGS_MANAGE)
 def settings_gateway_config_toggle(request, gateway_code):
-    """فعال/غیرفعال کردن سریع یک درگاه پیکربندی‌شده."""
+    """فعال/غیرفعال کردن سریع یک درگاه. فعال‌سازیِ درگاهِ ناقص رد می‌شود و دلیلِ آن کنارِ فیلدها نشان داده می‌شود."""
     from apps.orders.gateways import get_adapter, GATEWAY_CHOICES
     from apps.orders.models import PaymentGatewayConfig
 
@@ -6084,42 +6077,29 @@ def settings_gateway_config_toggle(request, gateway_code):
     if gateway_code not in valid_codes:
         return HttpResponse(status=404)
 
-    config = PaymentGatewayConfig.objects.filter(
-        store=store, gateway_code=gateway_code
-    ).first()
-
-    if config is None:
-        return HttpResponse(status=404)
-
+    config, _created = PaymentGatewayConfig.objects.get_or_create(
+        store=store, gateway_code=gateway_code, defaults={"display_order": len(valid_codes)},
+    )
     adapter = get_adapter(gateway_code)
+    keep_open = request.POST.get("open") == "1"
 
     if config.is_active:
-        # Deactivate — always allowed
         config.is_active = False
         config.save(update_fields=["is_active", "updated_at"])
-        toast_msg = f"{adapter.display_name} غیرفعال شد"
         _sync_legacy_gateway_row(store, config, adapter)
-    else:
-        # Activate — only if configured
-        if adapter.required_credentials:
-            errors = adapter.validate_credentials(config.get_credentials())
-            if errors:
-                response = HttpResponse(status=204)
-                response["HX-Trigger"] = json.dumps({
-                    "toast": {"message": "پیکربندی ناقص — ابتدا اعتبارنامه را وارد کنید", "type": "err"},
-                })
-                return response
-        config.is_active = True
-        config.save(update_fields=["is_active", "updated_at"])
-        toast_msg = f"{adapter.display_name} فعال شد"
-    _sync_legacy_gateway_row(store, config, adapter)
+        return _gateway_card_response(request, store, gateway_code, toast=f"{adapter.display_name} غیرفعال شد", toast_type="info", open_card=keep_open)
 
-    response = HttpResponse(status=204)
-    response["HX-Trigger"] = json.dumps({
-        "toast": {"message": toast_msg, "type": "info"},
-        "settings-reload": {},
-    })
-    return response
+    if adapter.required_credentials:
+        problems = adapter.field_errors(config.get_credentials())
+        if problems:
+            return _gateway_card_response(
+                request, store, gateway_code, toast=f"{adapter.display_name} فعال نشد: ابتدا اطلاعات ناقص را کامل کنید.",
+                toast_type="err", errors=problems, open_card=True,
+            )
+    config.is_active = True
+    config.save(update_fields=["is_active", "updated_at"])
+    _sync_legacy_gateway_row(store, config, adapter)
+    return _gateway_card_response(request, store, gateway_code, toast=f"{adapter.display_name} فعال شد", toast_type="ok", open_card=keep_open)
 
 
 # ---------------------------------------------------------------- اعضای تیم (Staff / Membership)

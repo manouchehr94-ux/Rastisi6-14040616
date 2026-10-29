@@ -1,0 +1,66 @@
+{% load persian %}
+{# یک درگاه پرداخت به‌صورت آکاردئون. پاسخ htmx همین قطعه را جایگزین می‌کند؛ وضعیتِ کلید همیشه از پایگاه‌داده می‌آید. #}
+<div class="au-acc{% if gw.open %} is-open{% endif %}{% if gw.has_errors %} has-error{% endif %}" id="gw-{{ gw.code }}" data-testid="gateway-{{ gw.code }}" data-active="{{ gw.is_active|yesno:'1,0' }}">
+  <div class="au-acc__head">
+    <button type="button" class="au-acc__trigger" aria-expanded="{{ gw.open|yesno:'true,false' }}" aria-controls="gw-panel-{{ gw.code }}">
+      <span class="au-acc__icon" aria-hidden="true">{% if gw.code == "zibal" %}💳{% elif gw.code == "cod" %}🚪{% elif gw.code == "card_to_card" %}🏦{% else %}💰{% endif %}</span>
+      <span class="au-acc__text">
+        <span class="au-acc__title">{{ gw.label }}
+          {% if gw.is_active %}<span class="au-badge au-badge--ok" data-testid="gw-status">فعال</span>
+          {% elif gw.needs_info %}<span class="au-badge au-badge--warn" data-testid="gw-status">نیازمند تکمیل اطلاعات</span>
+          {% else %}<span class="au-badge" data-testid="gw-status">غیرفعال</span>{% endif %}
+        </span>
+        <span class="au-acc__desc">{% if gw.code == "zibal" %}پرداخت آنلاین با درگاه زیبال{% elif gw.code == "cod" %}مشتری هنگام تحویل سفارش پرداخت می‌کند{% elif gw.code == "card_to_card" %}واریز به کارت فروشگاه؛ پس از تأیید شما پرداخت‌شده می‌شود{% else %}{{ gw.label }}{% endif %}</span>
+      </span>
+      <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="au-acc__ctrl">
+      <button type="button" class="au-toggle" role="switch" aria-checked="{{ gw.is_active|yesno:'true,false' }}" aria-label="فعال‌سازی {{ gw.label }}" data-testid="gw-toggle"
+              hx-post="{% url 'dashboard:settings-gateway-config-toggle' gw.code %}" hx-target="#gw-{{ gw.code }}" hx-swap="outerHTML"
+              hx-vals='js:{open: document.getElementById("gw-{{ gw.code }}").classList.contains("is-open") ? "1" : ""}'>
+        <span class="au-toggle__track" aria-hidden="true"></span>
+        <span class="au-toggle__text">{% if gw.is_active %}فعال{% else %}غیرفعال{% endif %}</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="au-acc__panel" id="gw-panel-{{ gw.code }}"{% if not gw.open %} hidden{% endif %}>
+    {% if gw.needs_info and not gw.is_active %}<div class="au-note au-note--warn">این روش پرداخت تا کامل‌شدن اطلاعات زیر فعال نمی‌شود.</div>{% endif %}
+    {% if gw.form_error %}<div class="au-note au-note--danger" role="alert">{{ gw.form_error }}</div>{% endif %}
+    {% if gw.manual %}
+    <div class="au-note">شماره‌ی کارتِ مقصد را مشتری در صفحه‌ی پرداخت می‌بیند و پس از واریز ۴ رقمِ آخرِ کارتِ خودش و شماره‌ی پیگیری را ثبت می‌کند. سفارش فقط پس از «تأیید پرداخت» شما در «بررسی کارت‌به‌کارت» پرداخت‌شده می‌شود.</div>
+    {% endif %}
+    <form hx-post="{% url 'dashboard:settings-gateway-config-save' gw.code %}" hx-target="#gw-{{ gw.code }}" hx-swap="outerHTML" novalidate class="au-grid" style="grid-template-columns:1fr">
+      {% csrf_token %}
+      {% if gw.is_active %}<input type="hidden" name="is_active" value="on">{% endif %}
+      <div class="au-grid">
+        <div class="au-field">
+          <label for="gw-{{ gw.code }}-title">عنوان نمایشی (اختیاری)</label>
+          <input class="au-input" id="gw-{{ gw.code }}-title" type="text" name="display_title" value="{{ gw.display_title }}" placeholder="{{ gw.label }}">
+        </div>
+        <div class="au-field" style="max-width:140px">
+          <label for="gw-{{ gw.code }}-order">ترتیب نمایش</label>
+          <input class="au-input" id="gw-{{ gw.code }}-order" type="number" name="display_order" value="{{ gw.display_order }}" min="0">
+        </div>
+      </div>
+      {% if gw.is_online %}
+      <label class="au-switch"><input type="checkbox" name="is_sandbox" {% if gw.is_sandbox %}checked{% endif %}><span class="au-switch__track"></span><span class="au-switch__text" data-on="روشن" data-off="خاموش"></span><span class="au-switch__label">حالت آزمایشی (Sandbox)<small>پرداختِ واقعی انجام نمی‌شود.</small></span></label>
+      {% endif %}
+      {% for field in gw.credential_fields %}
+      <div class="au-field">
+        <label for="gw-{{ gw.code }}-{{ field.name }}">{% if field.label == "merchant" %}شناسه مرچنت (Merchant ID){% else %}{{ field.label }}{% endif %}{% if not field.optional and not field.secret %} <span class="au-hint">(الزامی)</span>{% endif %}</label>
+        {% if field.secret %}
+        <input class="au-input au-input--ltr" id="gw-{{ gw.code }}-{{ field.name }}" type="password" name="credential_{{ field.name }}" autocomplete="off"
+               placeholder="{% if field.has_value %}••••••• (مقدار موجود حفظ می‌شود){% else %}وارد کنید{% endif %}"{% if field.error %} aria-invalid="true" aria-describedby="gw-{{ gw.code }}-{{ field.name }}-err"{% endif %}>
+        <div class="au-hint">خالی بگذارید تا مقدار فعلی حفظ شود. مقدارِ ذخیره‌شده هرگز نمایش داده نمی‌شود.</div>
+        {% else %}
+        <input class="au-input{% if field.ltr %} au-input--ltr{% endif %}" id="gw-{{ gw.code }}-{{ field.name }}" type="text" name="credential_{{ field.name }}" value="{{ field.value }}" autocomplete="off"
+               maxlength="{{ field.max_length|default:100 }}" {% if field.ltr %}dir="ltr"{% endif %} placeholder="{{ field.placeholder }}"{% if field.name == "destination_card" %} inputmode="numeric"{% endif %}{% if field.error %} aria-invalid="true" aria-describedby="gw-{{ gw.code }}-{{ field.name }}-err"{% endif %}>
+        {% endif %}
+        {% if field.error %}<div class="au-error" id="gw-{{ gw.code }}-{{ field.name }}-err" role="alert">{{ field.error }}</div>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="au-acc__foot"><button type="submit" class="au-btn au-btn--primary">ذخیره پیکربندی</button><span class="au-hint">کلیدِ «فعال / غیرفعال» بالای همین کارت، روش را در تسویه‌حساب روشن یا خاموش می‌کند.</span></div>
+    </form>
+  </div>
+</div>

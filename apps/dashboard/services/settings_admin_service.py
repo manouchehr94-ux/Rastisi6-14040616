@@ -57,33 +57,57 @@ def toggle_shipping_method(pk: int, *, store) -> ShippingMethod:
 
 
 
-def gateway_configs_context(*, store):
-    """پیکربندی‌های درگاه‌های پرداخت واقعی — برای بخش «پیکربندی درگاه» در تنظیمات."""
+def _group_card(value: str) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return " ".join(digits[i:i + 4] for i in range(0, len(digits), 4)) if len(digits) == 16 else str(value or "")
+
+
+def gateway_configs_context(*, store, only: str = "", posted: dict | None = None, errors: dict | None = None, open_code: str = ""):
+    """پیکربندی‌های درگاه‌های پرداخت واقعی — برای بخش «پیکربندی درگاه» در تنظیمات.
+
+    ``only`` یک درگاه؛ ``posted`` مقدارهای ارسال‌شده‌ی غیرمحرمانه (برای بازنمایی بعد از خطا)؛ ``errors`` خطای هر فیلد؛
+    رمزها/اعتبارنامه‌ی محرمانه هرگز به قالب برنمی‌گردند."""
     from apps.orders.gateways import GATEWAY_CHOICES, get_adapter
     from apps.orders.models import PaymentGatewayConfig
 
-    configs = {
-        c.gateway_code: c
-        for c in PaymentGatewayConfig.objects.filter(store=store)
-    }
+    configs = {c.gateway_code: c for c in PaymentGatewayConfig.objects.filter(store=store)}
+    posted, errors = posted or {}, errors or {}
 
     result = []
     for code, label in GATEWAY_CHOICES:
+        if only and code != only:
+            continue
         adapter = get_adapter(code)
         config = configs.get(code)
+        stored = config.get_credentials() if config else {}
+        field_errors = errors if code == only else {}
+        fields = []
+        for f in adapter.credential_fields:
+            value = ""
+            if not f.get("secret", True):
+                value = posted.get(f"credential_{f['name']}", stored.get(f["name"], "")) if code == only else stored.get(f["name"], "")
+                if f["name"] == "destination_card":
+                    value = _group_card(value)
+            fields.append({**f, "value": value, "error": field_errors.get(f["name"], ""),
+                           "has_value": bool(stored.get(f["name"]))})
+        is_active = bool(config.is_active) if config else False
+        is_configured = config.is_configured if config else (not adapter.required_credentials)
+        if adapter.required_credentials and not config:
+            is_configured = False
         result.append({
             "code": code,
             "label": label,
             "adapter": adapter,
             "config": config,
-            "is_active": config.is_active if config else False,
-            "is_configured": config.is_configured if config else False,
+            "is_active": is_active,
+            "is_configured": is_configured,
+            "needs_info": bool(adapter.required_credentials) and not is_configured,
             "is_online": adapter.is_online,
             "required_credentials": adapter.required_credentials,
-            "credential_fields": [
-                {**f, "value": (config.get_credentials().get(f["name"], "") if (config and not f.get("secret", True)) else "")}
-                for f in adapter.credential_fields
-            ],
+            "credential_fields": fields,
+            "form_error": field_errors.get("", ""),
+            "has_errors": bool(field_errors),
+            "open": bool(field_errors) or code == open_code,
             "manual": adapter.requires_manual_confirmation,
             "display_order": config.display_order if config else 0,
             "display_title": config.display_title if config else "",

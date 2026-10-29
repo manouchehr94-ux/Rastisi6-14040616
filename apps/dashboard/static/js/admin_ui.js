@@ -5,6 +5,7 @@
  *   data-au-confirm="text"  ask before an irreversible action: the click/submit goes ahead only after the person confirms in a modal
  *                           (works on <button>, <a> and <form>); no text means the generic Persian prompt below.
  *   .au-switch [data-au-autosubmit]  submits the enclosing form when the switch flips.
+ *   .au-acc  accordion: the trigger button (aria-expanded/aria-controls) shows or hides its panel; nothing is saved by opening it.
  * Backdrop click and Esc close a modal; focus returns to the opener.
  */
 (function () {
@@ -47,8 +48,24 @@
     openDialog(dlg, opener);
   }
 
+  function setAccordion(acc, open) {
+    var trigger = acc.querySelector('.au-acc__trigger');
+    var panel = acc.querySelector('.au-acc__panel');
+    if (!trigger || !panel) return;
+    acc.classList.toggle('is-open', open);
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+  }
+  window.auSetAccordion = setAccordion;
+
   document.addEventListener('click', function (e) {
     var t = e.target;
+    var accTrigger = t.closest && t.closest('.au-acc__trigger');
+    if (accTrigger) {
+      var acc = accTrigger.closest('.au-acc');
+      if (acc) setAccordion(acc, accTrigger.getAttribute('aria-expanded') !== 'true');
+      return;
+    }
     var opener = t.closest && t.closest('[data-au-open]');
     if (opener) { e.preventDefault(); openDialog(document.querySelector(opener.getAttribute('data-au-open')), opener); return; }
     var closer = t.closest && t.closest('[data-au-close]');

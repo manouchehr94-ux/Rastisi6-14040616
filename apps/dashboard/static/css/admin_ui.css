@@ -137,3 +137,47 @@
 .au-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
 .au-tab { display: inline-flex; align-items: center; min-height: 40px; padding: 0 18px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--card); color: var(--muted); font-weight: 700; font-size: 13px; text-decoration: none; }
 .au-tab.is-on { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+/* ---- accordion: one row per item (gateway, integration, shipping method), closed by default.
+ *   <div class="au-acc [is-open]"> <div class="au-acc__head"> <button class="au-acc__trigger" aria-expanded aria-controls> … </button> [controls] </div>
+ *   <div class="au-acc__panel" id hidden> … </div> </div>
+ * Opening / closing only shows or hides the panel — it never changes a setting. ---- */
+.au-accs { display: grid; gap: 12px; }
+.au-acc { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: clip; }
+.au-acc.is-open { border-color: var(--primary); }
+.au-acc.has-error { border-color: var(--red); }
+.au-acc__head { display: flex; align-items: center; gap: 12px; padding: 6px 16px 6px 12px; min-height: 68px; }
+.au-acc__trigger {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 8px 4px; border: 0; background: transparent; font: inherit;
+  color: var(--text); text-align: start; cursor: pointer; min-height: 56px; border-radius: 12px;
+}
+.au-acc__trigger:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.au-acc__icon { flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--bg); font-size: 20px; }
+.au-acc__text { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.au-acc__title { font-weight: 800; font-size: 14.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.au-acc__desc { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+.au-acc__chev { flex: 0 0 auto; width: 22px; height: 22px; color: var(--muted); transition: transform .18s; }
+.au-acc.is-open .au-acc__chev { transform: rotate(180deg); }
+.au-acc__ctrl { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.au-acc__panel { padding: 18px 20px 20px; border-top: 1px solid var(--border); display: grid; gap: 16px; background: var(--card); }
+.au-acc__panel[hidden] { display: none; }
+.au-acc__foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* ---- async toggle: <button role="switch" aria-checked> — the knob only moves after the SERVER confirmed the change (the row is re-rendered). ---- */
+.au-toggle { display: inline-flex; align-items: center; gap: 10px; padding: 4px 0; border: 0; background: transparent; font: inherit; cursor: pointer; min-height: 44px; color: var(--muted); touch-action: manipulation; }
+.au-toggle__track { position: relative; flex: 0 0 52px; width: 52px; height: 30px; border-radius: 999px; background: #b3bccd; transition: background .18s; }
+.au-toggle__track::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(16, 24, 40, .3); transition: inset-inline-start .18s; }
+.au-toggle[aria-checked="true"] .au-toggle__track { background: var(--green); }
+.au-toggle[aria-checked="true"] .au-toggle__track::after { inset-inline-start: 25px; }
+.au-toggle__text { font-weight: 800; font-size: 13px; min-width: 52px; text-align: start; }
+.au-toggle[aria-checked="true"] .au-toggle__text { color: var(--green-ink); }
+.au-toggle:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 12px; }
+.au-toggle.htmx-request, .au-toggle[aria-busy="true"] { opacity: .6; pointer-events: none; }
+@media (max-width: 640px) {
+  .au-acc__head { flex-wrap: wrap; padding: 6px 12px; }
+  .au-acc__ctrl { width: 100%; justify-content: flex-end; padding-bottom: 6px; }
+  .au-acc__panel { padding: 16px; }
+  .au-acc__desc { display: none; }
+  .au-acc.is-open .au-acc__desc { display: block; }
+}
+@media (prefers-reduced-motion: reduce) { .au-toggle__track, .au-toggle__track::after, .au-acc__chev { transition: none; } }

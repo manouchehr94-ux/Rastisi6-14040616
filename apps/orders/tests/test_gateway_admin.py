@@ -84,7 +84,7 @@ class GatewayConfigAdminTests(TestCase):
                 "is_active": "on",
             },
         )
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
         config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="zibal")
         self.assertEqual(config.display_title, "درگاه زیبال")
         self.assertEqual(config.display_order, 1)
@@ -103,7 +103,7 @@ class GatewayConfigAdminTests(TestCase):
                 "is_active": "on",  # trying to activate
             },
         )
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
         config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="zibal")
         # Should NOT be active because credentials are missing
         self.assertFalse(config.is_active)
@@ -150,7 +150,7 @@ class GatewayConfigAdminTests(TestCase):
         response = self.client.post(
             "/admin-portal/settings/gateway-config/zibal/toggle/",
         )
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
         config.refresh_from_db()
         self.assertTrue(config.is_active)
 
@@ -165,7 +165,7 @@ class GatewayConfigAdminTests(TestCase):
         response = self.client.post(
             "/admin-portal/settings/gateway-config/zibal/toggle/",
         )
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
         config.refresh_from_db()
         self.assertFalse(config.is_active)
 
@@ -178,7 +178,7 @@ class GatewayConfigAdminTests(TestCase):
         response = self.client.post(
             "/admin-portal/settings/gateway-config/zibal/toggle/",
         )
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
         config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="zibal")
         self.assertFalse(config.is_active)  # Still inactive
 
@@ -188,7 +188,7 @@ class GatewayConfigAdminTests(TestCase):
             "/admin-portal/settings/gateway-config/cod/save/",
             {"display_title": "پرداخت درب منزل", "display_order": "2", "is_active": "on"},
         )
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
         config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="cod")
         self.assertTrue(config.is_active)
         self.assertEqual(config.display_title, "پرداخت درب منزل")
