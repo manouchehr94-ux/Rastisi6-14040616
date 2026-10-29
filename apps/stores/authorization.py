@@ -132,7 +132,7 @@ STOREFRONT_LAYOUT_MANAGE = "storefront_layout.manage"
 COLLECTION_MANAGE = "collection.manage"
 
 STAFF_MANAGE = "staff.manage"
-DOMAIN_MANAGE = "domain.manage"  # reserved — no domain-management UI yet
+DOMAIN_MANAGE = "domain.manage"  # custom-domain management (owner portal); the admin «دامنه و آدرس» page is read-only + a link
 SUBSCRIPTION_MANAGE = "subscription.manage"  # coarse legacy key — kept for back-compat
 # Soft-deleting the whole Store is the single most destructive owner action.
 # It gets its own granular key (rather than reusing SETTINGS_MANAGE) and is

@@ -113,7 +113,7 @@ from apps.core.services.audit_service import list_audit_events, record_audit_eve
 from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
-from apps.dashboard.services import import_proposals, import_service, import_xlsx
+from apps.dashboard.services import domain_settings_service, import_proposals, import_service, import_xlsx
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
 from apps.cart.services.coupon_service import (
@@ -283,6 +283,7 @@ from apps.stores.authorization import (
     CATEGORY_MANAGE,
     COLLECTION_MANAGE,
     CONTENT_MANAGE,
+    DOMAIN_MANAGE,
     CUSTOMER_EXPORT,
     CUSTOMER_NOTE_MANAGE,
     CUSTOMER_SEGMENT_MANAGE,
@@ -4337,6 +4338,9 @@ def _settings_context(
         "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
         "industry_installation": _industry_installation_context(store),
         "integration_rows": integration_service.connections_context(store=store),
+        "domain_overview": SimpleLazyObject(lambda: domain_settings_service.domain_overview(
+            store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE),
+        )),
         "integration_open": request.session.pop("integration_open", ""),
         "active_page": "settings",
     }
@@ -4365,6 +4369,7 @@ def _industry_installation_context(store):
 
 SETTINGS_SECTIONS = [
     ("general", "اطلاعات فروشگاه", "🏪", "نام، شعار و اطلاعات تماس فروشگاه"),
+    ("domain", "دامنه و آدرس", "🌐", "نشانی فروشگاه، دامنه‌ی اختصاصی و وضعیت اتصال"),
     ("finance", "مالی و مالیات", "💰", "وضعیتِ مالیات، آستانه‌ی ارسال رایگان و کادوپیچی"),
     ("unpaid-orders", "مدیریت سفارش‌های پرداخت‌نشده", "⏱", "لغوِ خودکارِ سفارش‌های آنلاینی که پرداخت‌شان کامل نشده"),
     ("delivery-payment", "ارسال و درگاه", "🚚", "روش‌های ارسال و درگاه‌های پرداخت"),

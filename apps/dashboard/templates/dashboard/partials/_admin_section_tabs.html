@@ -11,3 +11,19 @@
   </ul>
 </nav>
 {% endif %}
+{% comment %}Level-3: the screens of the active tab (e.g. مالی و پرداخت → درگاه‌ها / مالیات). Real links to existing screens; shown only when there is more than one.{% endcomment %}
+{% if nav.subtabs %}
+<nav class="admin-subtabs" aria-label="صفحه‌های {{ nav.active_tab.label }}" data-testid="admin-subtabs">
+  {% for child in nav.subtabs %}<a class="admin-subtab{% if child.active %} active{% endif %}" data-subtab="{{ child.key }}" href="{{ child.href }}"{% if child.active %} aria-current="page"{% endif %}>{{ child.label }}</a>{% endfor %}
+</nav>
+{% endif %}
+{% if settings_index %}
+<div class="settings-search" data-au-search>
+  <label class="au-sr" for="settingsSearch">جست‌وجو در تنظیمات</label>
+  <input id="settingsSearch" class="au-input" type="search" autocomplete="off" placeholder="جست‌وجو در تنظیمات… (مثلاً دامنه، مالیات، پیامک)" aria-controls="settingsSearchResults" data-au-search-input>
+  <ul id="settingsSearchResults" class="settings-search-results" role="listbox" hidden data-au-search-results>
+    {% for item in settings_index %}<li role="option" hidden data-au-search-item data-keywords="{{ item.title }} {{ item.path }} {{ item.keywords }}"><a href="{{ item.href }}" data-palette-skip><b>{{ item.title }}</b><span>{{ item.path }}</span></a></li>{% endfor %}
+    <li class="settings-search-empty" hidden data-au-search-empty>نتیجه‌ای پیدا نشد.</li>
+  </ul>
+</div>
+{% endif %}

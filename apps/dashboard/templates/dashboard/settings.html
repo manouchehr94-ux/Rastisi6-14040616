@@ -24,23 +24,13 @@
 {% endblock %}
 
 {% block content %}
-<!-- Settings Navigation (pill tabs) -->
-<nav class="settings-nav" aria-label="بخش‌های تنظیمات">
-  {% for key, label, icon, desc in sections %}
-  <a class="settings-nav-item{% if active_section == key %} active{% endif %}"
-     href="{% url 'dashboard:settings' %}?section={{ key }}"
-     title="{{ desc }}"
-     {% if active_section == key %}aria-current="page"{% endif %}>
-    <span class="sn-icon">{{ icon }}</span>
-    <span>{{ label }}</span>
-  </a>
-  {% endfor %}
-</nav>
-
+{% comment %}Navigation is rendered once by base_admin (section tabs + level-3 screens + settings search) — no second tab row here.{% endcomment %}
 <!-- Settings Content -->
 <div class="settings-content">
   {% if active_section == "general" %}
   {% include "dashboard/partials/settings_general.html" %}
+  {% elif active_section == "domain" %}
+  {% include "dashboard/partials/settings_domain.html" %}
   {% elif active_section == "finance" %}
   {% include "dashboard/partials/settings_finance.html" %}
   {% elif active_section == "unpaid-orders" %}

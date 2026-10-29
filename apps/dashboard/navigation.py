@@ -53,6 +53,20 @@ class Match:
 
 
 @dataclass(frozen=True)
+class SubTab:
+    """Level-3 screen inside a Level-2 tab (e.g. «مالی و پرداخت» → «مالیات»). Same rules as ``Tab``: a real ``dashboard:*`` route,
+    optional permission flags, optional match rules; it never owns a view or a permission."""
+
+    key: str
+    label: str
+    url_name: str
+    perms: tuple = ()
+    query: str = ""
+    matches: tuple = ()
+    keywords: str = ""
+
+
+@dataclass(frozen=True)
 class Tab:
     key: str
     label: str
@@ -64,6 +78,7 @@ class Tab:
     pages_first: tuple = ()  # ``active_page`` values that outrank URL names
     keywords: str = ""  # extra command-palette search terms
     badge: str = ""  # context variable holding a count to show (hidden if 0)
+    children: tuple = ()  # SubTab entries shown as the Level-3 bar while this tab is active
 
 
 @dataclass(frozen=True)
@@ -93,6 +108,9 @@ def _m(*names, prefix=(), get=None, get_not=None):
         prefix = (prefix,)
     return Match(names=tuple(names), prefixes=tuple(prefix), get=get, get_not=get_not)
 
+
+#: ``?section=`` values of the settings route that are NOT «اطلاعات فروشگاه».
+_OTHER_SETTINGS_SECTIONS = ("domain", "finance", "payment-config", "unpaid-orders", "delivery-payment", "sms", "integrations")
 
 SECTIONS: tuple = (
     Section(
@@ -259,54 +277,96 @@ SECTIONS: tuple = (
                 keywords="رخداد لاگ تاریخچه تغییرات audit log"),
         ),
     ),
+    # Settings — ONE category bar (no duplicated labels). Tax and shipping stay single-editor screens; every other page only summarises
+    # them and links to the editor. Legacy ``?section=…`` links keep resolving through the same ``settings`` route.
     Section(
         key="settings", label="تنظیمات", icon="gear",
         tabs=(
-            Tab("settings-general", "تنظیمات عمومی", "settings", perms=("can_manage_settings",),
+            Tab("settings-general", "اطلاعات فروشگاه", "settings", perms=("can_manage_settings",), query="?section=general",
                 matches=(
-                    _m("settings", get_not={"section": ("finance", "sms")}),
+                    _m("settings", get_not={"section": _OTHER_SETTINGS_SECTIONS}),
                     _m(prefix="settings-"),
                 ),
                 pages=("settings",),
-                keywords="تنظیمات دامنه پرداخت اطلاعات فروشگاه صنف درگاه یکپارچه‌سازی settings"),
-            Tab("shipping", "ارسال", "shipping-setup", perms=("can_view_shipping_settings",),
-                matches=(_m(prefix="shipping-"),), pages=("shipping",),
-                keywords="ارسال پست روش ارسال هزینه ارسال shipping"),
-            Tab("tax", "مالیات", "tax-settings", perms=("can_view_tax_settings",),
-                matches=(_m(prefix="tax-"),), pages=("tax",),
-                keywords="مالیات ارزش افزوده tax"),
-            Tab("settings-finance", "تنظیمات مالی", "settings", perms=("can_manage_settings",),
+                keywords="تنظیمات اطلاعات فروشگاه نام شعار لوگو تماس صنف settings",
+                children=(
+                    SubTab("general", "اطلاعات عمومی", "settings", perms=("can_manage_settings",), query="?section=general",
+                           matches=(_m("settings", get_not={"section": ("industry",) + _OTHER_SETTINGS_SECTIONS}), _m(prefix="settings-")),
+                           keywords="نام فروشگاه شعار لوگو فاوآیکون تماس آدرس"),
+                    SubTab("industry", "صنف فروشگاه", "settings", perms=("can_manage_settings",), query="?section=industry",
+                           matches=(_m("settings", get={"section": ("industry",)}),),
+                           keywords="صنف الگوی کاتالوگ نصب قالب صنف industry"),
+                )),
+            Tab("settings-domain", "دامنه و آدرس", "settings", perms=("can_manage_settings",), query="?section=domain",
+                matches=(_m("settings", get={"section": ("domain",)}),),
+                keywords="دامنه اختصاصی آدرس فروشگاه dns ssl اتصال دامنه domain"),
+            Tab("settings-finance", "مالی و پرداخت", "settings", perms=("can_manage_settings", "can_view_tax_settings"),
                 query="?section=finance",
                 matches=(
-                    _m("settings", get={"section": ("finance",)}),
-                    _m("settings-finance", "settings-gift-wrap",
-                       "gift-wrap-products", "gift-wrap-product-update"),
+                    _m("settings", get={"section": ("finance", "payment-config", "unpaid-orders")}),
+                    _m("settings-finance", "settings-gift-wrap", "settings-order-expiry", "gift-wrap-products", "gift-wrap-product-update",
+                       prefix=("settings-gateway", "tax-")),
                 ),
-                keywords="مالی تنظیمات مالی کادوپیچی بسته بندی هدیه finance gift wrap"),
-            Tab("sms", "پیامک", "settings", perms=("can_manage_settings",), query="?section=sms",
+                pages=("tax",),
+                keywords="مالی پرداخت درگاه مالیات کادوپیچی finance payment tax",
+                children=(
+                    SubTab("finance-overview", "نمای کلی مالی", "settings", perms=("can_manage_settings",), query="?section=finance",
+                           matches=(_m("settings", get={"section": ("finance",)}), _m("settings-finance", "settings-gift-wrap",
+                                    "gift-wrap-products", "gift-wrap-product-update")),
+                           keywords="آستانه ارسال رایگان کادوپیچی خلاصه مالیات"),
+                    SubTab("payment-config", "درگاه‌های پرداخت", "settings", perms=("can_manage_settings",), query="?section=payment-config",
+                           matches=(_m("settings", get={"section": ("payment-config",)}), _m(prefix="settings-gateway")),
+                           keywords="درگاه پرداخت زیبال کارت به کارت پرداخت در محل gateway"),
+                    SubTab("tax", "مالیات", "tax-settings", perms=("can_view_tax_settings",),
+                           matches=(_m(prefix="tax-"),),
+                           keywords="مالیات ارزش افزوده نرخ دسته مالیاتی tax"),
+                    SubTab("unpaid-orders", "سفارش‌های پرداخت‌نشده", "settings", perms=("can_manage_settings",), query="?section=unpaid-orders",
+                           matches=(_m("settings", get={"section": ("unpaid-orders",)}), _m("settings-order-expiry")),
+                           keywords="لغو خودکار سفارش پرداخت نشده انقضا مهلت پرداخت"),
+                )),
+            Tab("shipping", "ارسال و تحویل", "shipping-setup", perms=("can_view_shipping_settings",),
+                matches=(_m(prefix="shipping-"), _m("settings", get={"section": ("delivery-payment",)})), pages=("shipping",),
+                keywords="ارسال تحویل پست روش ارسال هزینه ارسال پس کرایه shipping",
+                children=(
+                    SubTab("shipping-methods", "روش‌های ارسال", "shipping-setup", perms=("can_view_shipping_settings",),
+                           matches=(_m(prefix="shipping-"),), keywords="روش ارسال هزینه آستانه ارسال رایگان پس کرایه دریافت حضوری"),
+                    SubTab("delivery-summary", "خلاصه ارسال و درگاه", "settings", perms=("can_manage_settings",), query="?section=delivery-payment",
+                           matches=(_m("settings", get={"section": ("delivery-payment",)}),),
+                           keywords="خلاصه ارسال درگاه پرداخت"),
+                )),
+            Tab("sms", "پیامک و ارتباطات", "settings", perms=("can_manage_settings",), query="?section=sms",
                 matches=(
                     _m("settings", get={"section": ("sms",)}),
                     _m(prefix=("settings-sms", "settings-smsrasti", "sms-")),
                 ),
-                keywords="پیامک sms اس ام اس اتصال پیامک پنل پیامکی ارسال آزمایشی"),
-            Tab("staff", "اعضای تیم", "staff-list", perms=("can_manage_staff",),
-                matches=(_m(prefix="staff-"),), pages=("staff",),
-                keywords="اعضا تیم کارمند نقش دسترسی staff"),
-            Tab("subscription", "اشتراک", "subscription-overview", perms=("can_view_subscription",),
-                matches=(_m(prefix="subscription-"),), pages=("subscription",),
-                keywords="اشتراک پلن ارتقا subscription plan"),
-            Tab("billing", "صورتحساب اشتراک", "billing-overview", perms=("can_view_billing",),
-                matches=(_m(prefix="billing-"),), pages=("billing",),
-                keywords="صورتحساب فاکتور اشتراک پرداخت اشتراک billing"),
-            Tab("usage", "مصرف و سقف‌ها", "usage-overview", perms=("can_view_usage",),
-                matches=(_m(prefix="usage-"),), pages=("usage",),
-                keywords="مصرف سقف محدودیت usage limits"),
-            Tab("imports", "ورود اطلاعات", "import-list", perms=("can_view_imports",),
-                matches=(_m(prefix="import-"),), pages=("imports",),
-                keywords="ورود اطلاعات اکسل آپلود بارگذاری فایل ورود کالا موجودی import"),
-            Tab("exports", "خروج اطلاعات", "export-list", perms=("can_view_exports",),
-                matches=(_m(prefix="export-"),), pages=("exports",),
-                keywords="خروج اطلاعات خروجی اکسل دانلود دریافت فایل export"),
+                keywords="پیامک sms اس ام اس اتصال پیامک پنل پیامکی ارسال آزمایشی ارتباطات"),
+            Tab("integrations", "یکپارچه‌سازی‌ها", "settings", perms=("can_manage_settings",), query="?section=integrations",
+                matches=(_m("settings", get={"section": ("integrations",)}), _m(prefix="settings-integration")),
+                keywords="اینماد ترب گوگل آنالیتیکس تگ منیجر پیکسل یکپارچه‌سازی integrations"),
+            Tab("data-transfer", "ورود و خروج اطلاعات", "import-list", perms=("can_view_imports", "can_view_exports"),
+                matches=(_m(prefix=("import-", "export-")),), pages=("imports", "exports"),
+                keywords="ورود اطلاعات اکسل آپلود بارگذاری فایل ورود کالا موجودی خروج خروجی دانلود import export",
+                children=(
+                    SubTab("imports", "ورود اطلاعات", "import-list", perms=("can_view_imports",), matches=(_m(prefix="import-"),),
+                           keywords="ورود گروهی کالا اکسل قالب نمونه import"),
+                    SubTab("exports", "خروج اطلاعات", "export-list", perms=("can_view_exports",), matches=(_m(prefix="export-"),),
+                           keywords="خروجی اکسل دانلود export"),
+                )),
+            Tab("account", "تیم و اشتراک", "staff-list",
+                perms=("can_manage_staff", "can_view_subscription", "can_view_billing", "can_view_usage"),
+                matches=(_m(prefix=("staff-", "subscription-", "billing-", "usage-")),),
+                pages=("staff", "subscription", "billing", "usage"),
+                keywords="اعضا تیم کارمند نقش اشتراک پلن صورتحساب مصرف سقف staff subscription billing usage",
+                children=(
+                    SubTab("staff", "اعضای تیم", "staff-list", perms=("can_manage_staff",), matches=(_m(prefix="staff-"),),
+                           keywords="اعضا تیم کارمند نقش دسترسی staff"),
+                    SubTab("subscription", "اشتراک", "subscription-overview", perms=("can_view_subscription",),
+                           matches=(_m(prefix="subscription-"),), keywords="اشتراک پلن ارتقا subscription plan"),
+                    SubTab("billing", "صورتحساب اشتراک", "billing-overview", perms=("can_view_billing",),
+                           matches=(_m(prefix="billing-"),), keywords="صورتحساب فاکتور اشتراک پرداخت اشتراک billing"),
+                    SubTab("usage", "مصرف و سقف‌ها", "usage-overview", perms=("can_view_usage",),
+                           matches=(_m(prefix="usage-"),), keywords="مصرف سقف محدودیت usage limits"),
+                )),
         ),
     ),
 )
@@ -333,7 +393,7 @@ PALETTE_EXTRAS: tuple = (
                  "پیامک sms صندوق خروجی صف ارسال outbox", "⇢"),
     PaletteExtra("تاریخچه اعلان‌ها", "بازاریابی ← اعلان‌ها و پیام‌ها ← تاریخچه", "notification-history", "",
                  ("can_manage_settings",), "اعلان تاریخچه پیام ارسال شده", "≡"),
-    PaletteExtra("کادوپیچی کالاها", "تنظیمات ← تنظیمات مالی ← کادوپیچی", "gift-wrap-products", "",
+    PaletteExtra("کادوپیچی کالاها", "تنظیمات ← مالی و پرداخت ← کادوپیچی", "gift-wrap-products", "",
                  ("can_manage_settings",), "کادوپیچی کادو بسته بندی هدیه gift wrap", "🎁"),
     PaletteExtra("برچسب‌های مشتری", "مشتریان ← مشتریان ← برچسب‌ها", "customer-tag-list", "",
                  ("can_view_customers",), "برچسب تگ مشتری tag", "#"),
@@ -414,8 +474,19 @@ def resolve_active(url_name: str, get=None, active_page: str = "") -> tuple:
     return None, None
 
 
-def tab_href(tab: Tab) -> str:
+def tab_href(tab) -> str:
     return reverse(f"dashboard:{tab.url_name}") + tab.query
+
+
+def resolve_child(tab: Tab, url_name: str, get=None) -> Optional[str]:
+    """Key of the best-matching Level-3 screen of ``tab`` for this request, or ``None``."""
+    best, best_key = 0, None
+    for child in tab.children:
+        for match in child.matches:
+            score = _score(match, url_name, get)
+            if score > best:
+                best, best_key = score, child.key
+    return best_key
 
 
 def _tab_visible(tab: Tab, flags: Mapping[str, object]) -> bool:
@@ -436,6 +507,15 @@ class NavTab:
     href: str
     active: bool = False
     badge: int = 0
+    children: list = field(default_factory=list)
+
+
+@dataclass
+class NavChild:
+    key: str
+    label: str
+    href: str
+    active: bool = False
 
 
 @dataclass
@@ -454,6 +534,12 @@ class Navigation:
     sections: list
     active_section: Optional[NavSection]
     active_tab: Optional[NavTab]
+
+    @property
+    def subtabs(self) -> list:
+        """Level-3 bar: the screens of the ACTIVE tab (only when there is more than one — a single destination would be noise)."""
+        children = self.active_tab.children if self.active_tab else []
+        return children if len(children) > 1 else []
 
     @property
     def show_tabs(self) -> bool:
@@ -481,10 +567,18 @@ def build_navigation(
         for tab in section.tabs:
             if not _tab_visible(tab, flags):
                 continue
+            is_active = section.key == active_section_key and tab.key == active_tab_key
+            children, href = [], tab_href(tab)
+            if tab.children:
+                visible = [c for c in tab.children if _tab_visible(c, flags)]
+                if not visible:
+                    continue                      # a category none of whose screens the user may open is not shown
+                href = tab_href(visible[0])       # the category opens its first permitted screen (never a page the user cannot open)
+                active_child = resolve_child(tab, url_name, get) if is_active else None
+                children = [NavChild(key=c.key, label=c.label, href=tab_href(c), active=(c.key == active_child)) for c in visible]
             nav_tab = NavTab(
-                key=tab.key, label=tab.label, href=tab_href(tab),
-                active=(section.key == active_section_key and tab.key == active_tab_key),
-                badge=_count(counts.get(tab.badge)) if tab.badge else 0,
+                key=tab.key, label=tab.label, href=href, active=is_active,
+                badge=_count(counts.get(tab.badge)) if tab.badge else 0, children=children,
             )
             tabs.append(nav_tab)
         if not tabs:
@@ -526,6 +620,11 @@ def build_palette(flags: Mapping[str, object]) -> list:
             else:
                 path = f"{section.label} ← {tab.label}"
             items.append(PaletteItem(tab.label, path, tab_href(tab), tab.keywords, "◦"))
+            for child in tab.children:
+                if not _tab_visible(child, flags) or (child.url_name, child.query) == (tab.url_name, tab.query):
+                    continue
+                items.append(PaletteItem(child.label, f"{section.label} ← {tab.label} ← {child.label}", tab_href(child),
+                                         f"{tab.keywords} {child.keywords}", "◦"))
     for extra in PALETTE_EXTRAS:
         if extra.perms and not any(bool(flags.get(flag)) for flag in extra.perms):
             continue
@@ -534,3 +633,17 @@ def build_palette(flags: Mapping[str, object]) -> list:
             extra.keywords, extra.icon,
         ))
     return items
+
+
+def build_settings_index(flags: Mapping[str, object]) -> list:
+    """Permission-filtered, searchable list of every settings destination (tabs, their screens and settings deep links) — the data
+    behind «جست‌وجو در تنظیمات». Derived from the same IA, so a result is always a real route the user may open."""
+    seen, out = set(), []
+    for item in build_palette(flags):
+        if not item.path.startswith("تنظیمات"):
+            continue
+        if item.href in seen:
+            continue
+        seen.add(item.href)
+        out.append(item)
+    return out

@@ -1,0 +1,52 @@
+{% load persian %}
+{# «دامنه و آدرس فروشگاه»: خلاصه‌ی فقط‌خواندنی؛ مدیریتِ واقعیِ دامنه در پرتالِ مالک است (DOMAIN_MANAGE + Step-Up + Audit). #}
+<div class="au-page" data-testid="domain-settings">
+  <div class="au-intro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>
+    <p>اینجا نشانیِ فعلیِ فروشگاه و وضعیتِ دامنه‌ی اختصاصی را می‌بینید. افزودن و فعال‌سازیِ دامنه در «پرتالِ مالک» انجام می‌شود تا هر تغییرِ حساس با تأییدِ مالک و ثبتِ سابقه همراه باشد.</p></div>
+
+  <div class="au-card">
+    <div class="au-card__head"><h2>🌐 نشانیِ فعلیِ فروشگاه</h2></div>
+    <div class="au-card__body">
+      {% if domain_overview.storefront_url %}
+      <div class="au-field"><span class="au-label">آدرسی که مشتریان می‌بینند</span>
+        <a class="au-btn" dir="ltr" href="{{ domain_overview.storefront_url }}" target="_blank" rel="noopener" data-testid="storefront-url" style="justify-content:flex-start;text-transform:none">{{ domain_overview.storefront_url }}</a></div>
+      {% else %}<div class="au-note au-note--warn">هنوز نشانیِ عمومیِ قابل‌استفاده‌ای برای فروشگاه ثبت نشده است.</div>{% endif %}
+      {% if domain_overview.platform_domains %}
+      <div class="au-field"><span class="au-label">زیردامنه‌ی دائمیِ راستی‌سی</span>
+        <ul style="margin:0;padding-inline-start:18px;line-height:2">{% for d in domain_overview.platform_domains %}<li><bdi dir="ltr">{{ d.hostname }}</bdi> <span class="au-hint">— {{ d.kind }}{% if d.is_primary %} (اصلی){% endif %}</span></li>{% endfor %}</ul></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="au-card">
+    <div class="au-card__head"><h2>🔗 دامنه‌ی اختصاصی</h2>
+      {% if domain_overview.custom_domains %}<span class="au-sub">{{ domain_overview.custom_domains|length|fa_number }} دامنه</span>{% endif %}</div>
+    <div class="au-card__body">
+      {% for d in domain_overview.custom_domains %}
+      <div class="au-note {% if d.tone == 'ok' %}au-note--ok{% elif d.tone == 'danger' %}au-note--danger{% else %}au-note--warn{% endif %}" data-testid="custom-domain-row">
+        <b dir="ltr">{{ d.hostname }}</b> —
+        {% if d.is_primary %}فعال و آدرس اصلیِ فروشگاه{% else %}هنوز فعال نشده{% endif %}
+        <div class="au-hint">مالکیت: {{ d.verification }} · اتصال DNS: {{ d.routing }} · HTTPS: {{ d.tls }}</div>
+        {% if d.next_step %}<div class="au-hint"><b>قدم بعدی:</b> {{ d.next_step }}{% if d.next_hint %} — {{ d.next_hint }}{% endif %}</div>{% endif %}
+      </div>
+      {% empty %}
+      <p class="au-hint" style="margin:0">هنوز دامنه‌ی اختصاصی‌ای اضافه نشده است. اگر دامنه‌ی خودتان را دارید (مثل <bdi dir="ltr">shop.example.com</bdi>)، می‌توانید آن را به فروشگاه وصل کنید.</p>
+      {% endfor %}
+      {% if not domain_overview.targets_configured %}
+      <div class="au-note au-note--warn" data-testid="targets-missing">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسط مدیر زیرساختِ راستی‌سی تنظیم نشده است؛ تا آن زمان مرحله‌ی اتصال و فعال‌سازی ممکن نیست.</div>
+      {% endif %}
+      <ol class="au-hint" style="margin:0;padding-inline-start:20px;line-height:2">
+        <li>دامنه را تهیه کنید و به پنل DNS آن دسترسی داشته باشید.</li><li>دامنه را در پرتال ثبت کنید.</li><li>رکورد TXT را برای اثبات مالکیت اضافه کنید.</li>
+        <li>رکورد A یا CNAME را برای اتصال ثبت کنید.</li><li>اتصال DNS و HTTPS را بررسی کنید.</li><li>با تأیید مالک، دامنه را فعال کنید.</li>
+      </ol>
+    </div>
+    <div class="au-card__foot">
+      {% if domain_overview.can_manage %}
+      <a class="au-btn au-btn--primary" href="{{ domain_overview.portal_url }}" data-testid="portal-domains-link">مدیریت و راهنمای اتصال دامنه</a>
+      <span class="au-hint">در پرتالِ مالکِ راستی‌سی باز می‌شود؛ ممکن است دوباره وارد شوید.</span>
+      {% else %}
+      <span class="au-hint" data-testid="owner-only">افزودن و فعال‌سازیِ دامنه فقط توسطِ مالکِ فروشگاه انجام می‌شود.</span>
+      {% endif %}
+    </div>
+  </div>
+</div>

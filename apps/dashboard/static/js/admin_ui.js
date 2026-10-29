@@ -97,6 +97,26 @@
     }
   }, true);
 
+  // settings search: filters the server-rendered, permission-filtered list of real destinations (no data of its own)
+  function normalize(t) { return (t || '').toString().toLowerCase().replace(/\u200c/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').trim(); }
+  document.addEventListener('input', function (e) {
+    var input = e.target;
+    if (!input.matches || !input.matches('[data-au-search-input]')) return;
+    var box = input.closest('[data-au-search]');
+    var list = box.querySelector('[data-au-search-results]');
+    var q = normalize(input.value);
+    var shown = 0;
+    box.querySelectorAll('[data-au-search-item]').forEach(function (li) {
+      var hit = q && normalize(li.getAttribute('data-keywords')).indexOf(q) !== -1;
+      li.hidden = !hit; if (hit) shown++;
+    });
+    box.querySelector('[data-au-search-empty]').hidden = !(q && shown === 0);
+    list.hidden = !q;
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('[data-au-search-results]').forEach(function (l) { l.hidden = true; });
+  });
+
   document.addEventListener('change', function (e) {
     var sw = e.target;
     if (sw && sw.matches && sw.matches('.au-switch input[data-au-autosubmit]') && sw.form) {

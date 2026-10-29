@@ -182,3 +182,20 @@
   .au-acc.is-open .au-acc__desc { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { .au-toggle__track, .au-toggle__track::after, .au-acc__chev { transition: none; } }
+
+
+/* ---- level-3 screens bar + settings search (navigation) ---- */
+.admin-subtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 16px; }
+.admin-subtab { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--card); color: var(--muted); font-size: 13px; font-weight: 700; text-decoration: none; }
+.admin-subtab:hover { border-color: var(--primary); color: var(--primary); }
+.admin-subtab:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.admin-subtab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.settings-search { position: relative; margin: 0 0 18px; max-width: min(520px, 100%); }
+.settings-search-results { list-style: none; margin: 6px 0 0; padding: 6px; position: absolute; inset-inline: 0; z-index: 30; background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); max-height: 320px; overflow: auto; }
+.settings-search-results[hidden], .settings-search-results li[hidden] { display: none; }
+.settings-search-results a { display: grid; gap: 2px; padding: 9px 12px; border-radius: 10px; text-decoration: none; color: var(--text); }
+.settings-search-results a:hover, .settings-search-results a:focus-visible { background: var(--primary-soft); outline: 0; }
+.settings-search-results a span { color: var(--muted); font-size: 12px; }
+.settings-search-empty { padding: 10px 12px; color: var(--muted); font-size: 13px; }
+.au-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 640px) { .admin-subtabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; } .admin-subtab { white-space: nowrap; } }

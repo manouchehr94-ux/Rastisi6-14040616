@@ -43,7 +43,13 @@ def admin_sidebar_nav(context):
 
 @register.inclusion_tag("dashboard/partials/_admin_section_tabs.html", takes_context=True)
 def admin_section_tabs(context):
-    return {"nav": _navigation(context)}
+    nav = _navigation(context)
+    index = []
+    if nav.active_section and nav.active_section.key == "settings":
+        flat = context.flatten()
+        flags = {key: value for key, value in flat.items() if key.startswith("can_")}
+        index = navigation.build_settings_index(flags)
+    return {"nav": nav, "settings_index": index}
 
 
 @register.inclusion_tag("dashboard/partials/_admin_command_index.html", takes_context=True)

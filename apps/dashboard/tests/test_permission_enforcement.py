@@ -272,9 +272,13 @@ class PermissionAwareNavigationTests(PermissionEnforcementTestCase):
         # general-settings, team or SMS tabs they cannot open.
         shipping = self.client.get(reverse("dashboard:shipping-setup"))
         self.assertEqual(shipping.status_code, 200)
-        for tab in ("settings-general", "settings-finance", "sms", "staff"):
+        for tab in ("settings-general", "settings-domain", "sms", "integrations"):
             self.assertNotContains(shipping, f'data-tab="{tab}"')
         self.assertContains(shipping, 'data-tab="shipping"')
+        # «مالی و پرداخت» is visible only through the tax screen the analyst may read — never the payment/finance screens
+        self.assertContains(shipping, 'data-tab="settings-finance"')
+        finance_nav = self.client.get(reverse("dashboard:tax-settings"))
+        self.assertNotContains(finance_nav, 'data-subtab="payment-config"')
         self.assertEqual(self.client.get(reverse("dashboard:settings")).status_code, 403)
 
     def test_catalog_manager_does_not_see_customers_or_content_nav(self):

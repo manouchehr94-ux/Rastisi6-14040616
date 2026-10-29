@@ -48,7 +48,7 @@ class AdminV22ShellContractTests(SimpleTestCase):
             "can_manage_settings",
         )}
         titles = {item.title for item in navigation.build_palette(flags)}
-        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "پیامک", "گزارش پیامک‌ها"):
+        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "پیامک و ارتباطات", "گزارش پیامک‌ها"):
             self.assertIn(term, titles)
         hrefs = " ".join(item.href for item in navigation.build_palette(flags))
         self.assertIn("panel=header", hrefs)
@@ -72,9 +72,14 @@ class AdminV22ShellContractTests(SimpleTestCase):
 
     def test_settings_remains_top_tab_navigation(self):
         settings_template = self._read("apps/dashboard/templates/dashboard/settings.html")
-        self.assertIn('class="settings-nav"', settings_template)
-        self.assertIn('aria-label="بخش‌های تنظیمات"', settings_template)
+        # Navigation is the shell's single section-tab bar (+ level-3 screens + search) — settings.html no longer renders a second tab row.
+        self.assertNotIn('class="settings-nav"', settings_template)
         self.assertNotIn("settings-sidebar", settings_template)
+        base = self._read("apps/dashboard/templates/dashboard/base_admin.html")
+        self.assertIn("{% admin_section_tabs %}", base)
+        tabs = self._read("apps/dashboard/templates/dashboard/partials/_admin_section_tabs.html")
+        self.assertIn('class="admin-subtabs"', tabs)
+        self.assertIn("data-au-search", tabs)
 
     def test_admin_v22_supports_embedded_real_editor_pages(self):
         js = self._read("apps/dashboard/static/js/admin_v2.js")

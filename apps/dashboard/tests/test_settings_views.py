@@ -41,7 +41,7 @@ class SettingsHomeViewTests(SettingsViewsTestCase):
     def test_finance_section(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=finance")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "مالی و مالیات")
+        self.assertContains(response, "مالی و پرداخت")
 
     def test_delivery_payment_section(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=delivery-payment")
@@ -76,8 +76,9 @@ class SettingsHomeViewTests(SettingsViewsTestCase):
     def test_navigation_shows_all_sections(self):
         response = self.client.get(reverse("dashboard:settings"))
         self.assertContains(response, "اطلاعات فروشگاه")
-        self.assertContains(response, "مالی و مالیات")
-        self.assertContains(response, "ارسال و درگاه")
+        self.assertContains(response, "مالی و پرداخت")
+        self.assertContains(response, "ارسال و تحویل")
+        self.assertContains(response, "دامنه و آدرس")
         self.assertContains(response, "پیامک")
         self.assertNotContains(response, "تم رنگی")  # RS-13: retired tab — design lives in the Studio
 
