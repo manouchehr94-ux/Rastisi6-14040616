@@ -1004,10 +1004,6 @@ input::placeholder,textarea::placeholder{color:var(--rs-muted);opacity:1}
 .r-auth-form > .p-alert{margin-bottom:16px}
 .r-auth-form .p-alert:focus{outline:3px solid var(--rs-focus);outline-offset:2px}
 .r-password-field{position:relative}
-.r-password-field input{padding-right:68px!important}
-.r-password-toggle{position:absolute;top:50%;right:6px;transform:translateY(-50%);min-width:56px;min-height:38px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--rs-brand);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
-.r-password-toggle:hover{background:var(--rs-soft)}
-.r-password-toggle:focus-visible{outline:3px solid var(--rs-focus);outline-offset:1px}
 .r-hint-list,.r-error-list{margin:7px 0 0;padding:0 18px 0 0;list-style:disc}
 .r-hint-list li,.r-error-list li{margin-bottom:3px}
 @media(max-width:720px){.r-auth-tabs{grid-template-columns:1fr 1fr}.r-auth-tab{font-size:14px;padding:0 6px}}

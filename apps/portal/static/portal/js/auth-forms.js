@@ -36,27 +36,7 @@
     }));
   }
 
-  // Optional show/hide for password fields (added by JS only, so no-JS layout is unchanged).
-  document.querySelectorAll('[data-password-field]').forEach((wrap) => {
-    const input = wrap.querySelector('input');
-    if (!input) return;
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'r-password-toggle';
-    toggle.textContent = 'نمایش';
-    toggle.setAttribute('aria-label', 'نمایش رمز عبور');
-    toggle.setAttribute('aria-pressed', 'false');
-    if (input.id) toggle.setAttribute('aria-controls', input.id);
-    const paint = (show) => {
-      input.type = show ? 'text' : 'password';
-      toggle.textContent = show ? 'پنهان' : 'نمایش';
-      toggle.setAttribute('aria-pressed', show ? 'true' : 'false');
-    };
-    toggle.addEventListener('click', () => paint(input.type === 'password'));
-    wrap.appendChild(toggle);
-    wrap.closest('form')?.addEventListener('submit', () => paint(false));
-    window.addEventListener('pageshow', () => paint(false));
-  });
+  // Password show/hide is provided by the shared component (core/password_toggle.js); nothing to do here.
 
   // Double-submit protection: lock the submit button once a form is sent.
   document.querySelectorAll('form[data-auth-form]').forEach((form) => {
