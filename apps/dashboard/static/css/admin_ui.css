@@ -199,3 +199,5 @@
 .settings-search-empty { padding: 10px 12px; color: var(--muted); font-size: 13px; }
 .au-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 640px) { .admin-subtabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; } .admin-subtab { white-space: nowrap; } }
+
+.au-page-title{margin:0 0 12px;font-size:18px;font-weight:800;color:var(--text)}
