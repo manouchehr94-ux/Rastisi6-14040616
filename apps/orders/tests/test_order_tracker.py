@@ -155,3 +155,37 @@ class OrderTrackerTests(CardTransferBase):
         Customer.objects.create(user=other, full_name="دیگری", phone="09121110002")
         order = self.make_order()
         self.assertEqual(self._get(order, other).status_code, 404)
+
+
+@override_settings(ALLOWED_HOSTS=[SHOP_HOST, "testserver", "127.0.0.1", "localhost"])
+class CardTransferJourneyTests(CardTransferBase):
+    """submit → reject → resubmit → approve → double approve → submit after approval, end to end."""
+
+    def test_full_journey_is_idempotent_and_closes_after_approval(self):
+        from apps.orders.models import Transaction
+        order = self.make_order()
+        first = self.submit(order)
+        svc.reject(first.pk, store=self.store, actor=self.user, reason="مبلغ اشتباه")
+        self.assertEqual(Order.objects.get(pk=order.pk).payment_status, Order.PaymentStatus.PENDING)
+        second = self.submit(order, last4="5678", tracking="TRK55555")
+        svc.approve(second.pk, store=self.store, actor=self.user)
+        with self.assertRaises(svc.AlreadyDecided):
+            svc.approve(second.pk, store=self.store, actor=self.user)           # double click
+        with self.assertRaises(svc.AlreadyDecided):
+            svc.reject(second.pk, store=self.store, actor=self.user, reason="بعد از تأیید")
+        self.assertEqual(Transaction.objects.filter(order=order, status="ok").count(), 1)
+        with self.assertRaises(svc.CardTransferError):
+            self.submit(order, last4="9999", tracking="TRK00009")             # closed after approval
+        self.assertEqual(order.card_transfers.count(), 2)
+
+    def test_customer_page_number_is_ltr_isolated_with_copy_fallback_and_theme_tokens(self):
+        order = self.make_order()
+        client = Client()
+        client.force_login(self.user)
+        page = client.get(reverse("orders:card-transfer", args=[order.code]))
+        html = page.content.decode()
+        self.assertIn('dir="ltr" class="c2c-num"', html)
+        self.assertIn("6037 9970 0000 0019", html)
+        self.assertIn("execCommand", html)                                      # fallback when the clipboard API is unavailable
+        self.assertIn("card_transfer.css", html)
+        self.assertNotIn("#b9c2d6", html)                                       # no hard-coded colours left in the template
