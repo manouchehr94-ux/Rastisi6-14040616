@@ -1,0 +1,55 @@
+# Full-suite reconciliation — HEAD `fbedae0e` (11 625 tests, 34 FAIL + 5 ERROR = 39 ids)
+
+Every id below was re-run: the 29 baseline ids and the 8 environmental ids also fail on the untouched pre-mission base `6d6258d3`; the 2 parallel-only ids pass when run alone on both HEAD and base. No failure is caused by the account/order/security changes.
+
+### A. In the Vision baseline list and still failing — identical on base 6d6258d3 (29)
+- `FAIL` apps.storefront_builder.tests.test_arch02b_gallery_unification.GalleryUnificationTests.test_the_old_gallery_page_and_its_script_are_gone
+- `FAIL` apps.storefront_builder.tests.test_architecture_consolidation.OneCapabilityModelTests.test_no_parallel_allowlists_exist
+- `FAIL` apps.storefront_builder.tests.test_architecture_consolidation.OneHomepageRendererTests.test_the_legacy_homepage_template_is_gone_and_home_renders_the_engine_template
+- `FAIL` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_dense_product_rows_are_real_store_data_and_compact
+- `FAIL` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_first_fold_matches_dense_commerce_structure
+- `ERROR` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_home_closes_with_generic_brand_and_blog_discovery
+- `FAIL` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_home_reuses_the_proven_generic_dense_commerce_composition
+- `FAIL` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_identity_palette_and_registered_shell
+- `FAIL` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_other_reference_families_keep_their_versions_and_variants
+- `FAIL` apps.storefront_builder.tests.test_dense_marketplace_beraito_v2.DenseMarketplaceBeraitoV2ContractTests.test_reference_coloured_merchandising_rows_use_generic_palette_roles
+- `FAIL` apps.storefront_builder.tests.test_editorial_jewelry_saremi_v2.EditorialJewelrySaremiV2ContractTests.test_home_composition_is_editorial_and_data_driven
+- `FAIL` apps.storefront_builder.tests.test_editorial_jewelry_saremi_v2.EditorialJewelrySaremiV2ContractTests.test_other_accepted_families_keep_their_frozen_versions
+- `FAIL` apps.storefront_builder.tests.test_editorial_jewelry_saremi_v2.EditorialJewelrySaremiV2ContractTests.test_product_rows_use_honest_store_scoped_sources_and_minimal_cards
+- `FAIL` apps.storefront_builder.tests.test_editorial_jewelry_saremi_v2.EditorialJewelrySaremiV2ContractTests.test_version_palette_and_global_chrome
+- `FAIL` apps.storefront_builder.tests.test_phase28_canvas_first_ux.Phase28CanvasFirstUXTemplateTests.test_desktop_panels_follow_v3_persistent_three_column_contract
+- `FAIL` apps.storefront_builder.tests.test_phase28c_direct_drawers.Phase28CDirectDrawerStaticTests.test_v3_desktop_shell_has_no_offscreen_drawer_translation
+- `FAIL` apps.storefront_builder.tests.test_premium_leather_shokolati_v2.PremiumLeatherShokolatiV2ContractTests.test_home_product_rows_use_chocolate_card_and_four_desktop_columns
+- `FAIL` apps.storefront_builder.tests.test_premium_leather_shokolati_v2.PremiumLeatherShokolatiV2ContractTests.test_home_reference_silhouette
+- `FAIL` apps.storefront_builder.tests.test_premium_leather_shokolati_v2.PremiumLeatherShokolatiV2ContractTests.test_identity_and_shell
+- `FAIL` apps.storefront_builder.tests.test_r411_image_display_contract.EveryImageDeclaresARoleTests.test_every_storefront_img_has_a_known_role
+- `FAIL` apps.storefront_builder.tests.test_r411_image_display_contract.EveryImageDeclaresARoleTests.test_no_template_sets_object_fit_inline
+- `FAIL` apps.storefront_builder.tests.test_r4_settings_schema.BackgroundCapabilityProjectionTests.test_documented_non_schema_background_aware_sections_have_no_schema
+- `FAIL` apps.storefront_builder.tests.test_r4_settings_schema.SchemaEnablementRegistryGuardTests.test_every_registered_section_key_matches_its_expected_schema_state
+- `FAIL` apps.storefront_builder.tests.test_warm_boutique_lalerokh_v2.WarmBoutiqueIsolationTests.test_completed_ibolak_template_contract_stays_frozen
+- `FAIL` apps.storefront_builder.tests.test_warm_boutique_lalerokh_v2.WarmBoutiqueIsolationTests.test_only_warm_boutique_opts_into_new_beauty_identity
+- `FAIL` apps.storefront_builder.tests.test_warm_boutique_lalerokh_v2.WarmBoutiqueV2ContractTests.test_all_explicit_home_product_rows_use_beauty_retail_card
+- `FAIL` apps.storefront_builder.tests.test_warm_boutique_lalerokh_v2.WarmBoutiqueV2ContractTests.test_home_uses_reference_driven_registered_primitives
+- `FAIL` apps.storefront_builder.tests.test_warm_boutique_lalerokh_v2.WarmBoutiqueV2ContractTests.test_product_walls_reuse_id_free_store_runtime_resolution
+- `FAIL` apps.storefront_builder.tests.test_warm_boutique_lalerokh_v2.WarmBoutiqueV2ContractTests.test_version_palette_and_global_variants
+
+### B. Environmental — fail alone on HEAD and on base 6d6258d3 (8)
+- `FAIL` apps.portal.tests.test_onboarding_ready_template.CatalogTests.test_card_screenshots_use_the_existing_preview_authority
+- `FAIL` apps.portal.tests.test_onboarding_ready_template.CatalogTests.test_gallery_exposes_exactly_the_canonical_current_ready_templates
+- `FAIL` apps.portal.tests.test_onboarding_ready_template.GalleryUiTests.test_every_card_has_a_persian_name_a_lazy_preview_and_a_large_view_link
+- `FAIL` apps.portal.tests.test_onboarding_ready_template.GalleryUiTests.test_search_is_client_side_and_a_get_never_mutates
+- `FAIL` apps.portal.tests.test_onboarding_template_fidelity.TemplateStepInteractionTests.test_every_card_has_an_explicit_choose_affordance_and_a_sample_content_label
+- `FAIL` apps.stores.tests.test_refresh_rasti_mode_demo_visuals_command.RefreshRastiModeDemoVisualsCommandTests.test_refresh_applies_curated_branding_and_all_non_product_media
+- `ERROR` apps.stores.tests.test_refresh_rasti_mode_demo_visuals_command.RefreshRastiModeDemoVisualsCommandTests.test_second_run_is_content_idempotent
+- `ERROR` unittest.loader._FailedTest.apps.notifications.tests.test_email_transport
+
+### C. Parallel-run only — pass alone on HEAD and on base (2)
+- `ERROR` apps.dashboard.tests.test_product_image_views.ProductImageReorderViewTests.test_reorders_by_posted_sequence
+- `ERROR` apps.sms.tests.test_gateway_live.LiveProtocolTests
+
+### D. In the Vision baseline list but passing now (3)
+- apps.dashboard.tests.test_export_views.DirectDownloadViewTests.test_no_file_is_stored_and_job_keeps_only_metadata
+- apps.dashboard.tests.test_views.CollapsibleSidebarTests.test_sidebar_is_flat_with_nine_sections_and_no_accordion
+- apps.storefront_builder.tests.test_r4_showcase_facade.ShowcaseFacadeReadyTemplateGuardTests.test_ready_template_recipe_files_are_untouched_by_task6
+
+Totals: FAIL 34, ERROR 5 (A=29, B=8, C=2; 29+8+2 = 39).
