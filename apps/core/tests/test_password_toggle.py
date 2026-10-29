@@ -34,6 +34,17 @@ class PasswordToggleWiringTests(SimpleTestCase):
             self.assertIn("core/password_toggle.css", text, f"{rel} ({what}) must load the shared stylesheet")
             self.assertIn("core/password_toggle.js", text, f"{rel} ({what}) must load the shared script")
 
+    def test_storefront_base_loads_the_component_for_the_customer_login_and_signup_modal(self):
+        text = (APPS.parent / "templates" / "base.html").read_text(encoding="utf-8")
+        self.assertIn("core/password_toggle.css", text)
+        self.assertIn("core/password_toggle.js", text)
+        self.assertEqual(text.count("core/password_toggle.js"), 1)
+
+    def test_accessible_names_are_the_short_persian_words(self):
+        js = JS.read_text(encoding="utf-8")
+        self.assertIn("var SHOW = 'نمایش رمز';", js)
+        self.assertIn("var HIDE = 'پنهان\u200cکردن رمز';", js)
+
     def test_every_template_with_a_password_input_extends_a_host(self):
         """A template that renders ``type="password"`` (or a Django password widget field) must be a host or extend one."""
         hosts = {Path(rel).name for rel in HOSTS}
@@ -176,7 +187,7 @@ class PasswordToggleBrowserTests(unittest.TestCase):
             self.assertEqual(page.evaluate("document.activeElement.className"), "pw-toggle")
             page.keyboard.press("Enter")
             self.assertEqual(page.eval_on_selector("#ltr", "e => e.type"), "text")
-            self.assertEqual(page.evaluate("document.activeElement.getAttribute('aria-label')"), "پنهان کردن رمز عبور")
+            self.assertEqual(page.evaluate("document.activeElement.getAttribute('aria-label')"), "پنهان‌کردن رمز")
         finally:
             ctx.close()
 
