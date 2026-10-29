@@ -87,5 +87,9 @@
   .acct .ord-row{grid-template-columns:1fr 1fr;row-gap:6px;border:1px solid var(--line);border-radius:var(--radius,12px);padding:12px;margin-bottom:8px}
   .acct .ord-row [data-label]::before{content:attr(data-label) ": ";color:var(--muted);font-size:11px}
   .acct .addr-badge{position:static;display:inline-block;margin-bottom:6px}
+  /* نوار ناوبریِ ثابتِ پایینِ موبایل (~۶۵px) نباید روی فیلد/دکمه‌ای که فوکوس یا اسکرولِ خطا می‌گیرد بیفتد */
+  .acct :is(input,textarea,select,button,a,.fg,.acct-alert,.coup-err){scroll-margin-bottom:112px}
+  .acct{padding-bottom:24px}
+  html{scroll-padding-bottom:112px}  /* focus/scrollIntoView treat the area under the fixed bar as unavailable */
 }
 @media(prefers-reduced-motion:reduce){.acct-tab{transition:none}}

@@ -46,3 +46,14 @@ class AccountTabsStructureTests(TestCase):
         self.assertContains(bad, "coup-err")
         added = self.client.post(reverse("customers:address-add"), {"receiver_name": "م", "phone": "09121110000", "province": "تهران", "city": "تهران", "full_address": "خیابان"})
         self.assertContains(added, "addr-card")
+
+
+class AccountMobileBottomNavTests(TestCase):
+    """The fixed mobile bottom navigation (~65px) must never cover a field/button that receives focus or an error scroll."""
+
+    def test_css_reserves_room_under_the_fixed_bar(self):
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parents[1] / "static" / "css" / "account.css").read_text(encoding="utf-8")
+        self.assertIn("html{scroll-padding-bottom:112px}", css)
+        self.assertIn("scroll-margin-bottom:112px", css)
