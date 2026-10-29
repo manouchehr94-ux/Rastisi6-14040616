@@ -90,13 +90,13 @@ class OrderTrackerTests(CardTransferBase):
         f = _states(_tracker(order).fulfillment)
         self.assertEqual((f["shipped"], f["delivered"]), ("done", "done"))
 
-    def test_pickup_has_no_shipping_step(self):
+    def test_pickup_uses_pickup_labels_and_never_says_shipped(self):
         order = self.make_order()
         Order.objects.filter(pk=order.pk).update(is_pickup=True)
-        steps = [s.key for s in _tracker(order).fulfillment.steps]
-        self.assertNotIn("shipped", steps)
-        self.assertIn("delivered", steps)
-        self.assertIn("حضوری", [s.label for s in _tracker(order).fulfillment.steps][-1])
+        labels = [s.label for s in _tracker(order).fulfillment.steps]
+        self.assertNotIn("ارسال شد", labels)
+        self.assertIn("آماده‌ی دریافت حضوری", labels)
+        self.assertIn("تحویلِ حضوری انجام شد", labels)
 
     def test_canceled_is_a_separate_failed_branch(self):
         order = self.make_order()

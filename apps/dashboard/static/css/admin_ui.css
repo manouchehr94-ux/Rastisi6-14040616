@@ -109,6 +109,7 @@
 
 /* ---- modal (native <dialog>) ---- */
 .au-modal { border: 0; padding: 0; border-radius: 18px; width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); background: var(--card); color: var(--text); box-shadow: 0 24px 70px rgba(10, 16, 32, .45); overflow: clip; }
+.au-modal[open] { position: fixed; inset: 0; margin: auto; }  /* admin.css resets margins, which pinned dialogs to the top corner */
 .au-modal--wide { width: min(860px, calc(100vw - 24px)); }
 .au-modal::backdrop { background: rgba(10, 16, 32, .55); }
 .au-modal__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }

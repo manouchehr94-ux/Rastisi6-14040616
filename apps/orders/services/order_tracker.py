@@ -127,8 +127,8 @@ def build(order: Order) -> OrderTracker:
     else:
         rank = {Order.Status.PENDING: 0, Order.Status.PROCESSING: 1, Order.Status.SHIPPED: 2, Order.Status.DELIVERED: 3}[order.status]
         defs = [("processing", "در حال پردازش", 1, times.get(Order.Status.PROCESSING))]
-        if not pickup:
-            defs.append(("shipped", "ارسال شد", 2, times.get(Order.Status.SHIPPED)))
+        # «ارسال‌شده» تنها وضعیتِ واقعیِ میانیِ سفارش است؛ برایِ تحویلِ حضوری همان وضعیت با برچسبِ حضوری نمایش داده می‌شود.
+        defs.append(("shipped", "آماده‌ی دریافت حضوری" if pickup else "ارسال شد", 2, times.get(Order.Status.SHIPPED)))
         defs.append(("delivered", last_label, 3, times.get(Order.Status.DELIVERED)))
         steps = [f_placed]
         for key, label, need, at in defs:
@@ -144,7 +144,8 @@ def build(order: Order) -> OrderTracker:
         notes = {
             0: ("سفارش ثبت شده است", "فروشگاه پس از تأیید پرداخت سفارش را به پردازش می‌برد." if not (paid or is_cod) else "فروشگاه به‌زودی سفارش را به پردازش می‌برد.", "info"),
             1: ("سفارش در حال پردازش است", "فروشگاه در حال آماده‌سازی سفارش شماست.", "info"),
-            2: ("سفارش ارسال شده است", "سفارش شما تحویل مرسوله‌بر شده است." if not pickup else "وضعیتِ ثبت‌شده: ارسال شده.", "info"),
+            2: ("سفارش ارسال شده است" if not pickup else "سفارش آماده‌ی دریافت حضوری است",
+                "سفارش شما تحویل مرسوله‌بر شده است." if not pickup else "برای دریافت سفارش به فروشگاه مراجعه کنید.", "info"),
             3: ("سفارش تحویل داده شد", "سفارش شما تحویل شد." if not pickup else "سفارش شما به‌صورت حضوری تحویل شد.", "ok"),
         }
         headline, desc, tone = notes[rank]
