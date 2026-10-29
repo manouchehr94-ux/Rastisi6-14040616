@@ -638,12 +638,13 @@ class VisionBrowserTests(_VisionPage, _composer.ComposerBrowserTests):
         self.assertTrue(config["hide_on_mobile"], "hidden is stored as true")
         self.assertFalse(config["hide_on_tablet"], "the sibling device is untouched")
         self._shot(page, "vision_10_show_on_mobile_switch_off")
-        # the real Preview renders exactly the device flag the Draft stores: «hide on mobile» flags the mobile branch and never the tablet one.
-        # (Whether a given header variant's own CSS then honours the flag is the storefront engine's business: see the Vision report, finding on
-        # `[data-shell-hide-*]` vs class-level `display` rules.)
+        # the real Preview: «hide on mobile» flags the mobile branch (never the tablet one) AND the search really disappears on a phone (computed
+        # style of every flagged part), while a tablet still shows it. (Full model x width matrix: test_responsive_hide_browser.)
         phone = self._search_hidden_in_preview(page, "mobile")
         self.assertTrue(phone["flagged"] and all(n["m"] and not n["t"] for n in phone["flagged"]), phone)
-        self.assertTrue(any(n["hidden"] for n in phone["flagged"]), f"the desktop search branch is hidden on a phone: {phone}")
+        self.assertTrue(all(n["hidden"] for n in phone["flagged"]), f"every flagged search part is hidden on a phone: {phone}")
+        self.assertFalse(phone["searchVisible"], f"no search field can be seen on a phone: {phone}")
+        self.assertTrue(self._search_hidden_in_preview(page, "tablet")["searchVisible"], "a tablet still shows the search")
         page.evaluate("RastiSiR4.setDevice('desktop')")
         # refresh keeps the value
         page.reload(wait_until="networkidle")
@@ -682,6 +683,9 @@ class VisionBrowserTests(_VisionPage, _composer.ComposerBrowserTests):
         self.assertEqual(self._proxy(page, self.MOBILE).get_attribute("aria-checked"), "true")
         tablet = self._search_hidden_in_preview(page, "tablet")
         self.assertTrue(tablet["flagged"] and all(n["t"] and not n["m"] for n in tablet["flagged"]), tablet)
+        self.assertTrue(all(n["hidden"] for n in tablet["flagged"]), f"every flagged search part is hidden on a tablet: {tablet}")
+        self.assertFalse(tablet["searchVisible"], f"no search field can be seen on a tablet: {tablet}")
+        self.assertTrue(self._search_hidden_in_preview(page, "mobile")["searchVisible"], "a phone still shows the search")
         # the keyboard works: Space on the focused switch toggles it back
         self._proxy(page, self.TABLET).focus()
         page.keyboard.press("Space")

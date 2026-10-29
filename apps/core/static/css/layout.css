@@ -248,11 +248,15 @@ html[data-sfb-density="relaxed"] .rsec[data-width="full"] > .section{margin-inli
    علاقه‌مندی‌ها) و نیاز به یک عنصرِ واحد برایِ گذاشتنِ data-attribute
    رویش دارند — چیدمانِ flexِ والد (``.h-actions``) را نمی‌شکند. */
 .sfb-shell-inline{display:contents}
+/* ``!important`` is deliberate and safe: the attribute exists ONLY on the one component a merchant switched off for that device (the
+   templates add it conditionally), and the header/footer variant sheets (storefront_builder.css) later declare class-level ``display``
+   (``.gh-inline-block{display:contents}``, the mobile-search rows, ...) with the SAME specificity, which silently won by load order and
+   left the component visible. Nothing without the attribute is touched. */
 @media(max-width:1000px) and (min-width:681px){
-  [data-shell-hide-tablet]{display:none}
+  [data-shell-hide-tablet]{display:none!important}
 }
 @media(max-width:680px){
-  [data-shell-hide-mobile]{display:none}
+  [data-shell-hide-mobile]{display:none!important}
 }
 
 /* Phase 8 P0-3 — بلوک‌هایِ اضافیِ هدر (تلفن/شبکه‌ی اجتماعی/CTA) روی

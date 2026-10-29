@@ -1726,7 +1726,7 @@
   .gh--beauty .gh-logo-text{min-width:0}.gh--beauty .gh-logo-text b{max-width:100%}.gh--beauty .gh-logo-text small{display:none}
   .gh--beauty .gh-beauty-main>.gh-beauty-search{display:none}
   .gh--beauty .gh-beauty-main>.gh-beauty-actions{grid-area:actions}
-  .gh-beauty-mobile-account{display:contents!important}
+  .gh-beauty-mobile-account:not([data-shell-hide-mobile]){display:contents!important}
   .gh-beauty-desktop-account{display:none}
   .gh-beauty-nav{display:none}
   .gh-beauty-nav:not(.gh-nav-hidden){display:block}
