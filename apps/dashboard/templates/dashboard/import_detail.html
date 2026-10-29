@@ -19,7 +19,15 @@
 .imp-banner.is-warn{background:var(--amber-soft)}
 .imp-banner.is-bad{background:var(--red-soft)}
 .imp-err{display:flex;gap:8px;align-items:baseline;color:var(--red-ink);font-size:12.5px;line-height:1.9}
-.imp-err .imp-col{flex:none;padding:0 8px;border-radius:999px;background:var(--red-soft);font-size:11.5px;font-weight:700;white-space:nowrap}
+.imp-err .imp-col{flex:none;padding:0 8px;margin-inline-end:2px;border-radius:999px;background:var(--red-soft);font-size:11.5px;font-weight:700;white-space:nowrap}
+.imp-final{display:grid;gap:10px;padding:16px 18px;border-radius:14px;background:var(--primary-soft);border:1px solid var(--primary)}
+.imp-final.is-blocked{background:var(--bg);border-color:var(--border)}
+.imp-final h3{margin:0;font-size:15px}
+.imp-final p{margin:0;font-size:12.5px;line-height:1.9;color:var(--muted)}
+.imp-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.imp-counts div{padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.imp-counts b{display:block;font-size:20px}
+.imp-counts span{font-size:12px;color:var(--muted)}
 .imp-warn{color:var(--amber-ink);font-size:12.5px}
 .imp-blockers{margin:8px 0 0;padding:0 18px;font-size:12.5px;line-height:2}
 .imp-confirm{margin:0 0 10px;padding:10px 14px;border-radius:12px;background:var(--amber-soft);font-size:12.5px;line-height:1.9}
@@ -91,13 +99,17 @@
   {% endif %}
 
   <div class="card-body" style="border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    {% if can_execute %}
-    <form method="post" action="{% url 'dashboard:import-execute' job.pk %}" style="flex-basis:100%">{% csrf_token %}
-      <p class="imp-confirm">با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند. فایل پیش از اجرا یک بارِ دیگر با وضعیتِ فعلیِ فروشگاه بررسی می‌شود و اگر هر مشکلی پیدا شود هیچ تغییری اعمال نمی‌شود.</p>
-      <button type="submit" class="btn btn-primary" onclick="return confirm('با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند. ادامه می‌دهید؟')">
-        تأیید اجرای واقعی
-      </button>
-    </form>
+    {% if job.status == "preview_ready" and can_manage_imports %}
+    <div class="imp-final{% if not can_execute %} is-blocked{% endif %}" style="flex-basis:100%" data-testid="final-import-panel">
+      <h3>ورود نهایی {{ item_plural }} به فروشگاه</h3>
+      {% if can_execute %}
+      <p>همه‌ی ردیف‌ها معتبرند{% if summary.proposals.total %} و مواردِ جدید تأیید شده‌اند{% endif %}. تا وقتی دکمه‌ی زیر را نزنید هیچ تغییری روی فروشگاه اعمال نمی‌شود.</p>
+      <div><button type="button" class="au-btn au-btn--primary" data-au-open="#final-import-modal" data-testid="final-import-open">ورود نهایی {{ item_plural }} به فروشگاه</button></div>
+      {% else %}
+      <p>{% if summary.awaiting %}ابتدا {{ summary.awaiting|fa_number }} ردیفِ منتظرِ تأییدِ موردِ جدید را در بخش «مواردِ جدیدِ پیشنهادی» تأیید کنید.{% elif summary.invalid %}ابتدا خطاهایِ فایل را اصلاح و آن را دوباره بارگذاری کنید.{% else %}ورودِ نهایی هنوز ممکن نیست؛ دلیل را در بالا ببینید.{% endif %}</p>
+      <div><button type="button" class="au-btn" disabled aria-disabled="true" data-testid="final-import-open">ورود نهایی {{ item_plural }} به فروشگاه</button></div>
+      {% endif %}
+    </div>
     {% endif %}
     {% if job.status == "preview_ready" and can_manage_imports %}
     <form method="post" action="{% url 'dashboard:import-cancel' job.pk %}">{% csrf_token %}
@@ -166,12 +178,15 @@
     </span>
   </div>
   <div class="table-wrap"><table>
-    <thead><tr><th>{{ row_label }}</th><th>شناسه</th><th>وضعیت</th><th>مشکل / هشدار</th></tr></thead>
+    <thead><tr><th>{{ row_label }}</th><th>نامِ {{ item_label }}</th><th>وضعیت</th><th>مشکل / هشدار</th></tr></thead>
     <tbody>
     {% for row in row_results %}
       <tr>
         <td>{{ row.row_number|fa_number }}</td>
-        <td dir="ltr" style="text-align:right">{{ row.source_identifier|default:"—" }}</td>
+        <td data-testid="row-name">
+          {% if row.shown.name %}<b>{{ row.shown.name }}</b>{% else %}<span style="color:var(--muted)">{{ row.shown.fallback|default:"—" }}</span>{% endif %}
+          {% if row.shown.ident or row.shown.extra %}<div style="font-size:11.5px;color:var(--muted)">{% if row.shown.name %}{{ row.shown.extra|default:row.shown.ident }}{% endif %}{% if row.shown.name and row.shown.extra and row.shown.ident and row.shown.ident != row.shown.extra %} · {{ row.shown.ident }}{% endif %}</div>{% endif %}
+        </td>
         <td>
           {% if row.status == "created" %}<span class="badge b-green">ساخته شد</span>
           {% elif row.status == "updated" %}<span class="badge b-blue">بروزرسانی شد</span>
@@ -185,7 +200,7 @@
           {% else %}<span class="badge b-red">ناموفق</span>{% endif %}
         </td>
         <td>
-          {% for e in row.described_errors %}<div class="imp-err">{% if e.column %}<span class="imp-col">{{ e.column }}</span>{% endif %}<span>{{ e.message }}</span></div>{% endfor %}
+          {% for e in row.described_errors %}<div class="imp-err">{% if e.column %}<span class="imp-col">{{ e.column }}:</span>{% endif %}<span>{{ e.message }}</span></div>{% endfor %}
           {% for w in row.warnings %}<div class="imp-warn">⚠ {{ w }}</div>{% endfor %}
           {% if not row.errors and not row.warnings %}—{% endif %}
         </td>
@@ -207,4 +222,33 @@
   </div>
   {% endif %}
 </div>
+{% if can_execute %}
+<dialog class="au-modal au-modal--wide" id="final-import-modal" aria-labelledby="final-import-title" data-testid="final-import-modal">
+  <div class="au-modal__head"><h3 id="final-import-title">تأیید ورود نهایی {{ item_plural }} به فروشگاه</h3><button type="button" class="au-x" data-au-close aria-label="بستن">×</button></div>
+  <div class="au-modal__body">
+    <div>فایل: <b><bdi dir="ltr">{{ job.original_filename }}</bdi></b></div>
+    <div class="imp-counts" data-testid="final-import-counts">
+      <div><b>{{ summary.total|fa_number }}</b><span>کلِ ردیف‌ها</span></div>
+      <div><b>{{ summary.will_create|fa_number }}</b><span>{{ item_label }}‌ای که ساخته می‌شود</span></div>
+      <div><b>{{ summary.will_update|fa_number }}</b><span>{{ item_label }}‌ای که بروزرسانی می‌شود</span></div>
+      <div><b>{{ summary.invalid|fa_number }}</b><span>ردیفِ دارایِ خطا</span></div>
+      <div><b>{{ summary.awaiting|fa_number }}</b><span>منتظرِ تأیید</span></div>
+      <div><b>{{ summary.warnings|fa_number }}</b><span>ردیفِ دارایِ هشدار</span></div>
+    </div>
+    <div class="au-note au-note--warn"><b>این کار اطلاعاتِ واقعیِ فروشگاه را تغییر می‌دهد.</b> فایل پیش از اجرا یک بارِ دیگر با وضعیتِ فعلیِ فروشگاه بررسی می‌شود؛ اگر حتی یک مشکل پیدا شود، هیچ تغییری اعمال نمی‌شود (همه یا هیچ). اجرا فقط یک بار انجام می‌شود.</div>
+  </div>
+  <form method="post" action="{% url 'dashboard:import-execute' job.pk %}" class="au-modal__foot" data-once>
+    {% csrf_token %}
+    <button type="submit" class="au-btn au-btn--primary" data-testid="final-import-confirm">تأیید و اجرای نهایی</button>
+    <button type="button" class="au-btn au-btn--ghost" data-au-close>انصراف</button>
+  </form>
+</dialog>
+<script>
+document.querySelectorAll('form[data-once]').forEach(function (f) {
+  f.addEventListener('submit', function () {
+    f.querySelectorAll('button[type=submit]').forEach(function (b) { setTimeout(function () { b.disabled = true; b.textContent = 'در حال اجرا…'; }, 0); });
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

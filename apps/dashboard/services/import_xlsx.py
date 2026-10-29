@@ -525,6 +525,7 @@ _FIELD_PHRASES = [
     ("تغییرِ قیمت", "price"), ("قیمتِ مقایسه", "compare_at_price"), ("بهایِ تمام", "cost"),
     ("برایِ قیمت", "price"), ("قیمت نمی‌تواند", "price"), ("برایِ موجودی", "stock"), ("موجودی نمی‌تواند", "stock"),
     ("برایِ وزن", "weight_grams"), ("برایِ تعداد", "quantity"), ("تعداد نمی‌تواند", "quantity"),
+    ("زیردسته‌بندیِ «", "subcategory_name"), ("دسته‌بندیِ اصلیِ «", "category_code"),
     ("وضعیتِ «", "status"), ("برندِ «", "brand_code"), ("دسته‌بندیِ «", "category_code"),
     ("دسته‌یِ مالیاتیِ", "tax_class_code"), ("انباری با کدِ", "warehouse_code"), ("حالتِ ردیفِ", "mode"),
     ("set_on_hand", "mode"), ("مقدارِ «", "option_1_value_code"), ("محورِ", "option_1_code"),
@@ -544,6 +545,18 @@ _TEXT_REPLACEMENTS = [
     ("هم کدِ محور و هم کدِ مقدار", "هم نامِ ویژگی و هم مقدارِ ویژگی"),
     ("محورهای", "ویژگی‌هایِ"), ("محورِ", "ویژگیِ"), ("محورها", "ویژگی‌ها"),
 ]
+
+
+# پیام‌هایی که با نامِ همان ستونی شروع می‌شوند («برندِ «X» …») کنارِ برچسبِ ستون تکرار دیده می‌شدند («برندبرندِ …»).
+# برچسبِ ستون جدا و با «:» نشان داده می‌شود و ابتدای پیام که همان کلمه است حذف می‌شود.
+_LEADING_LABELS = ("زیردسته‌بندیِ ", "دسته‌بندیِ اصلیِ ", "دسته‌بندیِ ", "برندِ ", "ویژگیِ ")
+
+
+def _drop_duplicate_label(text: str) -> str:
+    for label in _LEADING_LABELS:
+        if text.startswith(label + "«"):
+            return text[len(label):]
+    return text
 
 
 def describe_errors(import_type: str, messages) -> list:
@@ -576,7 +589,8 @@ def describe_errors(import_type: str, messages) -> list:
             text = text.replace(f"«{internal}»", f"«{column.base_label}»")
         for old, new in _TEXT_REPLACEMENTS:
             text = text.replace(old, new)
-        results.append({"column": columns[key].base_label if key in columns else "", "message": text})
+        column = columns[key].base_label if key in columns else ""
+        results.append({"column": column, "message": _drop_duplicate_label(text) if column else text})
     return results
 
 
@@ -745,21 +759,25 @@ def build_error_report_xlsx(job, row_results, source_rows: dict, import_type: st
 
     alias = alias_map(import_type)
     fixed = [
-        Column("ردیف در اکسل", "id", width=11), Column("وضعیت", width=11),
+        Column("ردیف در اکسل", "id", width=11), Column("نام کالا", width=30, wrap=True), Column("وضعیت", width=11),
         Column("خطاها", width=60, wrap=True), Column("هشدارها", width=40, wrap=True),
     ]
     table_columns = fixed + [Column(h, width=18, wrap=True, tier="tech") for h in header_pool]
 
     results = list(row_results)
+    from apps.dashboard.services import import_service
+
+    display_names = import_service.row_display_names(job, results)
     described = []
     table_rows = []
     for result in results:
         details = describe_errors(import_type, result.errors)
         described.append(details)
         raw = dict(source_rows.get(result.row_number, {}).get("__raw__", []))
+        shown = display_names.get(result.row_number, {})
         table_rows.append([
-            result.row_number, ROW_STATUS_LABELS.get(result.status, result.status),
-            "\n".join(f"• {d['message']}" for d in details),
+            result.row_number, shown.get("name") or shown.get("fallback", ""), ROW_STATUS_LABELS.get(result.status, result.status),
+            "\n".join(f"• {d['column'] + ': ' if d['column'] else ''}{d['message']}" for d in details),
             "\n".join(f"• {w}" for w in result.warnings),
             *[raw.get(h, "") for h in header_pool],
         ])
@@ -767,10 +785,10 @@ def build_error_report_xlsx(job, row_results, source_rows: dict, import_type: st
 
     error_fill = PatternFill("solid", start_color=xlsx_utils.ERROR_FILL, end_color=xlsx_utils.ERROR_FILL)
     for offset, (result, details) in enumerate(zip(results, described), start=2):
-        for column_index in (2, 3):
+        for column_index in (3, 4):
             cell = ws.cell(row=offset, column=column_index)
             cell.fill = error_fill
-            cell.font = Font(name=xlsx_utils.FONT_NAME, size=10, bold=(column_index == 2), color=xlsx_utils.ERROR_TEXT)
+            cell.font = Font(name=xlsx_utils.FONT_NAME, size=10, bold=(column_index == 3), color=xlsx_utils.ERROR_TEXT)
         flagged = {d["column"] for d in details if d["column"]}
         for position, header in enumerate(header_pool, start=len(fixed) + 1):
             key = alias.get(header_key(header))

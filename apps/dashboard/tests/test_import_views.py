@@ -383,9 +383,10 @@ class XlsxUploadFlowTests(ImportViewTestCase):
         self.assertFalse(Product.objects.filter(sku="XU-1").exists())
 
         detail = self.client.get(reverse("dashboard:import-detail", args=[job.pk]))
-        self.assertContains(detail, "تأیید اجرای واقعی")
+        self.assertContains(detail, "ورود نهایی کالاها به فروشگاه")
+        self.assertContains(detail, "تأیید و اجرای نهایی")
         self.assertContains(detail, "فایل با موفقیت بررسی شد. همه ردیف‌ها معتبرند و آماده اجرا هستند.")
-        self.assertContains(detail, "با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند")
+        self.assertContains(detail, "این کار اطلاعاتِ واقعیِ فروشگاه را تغییر می‌دهد")
         self.assertContains(detail, "ساخته می‌شود")
         self.assertContains(detail, "ردیف در اکسل")
         self.assertEqual(detail.context["summary"], {

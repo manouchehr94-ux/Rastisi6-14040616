@@ -6796,10 +6796,14 @@ def _import_detail_context(request, job):
             proposal.can_decide = membership_has_permission(
                 request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind],
             ) and membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE)
+    names = import_service.row_display_names(job, list(page_obj))
     for row in page_obj:
         row.is_awaiting = bool((row.normalized_data_summary or {}).get("awaiting"))
+        row.shown = names.get(row.row_number, {})
     return {
         "job": job, "active_page": "imports", "proposals": proposals,
+        "item_label": {"products": "کالا", "variants": "تنوع", "inventory": "ردیفِ موجودی"}.get(job.import_type, "ردیف"),
+        "item_plural": {"products": "کالاها", "variants": "تنوع‌ها", "inventory": "ردیف‌هایِ موجودی"}.get(job.import_type, "ردیف‌ها"),
         "can_decide_any": any(p.can_decide and p.status == "pending" for p in proposals),
         "row_results": page_obj, "page_obj": page_obj, "paginator": paginator,
         "can_manage_imports": membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE),

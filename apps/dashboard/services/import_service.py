@@ -363,7 +363,10 @@ def _validate_product_row(row_number: int, row: dict, *, store, mode: str, cache
             errors=errors, warnings=warnings,
             # ردیفی که *فقط* به‌خاطرِ مواردِ تازه (پیشنهادی) معتبر نیست؛ اگر خطایِ دیگری هم دارد (نامِ خالی، قیمتِ نامعتبر،
             # مورد رد‌شده ...) یک ردیفِ خطادار است و پیشنهادی ثبت نمی‌شود تا فایل اصلاح شود. ``sync_from_outcomes`` از این می‌خواند.
-            normalized_data_summary={"awaiting": awaiting} if awaiting and len(errors) == len(awaiting) else {},
+            normalized_data_summary={
+                **({"awaiting": awaiting} if awaiting and len(errors) == len(awaiting) else {}),
+                **({"product_name": name[:150]} if name else {}),
+            },
         )
         return outcome, None, existing_product
 
@@ -379,7 +382,7 @@ def _validate_product_row(row_number: int, row: dict, *, store, mode: str, cache
     }
     outcome = RowOutcome(
         row_number=row_number, source_identifier=source_identifier, status=ImportRowResult.RowStatus.VALID,
-        warnings=warnings,
+        warnings=warnings, normalized_data_summary={"product_name": (name or "")[:150]} if name else {},
     )
     return outcome, normalized, existing_product
 
@@ -1034,7 +1037,9 @@ def _execute_product_batch(store, batch, *, mode, cache, actor, dry_run: bool) -
             outcomes.append(outcome)
             continue
         if dry_run:
-            outcome.normalized_data_summary = {"action": "update" if existing_product is not None else "create"}
+            outcome.normalized_data_summary = {
+                **outcome.normalized_data_summary, "action": "update" if existing_product is not None else "create",
+            }
             outcomes.append(outcome)
             continue
         # بودجه‌ی ساختِ کالا (§16): اگر این ردیف یک کالایِ تازه می‌سازد و
@@ -1586,6 +1591,46 @@ def _generate_error_report(job: ImportJob) -> None:
     if job.error_report_file:
         job.error_report_file.delete(save=False)
     job.error_report_file.save(f"errors-{job.pk}.xlsx", ContentFile(content), save=True)
+
+
+def row_display_names(job: ImportJob, results) -> dict:
+    """نامِ قابلِ‌نمایشِ هر ردیفِ نتیجه: ``{row_number: {"name", "ident", "fallback"}}``.
+
+    اولویت: نامِ کالا در همان ردیفِ فایل (``product_name`` در خلاصه) ← نامِ کالایِ موجودِ همین فروشگاه (از شیءِ هدف یا SKU/شناسه؛
+    همیشه با ``store=job.store`` یعنی Store-scoped) ← برچسبِ صادقانه‌ی «شناسه: …». شناسه/SKU همیشه جدا و ثانویه برمی‌گردد."""
+    from apps.catalog.models import Product, ProductVariant
+
+    results = list(results)
+    store = job.store
+    product_ids = {r.target_object_id for r in results if r.target_object_type == "Product" and r.target_object_id}
+    variant_ids = {r.target_object_id for r in results if r.target_object_type == "ProductVariant" and r.target_object_id}
+    idents = {r.source_identifier for r in results if r.source_identifier and not r.source_identifier.startswith("row-")}
+    id_like = {int(i) for i in idents if i.isdigit()}
+    products = {p.pk: p.name for p in Product.objects.filter(store=store, pk__in=product_ids | id_like)}
+    variants = {v.pk: v for v in ProductVariant.objects.filter(store=store, pk__in=variant_ids).select_related("product")}
+    products_by_sku = dict(Product.objects.filter(store=store, sku__in=idents).values_list("sku", "name"))
+    variants_by_sku = {
+        v.sku: v for v in ProductVariant.objects.filter(store=store, sku__in=idents).exclude(sku="").select_related("product")
+    }
+    out = {}
+    for r in results:
+        ident = r.source_identifier if r.source_identifier and not r.source_identifier.startswith("row-") else ""
+        name = ((r.normalized_data_summary or {}).get("product_name") or "").strip()
+        extra = ""
+        if not name and r.target_object_type == "Product":
+            name = products.get(r.target_object_id, "")
+        if not name and r.target_object_type == "ProductVariant":
+            variant = variants.get(r.target_object_id)
+            if variant is not None:
+                name, extra = variant.product.name, variant.sku
+        if not name and ident:
+            variant = variants_by_sku.get(ident)
+            if variant is not None:
+                name, extra = variant.product.name, variant.sku
+            else:
+                name = products_by_sku.get(ident) or (products.get(int(ident)) if ident.isdigit() else "") or ""
+        out[r.row_number] = {"name": name, "ident": ident, "extra": extra, "fallback": "" if name else (f"شناسه: {ident}" if ident else "بدون نام")}
+    return out
 
 
 def job_preview_summary(job: ImportJob) -> dict:
