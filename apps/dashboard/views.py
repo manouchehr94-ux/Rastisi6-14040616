@@ -7708,8 +7708,11 @@ def shipping_setup(request):
     دارند دست‌نخورده و همچنان در دسترس می‌ماند."""
     store = _resolve_dashboard_store(request)
     ensure_default_shipping_methods(store)
+    # فعال‌ها اول نمایش داده می‌شوند؛ ترتیبِ واقعیِ ذخیره‌شده (display_order) و اولویتِ روش‌ها تغییر نمی‌کند (مرتب‌سازیِ پایدار).
+    methods = sorted(ShippingMethod.objects.filter(store=store).order_by("display_order", "name"), key=lambda m: not m.is_active)
     return render(request, "dashboard/shipping_setup.html", {
-        "methods": ShippingMethod.objects.filter(store=store).order_by("display_order", "name"),
+        "methods": methods,
+        "open_method": request.session.pop("shipping_open", None),
         "active_page": "shipping",
         "can_manage_shipping": membership_has_permission(request.store_membership, SHIPPING_SETTINGS_MANAGE),
     })
@@ -7718,9 +7721,27 @@ def shipping_setup(request):
 @require_POST
 @staff_required
 @permission_required(SHIPPING_SETTINGS_MANAGE)
+def shipping_method_toggle(request, pk):
+    """کلیدِ فعال/غیرفعالِ ردیفِ روشِ ارسال — همان ``toggle_shipping_method`` (اعتبارسنجی + ثبت حسابرسی) و همان فیلدِ ``is_active``."""
+    store = _resolve_dashboard_store(request)
+    get_object_or_404(ShippingMethod, pk=pk, store=store)
+    try:
+        method = settings_admin_service.toggle_shipping_method(pk, store=store)
+    except settings_admin_service.ShippingMethodIncomplete as exc:
+        messages.error(request, f"روشِ ارسال فعال نشد: {exc}")
+        request.session["shipping_open"] = pk
+    else:
+        messages.success(request, f"روشِ ارسالِ «{method.name}» {'فعال' if method.is_active else 'غیرفعال'} شد")
+    return redirect("dashboard:shipping-setup")
+
+
+@require_POST
+@staff_required
+@permission_required(SHIPPING_SETTINGS_MANAGE)
 def shipping_method_simple_update(request, pk):
     store = _resolve_dashboard_store(request)
     method = get_object_or_404(ShippingMethod, pk=pk, store=store)
+    request.session["shipping_open"] = method.pk          # the edited row stays open after the redirect (success or error message)
 
     method.is_active = request.POST.get("is_active") == "on"
     method.cod_eligible = request.POST.get("cod_eligible") == "on" and not method.is_pickup

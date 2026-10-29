@@ -1,68 +1,79 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}راه‌اندازیِ ارسال | پنل مدیریت{% endblock %}
 {% block page_title %}راه‌اندازیِ ارسال{% endblock %}
 {% block page_sub %}روش‌هایِ رایجِ ارسال را فعال کنید — بدونِ نیاز به منطقه‌بندی یا جدولِ نرخ{% endblock %}
 {% block content %}
-<p class="field-help" style="margin:0 0 10px">این صفحه تنها مرجعِ ویرایشِ روش‌هایِ ارسال است (صفحهٔ «ارسال و درگاه» در تنظیمات فقط خلاصه نشان می‌دهد). آستانهٔ رایگانِ کلِ فروشگاه در «تنظیمات ← مالی و مالیات» است؛ هر کدام زودتر برقرار شود ارسال رایگان می‌شود.</p>
-<div class="page-header">
-  <div><p class="page-desc">حداقل یک روشِ ارسال یا گزینه‌ی دریافتِ حضوری را فعال کنید تا فروشگاه‌تان بتواند منتشر شود.</p></div>
-  {% if can_manage_shipping %}<a href="{% url 'dashboard:shipping-method-list' %}" class="btn btn-sm">تنظیماتِ پیشرفته (مناطق و جدولِ نرخ)</a>{% endif %}
-</div>
-<div class="card">
-  <div class="table-wrap"><table>
-    <thead>
-      <tr>
-        <th>روشِ ارسال</th>
-        <th>فعال</th>
-        <th>پرداخت در محل (پس‌کرایه)</th>
-        <th>هزینه (تومان)</th>
-        <th>آستانه‌ی ارسالِ رایگانِ همین روش (تومان)</th>
-        {% if can_manage_shipping %}<th>عملیات</th>{% endif %}
-      </tr>
-    </thead>
-    <tbody>
+<div class="au-page">
+  <div class="au-intro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+    <p>هر روشِ ارسال یک ردیف دارد؛ روی آن بزنید تا هزینه و تنظیماتش باز شود. کلیدِ سمتِ چپِ ردیف همان روش را برای مشتری روشن یا خاموش می‌کند. حداقل یک روشِ ارسال یا دریافتِ حضوری را فعال کنید تا فروشگاه بتواند منتشر شود.
+      این صفحه تنها مرجعِ ویرایشِ روش‌هایِ ارسال است؛ <a href="{% url 'dashboard:settings' %}?section=delivery-payment">خلاصه‌ی «ارسال و درگاه» در تنظیمات</a> فقط نمایش می‌دهد. آستانهٔ ارسالِ رایگانِ کلِ فروشگاه در «<a href="{% url 'dashboard:settings' %}?section=finance">مالی</a>» است؛ هر کدام زودتر برقرار شود، ارسال رایگان می‌شود.</p></div>
+  {% if can_manage_shipping %}<div><a href="{% url 'dashboard:shipping-method-list' %}" class="au-btn au-btn--sm">تنظیماتِ پیشرفته (مناطق و جدولِ نرخ)</a></div>{% endif %}
+
+  <div class="au-accs" data-testid="shipping-accordions">
     {% for method in methods %}
-    <tr x-data="{ cod: {{ method.cod_eligible|yesno:'true,false' }} }">
-      <td>
-        <b>{{ method.icon }} {{ method.name }}</b>
-        {% if method.is_pickup %}<br><small style="color:var(--muted)">دریافتِ حضوری</small>{% endif %}
-      </td>
-      <td>
-        <input type="checkbox" form="shipform-{{ method.pk }}" name="is_active" {% if method.is_active %}checked{% endif %} {% if not can_manage_shipping %}disabled{% endif %}>
-      </td>
-      <td>
-        {% if method.is_pickup %}
-          <span style="color:var(--muted)">—</span>
-        {% else %}
-          <input type="checkbox" form="shipform-{{ method.pk }}" name="cod_eligible" x-model="cod" {% if not can_manage_shipping %}disabled{% endif %}>
+    {% with is_open=open_method|default_if_none:""|stringformat:"s" %}
+    <div class="au-acc{% if is_open == method.pk|stringformat:'s' %} is-open{% endif %}" id="ship-{{ method.pk }}" data-testid="shipping-{{ method.pk }}" data-active="{{ method.is_active|yesno:'1,0' }}"
+         x-data="{ cod: {{ method.cod_eligible|yesno:'true,false' }} }">
+      <div class="au-acc__head">
+        <button type="button" class="au-acc__trigger" aria-expanded="{% if is_open == method.pk|stringformat:'s' %}true{% else %}false{% endif %}" aria-controls="ship-panel-{{ method.pk }}">
+          <span class="au-acc__icon" aria-hidden="true">{{ method.icon|default:"🚚" }}</span>
+          <span class="au-acc__text">
+            <span class="au-acc__title">{{ method.name }}
+              {% if method.is_active %}<span class="au-badge au-badge--ok">فعال</span>{% else %}<span class="au-badge">غیرفعال</span>{% endif %}
+              {% if method.is_pickup %}<span class="au-badge au-badge--info">دریافتِ حضوری</span>{% endif %}
+            </span>
+            <span class="au-acc__desc">
+              {% if method.is_pickup %}هزینه: رایگان — مشتری سفارش را حضوری تحویل می‌گیرد
+              {% elif method.cod_eligible %}پس‌کرایه — هزینه‌ی ارسال هنگام تحویل را مشتری می‌پردازد
+              {% elif method.cost > 0 %}هزینه: {{ method.cost|toman }}{% else %}هزینه: رایگان{% endif %}{% if method.free_over is not None %} · ارسال رایگان از {{ method.free_over|toman }}{% endif %}
+            </span>
+          </span>
+          <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        {% if can_manage_shipping %}
+        <form class="au-acc__ctrl" method="post" action="{% url 'dashboard:shipping-method-toggle' method.pk %}">{% csrf_token %}
+          <button type="submit" class="au-toggle" role="switch" aria-checked="{{ method.is_active|yesno:'true,false' }}" aria-label="فعال‌سازی {{ method.name }}" data-testid="ship-toggle">
+            <span class="au-toggle__track" aria-hidden="true"></span><span class="au-toggle__text">{% if method.is_active %}فعال{% else %}غیرفعال{% endif %}</span>
+          </button>
+        </form>
         {% endif %}
-      </td>
-      <td>
-        {% if method.is_pickup %}
-          <span>۰ (رایگان)</span>
-        {% else %}
-          <div x-show="!cod">
-            <input type="number" min="0" step="1" form="shipform-{{ method.pk }}" name="cost" value="{{ method.cost|floatformat:0 }}" style="width:110px" {% if not can_manage_shipping %}disabled{% endif %}>
+      </div>
+
+      <div class="au-acc__panel" id="ship-panel-{{ method.pk }}"{% if is_open != method.pk|stringformat:'s' %} hidden{% endif %}>
+        <form id="shipform-{{ method.pk }}" method="post" action="{% url 'dashboard:shipping-method-simple-update' method.pk %}" class="au-grid">{% csrf_token %}
+          <label class="au-switch" style="grid-column:1/-1">
+            <input type="checkbox" name="is_active" {% if method.is_active %}checked{% endif %} {% if not can_manage_shipping %}disabled{% endif %}>
+            <span class="au-switch__track"></span><span class="au-switch__text" data-on="فعال" data-off="غیرفعال"></span>
+            <span class="au-switch__label">فعال‌سازیِ این روش<small>روشِ خاموش در تسویه‌حسابِ مشتری نمایش داده نمی‌شود.</small></span>
+          </label>
+          {% if method.is_pickup %}
+          <div class="au-field"><span class="au-label">هزینه (تومان)</span><div class="au-note">دریافتِ حضوری همیشه رایگان است و منطقه‌ی ارسال ندارد.</div></div>
+          {% else %}
+          <label class="au-switch" style="grid-column:1/-1">
+            <input type="checkbox" name="cod_eligible" x-model="cod" {% if not can_manage_shipping %}disabled{% endif %}>
+            <span class="au-switch__track"></span><span class="au-switch__text" data-on="بله" data-off="خیر"></span>
+            <span class="au-switch__label">پس‌کرایه (پرداختِ هزینه‌ی ارسال هنگام تحویل)<small>اگر روشن باشد، هزینه‌ی ارسال از مشتری در سایت گرفته نمی‌شود.</small></span>
+          </label>
+          <div class="au-field" x-show="!cod">
+            <label for="ship-cost-{{ method.pk }}">هزینه‌ی ارسال (تومان)</label>
+            <input class="au-input" id="ship-cost-{{ method.pk }}" type="number" min="0" step="1" name="cost" value="{{ method.cost|floatformat:0 }}" {% if not can_manage_shipping %}disabled{% endif %}>
+            <div class="au-hint">صفر یعنی ارسالِ رایگان.</div>
           </div>
-          <small x-show="cod" style="color:var(--muted)">هزینه ارسال هنگام تحویل توسط مشتری پرداخت می‌شود</small>
-        {% endif %}
-      </td>
-      <td>
-        <input type="number" min="0" step="1" form="shipform-{{ method.pk }}" name="free_over"
-               value="{% if method.free_over is not None %}{{ method.free_over|floatformat:0 }}{% endif %}"
-               placeholder="خالی = غیرفعال" style="width:140px" {% if not can_manage_shipping %}disabled{% endif %}>
-      </td>
-      {% if can_manage_shipping %}
-      <td>
-        <button type="submit" form="shipform-{{ method.pk }}" class="btn btn-sm btn-primary">ذخیره</button>
-      </td>
-      {% endif %}
-    </tr>
+          <div class="au-field" x-show="cod"><span class="au-label">هزینه‌ی ارسال</span><div class="au-note">هنگام تحویل توسط مشتری پرداخت می‌شود.</div></div>
+          {% endif %}
+          <div class="au-field">
+            <label for="ship-free-{{ method.pk }}">آستانه‌ی ارسالِ رایگانِ همین روش (تومان)</label>
+            <input class="au-input" id="ship-free-{{ method.pk }}" type="number" min="0" step="1" name="free_over" value="{% if method.free_over is not None %}{{ method.free_over|floatformat:0 }}{% endif %}" placeholder="خالی = غیرفعال" {% if not can_manage_shipping %}disabled{% endif %}>
+            <div class="au-hint">اگر جمعِ سفارش به این مبلغ برسد، ارسال با این روش رایگان می‌شود. خالی = بدونِ آستانه.</div>
+          </div>
+          {% if can_manage_shipping %}<div class="au-acc__foot" style="grid-column:1/-1"><button type="submit" class="au-btn au-btn--primary">ذخیره‌ی این روش</button></div>{% endif %}
+        </form>
+      </div>
+    </div>
+    {% endwith %}
+    {% empty %}<p class="au-empty">هنوز روشِ ارسالی تعریف نشده است.</p>
     {% endfor %}
-    </tbody>
-  </table></div>
+  </div>
 </div>
-{% for method in methods %}
-<form id="shipform-{{ method.pk }}" method="post" action="{% url 'dashboard:shipping-method-simple-update' method.pk %}">{% csrf_token %}</form>
-{% endfor %}
 {% endblock %}

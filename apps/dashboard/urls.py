@@ -504,6 +504,7 @@ urlpatterns = [
 
     # --- راه‌اندازیِ سادهٔ ارسال (Onboarding) ---
     path("shipping/setup/", views.shipping_setup, name="shipping-setup"),
+    path("shipping/setup/<int:pk>/toggle/", views.shipping_method_toggle, name="shipping-method-toggle"),
     path("shipping/setup/<int:pk>/update/", views.shipping_method_simple_update, name="shipping-method-simple-update"),
 
     # --- مناطق و روش‌های ارسال (Shipping Zones/Methods/Rates) ---
