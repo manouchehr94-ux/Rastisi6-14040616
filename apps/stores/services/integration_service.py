@@ -68,6 +68,16 @@ def disconnect(*, store, provider_code: str, actor) -> StoreIntegrationConnectio
     return connection
 
 
+def reconnect_with_saved(*, store, provider_code: str, actor) -> StoreIntegrationConnection:
+    """فعال‌سازیِ دوباره با اعتبارنامه‌ی ذخیره‌شده — از همان ``connect`` (اعتبارسنجیِ قالب + ثبتِ حسابرسی) استفاده می‌کند."""
+    provider = _require_provider(provider_code)
+    connection = get_or_create_connection(store=store, provider_code=provider_code)
+    saved = connection.get_credentials()
+    if not any(saved.get(f.key) for f in provider.fields):
+        raise IntegrationError("اطلاعاتی ذخیره نشده است؛ ابتدا اطلاعات اتصال را وارد و ذخیره کنید.")
+    return connect(store=store, provider_code=provider_code, values={f.key: saved.get(f.key, "") for f in provider.fields}, actor=actor)
+
+
 def test_connection(*, store, provider_code: str, actor) -> StoreIntegrationConnection:
     """«تستِ اتصال» یعنی اعتبارسنجیِ واقعیِ فرمتِ اعتبارنامه‌ی ذخیره‌شده —
     نه یک فراخوانیِ شبکه به APIِ مستندنشده‌ی بیرونی (که بدونِ مدارکِ
@@ -97,10 +107,16 @@ def connections_context(*, store) -> list[dict]:
     rows = []
     for provider in all_providers():
         connection = existing.get(provider.code)
+        credentials = connection.get_credentials() if connection else {}
+        is_connected = bool(connection and connection.is_active)
+        has_saved = any(credentials.get(f.key) for f in provider.fields)
         rows.append({
             "provider": provider,
             "connection": connection,
-            "is_connected": bool(connection and connection.is_active),
-            "credentials": connection.get_credentials() if connection else {},
+            "is_connected": is_connected,
+            # «متصل» همان «فعال» است (یک پرچمِ واقعی: ``is_active``)؛ قطع‌کردن اطلاعات را نگه می‌دارد و «فعال‌سازی دوباره» با همان اطلاعات ممکن است.
+            "has_saved_credentials": has_saved,
+            "can_reenable": (not is_connected) and has_saved,
+            "credentials": credentials,
         })
     return rows

@@ -4337,6 +4337,7 @@ def _settings_context(
         "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
         "industry_installation": _industry_installation_context(store),
         "integration_rows": integration_service.connections_context(store=store),
+        "integration_open": request.session.pop("integration_open", ""),
         "active_page": "settings",
     }
 
@@ -4927,6 +4928,7 @@ def settings_integration_connect(request, provider_code):
         integration_service.connect(store=store, provider_code=provider_code, values=values, actor=request.user)
     except integration_service.IntegrationError as exc:
         messages.error(request, str(exc))
+        request.session["integration_open"] = provider_code      # keep the form open so the error is seen next to the fields
     else:
         messages.success(request, f"{provider.display_name} با موفقیت متصل شد")
     return redirect("/admin-portal/settings/?section=integrations")
@@ -4956,10 +4958,37 @@ def settings_integration_test(request, provider_code):
         return HttpResponse(status=404)
 
     connection = integration_service.test_connection(store=store, provider_code=provider_code, actor=request.user)
+    request.session["integration_open"] = provider_code
     if connection.last_test_result == "success":
         messages.success(request, f"{provider.display_name}: {connection.last_test_message}")
     else:
         messages.error(request, f"{provider.display_name}: {connection.last_test_message}")
+    return redirect("/admin-portal/settings/?section=integrations")
+
+
+@require_POST
+@staff_required
+@permission_required(SETTINGS_MANAGE)
+def settings_integration_toggle(request, provider_code):
+    """کلیدِ فعال/غیرفعال: خاموش = همان «قطع اتصال» (اطلاعات می‌ماند)؛ روشن = اتصال دوباره با اطلاعاتِ ذخیره‌شده (با اعتبارسنجیِ قالب)."""
+    store = _resolve_dashboard_store(request)
+    provider = get_integration_provider(provider_code)
+    if provider is None:
+        return HttpResponse(status=404)
+    from apps.stores.models import StoreIntegrationConnection
+
+    connection = StoreIntegrationConnection.objects.filter(store=store, provider_code=provider_code).first()
+    if connection is not None and connection.is_active:
+        integration_service.disconnect(store=store, provider_code=provider_code, actor=request.user)
+        messages.success(request, f"{provider.display_name} غیرفعال شد؛ اطلاعات ذخیره‌شده حفظ شد.")
+    else:
+        try:
+            integration_service.reconnect_with_saved(store=store, provider_code=provider_code, actor=request.user)
+        except integration_service.IntegrationError as exc:
+            messages.error(request, str(exc))
+            request.session["integration_open"] = provider_code
+        else:
+            messages.success(request, f"{provider.display_name} دوباره فعال شد.")
     return redirect("/admin-portal/settings/?section=integrations")
 
 

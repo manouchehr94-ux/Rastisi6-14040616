@@ -180,3 +180,58 @@ class IntegrationTenantIsolationViewTests(TestCase):
             reverse("dashboard:settings") + "?section=integrations", HTTP_HOST=_HOST_B,
         )
         self.assertNotContains(response, "akhlaghiSecretCode")
+
+
+class IntegrationAccordionTests(TestCase):
+    """Accordion rows: closed by default, «connected» = the real is_active flag, toggle = disconnect / reconnect with saved data."""
+
+    def setUp(self):
+        self.staff = User.objects.create_user(username="09121197002", password="pass12345", is_staff=True)
+        _grant_akhlaghi_membership(self.staff)
+        self.client.login(username="09121197002", password="pass12345")
+        self.url = reverse("dashboard:settings") + "?section=integrations"
+        self.store = Store.objects.get(slug="akhlaghi")
+
+    def row(self, code):
+        return next(r for r in integration_service.connections_context(store=self.store) if r["provider"].code == code)
+
+    def test_five_rows_closed_by_default_without_toggle_until_something_is_saved(self):
+        html = self.client.get(self.url).content.decode()
+        for code in ("enamad", "torob", "google_analytics", "google_tag_manager", "ad_pixel"):
+            self.assertIn(f'id="int-{code}"', html)
+        self.assertNotIn("au-acc is-open", html)
+        self.assertNotIn('role="switch"', html)
+
+    def test_toggle_off_keeps_credentials_and_toggle_on_restores_the_connection(self):
+        self.client.post(reverse("dashboard:settings-integration-connect", args=["torob"]), {"merchant_id": "SHOP-77"})
+        self.assertTrue(self.row("torob")["is_connected"])
+        self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
+        row = self.row("torob")
+        self.assertFalse(row["is_connected"])
+        self.assertTrue(row["can_reenable"])                    # data kept; «connected» and «enabled» are the same real flag
+        self.assertContains(self.client.get(self.url), "غیرفعال — اطلاعات ذخیره است")
+        self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
+        self.assertTrue(self.row("torob")["is_connected"])
+        self.assertEqual(self.row("torob")["credentials"]["merchant_id"], "SHOP-77")
+
+    def test_toggle_on_without_saved_data_explains_and_stays_off(self):
+        self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
+        self.assertFalse(self.row("torob")["is_connected"])
+
+    def test_connect_error_reopens_the_row_with_the_message(self):
+        self.client.post(reverse("dashboard:settings-integration-connect", args=["google_analytics"]), {"measurement_id": "bad"})
+        page = self.client.get(self.url)
+        self.assertContains(page, "au-acc is-open")
+        self.assertContains(page, "الگو")
+
+    def test_test_result_and_date_are_shown_and_say_no_external_call(self):
+        self.client.post(reverse("dashboard:settings-integration-connect", args=["torob"]), {"merchant_id": "SHOP-77"})
+        self.client.post(reverse("dashboard:settings-integration-test", args=["torob"]))
+        page = self.client.get(self.url)
+        self.assertContains(page, 'data-testid="int-last-test"')
+        self.assertContains(page, "به سرویس بیرونی درخواستی نمی‌فرستد")
+
+    def test_toggle_is_store_scoped_and_needs_authentication(self):
+        anon = self.client_class()
+        self.assertEqual(anon.post(reverse("dashboard:settings-integration-toggle", args=["torob"])).status_code, 302)
+        self.assertEqual(self.client.post(reverse("dashboard:settings-integration-toggle", args=["nope"])).status_code, 404)

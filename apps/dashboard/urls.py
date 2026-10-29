@@ -263,6 +263,7 @@ urlpatterns = [
 
     path("settings/integrations/<str:provider_code>/connect/", views.settings_integration_connect, name="settings-integration-connect"),
     path("settings/integrations/<str:provider_code>/disconnect/", views.settings_integration_disconnect, name="settings-integration-disconnect"),
+    path("settings/integrations/<str:provider_code>/toggle/", views.settings_integration_toggle, name="settings-integration-toggle"),
     path("settings/integrations/<str:provider_code>/test/", views.settings_integration_test, name="settings-integration-test"),
 
     # --- صفحات محتوایی ---
