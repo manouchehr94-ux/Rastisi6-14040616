@@ -98,10 +98,17 @@ class HeroStageBrowserTests(_parity.EngineGeometryParityBrowserTests):
         page.wait_for_timeout(1500)
 
     def _open_stage_inspector(self, page):
-        frame = self._frame(page)
-        frame.wait_for_selector(".hs-stage")
-        section_id = frame.evaluate("document.querySelector('.rsec[data-section-key=hero_stage]').dataset.sectionId")
-        frame.locator(f'[data-section-id="{section_id}"]').first.dblclick(position={"x": 40, "y": 300})
+        section_id = None
+        for _ in range(12):                                                # a template apply reloads the Studio: the frame may be replaced mid-wait
+            try:
+                frame = self._frame(page)
+                frame.wait_for_selector(".hs-stage", timeout=4000)
+                section_id = frame.evaluate("document.querySelector('.rsec[data-section-key=hero_stage]').dataset.sectionId")
+                frame.locator(f'[data-section-id="{section_id}"]').first.dblclick(position={"x": 40, "y": 300})
+                break
+            except Exception:                                              # noqa: BLE001 - the frame is being replaced; re-acquire it
+                page.wait_for_timeout(500)
+        self.assertIsNotNone(section_id, "the Preview never showed the stage")
         page.wait_for_selector('[data-rs-workspace]:not([hidden]) [data-r4-section-inspector]', timeout=10000)
         page.wait_for_timeout(600)
         return section_id
