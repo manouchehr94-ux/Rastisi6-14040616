@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from django.conf import settings
 from django.urls import reverse
 
@@ -20,6 +22,12 @@ def portal_domains_url(request, store) -> str:
     """نشانیِ مطلق صفحه‌ی دامنه روی میزبانِ پرتال — با reverse واقعی روی urlconf پلتفرم و حفظِ پورتِ توسعه (نه میزبانِ حدسی)."""
     path = reverse("portal:custom-domains", args=[store.public_id], urlconf="shop_core.urls_platform")
     return build_cross_host_url(request, hostname=settings.RASTISI_PLATFORM_PRIMARY_HOST, path=path)
+
+
+def _is_local_address(url: str) -> bool:
+    """True for a development/QA address (``*.localhost``, ``localhost``, loopback) — never a public address customers can reach."""
+    host = (urlsplit(url or "").hostname or "").lower()
+    return host == "localhost" or host.endswith(".localhost") or host in {"127.0.0.1", "::1", "0.0.0.0"}
 
 
 def domain_overview(store, request, *, can_manage: bool) -> dict:
@@ -44,8 +52,10 @@ def domain_overview(store, request, *, can_manage: bool) -> dict:
         {"hostname": d.hostname, "kind": d.get_domain_type_display(), "is_primary": d.is_primary}
         for d in store.domains.exclude(domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN).filter(retired_at__isnull=True).order_by("-is_primary", "hostname")
     ]
+    storefront_url = resolve_storefront_url_for_store(store, request)
     return {
-        "storefront_url": resolve_storefront_url_for_store(store, request),
+        "storefront_url": storefront_url,
+        "storefront_is_local": _is_local_address(storefront_url),
         "platform_domains": platform_domains,
         "custom_domains": custom_rows,
         "targets_configured": connection["configured"],

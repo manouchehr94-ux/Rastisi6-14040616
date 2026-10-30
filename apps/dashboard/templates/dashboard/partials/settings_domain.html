@@ -8,7 +8,12 @@
     <div class="au-card__head"><h2>🌐 نشانیِ فعلیِ فروشگاه</h2></div>
     <div class="au-card__body">
       {% if domain_overview.storefront_url %}
+      {% if domain_overview.storefront_is_local %}
+      <div class="au-note au-note--warn" data-testid="storefront-local-note">این نشانی مخصوص محیط آزمایشی یا توسعه است و مشتریانِ واقعی نمی‌توانند با آن وارد فروشگاه شوند. پس از اتصال و فعال‌سازیِ دامنه‌ی اصلی، نشانیِ عمومیِ واقعی همین‌جا نمایش داده می‌شود.</div>
+      <div class="au-field"><span class="au-label">نشانیِ فعلیِ محیط آزمایشی</span>
+      {% else %}
       <div class="au-field"><span class="au-label">آدرسی که مشتریان می‌بینند</span>
+      {% endif %}
         <a class="au-btn" dir="ltr" href="{{ domain_overview.storefront_url }}" target="_blank" rel="noopener" data-testid="storefront-url" style="justify-content:flex-start;text-transform:none">{{ domain_overview.storefront_url }}</a></div>
       {% else %}<div class="au-note au-note--warn">هنوز نشانیِ عمومیِ قابل‌استفاده‌ای برای فروشگاه ثبت نشده است.</div>{% endif %}
       {% if domain_overview.platform_domains %}
