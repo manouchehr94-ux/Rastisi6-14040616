@@ -631,7 +631,7 @@ button.r4-picker-row--result:hover {
 .r4-mp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .r4-mp-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 14px; border: 1.5px solid var(--r4-line); border-radius: 10px; background: #fff; color: inherit; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .r4-mp-btn:hover:not(:disabled) { border-color: #5853e8; color: #5853e8; }
-.r4-mp-btn:disabled { opacity: .5; cursor: not-allowed; }
+.r4-mp-btn:disabled { color: #656a77; background: #e8e9ef; border-color: #e8e9ef; cursor: not-allowed; }
 .r4-mp-btn:focus-visible, .r4-mp-tile:focus-visible { outline: 3px solid #5853e8; outline-offset: 2px; }
 .r4-mp-upload { position: relative; }
 .r4-mp-file { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
