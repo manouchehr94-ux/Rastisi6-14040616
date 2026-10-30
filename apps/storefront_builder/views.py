@@ -316,6 +316,10 @@ def render_preview_fragment(request, store, draft, *, section_id=None, container
             pk=section_id, page__version=draft, is_active=True).first()
         if section is None:
             return None
+        if section.section_key == "hero_stage":
+            # The stage may draw the page's global header inside itself (and the shell skips its own then): any change to it is a
+            # page-level change, so only the atomic full-frame refresh stays faithful (a swapped fragment could lose or duplicate the header).
+            return None
         page = section.page
     elif container_id is not None:
         container = StorefrontContainer.all_objects.select_related("page", "parent_cell__container").filter(pk=container_id, page__version=draft).first()

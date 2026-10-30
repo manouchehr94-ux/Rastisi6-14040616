@@ -24,6 +24,11 @@ EXPECTED_REFERENCE_VERSIONS = {
     "campaign_beauty_hub": "1",
     "cocoa_gift_shop": "1",
     "neon_digital_store": "1",
+    # Hero Stage templates (60-63)
+    "dual_atelier": "1",
+    "editorial_noir": "1",
+    "glass_commerce": "1",
+    "asymmetric_canvas": "1",
 }
 
 EXPECTED_LATEST_VERSIONS = {

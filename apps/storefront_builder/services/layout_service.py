@@ -955,7 +955,9 @@ def get_or_create_draft(store, *, user=None) -> StorefrontLayoutVersion:
     صورت از روی نسخه‌ی منتشرشده‌ی فعلی کپی می‌شود — تا ویرایشگر همیشه از
     وضعیت فعلیِ زنده شروع شود.
     """
-    layout = get_or_create_layout(store)
+    # The Studio page and its Preview iframe open together: right after a publish (no Draft yet) two requests would both try to create it,
+    # and one of them could read a half-built Draft. The lifecycle lock makes the second one wait, then re-read the committed Draft.
+    layout = _lock_layout(store)
     if layout.draft_version_id:
         container_service.ensure_version_containers(layout.draft_version)
         return layout.draft_version

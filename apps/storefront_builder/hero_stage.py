@@ -266,6 +266,8 @@ def clean_hero_stage_settings(raw: dict) -> dict:
         if key in raw:
             media_id = _media_id(raw, key)
             if media_id is None:
+                if raw[key] not in (None, "", "null"):
+                    raise ValueError("رسانهٔ انتخاب‌شده نامعتبر است")        # junk is refused, only «no picture» clears the field
                 cleaned.pop(key, None)
             else:
                 cleaned[key] = media_id

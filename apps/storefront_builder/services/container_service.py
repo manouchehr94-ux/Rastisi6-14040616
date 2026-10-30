@@ -490,7 +490,12 @@ def ensure_page_containers(page) -> None:
     If there are no containers at all, legacy rows are mirrored.  If containers
     already exist, only sections that currently have no Cell are appended in
     new single-column containers.  Empty Cells are preserved.
+
+    Concurrency: the Studio page and its Preview iframe open together, so two requests can heal the SAME page at the same moment (a freshly
+    applied template has Sections but no Cells yet). Locking the page row serialises them — the second request waits, then finds the
+    placements already made — instead of both inserting a Cell for the same Section (a unique-constraint 500 on PostgreSQL).
     """
+    type(page).objects.select_for_update().filter(pk=page.pk).first()
     if not page.containers.exists():
         if page.sections.exists():
             rebuild_page_from_legacy_rows(page)
