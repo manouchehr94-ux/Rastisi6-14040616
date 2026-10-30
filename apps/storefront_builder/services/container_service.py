@@ -73,7 +73,7 @@ from copy import deepcopy
 from django.db import transaction
 from django.db.models import F
 
-from ..models import StorefrontCell, StorefrontContainer, StorefrontSection
+from ..models import StorefrontCell, StorefrontContainer, StorefrontLayout, StorefrontLayoutVersion, StorefrontSection
 
 GRID_UNITS = 12
 MAX_CELLS = 4
@@ -492,10 +492,15 @@ def ensure_page_containers(page) -> None:
     new single-column containers.  Empty Cells are preserved.
 
     Concurrency: the Studio page and its Preview iframe open together, so two requests can heal the SAME page at the same moment (a freshly
-    applied template has Sections but no Cells yet). Locking the page row serialises them — the second request waits, then finds the
-    placements already made — instead of both inserting a Cell for the same Section (a unique-constraint 500 on PostgreSQL).
+    applied template has Sections but no Cells yet). Locking the Store's layout row serialises them — the second request waits, then finds
+    the placements already made — instead of both inserting a Cell for the same Section (a unique-constraint 500 on PostgreSQL).
+    The LAYOUT row (not the page row) is the lock because it is the first lock every R4 mutation, undo/redo, publish and
+    ``get_or_create_draft`` takes (layout → draft → section/cell): locking the page first would invert that order and let a heal and a
+    mutation deadlock on PostgreSQL. Re-locking the same row inside a transaction that already holds it is free.
     """
-    type(page).objects.select_for_update().filter(pk=page.pk).first()
+    layout_id = StorefrontLayoutVersion.objects.filter(pk=page.version_id).values_list("layout_id", flat=True).first()
+    if layout_id is not None:
+        StorefrontLayout.objects.select_for_update().filter(pk=layout_id).first()
     if not page.containers.exists():
         if page.sections.exists():
             rebuild_page_from_legacy_rows(page)
