@@ -262,6 +262,78 @@ class HeroStageBrowserTests(_parity.EngineGeometryParityBrowserTests):
         self.assertEqual((shown[768]["subtitle"], shown[768]["cta"]), (True, False))
         self.assertEqual((shown[1440]["subtitle"], shown[1440]["cta"]), (True, True))
 
+    # ------------------------------------------------------------------------------------------ Studio canvas: no accidental navigation
+    NAV_VECTORS = (
+        ("category link", ".hs-cats a", "click"), ("category link (double)", ".hs-cats a", "dblclick"), ("category link (middle)", ".hs-cats a", "middle"),
+        ("category link (Enter)", ".hs-cats a", "enter"), ("CTA", ".hs-cta-wrap a", "click"), ("header menu link", ".hs-header header nav a", "click"),
+        ("header search (Enter)", ".hs-header input[type=search], .hs-header input[name=q]", "search"),
+        ("stage product card", ".hs-card", "click"),
+        ("shelf product link", ".rsec[data-section-key=product_section] a[href*='/product']", "click"),
+        ("shelf product link (middle)", ".rsec[data-section-key=product_section] a[href*='/product']", "middle"),
+    )
+
+    def _assert_canvas_is_navigation_safe(self, page, label, minimum=5):
+        """Every link-like gesture the merchant can make on the Studio canvas must leave the Studio AND the preview document where they are."""
+        popups = []
+        page.context.on("page", lambda q: popups.append(q.url))
+        checked = 0
+        for name, selector, gesture in self.NAV_VECTORS:
+            frame = self._frame(page)
+            target = frame.locator(selector).first
+            if target.count() == 0 or not target.is_visible():             # e.g. a collapsed menu: nothing a merchant could click
+                continue
+            main_before, frame_before = page.url, frame.url
+            if gesture == "click":
+                target.click(force=True)
+            elif gesture == "dblclick":
+                target.dblclick(force=True)
+            elif gesture == "middle":
+                target.click(button="middle", force=True)
+            elif gesture == "enter":
+                target.focus()
+                page.keyboard.press("Enter")
+            elif gesture == "search":
+                target.fill("x", force=True)
+                target.press("Enter")
+            page.wait_for_timeout(700)
+            frame_after = self._frame(page)
+            self.assertEqual(page.url, main_before, f"{label}: {name} must not move the Studio")
+            self.assertEqual(frame_after.url, frame_before, f"{label}: {name} must not navigate the preview")
+            checked += 1
+            page.keyboard.press("Escape")                                  # an opened inspector must not block the next gesture
+        self.assertEqual(popups, [], f"{label}: no gesture may open a window")
+        self.assertGreaterEqual(checked, minimum, f"{label}: the vectors must actually have been exercised")
+
+    def test_clicks_inside_the_studio_canvas_never_navigate_for_every_template(self):
+        for key in TEMPLATES:
+            with self.subTest(template=key):
+                context, page = self._studio()
+                try:
+                    self._apply_through_the_gallery(page, key)
+                    self._assert_canvas_is_navigation_safe(page, key, minimum=4)
+                finally:
+                    context.close()
+
+    def test_clicks_inside_the_studio_canvas_never_navigate_on_an_existing_template(self):
+        context, page = self._studio()                                     # the fixture store runs a pre-existing template
+        try:
+            self._assert_canvas_is_navigation_safe(page, "existing template", minimum=2)
+        finally:
+            context.close()
+
+    def test_a_click_on_the_header_inside_the_stage_opens_the_header_settings_like_the_shell_header(self):
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "dual_atelier")
+            page.evaluate("()=>{window.__sfbMsgs=[];window.addEventListener('message',e=>window.__sfbMsgs.push(e.data&&e.data.type))}")
+            frame = self._frame(page)
+            frame.wait_for_selector(".hs-header")
+            frame.locator(".hs-header").first.click(position={"x": 2, "y": 2}, force=True)
+            page.wait_for_timeout(600)
+            self.assertIn("sfb:openHeaderSettings", page.evaluate("()=>window.__sfbMsgs"))
+        finally:
+            context.close()
+
     def test_an_existing_template_keeps_its_independent_header(self):
         context, page = self._page(1440, "/")                         # the fixture store runs a pre-existing template
         try:

@@ -258,6 +258,16 @@
       return;
     }
 
+    // The Store header embedded INSIDE a Hero Stage is still «the header» for the merchant: a click on its plain area opens the header
+    // settings (as a click on the shell header does) instead of selecting the whole stage. Links/buttons keep their own behaviour.
+    var embeddedHeader = target.closest('.hs-header');
+    if (embeddedHeader && !isInteractive(target, embeddedHeader)) {
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      window.parent.postMessage({ type: 'sfb:openHeaderSettings' }, window.location.origin);
+      return;
+    }
+
     var section = target.closest('[data-section-id]');
     if (section) {
       // a real storefront control (button, quantity, carousel arrow, add-to-cart, link …) keeps working: not hijacked
@@ -295,9 +305,11 @@
 
   function blockEmbeddedNavigation(evt) {
     if (!inParentFrame) return;
-    var target = evt.target && evt.target.closest ? evt.target : null;
+    var target = evt.target && evt.target.nodeType === 3 ? evt.target.parentElement : evt.target;   // a text node (Firefox) has no .closest
+    target = target && target.closest ? target : null;
     if (!target) return;
-    var navigationTarget = target.closest('a[href], [role="link"]');
+    // any link-like element: <a href>, <area href>, an SVG <a>, role=link — whichever section / header / stage it sits in
+    var navigationTarget = target.closest('a[href], [role="link"]') || target.closest('a, area[href]');
     if (!navigationTarget) return;
     evt.preventDefault();
     evt.stopPropagation();
