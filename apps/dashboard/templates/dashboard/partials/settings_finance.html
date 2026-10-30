@@ -1,29 +1,53 @@
 {% load image_guide %}
 {% load persian %}
-<div class="au-page" style="max-width:none;margin-bottom:16px">
-  <form method="post" action="{% url 'dashboard:settings-finance' %}" class="au-card" novalidate>
-    {% csrf_token %}
-    <div class="au-card__head"><h2>🚚 آستانه‌ی ارسال رایگان</h2><span class="au-sub">برای کلِ فروشگاه</span></div>
-    <div class="au-card__body">
+<div class="au-accs" data-testid="finance-accordions" style="margin-bottom:16px">
+<div class="au-acc{% if finance_form.errors %} is-open has-error{% else %} is-open{% endif %}" id="fin-free-shipping" data-testid="finance-free-shipping">
+  <div class="au-acc__head">
+    <button type="button" class="au-acc__trigger" aria-expanded="true" aria-controls="fin-panel-free-shipping">
+      <span class="au-acc__icon" aria-hidden="true">🚚</span>
+      <span class="au-acc__text">
+        <span class="au-acc__title">آستانه‌ی ارسال رایگان <span class="au-badge{% if shop.free_shipping_threshold %} au-badge--ok{% endif %}">{% if shop.free_shipping_threshold %}{{ shop.free_shipping_threshold|floatformat:"0g" }} تومان{% else %}بدون آستانه{% endif %}</span></span>
+        <span class="au-acc__desc">برای کلِ فروشگاه — خرید بالای این مبلغ، ارسال رایگان است</span>
+      </span>
+      <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+  </div>
+  <div class="au-acc__panel" id="fin-panel-free-shipping">
+    <form method="post" action="{% url 'dashboard:settings-finance' %}" novalidate>
+      {% csrf_token %}
       <div class="au-field">
         <label for="id_free_shipping_threshold">خرید بالای این مبلغ، ارسال رایگان است</label>
         <div class="au-unit">{{ finance_form.free_shipping_threshold }}<span>تومان</span></div>
         {% for error in finance_form.free_shipping_threshold.errors %}<span class="au-error">{{ error }}</span>{% endfor %}
         <span class="au-hint">این مقدار در سبد خرید و تسویه‌حساب استفاده می‌شود. هر روشِ ارسال می‌تواند آستانه‌ی رایگانِ خودش را هم داشته باشد؛ هر کدام زودتر برقرار شود ارسال رایگان است. هزینه‌ها و روش‌ها در «مدیریت ارسال».</span>
       </div>
-    </div>
-    <div class="au-card__foot"><button type="submit" class="au-btn au-btn--primary">ذخیره آستانه</button></div>
-  </form>
+      <div class="au-acc__foot"><button type="submit" class="au-btn au-btn--primary">ذخیره آستانه</button></div>
+    </form>
+  </div>
 </div>
 
-<div class="card" style="margin-top:16px">
-  <div class="card-head"><h3>🎁 کادوپیچی</h3><span class="hint">افزونه‌ی اختیاریِ سبد خرید — مستقل از خانواده‌ی بصریِ فروشگاه</span></div>
-  <div class="card-body">
+<div class="au-acc{% if gift_wrap_form.errors %} is-open has-error{% endif %}" id="fin-gift-wrap" data-testid="finance-gift-wrap">
+  <div class="au-acc__head">
+    <button type="button" class="au-acc__trigger" aria-expanded="{% if gift_wrap_form.errors %}true{% else %}false{% endif %}" aria-controls="fin-panel-gift-wrap">
+      <span class="au-acc__icon" aria-hidden="true">🎁</span>
+      <span class="au-acc__text">
+        <span class="au-acc__title">کادوپیچی <span class="au-badge{% if gift_wrap_form.gift_wrap_available.value %} au-badge--ok{% endif %}" data-testid="finance-gift-wrap-status">{% if gift_wrap_form.gift_wrap_available.value %}فعال{% else %}غیرفعال{% endif %}</span></span>
+        <span class="au-acc__desc">افزونه‌ی اختیاریِ سبد خرید — مستقل از خانواده‌ی بصریِ فروشگاه</span>
+      </span>
+      <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+  </div>
+  <div class="au-acc__panel" id="fin-panel-gift-wrap"{% if not gift_wrap_form.errors %} hidden{% endif %}>
     <form method="post" action="{% url 'dashboard:settings-gift-wrap' %}" enctype="multipart/form-data">
       {% csrf_token %}
       <div class="form-row">
         <div class="form-group">
-          <label><input type="checkbox" name="gift_wrap_available" {% if gift_wrap_form.gift_wrap_available.value %}checked{% endif %}> کادوپیچی را در دسترسِ مشتری قرار بده</label>
+          <label class="au-switch">
+            <input type="checkbox" name="gift_wrap_available" {% if gift_wrap_form.gift_wrap_available.value %}checked{% endif %}>
+            <span class="au-switch__track"></span>
+            <span class="au-switch__text" data-on="فعال" data-off="غیرفعال"></span>
+            <span class="au-switch__label">کادوپیچی را در دسترسِ مشتری قرار بده<small>با «ذخیره تنظیمات کادوپیچی» اعمال می‌شود.</small></span>
+          </label>
           {% for error in gift_wrap_form.gift_wrap_available.errors %}<small style="color:var(--red-ink)">{{ error }}</small>{% endfor %}
         </div>
         <div class="form-group">
@@ -49,7 +73,12 @@
           {{ gift_wrap_form.gift_wrap_description }}
         </div>
         <div class="form-group">
-          <label><input type="checkbox" name="gift_wrap_message_enabled" {% if gift_wrap_form.gift_wrap_message_enabled.value %}checked{% endif %}> مشتری بتواند پیام کارت هدیه بنویسد</label>
+          <label class="au-switch">
+            <input type="checkbox" name="gift_wrap_message_enabled" {% if gift_wrap_form.gift_wrap_message_enabled.value %}checked{% endif %}>
+            <span class="au-switch__track"></span>
+            <span class="au-switch__text" data-on="فعال" data-off="غیرفعال"></span>
+            <span class="au-switch__label">مشتری بتواند پیام کارت هدیه بنویسد</span>
+          </label>
         </div>
       </div>
       <div class="form-row">
@@ -69,20 +98,24 @@
   </div>
 </div>
 
-<div class="au-page" data-testid="finance-tax-summary" style="max-width:none;margin-top:16px">
-  <div class="au-card">
-    <div class="au-card__head">
-      <h2>💰 مالیات</h2>
-      <span class="au-badge {% if shop.tax_enabled %}au-badge--ok{% endif %}">{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</span>
-    </div>
-    <div class="au-card__body">
+<div class="au-acc" id="fin-tax" data-testid="finance-tax-summary">
+  <div class="au-acc__head">
+    <button type="button" class="au-acc__trigger" aria-expanded="false" aria-controls="fin-panel-tax">
+      <span class="au-acc__icon" aria-hidden="true">💰</span>
+      <span class="au-acc__text">
+        <span class="au-acc__title">مالیات <span class="au-badge {% if shop.tax_enabled %}au-badge--ok{% endif %}">{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</span></span>
+        <span class="au-acc__desc">فقط نمایش وضعیت — ویرایش در «مدیریت مالیات»</span>
+      </span>
+      <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+  </div>
+  <div class="au-acc__panel" id="fin-panel-tax" hidden>
       <div class="au-stats">
         <div class="au-stat {% if shop.tax_enabled %}au-stat--ok{% endif %}"><b>{% if shop.tax_enabled %}فعال{% else %}غیرفعال{% endif %}</b><span>وضعیت مالیات</span></div>
         <div class="au-stat"><b>{% if shop.tax_enabled %}{% if tax_has_granular_rates %}بر اساس دسته‌ی مالیاتی{% else %}{{ shop.tax_percent|floatformat:"-2" }}٪{% endif %}{% else %}—{% endif %}</b><span>نرخ مالیات</span></div>
       </div>
       <p class="au-hint" style="margin:0">وضعیت و نرخِ مالیات فقط در صفحه‌ی «مدیریت مالیات» ویرایش می‌شود تا هیچ‌گاه دو مقدارِ متفاوت وجود نداشته باشد. اینجا فقط خلاصه‌ی وضعیت را می‌بینید.</p>
-    </div>
-    <div class="au-card__foot">{% if can_view_tax_page %}<a class="au-btn au-btn--primary" href="{% url 'dashboard:tax-settings' %}">مدیریت مالیات</a>{% else %}<span class="au-hint">برای مدیریتِ مالیات به دسترسیِ «مالیات» نیاز دارید.</span>{% endif %}</div>
+      <div class="au-card__foot">{% if can_view_tax_page %}<a class="au-btn au-btn--primary" href="{% url 'dashboard:tax-settings' %}">مدیریت مالیات</a>{% else %}<span class="au-hint">برای مدیریتِ مالیات به دسترسیِ «مالیات» نیاز دارید.</span>{% endif %}</div>
   </div>
 </div>
-
+</div>

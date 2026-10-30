@@ -74,6 +74,8 @@
 .au-switch input:checked ~ .au-switch__text::after { content: attr(data-on); }
 .au-switch__label { font-weight: 700; color: var(--text); }
 .au-switch__label small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+/* the legacy `.form-group label` (display:block, muted, small) must not flatten a switch used inside an old-style form row */
+.form-group label.au-switch { display: flex; margin-bottom: 0; font-size: 14px; font-weight: 700; color: var(--text); }
 
 /* ---- buttons ---- */
 .au-btn {
