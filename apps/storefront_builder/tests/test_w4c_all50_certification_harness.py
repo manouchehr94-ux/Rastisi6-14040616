@@ -232,7 +232,9 @@ class W4CAll50CertificationHarnessTests(TestCase):
         }
         self.assertEqual(
             no_hero_keys,
-            {"premium_leather", "utility_catalog", "tool_finder", "collection_index", "mother_utility"},
+            {"premium_leather", "utility_catalog", "tool_finder", "collection_index", "mother_utility",
+             # the Hero Stage templates (60-63) open with a ``hero_stage`` section, which is not a ``hero_banner`` slider
+             "dual_atelier", "editorial_noir", "glass_commerce", "asymmetric_canvas"},
         )
 
     # -- 14 --------------------------------------------------------------
