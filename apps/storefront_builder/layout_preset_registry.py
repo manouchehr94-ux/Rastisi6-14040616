@@ -1700,3 +1700,4 @@ from . import a9_reference_templates as _a9_reference_templates  # noqa: E402,F4
 
 # V5 six-site reference templates 54-59 (data-only recipes) register after 51-53.
 from . import a10_reference_templates as _a10_reference_templates  # noqa: E402,F401
+from . import a11_stage_templates as _a11_stage_templates  # noqa: E402,F401

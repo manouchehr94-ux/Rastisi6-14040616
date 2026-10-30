@@ -52,10 +52,16 @@ CHOICES = (
         ("overlay", "شفاف و شناور روی تصویر"),
         ("independent", "مستقل، بالای هیرو (مثل قبل)"),
     ), "merged", "basic", ()),
-    ("panel_layout", "تصویر پس‌زمینه", (
+    ("bg_layout", "تصویر پس‌زمینه", (
         ("single", "یک تصویر تمام‌عرض"),
         ("dual", "دو پنل (دو تصویر کنار هم)"),
     ), "single", "basic", ()),
+    ("bg_split", "نسبت عرض دو پنل", (
+        ("equal", "برابر (۵۰ / ۵۰)"),
+        ("wide_first", "پنل اول عریض‌تر (۶۰ / ۴۰)"),
+        ("wide_second", "پنل دوم عریض‌تر (۴۰ / ۶۰)"),
+        ("first_dominant", "پنل اول غالب (۷۰ / ۳۰)"),
+    ), "equal", "advanced", (("bg_layout", ("dual",)),)),
     ("text_tone", "رنگ نوشته‌ها روی تصویر", (
         ("light", "روشن (برای تصویر تیره)"),
         ("dark", "تیره (برای تصویر روشن)"),
@@ -69,7 +75,7 @@ CHOICES = (
         ("full", "یکنواخت روی کل تصویر"),
         ("none", "بدون لایه"),
     ), "both", "basic", ()),
-    ("cta_style", "ظاهر دکمه", (
+    ("button_style", "ظاهر دکمه", (
         ("solid", "توپر"),
         ("outline", "خطی"),
         ("glass", "شیشه‌ای"),
@@ -81,18 +87,18 @@ CHOICES = (
     ("mobile_dual", "دو پنل در موبایل", (
         ("stack", "زیر هم"),
         ("first_only", "فقط پنل اول"),
-    ), "stack", "advanced", (("panel_layout", ("dual",)),)),
-    ("content_panel", "قاب پشت محتوا", (
+    ), "stack", "advanced", (("bg_layout", ("dual",)),)),
+    ("content_frame", "قاب پشت محتوا", (
         ("none", "بدون قاب"),
         ("glass", "شیشه‌ای"),
         ("solid", "توپر"),
     ), "none", "advanced", ()),
-    ("panel_border", "حاشیهٔ قاب و کارت", (
+    ("frame_border", "حاشیهٔ قاب و کارت", (
         ("thin", "نازک"),
         ("none", "بدون حاشیه"),
         ("strong", "پررنگ"),
     ), "thin", "advanced", ()),
-    ("panel_shadow", "سایهٔ قاب و کارت", (
+    ("frame_shadow", "سایهٔ قاب و کارت", (
         ("off", "بدون سایه"),
         ("on", "با سایه"),
     ), "off", "advanced", ()),
@@ -122,13 +128,13 @@ INTEGERS = (
     ("height_tablet", "ارتفاع بوم در تبلت (درصد ارتفاع صفحه)", 40, 100, 75, "advanced"),
     ("height_mobile", "ارتفاع بوم در موبایل (درصد ارتفاع صفحه)", 40, 100, 70, "advanced"),
     ("scrim_strength", "شدت لایهٔ تیرگی (٪)", 0, 90, 45, "basic"),
-    ("panel_a_focal_x", "کانون تصویر اول — افقی (٪)", 0, 100, 50, "advanced"),
-    ("panel_a_focal_y", "کانون تصویر اول — عمودی (٪)", 0, 100, 50, "advanced"),
-    ("panel_b_focal_x", "کانون تصویر دوم — افقی (٪)", 0, 100, 50, "advanced"),
-    ("panel_b_focal_y", "کانون تصویر دوم — عمودی (٪)", 0, 100, 50, "advanced"),
-    ("panel_opacity", "شفافیت قاب پشت محتوا (٪)", 0, 90, 40, "advanced"),
-    ("panel_blur", "محو بودن پشت قاب شیشه‌ای (px)", 0, 30, 12, "advanced"),
-    ("panel_radius", "گردی گوشهٔ قاب و کارت (px)", 0, 40, 14, "advanced"),
+    ("bg_a_focal_x", "کانون تصویر اول — افقی (٪)", 0, 100, 50, "advanced"),
+    ("bg_a_focal_y", "کانون تصویر اول — عمودی (٪)", 0, 100, 50, "advanced"),
+    ("bg_b_focal_x", "کانون تصویر دوم — افقی (٪)", 0, 100, 50, "advanced"),
+    ("bg_b_focal_y", "کانون تصویر دوم — عمودی (٪)", 0, 100, 50, "advanced"),
+    ("frame_opacity", "شفافیت قاب پشت محتوا (٪)", 0, 90, 40, "advanced"),
+    ("frame_blur", "محو بودن پشت قاب شیشه‌ای (px)", 0, 30, 12, "advanced"),
+    ("frame_radius", "گردی گوشهٔ قاب و کارت (px)", 0, 40, 14, "advanced"),
     ("content_max_width", "حداکثر عرض محتوا (px)", 320, 1200, 720, "advanced"),
     ("category_limit", "تعداد دسته‌بندی در نوار", 2, 10, 6, "advanced"),
 )
@@ -139,7 +145,7 @@ TEXTS = (
     ("eyebrow", "عنوان کوچک (بالای تیتر)", 60),
     ("title", "تیتر اصلی", 90),
     ("subtitle", "زیرعنوان", 220),
-    ("cta_label", "متن دکمه", 40),
+    ("button_label", "متن دکمه", 40),
 )
 TEXT_MAX = {key: limit for key, _l, limit in TEXTS}
 
@@ -149,7 +155,7 @@ COLORS = (
     ("accent_color", "رنگ دکمه و تأکید"),
 )
 
-MEDIA_KEYS = ("panel_a_media_asset_id", "panel_b_media_asset_id")
+MEDIA_KEYS = ("bg_a_media_asset_id", "bg_b_media_asset_id")
 SLOT_HIDE_KEYS = ("hide_tablet", "hide_mobile")
 
 #: the stage's own keys (everything else — design / responsive / destination / motion … — travels through untouched)
@@ -274,7 +280,7 @@ def default_settings() -> dict:
     return {
         "v": SETTINGS_VERSION,
         "header_mode": "merged",
-        "panel_layout": "single",
+        "bg_layout": "single",
         "text_tone": "light",
         "content_align": "center",
         "content_valign": "middle",
@@ -284,7 +290,7 @@ def default_settings() -> dict:
         "eyebrow": "",
         "title": "تیتر اصلی فروشگاه",
         "subtitle": "",
-        "cta_label": "مشاهده محصولات",
+        "button_label": "مشاهده محصولات",
         "slots": _default_slot_rows(),
     }
 
@@ -311,11 +317,11 @@ def resolve_stage_view(raw) -> dict:
         view[key] = _color(source, key)
 
     attrs = [
-        ("header", view["header_mode"]), ("layout", view["panel_layout"]), ("fit", view["image_fit"]),
+        ("header", view["header_mode"]), ("layout", view["bg_layout"]), ("fit", view["image_fit"]),
         ("scrim", view["scrim_style"]), ("tone", view["text_tone"]), ("align", view["content_align"]),
-        ("valign", view["content_valign"]), ("panel", view["content_panel"]), ("cta", view["cta_style"]),
-        ("title", view["title_size"]), ("weight", view["title_weight"]), ("border", view["panel_border"]),
-        ("shadow", view["panel_shadow"]), ("mobile-dual", view["mobile_dual"]), ("card", view["card_position"]),
+        ("valign", view["content_valign"]), ("panel", view["content_frame"]), ("cta", view["button_style"]),
+        ("title", view["title_size"]), ("weight", view["title_weight"]), ("border", view["frame_border"]),
+        ("shadow", view["frame_shadow"]), ("mobile-dual", view["mobile_dual"]), ("card", view["card_position"]), ("split", view["bg_split"]),
     ]
     for key, name in (
         ("content_align_tablet", "align-t"), ("content_align_mobile", "align-m"), ("content_valign_mobile", "valign-m"),
@@ -328,10 +334,10 @@ def resolve_stage_view(raw) -> dict:
     css = [
         f"--hs-h:{view['height_desktop']}vh", f"--hs-h-t:{view['height_tablet']}vh", f"--hs-h-m:{view['height_mobile']}vh",
         f"--hs-scrim:{view['scrim_strength'] / 100:g}",
-        f"--hs-fx-a:{view['panel_a_focal_x']}%", f"--hs-fy-a:{view['panel_a_focal_y']}%",
-        f"--hs-fx-b:{view['panel_b_focal_x']}%", f"--hs-fy-b:{view['panel_b_focal_y']}%",
-        f"--hs-panel-op:{view['panel_opacity'] / 100:g}", f"--hs-panel-blur:{view['panel_blur']}px",
-        f"--hs-radius:{view['panel_radius']}px", f"--hs-maxw:{view['content_max_width']}px",
+        f"--hs-fx-a:{view['bg_a_focal_x']}%", f"--hs-fy-a:{view['bg_a_focal_y']}%",
+        f"--hs-fx-b:{view['bg_b_focal_x']}%", f"--hs-fy-b:{view['bg_b_focal_y']}%",
+        f"--hs-panel-op:{view['frame_opacity'] / 100:g}", f"--hs-panel-blur:{view['frame_blur']}px",
+        f"--hs-radius:{view['frame_radius']}px", f"--hs-maxw:{view['content_max_width']}px",
     ]
     if view["fallback_color"]:
         css.append(f"--hs-fallback:{semantic_color_css(view['fallback_color'])}")

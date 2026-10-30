@@ -14,7 +14,7 @@ DOM contract (the stylesheet block "hero stage" in storefront_builder.css is the
          aria-label="{{ SHOP_NAME|default:'فروشگاه' }}">
   <div class="hs-bg" aria-hidden="true">
     <div class="hs-panel hs-panel--a">{% if panel_urls.0 %}<img src="{{ panel_urls.0 }}" alt="" data-img-role="hero" loading="eager" decoding="async" fetchpriority="high">{% endif %}</div>
-    {% if st.panel_layout == "dual" %}<div class="hs-panel hs-panel--b">{% if panel_urls.1 %}<img src="{{ panel_urls.1 }}" alt="" data-img-role="hero" loading="eager" decoding="async">{% endif %}</div>{% endif %}
+    {% if st.bg_layout == "dual" %}<div class="hs-panel hs-panel--b">{% if panel_urls.1 %}<img src="{{ panel_urls.1 }}" alt="" data-img-role="hero" loading="eager" decoding="async">{% endif %}</div>{% endif %}
     <div class="hs-scrim"></div>
   </div>
   {% if header_embedded %}<div class="hs-header">{% include "storefront_builder/partials/hero_stage_header.html" %}</div>{% endif %}
@@ -24,9 +24,9 @@ DOM contract (the stylesheet block "hero stage" in storefront_builder.css is the
       {% if slot.key == "eyebrow" %}{% if st.eyebrow %}<p class="hs-slot hs-eyebrow" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>{{ st.eyebrow }}</p>{% endif %}
       {% elif slot.key == "title" %}{% if st.title %}<h1 class="hs-slot hs-title" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>{{ st.title }}</h1>{% endif %}
       {% elif slot.key == "subtitle" %}{% if st.subtitle %}<p class="hs-slot hs-subtitle" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>{{ st.subtitle }}</p>{% endif %}
-      {% elif slot.key == "cta" %}{% if st.cta_label %}
+      {% elif slot.key == "cta" %}{% if st.button_label %}
       <div class="hs-slot hs-cta-wrap" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>
-        <a class="hs-cta" href="{% if destination.url %}{{ destination.url }}{% else %}{% url 'catalog:product-list' %}{% endif %}" {% if destination.url and destination.open_new_tab %}target="_blank" rel="{{ destination.rel }}"{% endif %}>{{ st.cta_label }}</a>
+        <a class="hs-cta" href="{% if destination.url %}{{ destination.url }}{% else %}{% url 'catalog:product-list' %}{% endif %}" {% if destination.url and destination.open_new_tab %}target="_blank" rel="{{ destination.rel }}"{% endif %}>{{ st.button_label }}</a>
       </div>
       {% endif %}
       {% elif slot.key == "categories" %}

@@ -82,6 +82,8 @@ EXPECTED_KEYS = {
     "announcement_bar", "hero_banner", "image_slider", "single_banner",
     # V5 «عکس لینک‌دار» — one own picture + optional link (a deliberate, intentional addition; coverage: test_v5_linked_image_announcement.py)
     "linked_image",
+    # Hero Stage — header + hero in one composition (a deliberate, intentional addition; coverage: test_hero_stage.py)
+    "hero_stage",
     "multi_banner", "category_grid", "featured_products", "newest_products",
     "best_sellers", "discounted_products", "amazing_offers", "brand_carousel",
     "promo_cards", "rich_text", "image_text", "product_section", "trust_features",
@@ -1263,6 +1265,8 @@ class PageTypeAllowlistTests(TestCase):
         "cart_summary": frozenset({PAGE_TYPE_CART}),
         "fashion_lifestyle_hero": frozenset({PAGE_TYPE_HOME}),
         "catalog_product_wall": frozenset({PAGE_TYPE_HOME}),
+        # Hero Stage — the header-embedding stage is the first block of the HOME page only
+        "hero_stage": frozenset({PAGE_TYPE_HOME}),
     }
 
     def test_existing_section_types_default_to_all_pages(self):
@@ -1329,7 +1333,7 @@ class U1ABackwardsCompatibilityTests(TestCase):
     """Test #1, #13, #14, #15 — nothing about the existing registry moved."""
 
     def test_all_34_definitions_still_construct_and_are_gettable(self):
-        self.assertEqual(len(list_definitions()), 39)
+        self.assertEqual(len(list_definitions()), 40)
         for key in U1A_EXPECTED_SECTION_KEYS:
             definition = get_definition(key)
             self.assertEqual(definition.key, key)

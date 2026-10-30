@@ -3249,10 +3249,10 @@ HERO_STAGE_SCHEMA = SettingsSchema(fields=(
         SettingsField(key, label, "text", "basic", default="", max_length=limit)
         for key, label, limit in hero_stage.TEXTS
     ),
-    SettingsField("panel_a_media_asset_id", "تصویر اول (از کتابخانهٔ رسانه)", "media", "basic", default=None),
+    SettingsField("bg_a_media_asset_id", "تصویر اول (از کتابخانهٔ رسانه)", "media", "basic", default=None),
     SettingsField(
-        "panel_b_media_asset_id", "تصویر دوم (از کتابخانهٔ رسانه)", "media", "basic", default=None,
-        visible_when=(("panel_layout", ("dual",)),),
+        "bg_b_media_asset_id", "تصویر دوم (از کتابخانهٔ رسانه)", "media", "basic", default=None,
+        visible_when=(("bg_layout", ("dual",)),),
     ),
     *(SettingsField(key, label, "color", "advanced", default="") for key, label in hero_stage.COLORS),
     SettingsField(

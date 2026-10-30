@@ -48,7 +48,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .. import appearance_registry
+from .. import appearance_registry, hero_stage
 from ..layout_preset_registry import LayoutPresetDefinition
 from ..section_registry import sections_with_capability
 
@@ -92,6 +92,7 @@ _PRODUCT_GRID_KEYS = sections_with_capability("card")
 #: "unknown key degrades safely" convention (``render_service``).
 _ARCHETYPE_WEIGHTS = {
     "hero_banner": ("hero", 2.4),
+    "hero_stage": ("hero", 2.6),
     "multi_banner": ("banner_pair", 1.5),
     "image_text": ("image_text", 1.5),
     "story_rail": ("chip_row", 0.85),
@@ -169,6 +170,63 @@ def _footer_markup(preset: LayoutPresetDefinition, colors: dict, roles: dict, to
         cx = 14 + i * col_w
         parts.append(_line(cx, top_y + 7, col_w * 0.6, 3, footer_ink))
         parts.append(_line(cx, top_y + 13, col_w * 0.4, 2.5, footer_ink))
+    return "".join(parts)
+
+
+def _stage_block(entry, x: float, y: float, w: float, h: float, colors: dict, roles: dict, radius: float) -> str:
+    """Schematic of a ``hero_stage`` row from its real settings: the picture panels (one or two, with their real width split), the
+    scrim, the header marks inside the stage when the header is embedded, and the slot silhouettes (headline, button, category bar,
+    floating card) placed by the stage's own alignment. Pure function of the recipe — never a second renderer."""
+    view = hero_stage.resolve_stage_view(entry.settings or {})
+    embedded = view["header_mode"] != "independent"
+    fallback = colors["secondary"]
+    parts = []
+    if view["bg_layout"] == "dual":
+        first = {"equal": 0.5, "wide_first": 0.6, "wide_second": 0.4, "first_dominant": 0.7}[view["bg_split"]]
+        parts.append(_chip(x, y, w * first, h, 0, fallback))
+        parts.append(_chip(x + w * first, y, w * (1 - first), h, 0, colors["primary"]))
+        parts.append(f'<rect x="{x + w * first:.1f}" y="{y:.1f}" width="0.8" height="{h:.1f}" fill="rgba(255,255,255,.55)"/>')
+    else:
+        parts.append(_chip(x, y, w, h, 0, fallback))
+    parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="rgba(0,0,0,{view["scrim_strength"] / 220:.2f})"/>')
+    ink = "rgba(255,255,255,.92)" if view["text_tone"] == "light" else "rgba(20,17,15,.85)"
+    header_h = 0.0
+    if embedded:
+        header_h = _HEADER_H
+        top = y if view["header_mode"] == "merged" else y + 2
+        parts.append(_chip(x + w - 38, top + 8, 24, 8, 2, ink))
+        for i in range(4):
+            parts.append(_line(x + w - 70 - i * 24, top + 10, 16, 4, ink))
+        parts.append(_line(x + 16, top + 10, 14, 4, ink))
+        parts.append(_chip(x + 34, top + 8, 10, 8, 2, ink))
+        parts.append(f'<rect x="{x + 12:.1f}" y="{top + header_h - 1:.1f}" width="{w - 24:.1f}" height="0.6" fill="rgba(255,255,255,.4)"/>')
+    slots = [slot["key"] for slot in view["slots"]]
+    block_w = min(w * 0.42, 118)
+    align = view["content_align"]
+    cx = {"start": x + w - 14 - block_w, "center": x + (w - block_w) / 2, "end": x + 14}[align]
+    area_top, area_bottom = y + header_h + 6, y + h - 8
+    height = 4 + 8 * sum(1 for k in slots if k in ("eyebrow", "title", "subtitle", "cta")) + (16 if "categories" in slots else 0)
+    cy = {"top": area_top, "middle": area_top + (area_bottom - area_top - height) / 2, "bottom": area_bottom - height}[view["content_valign"]]
+    if view["content_frame"] != "none":
+        parts.append(f'<rect x="{cx - 8:.1f}" y="{cy - 6:.1f}" width="{block_w + 16:.1f}" height="{height + 12:.1f}" rx="{min(radius, 5):.1f}" fill="rgba(255,255,255,.14)" stroke="rgba(255,255,255,.4)" stroke-width=".6"/>')
+    ly = cy
+    for key in slots:
+        if key == "eyebrow":
+            parts.append(_line(cx + block_w * 0.3, ly, block_w * 0.4, 2.2, ink)); ly += 6
+        elif key == "title":
+            parts.append(_line(cx, ly, block_w, 5, ink)); ly += 9
+        elif key == "subtitle":
+            parts.append(_line(cx + block_w * 0.1, ly, block_w * 0.8, 2.6, ink)); ly += 7
+        elif key == "cta":
+            parts.append(_chip(cx + block_w * 0.3, ly, block_w * 0.4, 7, 2, colors["accent"] if view["button_style"] == "solid" else "rgba(255,255,255,.25)")); ly += 10
+        elif key == "categories":
+            parts.append(_chip(x + 14, area_bottom - 12, w - 28, 12, 6, "rgba(255,255,255,.22)", stroke="rgba(255,255,255,.4)"))
+            for i in range(5):
+                parts.append(_line(x + 22 + i * (w - 44) / 5, area_bottom - 8, (w - 44) / 6, 3, ink))
+        elif key == "product_card":
+            parts.append(_chip(x + 14, area_bottom - 30, 54, 30, min(radius, 4), "rgba(255,255,255,.2)", stroke="rgba(255,255,255,.45)"))
+            parts.append(_chip(x + 18, area_bottom - 26, 18, 22, 2, "rgba(255,255,255,.5)"))
+            parts.append(_line(x + 40, area_bottom - 22, 24, 3, ink))
     return "".join(parts)
 
 
@@ -284,18 +342,30 @@ def build_template_thumbnail_svg(preset: LayoutPresetDefinition) -> str:
     footer_markup = _footer_markup(preset, colors, roles, body_bottom)
 
     home_entries = preset.pages.get("home", ())[:_MAX_DISPLAYED_SECTIONS]
+    # Hero Stage — a stage that embeds the header replaces the header band: the stage is drawn full-bleed from the very top.
+    stage_entry = home_entries[0] if home_entries and home_entries[0].section_key == hero_stage.SECTION_KEY else None
+    embedded = stage_entry is not None and hero_stage.header_mode_of(stage_entry.settings or {}) != "independent"
+    body_parts = []
+    pad_x = 12.0
+    row_w = _VIEWBOX_W - pad_x * 2
+    if embedded:
+        header_markup, body_top = "", 0.0
+        stage_h = (body_bottom - 0.0) * 0.52
+        body_parts.append(_stage_block(stage_entry, 0.0, 0.0, float(_VIEWBOX_W), stage_h, colors, roles, radius))
+        body_top = stage_h
+        home_entries = home_entries[1:]
     weighted = [(*_archetype_for(entry.section_key), entry.section_key) for entry in home_entries]
     total_weight = sum(w for _, w, _ in weighted) or 1.0
     available_h = max(0.0, body_bottom - body_top - gap * (len(weighted) + 1))
 
-    body_parts = []
     y = body_top + gap
-    pad_x = 12.0
-    row_w = _VIEWBOX_W - pad_x * 2
-    for archetype, weight, _section_key in weighted:
+    for index, (archetype, weight, _section_key) in enumerate(weighted):
         row_h = available_h * (weight / total_weight)
         if row_h > 2:
-            body_parts.append(_section_row(archetype, pad_x, y, row_w, row_h, colors, radius))
+            if _section_key == hero_stage.SECTION_KEY:
+                body_parts.append(_stage_block(home_entries[index], pad_x, y, row_w, row_h, colors, roles, radius))
+            else:
+                body_parts.append(_section_row(archetype, pad_x, y, row_w, row_h, colors, radius))
         y += row_h + gap
 
     svg = (

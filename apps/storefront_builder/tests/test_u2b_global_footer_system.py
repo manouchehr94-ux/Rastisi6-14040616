@@ -415,7 +415,7 @@ class U1SectionRegistryUntouchedTests(TestCase):
     """Test Q — U1's SECTION_REGISTRY is completely untouched by U2B."""
 
     def test_section_registry_still_has_exactly_34_keys(self):
-        self.assertEqual(len(SECTION_REGISTRY), 39)
+        self.assertEqual(len(SECTION_REGISTRY), 40)   # Hero Stage: + hero_stage
 
 
 class U2AHeaderBehaviorIntactTests(TestCase):

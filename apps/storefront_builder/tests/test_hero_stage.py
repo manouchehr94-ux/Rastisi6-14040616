@@ -33,18 +33,18 @@ class VocabularyTests(SimpleTestCase):
 
     def test_cleaner_coerces_never_raises_and_keeps_foreign_keys(self):
         cleaned = hero_stage.clean_hero_stage_settings({
-            "header_mode": "evil", "panel_layout": "dual", "scrim_strength": "999", "height_desktop": "-4",
-            "title": "x" * 500, "design": {"radius": 4}, "responsive": {"hide_on_mobile": False}, "panel_a_media_asset_id": "abc",
+            "header_mode": "evil", "bg_layout": "dual", "scrim_strength": "999", "height_desktop": "-4",
+            "title": "x" * 500, "design": {"radius": 4}, "responsive": {"hide_on_mobile": False}, "bg_a_media_asset_id": "abc",
             "slots": [{"key": "title"}, {"key": "title"}, {"key": "nope"}, "cta", 7],
         })
         self.assertEqual(cleaned["header_mode"], "merged")           # unknown choice -> default
-        self.assertEqual(cleaned["panel_layout"], "dual")
+        self.assertEqual(cleaned["bg_layout"], "dual")
         self.assertEqual(cleaned["scrim_strength"], 90)              # clamped
         self.assertEqual(cleaned["height_desktop"], 40)
         self.assertEqual(len(cleaned["title"]), hero_stage.TEXT_MAX["title"])
         self.assertEqual(cleaned["design"], {"radius": 4})            # untouched
         self.assertEqual(cleaned["responsive"], {"hide_on_mobile": False})
-        self.assertNotIn("panel_a_media_asset_id", cleaned)           # not a positive integer -> dropped
+        self.assertNotIn("bg_a_media_asset_id", cleaned)           # not a positive integer -> dropped
         self.assertEqual([slot["key"] for slot in cleaned["slots"]], ["title", "cta"])   # de-duplicated, unknown dropped
         self.assertEqual(cleaned["v"], hero_stage.SETTINGS_VERSION)
 
@@ -117,7 +117,7 @@ class StageRenderTests(TestCase):
 
     # ---- the stage itself -------------------------------------------------------------------------------------------------
     def test_merged_stage_renders_the_single_real_header_inside_itself(self):
-        self._stage(title="تیتر آزمایشی", cta_label="بخرید")
+        self._stage(title="تیتر آزمایشی", button_label="بخرید")
         self._publish()
         body = self._live()
         stage = self._stage_html(body)
@@ -185,7 +185,7 @@ class StageRenderTests(TestCase):
 
     def test_ordered_slots_follow_the_merchant_order_and_hidden_flags(self):
         self._stage(
-            eyebrow="کوچک", title="بزرگ", subtitle="توضیح", cta_label="برو",
+            eyebrow="کوچک", title="بزرگ", subtitle="توضیح", button_label="برو",
             slots=[{"key": "cta"}, {"key": "title", "hide_mobile": True}, {"key": "eyebrow"}],
         )
         self._publish()
@@ -221,7 +221,7 @@ class StageRenderTests(TestCase):
             self.assertIn("hs-card", stage)
 
     def test_cta_without_a_destination_points_to_the_real_catalog(self):
-        self._stage(cta_label="مشاهده")
+        self._stage(button_label="مشاهده")
         self._publish()
         stage = self._stage_html(self._live())
         self.assertIn(f'href="{reverse("catalog:product-list")}"', stage)
@@ -233,13 +233,13 @@ class StageRenderTests(TestCase):
         asset = MediaAsset.objects.filter(store=other).first() if other else None
         if asset is None:
             self.skipTest("no foreign media asset available in the seed data")
-        self._stage(panel_a_media_asset_id=asset.pk)
+        self._stage(bg_a_media_asset_id=asset.pk)
         self._publish()
         stage = self._stage_html(self._live())
         self.assertNotIn("<img", stage.split('class="hs-header"')[0].split('class="hs-bg"')[1] if 'class="hs-bg"' in stage else "")
 
     def test_a_stage_in_a_page_without_content_still_renders_the_header(self):
-        self._stage(title="", subtitle="", cta_label="", eyebrow="")
+        self._stage(title="", subtitle="", button_label="", eyebrow="")
         self._publish()
         body = self._live()
         self.assertEqual(body.count("<header"), 1)
