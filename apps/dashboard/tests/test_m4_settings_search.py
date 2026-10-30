@@ -31,7 +31,8 @@ class _FinanceBase(TestCase):
 class SettingsSearchLabelTests(_FinanceBase):
     def test_settings_search_states_its_scope_and_points_to_the_global_search(self):
         html = self._html()
-        self.assertIn('class="settings-search-label"', html)
+        self.assertIn('settings-search-label', html)
+        self.assertIn('class="settings-search-scope"', html)
         self.assertIn("فقط صفحه‌های تنظیمات", html)
         self.assertIn("Ctrl+K", html)
         self.assertIn('aria-describedby="settingsSearchHint"', html)

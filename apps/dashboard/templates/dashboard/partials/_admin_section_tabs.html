@@ -19,8 +19,12 @@
 {% endif %}
 {% if settings_index %}
 <div class="settings-search" data-au-search>
-  <label class="settings-search-label" for="settingsSearch">جست‌وجو در تنظیمات <span class="settings-search-scope">فقط صفحه‌های تنظیمات</span></label>
-  <input id="settingsSearch" class="au-input" type="search" autocomplete="off" placeholder="مثلاً دامنه، مالیات، پیامک" aria-controls="settingsSearchResults" aria-describedby="settingsSearchHint" data-au-search-input>
+  <label class="settings-search-label au-sr" for="settingsSearch">جست‌وجو در تنظیمات (فقط صفحه‌های تنظیمات)</label>
+  <div class="settings-search-row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="settingsSearch" class="au-input" type="search" autocomplete="off" placeholder="جست‌وجو در تنظیمات… مثلاً دامنه، مالیات، پیامک" aria-controls="settingsSearchResults" aria-describedby="settingsSearchHint" data-au-search-input>
+    <span class="settings-search-scope" aria-hidden="true">فقط صفحه‌های تنظیمات</span>
+  </div>
   <ul id="settingsSearchResults" class="settings-search-results" role="listbox" hidden data-au-search-results>
     {% for item in settings_index %}<li role="option" hidden data-au-search-item data-keywords="{{ item.title }} {{ item.path }} {{ item.keywords }}"><a href="{{ item.href }}" data-palette-skip><b>{{ item.title }}</b><span>{{ item.path }}</span></a></li>{% endfor %}
     <li class="settings-search-empty" hidden data-au-search-empty>نتیجه‌ای پیدا نشد.</li>

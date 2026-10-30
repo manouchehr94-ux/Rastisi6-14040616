@@ -1,15 +1,28 @@
 {% load persian %}
 {# «دامنه و آدرس فروشگاه»: خلاصه‌ی فقط‌خواندنی؛ مدیریتِ واقعیِ دامنه در پرتالِ مالک است (DOMAIN_MANAGE + Step-Up + Audit). #}
 <div class="au-page" data-testid="domain-settings">
-  <div class="au-intro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>
-    <p>اینجا نشانیِ فعلیِ فروشگاه و وضعیتِ دامنه‌ی اختصاصی را می‌بینید. افزودن و فعال‌سازیِ دامنه در «پرتالِ مالک» انجام می‌شود تا هر تغییرِ حساس با تأییدِ مالک و ثبتِ سابقه همراه باشد.</p></div>
+  <div class="au-note au-note--{% if domain_overview.summary.tone == 'ok' %}ok{% elif domain_overview.summary.tone == 'warn' %}warn{% else %}info{% endif %} domain-summary" data-testid="domain-status-summary" data-summary="{{ domain_overview.summary.key }}" role="status">
+    <b>{{ domain_overview.summary.title }}</b>
+    <div>{{ domain_overview.summary.text }}</div>
+  </div>
+
+  <div class="au-card domain-who" data-testid="domain-who-does-what">
+    <div class="au-card__head"><h2>🧭 چه کاری را کجا انجام می‌دهم؟</h2></div>
+    <div class="au-card__body">
+      <ul class="domain-who__list">
+        <li><b>در همین صفحه:</b> فقط وضعیتِ آدرس‌ها را می‌بینید؛ چیزی تغییر نمی‌کند.</li>
+        <li><b>افزودن، تأیید و فعال‌سازیِ دامنه:</b> در «پرتالِ مالکِ راستی‌سی» (فقط مالکِ فروشگاه) انجام می‌شود؛ هر تغییرِ حساس با تأییدِ دوباره و ثبتِ سابقه همراه است.</li>
+        <li><b>رکوردهای DNS (TXT / A / CNAME):</b> در پنلِ شرکتی که دامنه را از آن خریده‌اید (ثبت‌کنندهٔ دامنه) ثبت می‌شوند؛ راستی‌سی مقدارهای لازم را در پرتال نشان می‌دهد.</li>
+      </ul>
+    </div>
+  </div>
 
   <div class="au-card">
     <div class="au-card__head"><h2>🌐 نشانیِ فعلیِ فروشگاه</h2></div>
     <div class="au-card__body">
       {% if domain_overview.storefront_url %}
       {% if domain_overview.storefront_is_local %}
-      <div class="au-note au-note--warn" data-testid="storefront-local-note">این نشانی مخصوص محیط آزمایشی یا توسعه است و مشتریانِ واقعی نمی‌توانند با آن وارد فروشگاه شوند. پس از اتصال و فعال‌سازیِ دامنه‌ی اصلی، نشانیِ عمومیِ واقعی همین‌جا نمایش داده می‌شود.</div>
+      <div class="au-note au-note--warn" data-testid="storefront-local-note">همین نشانی فقط برای آزمایش است؛ مشتریانِ واقعی با آن وارد نمی‌شوند.</div>
       <div class="au-field"><span class="au-label">نشانیِ فعلیِ محیط آزمایشی</span>
       {% else %}
       <div class="au-field"><span class="au-label">آدرسی که مشتریان می‌بینند</span>
@@ -24,7 +37,7 @@
   </div>
 
   <div class="au-card">
-    <div class="au-card__head"><h2>🔗 دامنه‌ی اختصاصی</h2>
+    <div class="au-card__head"><h2>🔗 دامنه‌ی اختصاصی <small class="au-hint">اختیاری — آدرسِ خودتان مثل shop.example.com</small></h2>
       {% if domain_overview.custom_domains %}<span class="au-sub">{{ domain_overview.custom_domains|length|fa_number }} دامنه</span>{% endif %}</div>
     <div class="au-card__body">
       {% for d in domain_overview.custom_domains %}
@@ -33,6 +46,9 @@
         {% if d.is_primary %}فعال و آدرس اصلیِ فروشگاه{% else %}هنوز فعال نشده{% endif %}
         <div class="au-hint">مالکیت: {{ d.verification }} · اتصال DNS: {{ d.routing }} · HTTPS: {{ d.tls }}</div>
         {% if d.next_step %}<div class="au-hint"><b>قدم بعدی:</b> {{ d.next_step }}{% if d.next_hint %} — {{ d.next_hint }}{% endif %}</div>{% endif %}
+        <ol class="domain-steps" data-testid="domain-steps" aria-label="مرحله‌های اتصالِ این دامنه">
+          {% for step in d.steps %}<li class="domain-step domain-step--{{ step.state }}"><span class="domain-step__mark" aria-hidden="true"></span><span>{{ step.title }}</span><small>{{ step.state_label }}</small></li>{% endfor %}
+        </ol>
       </div>
       {% empty %}
       <p class="au-hint" style="margin:0">هنوز دامنه‌ی اختصاصی‌ای اضافه نشده است. اگر دامنه‌ی خودتان را دارید (مثل <bdi dir="ltr">shop.example.com</bdi>)، می‌توانید آن را به فروشگاه وصل کنید.</p>
@@ -40,10 +56,13 @@
       {% if not domain_overview.targets_configured %}
       <div class="au-note au-note--warn" data-testid="targets-missing">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسط مدیر زیرساختِ راستی‌سی تنظیم نشده است؛ تا آن زمان مرحله‌ی اتصال و فعال‌سازی ممکن نیست.</div>
       {% endif %}
-      <ol class="au-hint" style="margin:0;padding-inline-start:20px;line-height:2">
+      <details class="domain-guide" data-testid="domain-six-steps"{% if not domain_overview.custom_domains %} open{% endif %}>
+        <summary>راهنمای شش‌مرحله‌ایِ اتصالِ دامنه</summary>
+      <ol class="au-hint" style="margin:8px 0 0;padding-inline-start:20px;line-height:2">
         <li>دامنه را تهیه کنید و به پنل DNS آن دسترسی داشته باشید.</li><li>دامنه را در پرتال ثبت کنید.</li><li>رکورد TXT را برای اثبات مالکیت اضافه کنید.</li>
         <li>رکورد A یا CNAME را برای اتصال ثبت کنید.</li><li>اتصال DNS و HTTPS را بررسی کنید.</li><li>با تأیید مالک، دامنه را فعال کنید.</li>
       </ol>
+      </details>
     </div>
     <div class="au-card__foot">
       {% if domain_overview.can_manage %}

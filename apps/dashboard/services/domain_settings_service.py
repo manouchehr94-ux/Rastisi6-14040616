@@ -16,6 +16,7 @@ from apps.stores.services import domain_guide_service as guide
 from apps.stores.services import domain_verification_service as dvs
 
 _TONE = {"active": "ok", "pending": "warn", "blocked": "danger"}
+_STEP_LABEL = {guide.DONE: "انجام شد", guide.CURRENT: "مرحلهٔ فعلی", guide.TODO: "بعداً", guide.BLOCKED: "نیازمند رفع مشکل"}
 
 
 def portal_domains_url(request, store) -> str:
@@ -28,6 +29,30 @@ def _is_local_address(url: str) -> bool:
     """True for a development/QA address (``*.localhost``, ``localhost``, loopback) — never a public address customers can reach."""
     host = (urlsplit(url or "").hostname or "").lower()
     return host == "localhost" or host.endswith(".localhost") or host in {"127.0.0.1", "::1", "0.0.0.0"}
+
+
+def _status_summary(*, storefront_url: str, is_local: bool, platform_domains: list, custom_rows: list) -> dict:
+    """ONE plain-language sentence about where the shop is reachable right now and what (if anything) is left — so a non-technical seller
+    does not have to read the tables below to learn it. Pure presentation of data the page already has."""
+    primary_custom = next((row for row in custom_rows if row["is_primary"]), None)
+    pending_custom = next((row for row in custom_rows if not row["is_primary"]), None)
+    public = next((d["hostname"] for d in platform_domains if d["is_primary"]), "") or (platform_domains[0]["hostname"] if platform_domains else "")
+    if is_local:
+        return {"tone": "warn", "key": "test_environment", "title": "این پنل در محیط آزمایشی/توسعه باز شده است",
+                "text": "آدرسی که در مرورگر می‌بینید (مثل localhost) فقط برای آزمایش است و مشتریان واقعی با آن وارد نمی‌شوند. "
+                        "آدرس عمومیِ فروشگاه شما در محیط واقعی پایین‌تر نوشته شده است." + (f" آدرس راستی‌سی: {public}" if public else "")}
+    if primary_custom:
+        return {"tone": "ok", "key": "custom_active", "title": f"فروشگاه شما با دامنهٔ اختصاصیِ {primary_custom['hostname']} آنلاین است",
+                "text": "مشتریان با همین دامنه وارد می‌شوند. آدرس رایگانِ راستی‌سی هم همچنان کار می‌کند."}
+    if pending_custom:
+        step = pending_custom["next_step"] or "بررسی وضعیتِ اتصال"
+        return {"tone": "warn", "key": "custom_in_progress", "title": f"اتصالِ دامنهٔ {pending_custom['hostname']} هنوز کامل نشده",
+                "text": f"تا آن زمان فروشگاه شما با آدرس راستی‌سی کار می‌کند و چیزی از دسترس خارج نمی‌شود. قدمِ بعدی: {step}."}
+    if storefront_url:
+        return {"tone": "info", "key": "platform_only", "title": "فروشگاه شما با آدرسِ رایگانِ راستی‌سی آنلاین است",
+                "text": "برای حرفه‌ای‌تر شدن می‌توانید یک دامنهٔ اختصاصی (مثل shop.example.com) وصل کنید؛ این کار اختیاری است و می‌توانید هر زمان انجام دهید."}
+    return {"tone": "warn", "key": "no_public_address", "title": "هنوز آدرسِ عمومیِ قابل‌استفاده‌ای ثبت نشده",
+            "text": "تا ثبتِ آدرس، مشتریان نمی‌توانند فروشگاه را ببینند. با پشتیبانیِ راستی‌سی تماس بگیرید."}
 
 
 def domain_overview(store, request, *, can_manage: bool) -> dict:
@@ -47,15 +72,18 @@ def domain_overview(store, request, *, can_manage: bool) -> dict:
             "tone": _TONE.get(overall, "warn"),
             "next_step": current["title"] if current else "",
             "next_hint": current["hint"] if current else "",
+            "steps": [{"title": step["title"], "state": step["state"], "state_label": _STEP_LABEL.get(step["state"], "")} for step in steps],
         })
     platform_domains = [
         {"hostname": d.hostname, "kind": d.get_domain_type_display(), "is_primary": d.is_primary}
         for d in store.domains.exclude(domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN).filter(retired_at__isnull=True).order_by("-is_primary", "hostname")
     ]
     storefront_url = resolve_storefront_url_for_store(store, request)
+    is_local = _is_local_address(storefront_url)
     return {
+        "summary": _status_summary(storefront_url=storefront_url, is_local=is_local, platform_domains=platform_domains, custom_rows=custom_rows),
         "storefront_url": storefront_url,
-        "storefront_is_local": _is_local_address(storefront_url),
+        "storefront_is_local": is_local,
         "platform_domains": platform_domains,
         "custom_domains": custom_rows,
         "targets_configured": connection["configured"],

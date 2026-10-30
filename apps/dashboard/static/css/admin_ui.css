@@ -194,9 +194,12 @@
 .admin-subtab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .settings-search { position: relative; margin: 0 32px 18px; max-width: min(520px, calc(100% - 64px)); }
 .settings-search .au-input { box-sizing: border-box; max-width: 100%; }
-.settings-search-label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 13px; font-weight: 800; color: var(--text); }
-.settings-search-scope { font-size: 11.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); }
+.settings-search-row { position: relative; display: flex; align-items: center; }
+.settings-search-row svg { position: absolute; inset-inline-start: 14px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
+.settings-search-row .au-input { padding-inline-start: 42px; padding-inline-end: 150px; }
+.settings-search-scope { position: absolute; inset-inline-end: 10px; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); pointer-events: none; white-space: nowrap; }
 .settings-search-hint { margin: 6px 2px 0; }
+@media (max-width: 640px) { .settings-search-row .au-input { padding-inline-end: 14px; } .settings-search-scope { display: none; } }
 .settings-search-results { list-style: none; margin: 6px 0 0; padding: 6px; position: absolute; inset-inline: 0; z-index: 30; background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); max-height: 320px; overflow: auto; }
 .settings-search-results[hidden], .settings-search-results li[hidden] { display: none; }
 .settings-search-results a { display: grid; gap: 2px; padding: 9px 12px; border-radius: 10px; text-decoration: none; color: var(--text); }
@@ -207,3 +210,19 @@
 @media (max-width: 640px) { .admin-subtabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; margin-inline: 14px; } .admin-subtab { white-space: nowrap; } .settings-search { margin-inline: 14px; max-width: calc(100% - 28px); } }
 
 .au-page-title{margin:0 0 12px;font-size:18px;font-weight:800;color:var(--text)}
+
+/* ---- domain page: status summary, who-does-what, per-domain step checklist ---- */
+.domain-summary { margin: 0 0 16px; display: grid; gap: 4px; font-size: 14px; line-height: 1.9; }
+.domain-summary b { font-size: 15px; }
+.au-note--info { background: var(--primary-soft); border-color: transparent; color: var(--text); }
+.domain-who__list { margin: 0; padding-inline-start: 20px; display: grid; gap: 8px; font-size: 13.5px; line-height: 1.9; }
+.domain-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.domain-step { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.domain-step small { margin-inline-start: auto; color: var(--muted); font-size: 12px; }
+.domain-step__mark { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); background: var(--card); }
+.domain-step--done .domain-step__mark { background: var(--green); border-color: var(--green); }
+.domain-step--current .domain-step__mark { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.domain-step--blocked .domain-step__mark { border-color: var(--red); background: var(--red); }
+.domain-step--done small { color: var(--green-ink); }
+.domain-guide { margin: 0; }
+.domain-guide summary { cursor: pointer; font-weight: 800; min-height: 40px; display: flex; align-items: center; }
