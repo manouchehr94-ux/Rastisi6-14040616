@@ -23,7 +23,7 @@ from apps.catalog.services.promotion_service import active_discount_q, earliest_
 from apps.content.models import HeroSlide, PromotionalBanner
 from apps.orders.services import best_seller_service
 
-from .. import appearance_registry, decorative_strip, design_block, pdp_settings, semantic_colors
+from .. import appearance_registry, decorative_strip, design_block, hero_stage, pdp_settings, semantic_colors
 from ..section_registry import (
     UnknownSectionTypeError,
     default_brand_carousel_settings,
@@ -585,6 +585,81 @@ def _image_text_context(store, section):
     return context
 
 
+def _hero_stage_context(store, section):
+    """The header + hero stage's view model (``hero_stage.py`` owns the vocabulary). Everything Store-specific is resolved HERE,
+    server-side and fail-closed — never in the template: panel pictures through the Store-scoped media resolver (a missing / foreign
+    asset yields no picture, never a broken image), the CTA through the standard destination resolver, categories and the floating
+    product through the Store's own catalog queries. Nothing is invented: an empty catalog simply renders no category bar / no card."""
+    from apps.content.services import resolve_background_media_url
+
+    raw = section.settings or {}
+    view = hero_stage.resolve_stage_view(raw)
+    context = dict(_resolved_destination_context(store, section))
+    context["stage"] = view
+    panel_urls = []
+    for key in hero_stage.MEDIA_KEYS:
+        media_id = raw.get(key)
+        panel_urls.append(
+            (resolve_background_media_url(store, {"mode": "image", "media_asset_id": media_id}) or "") if media_id else ""
+        )
+    context["panel_urls"] = panel_urls
+    slot_keys = {slot["key"] for slot in view["slots"]}
+    context["stage_categories"] = (
+        category_selection.select_categories(store, "top_level")[: view["category_limit"]] if "categories" in slot_keys else []
+    )
+    product = None
+    if "product_card" in slot_keys:
+        products, _view_all = section_data_service.resolve_products(
+            store, {"data_source": view["product_source"], "item_limit": 1}, availability=_availability_mode(section),
+        )
+        product = products[0] if products else None
+    context["stage_product"] = product
+    return context
+
+
+def _first_top_level_item(items, use_container_layout, render_containers):
+    """The render item a visitor sees FIRST on the page, but only when it is a stand-alone full-width block: with Container/Cell layout
+    (the primary composition source the Studio and every Ready Template produce) it is the first Block of the first non-empty top-level,
+    single-Cell, un-framed Container; with the legacy row layout it is the first item that is not part of a multi-item row."""
+    if use_container_layout:
+        for composition in render_containers or ():
+            if not composition.get("has_placement"):
+                continue                       # a truly empty Container shows nothing (public skips it too)
+            container = composition["container"]
+            if container.parent_cell_id is not None or (composition.get("group") or {}).get("framed"):
+                return None
+            cells = composition.get("cells") or []
+            if len(cells) != 1 or cells[0].get("group") or not cells[0].get("items"):
+                return None
+            return cells[0]["items"][0]
+        return None
+    if not items:
+        return None
+    first = items[0]
+    section = first.get("section")
+    return None if section is None or getattr(section, "row_key", "") else first
+
+
+def header_embedded_for(items, *, use_container_layout: bool = False, render_containers=None) -> bool:
+    """Is the Store's global header rendered INSIDE the page's first section (the ``hero_stage``) instead of by the shell?
+
+    True only when the first top-level block of the page is a ``hero_stage`` whose ``header_mode`` is ``merged`` or ``overlay`` and that
+    is visible on every device. Anything else — another section first, a multi-cell row, a nested Group, a stage hidden on some device
+    (the header, and with it the cart, must never become unreachable), any other page type — keeps the shell header, so the decision
+    degrades safely to today's behaviour. ONE function for Preview, Draft preview, gallery preview and the live page."""
+    first = _first_top_level_item(items, use_container_layout, render_containers)
+    if first is None:
+        return False
+    section = first.get("section")
+    if section is None or section.section_key != hero_stage.SECTION_KEY:
+        return False
+    settings = first.get("context", {}).get("settings") or section.settings or {}
+    if hero_stage.header_mode_of(settings) == "independent":
+        return False
+    responsive = settings.get("responsive") or {}
+    return not any(responsive.get(flag) for flag in ("hide_on_desktop", "hide_on_tablet", "hide_on_mobile"))
+
+
 def _resolved_destination_context(store, section):
     """بلوکِ ``destination`` این section (اگر داشته باشد) را به URL/تب‌جدید
     واقعی حل می‌کند — برایِ انواعی که در ``destination`` capability
@@ -631,7 +706,7 @@ def _product_section_context(store, section):
 #: تکرارشده (duplicable) با تنظیماتِ متفاوت (مثلاً دو کالکشنِ متفاوت)
 #: محتوایِ یکسان (نمونه‌ی اول) نشان می‌دهند.
 PER_INSTANCE_SECTION_KEYS = {
-    "trust_features", "decorative_strip", "product_section", "image_text", "hero_banner", "image_slider", "single_banner", "linked_image", "multi_banner",
+    "trust_features", "decorative_strip", "product_section", "image_text", "hero_stage", "hero_banner", "image_slider", "single_banner", "linked_image", "multi_banner",
     "category_grid", "brand_carousel", "collection_tiles", "quick_links", "video_section", "story_rail",
     #: Part 2D — same reason as ``product_section``/``category_grid``
     #: above: this builder's output depends on the section's own
@@ -830,6 +905,7 @@ _CONTEXT_BUILDERS = {
     "promo_cards": _category_context_for_promo_cards,
     "rich_text": _static_context,
     "image_text": _image_text_context,
+    "hero_stage": _hero_stage_context,
     "blog_posts": _blog_posts_context,
     "product_section": _product_section_context,
     "catalog_product_wall": _catalog_product_wall_context,

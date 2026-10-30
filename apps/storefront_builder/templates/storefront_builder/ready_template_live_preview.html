@@ -26,7 +26,7 @@
   <span>قالب: <strong>{{ preset.label_fa }}</strong></span>
   <a href="{% url 'dashboard:storefront-builder-templates' %}">← بازگشت به گالریِ قالب‌ها در Design Studio</a>
 </div>
-{% include header_variant_template with header_config=header_config is_live_storefront=False is_builder_preview=True %}
+{% if not header_embedded %}{% include header_variant_template with header_config=header_config is_live_storefront=False is_builder_preview=True %}{% endif %}
 {% endblock %}
 
 {% block content %}

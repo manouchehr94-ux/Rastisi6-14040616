@@ -8,7 +8,7 @@ in the content block; commerce content is never rewritten by the shell.
 {% endcomment %}
 
 {% block header %}
-{% include header_variant_template with header_config=layout_header_config is_live_storefront=True is_builder_preview=False %}
+{% if not header_embedded %}{% include header_variant_template with header_config=layout_header_config is_live_storefront=True is_builder_preview=False %}{% endif %}
 {% endblock %}
 
 {% block footer %}

@@ -33,6 +33,7 @@ from .services.render_service import (
     build_container_render_items,
     build_page_render_items,
     group_items_into_rows,
+    header_embedded_for,
     resolved_store_appearance_for_request,
     store_appearance_global_renderer_template,
 )
@@ -248,6 +249,7 @@ def storefront_preview(request):
     mobile_bottom_nav_template = store_appearance_global_renderer_template(
         store_appearance, "bottom_nav", footer_config,
     )
+    render_containers = build_container_render_items(page, items, include_empty=True)
     return render(request, "storefront_builder/preview.html", {
         "store": store, "version": draft, "page": page, "page_type": page_type,
         "header_variant_template": header_variant_template,
@@ -255,10 +257,14 @@ def storefront_preview(request):
         "mobile_bottom_nav_template": mobile_bottom_nav_template,
         "store_appearance": store_appearance,
         "render_items": items,
+        # Hero Stage — the same decision the live page uses (render_service.header_embedded_for)
+        "header_embedded": header_embedded_for(
+            items, use_container_layout=use_container_layout, render_containers=render_containers,
+        ),
         # Legacy rows remain as a compatibility fallback; Container/Cell is now
         # the primary Builder composition source. Empty cells are visible only here.
         "rows": group_items_into_rows(items),
-        "render_containers": build_container_render_items(page, items, include_empty=True),
+        "render_containers": render_containers,
         "use_container_layout": use_container_layout,
         "is_preview": True,
         "top_level_categories": top_level_categories,
@@ -581,6 +587,7 @@ def storefront_template_live_preview(request, key):
         "mobile_bottom_nav_template": mobile_bottom_nav_template,
         "store_appearance": candidate.store_appearance,
         "rows": rows,
+        "header_embedded": header_embedded_for(items),
         "nav_categories": nav_categories,
         "preview_uses_merchant_data": preview_uses_merchant_data,
     })

@@ -21,7 +21,7 @@ import dataclasses
 import re
 from typing import Callable
 
-from . import design_block, icon_registry, pdp_settings
+from . import design_block, hero_stage, icon_registry, pdp_settings
 from .services.category_selection import CATEGORY_SOURCE_MODES
 from . import resource_source as resource_source_module
 from .settings_schema import (
@@ -3236,6 +3236,36 @@ PROMO_CARDS_SCHEMA = SettingsSchema(fields=(
 # ---------------------------------------------------------------- V5 — کنترل‌های طراحی صفحهٔ محصول (بستهٔ ۱)
 # هر دو بخش یک Sectionِ یکپارچه می‌مانند؛ فقط «چینش و ظاهر» داده‌های واقعی را تنظیم می‌کنند. جدولِ گزینه‌ها، مقدارِ پیش‌فرض
 # (= رفتارِ پیش از این کنترل‌ها) و پاک‌سازی در ``pdp_settings`` است؛ اینجا فقط به schema/Inspector تبدیل می‌شود.
+HERO_STAGE_SCHEMA = SettingsSchema(fields=(
+    *(
+        SettingsField(key, label, "choice", group, default=default, choices=choices, visible_when=visible_when)
+        for key, label, choices, default, group, visible_when in hero_stage.CHOICES
+    ),
+    *(
+        SettingsField(key, label, "integer", group, default=default, min_value=low, max_value=high)
+        for key, label, low, high, default, group in hero_stage.INTEGERS
+    ),
+    *(
+        SettingsField(key, label, "text", "basic", default="", max_length=limit)
+        for key, label, limit in hero_stage.TEXTS
+    ),
+    SettingsField("panel_a_media_asset_id", "تصویر اول (از کتابخانهٔ رسانه)", "media", "basic", default=None),
+    SettingsField(
+        "panel_b_media_asset_id", "تصویر دوم (از کتابخانهٔ رسانه)", "media", "basic", default=None,
+        visible_when=(("panel_layout", ("dual",)),),
+    ),
+    *(SettingsField(key, label, "color", "advanced", default="") for key, label in hero_stage.COLORS),
+    SettingsField(
+        "slots", "ترتیب و نمایش اجزای هیرو (از بالا به پایین)", "repeater", "basic",
+        default=[], min_value=0, max_value=hero_stage.MAX_SLOTS,
+        repeater_item_fields=(
+            SettingsField("key", "جزء", "choice", "basic", default="title", choices=hero_stage.SLOT_LABELS),
+            SettingsField("hide_tablet", "پنهان در تبلت", "boolean", "basic", default=False),
+            SettingsField("hide_mobile", "پنهان در موبایل", "boolean", "basic", default=False),
+        ),
+    ),
+))
+
 PRODUCT_MAIN_SCHEMA = SettingsSchema(fields=(
     *(
         SettingsField(key, label, "choice", "basic", default=default, choices=choices)
@@ -3500,6 +3530,18 @@ _BASE_SECTION_REGISTRY: dict[str, SectionDefinition] = {
         validate_settings=_passthrough_dict, default_settings=_empty_defaults,
         max_instances=1, duplicable=False, removable=True, has_settings_form=True,
         category_fa="تصاویر و تبلیغات", page_types=frozenset({PAGE_TYPE_HOME}),
+    ),
+    # Header + hero in ONE composition (``hero_stage.py``): the Store's global header can be rendered inside this section over a shared
+    # (single or dual-panel) background; every control is a bounded, schema-validated setting. Generic — no template key is named.
+    "hero_stage": SectionDefinition(
+        key="hero_stage", label_fa="بوم هدر و هیرو", icon="image",
+        capabilities=frozenset({"destination"}),
+        template_name="storefront_builder/sections/hero_stage.html",
+        validate_settings=hero_stage.clean_hero_stage_settings, default_settings=hero_stage.default_settings,
+        settings_schema=HERO_STAGE_SCHEMA,
+        max_instances=1, duplicable=False, removable=True, has_settings_form=True,
+        category_fa="تصاویر و تبلیغات", page_types=frozenset({PAGE_TYPE_HOME}),
+        description_fa="هدر و تصویر اصلی در یک بوم مشترک؛ تک‌تصویر یا دوپنلی، تیتر، دکمه، نوار دسته‌بندی و کارت محصول داینامیک.",
     ),
     "image_slider": SectionDefinition(
         key="image_slider", label_fa="اسلایدر تصویر", icon="images",

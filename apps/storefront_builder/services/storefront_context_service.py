@@ -128,12 +128,18 @@ def _build_published_shell_context(
         rows = render_service.group_items_into_rows(items)
         render_containers = render_service.build_container_render_items(page, items)
         use_container_layout = page.containers.exists()
+    # Hero Stage — ONE decision (``render_service.header_embedded_for``) shared by every surface: when the page's first section is a
+    # ``hero_stage`` that draws the header inside itself, the shell must not render a second one.
+    header_embedded = render_service.header_embedded_for(
+        items, use_container_layout=use_container_layout, render_containers=render_containers,
+    )
 
     return {
         "storefront_version": version,
         "storefront_page": page,
         "page_type": page_type,
         "layout_header_config": header_config,
+        "header_embedded": header_embedded,
         "store_appearance": store_appearance,
         # U2A — رشته‌ی نامِ Templateِ Djangoِ هدرِ فعال، از رویِ Registryِ
         # امن resolve شده (نگاه کنید به ``global_region_registry``)؛ هرگز

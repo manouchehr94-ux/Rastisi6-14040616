@@ -1,0 +1,51 @@
+{% load persian catalog_extras %}
+{% comment %}
+Hero Stage (``hero_stage.py``): header + hero in ONE composition. Everything below is driven by the validated ``stage`` view model and
+by Store-scoped data resolved in ``render_service._hero_stage_context`` — no copy, product, category, colour or URL is hard-coded.
+DOM contract (the stylesheet block "hero stage" in storefront_builder.css is the only consumer):
+  .hs-stage[data-hs-*]  one stacking context (isolation), full-bleed background layer + (optional) embedded header + body
+  .hs-bg > .hs-panel(--a|--b) > img   the Store's own pictures (focal point = object-position), .hs-scrim = the readability layer
+  .hs-header            the Store's real global header (only when the shell skipped it)
+  .hs-body > .hs-content > .hs-slot   the ordered slots the merchant arranged
+{% endcomment %}
+{% with st=stage %}
+<section class="hs-stage" {% for name, value in st.attrs %}data-hs-{{ name }}="{{ value }}" {% endfor %}style="{{ st.style }}"
+         {% if header_embedded and st.header_mode == "overlay" %}x-data x-init="const h = $el.querySelector('.hs-header'); if (h && window.ResizeObserver) { new ResizeObserver(() => $el.style.setProperty('--hs-header-h', h.offsetHeight + 'px')).observe(h); }"{% endif %}
+         aria-label="{{ SHOP_NAME|default:'فروشگاه' }}">
+  <div class="hs-bg" aria-hidden="true">
+    <div class="hs-panel hs-panel--a">{% if panel_urls.0 %}<img src="{{ panel_urls.0 }}" alt="" data-img-role="hero" loading="eager" decoding="async" fetchpriority="high">{% endif %}</div>
+    {% if st.panel_layout == "dual" %}<div class="hs-panel hs-panel--b">{% if panel_urls.1 %}<img src="{{ panel_urls.1 }}" alt="" data-img-role="hero" loading="eager" decoding="async">{% endif %}</div>{% endif %}
+    <div class="hs-scrim"></div>
+  </div>
+  {% if header_embedded %}<div class="hs-header">{% include "storefront_builder/partials/hero_stage_header.html" %}</div>{% endif %}
+  <div class="hs-body wrap">
+    <div class="hs-content">
+      {% for slot in st.slots %}
+      {% if slot.key == "eyebrow" %}{% if st.eyebrow %}<p class="hs-slot hs-eyebrow" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>{{ st.eyebrow }}</p>{% endif %}
+      {% elif slot.key == "title" %}{% if st.title %}<h1 class="hs-slot hs-title" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>{{ st.title }}</h1>{% endif %}
+      {% elif slot.key == "subtitle" %}{% if st.subtitle %}<p class="hs-slot hs-subtitle" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>{{ st.subtitle }}</p>{% endif %}
+      {% elif slot.key == "cta" %}{% if st.cta_label %}
+      <div class="hs-slot hs-cta-wrap" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>
+        <a class="hs-cta" href="{% if destination.url %}{{ destination.url }}{% else %}{% url 'catalog:product-list' %}{% endif %}" {% if destination.url and destination.open_new_tab %}target="_blank" rel="{{ destination.rel }}"{% endif %}>{{ st.cta_label }}</a>
+      </div>
+      {% endif %}
+      {% elif slot.key == "categories" %}
+      <nav class="hs-slot hs-cats" aria-label="دسته‌بندی‌ها" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>
+        <a class="hs-chip" href="{% url 'catalog:product-list' %}">همه کالاها</a>
+        {% for cat in stage_categories %}<a class="hs-chip" href="{% url 'catalog:product-list' %}?category={{ cat.slug|urlencode }}">{{ cat.name }}</a>{% endfor %}
+      </nav>
+      {% elif slot.key == "product_card" %}{% if stage_product %}{% with card=stage_product|product_card_data %}
+      <a class="hs-slot hs-card" href="{{ card.url }}" aria-label="{{ card.name }}" {% if slot.hide_tablet %}data-hs-hide-t{% endif %} {% if slot.hide_mobile %}data-hs-hide-m{% endif %}>
+        <span class="hs-card-img">{% if card.image_url %}<img src="{{ card.image_url }}" alt="{{ card.image_alt }}" data-img-role="product" loading="lazy">{% endif %}</span>
+        <span class="hs-card-body">
+          <b class="hs-card-name">{{ card.name }}</b>
+          <span class="hs-card-price">{% if card.is_price_inquiry %}استعلام قیمت{% else %}{{ card.price|toman }}{% endif %}</span>
+        </span>
+      </a>
+      {% endwith %}{% endif %}
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endwith %}

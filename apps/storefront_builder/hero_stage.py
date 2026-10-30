@@ -1,0 +1,342 @@
+"""Hero Stage — the ONE authority for the settings vocabulary of the ``hero_stage`` section (header + hero in one canvas).
+
+``hero_stage`` is a normal registered Section of the one R4 engine: it is saved in the Draft, copied on publish, shown in the Studio
+library, edited through the schema-driven Inspector and covered by Undo/Redo like every other section. This module only owns:
+
+* the closed vocabulary (choices / bounded integers / short texts / the ordered ``slots`` list) and the matching ``SettingsField``
+  definitions (``section_registry`` builds ``HERO_STAGE_SCHEMA`` from the tables below, so a control exists if and only if the
+  renderer consumes it);
+* a lenient write-time cleaner (the Section's legacy validator — the schema already rejects out-of-vocabulary input) and a lenient
+  render-time resolver that can never raise: a stale or hand-edited stored value falls back to its default, it never breaks a page;
+* the projection the shared stylesheet reads: ``data-hs-*`` attributes + ``--hs-*`` custom properties built ONLY from validated
+  choices and clamped integers (no merchant text is ever placed in CSS or markup unescaped).
+
+Header embedding is a *composition* decision (``header_mode``): ``independent`` keeps today's shell header, ``merged`` renders the Store's
+global header INSIDE the stage in normal flow over the shared background, ``overlay`` renders it floating over the top of the stage.
+The decision itself (is this stage the first top-level item of the page?) lives in ``render_service.header_embedded_for``.
+
+Nothing here names a Ready Template, a section key other than its own, a Store or a brand.
+"""
+
+from __future__ import annotations
+
+from .semantic_colors import SemanticColorError, clean_semantic_color, semantic_color_css
+
+SECTION_KEY = "hero_stage"
+SETTINGS_VERSION = 1
+
+#: slot keys the merchant can order / hide per device (the stage renders exactly these, in this order)
+SLOT_LABELS = (
+    ("eyebrow", "عنوان کوچک (بالای تیتر)"),
+    ("title", "تیتر اصلی"),
+    ("subtitle", "زیرعنوان"),
+    ("cta", "دکمهٔ اقدام"),
+    ("categories", "نوار دسته‌بندی‌ها"),
+    ("product_card", "کارت محصول شناور"),
+)
+SLOT_KEYS = tuple(key for key, _ in SLOT_LABELS)
+DEFAULT_SLOTS = ("eyebrow", "title", "subtitle", "cta")
+MAX_SLOTS = len(SLOT_KEYS)
+
+_ALIGN = (("start", "ابتدا (راست در صفحهٔ فارسی)"), ("center", "وسط"), ("end", "انتها (چپ در صفحهٔ فارسی)"))
+_ALIGN_INHERIT = (("", "مثل دسکتاپ"),) + _ALIGN
+_VALIGN = (("top", "بالا"), ("middle", "وسط"), ("bottom", "پایین"))
+_VALIGN_INHERIT = (("", "مثل دسکتاپ"),) + _VALIGN
+_TITLE_SIZE = (("sm", "کوچک"), ("md", "متوسط"), ("lg", "بزرگ"), ("xl", "خیلی بزرگ"))
+_TITLE_SIZE_INHERIT = (("", "مثل دسکتاپ"),) + _TITLE_SIZE
+
+#: ``(key, merchant label, ((value, label), ...), default, group, visible_when)``
+CHOICES = (
+    ("header_mode", "هدر فروشگاه", (
+        ("merged", "داخل بوم هیرو — با پس‌زمینهٔ مشترک"),
+        ("overlay", "شفاف و شناور روی تصویر"),
+        ("independent", "مستقل، بالای هیرو (مثل قبل)"),
+    ), "merged", "basic", ()),
+    ("panel_layout", "تصویر پس‌زمینه", (
+        ("single", "یک تصویر تمام‌عرض"),
+        ("dual", "دو پنل (دو تصویر کنار هم)"),
+    ), "single", "basic", ()),
+    ("text_tone", "رنگ نوشته‌ها روی تصویر", (
+        ("light", "روشن (برای تصویر تیره)"),
+        ("dark", "تیره (برای تصویر روشن)"),
+    ), "light", "basic", ()),
+    ("content_align", "تراز محتوا", _ALIGN, "center", "basic", ()),
+    ("content_valign", "جای عمودی محتوا", _VALIGN, "middle", "basic", ()),
+    ("scrim_style", "لایهٔ تیرگی روی تصویر", (
+        ("both", "بالا و پایین"),
+        ("top", "فقط بالا"),
+        ("bottom", "فقط پایین"),
+        ("full", "یکنواخت روی کل تصویر"),
+        ("none", "بدون لایه"),
+    ), "both", "basic", ()),
+    ("cta_style", "ظاهر دکمه", (
+        ("solid", "توپر"),
+        ("outline", "خطی"),
+        ("glass", "شیشه‌ای"),
+    ), "solid", "basic", ()),
+    ("image_fit", "نحوهٔ قرارگیری تصویر", (
+        ("cover", "پر کردن کامل قاب"),
+        ("contain", "نمایش کامل تصویر"),
+    ), "cover", "advanced", ()),
+    ("mobile_dual", "دو پنل در موبایل", (
+        ("stack", "زیر هم"),
+        ("first_only", "فقط پنل اول"),
+    ), "stack", "advanced", (("panel_layout", ("dual",)),)),
+    ("content_panel", "قاب پشت محتوا", (
+        ("none", "بدون قاب"),
+        ("glass", "شیشه‌ای"),
+        ("solid", "توپر"),
+    ), "none", "advanced", ()),
+    ("panel_border", "حاشیهٔ قاب و کارت", (
+        ("thin", "نازک"),
+        ("none", "بدون حاشیه"),
+        ("strong", "پررنگ"),
+    ), "thin", "advanced", ()),
+    ("panel_shadow", "سایهٔ قاب و کارت", (
+        ("off", "بدون سایه"),
+        ("on", "با سایه"),
+    ), "off", "advanced", ()),
+    ("title_size", "اندازهٔ تیتر (دسکتاپ)", _TITLE_SIZE, "lg", "advanced", ()),
+    ("title_size_tablet", "اندازهٔ تیتر (تبلت)", _TITLE_SIZE_INHERIT, "", "advanced", ()),
+    ("title_size_mobile", "اندازهٔ تیتر (موبایل)", _TITLE_SIZE_INHERIT, "", "advanced", ()),
+    ("title_weight", "ضخامت تیتر", (("normal", "معمولی"), ("bold", "پررنگ"), ("black", "خیلی پررنگ")), "bold", "advanced", ()),
+    ("content_align_tablet", "تراز محتوا (تبلت)", _ALIGN_INHERIT, "", "advanced", ()),
+    ("content_align_mobile", "تراز محتوا (موبایل)", _ALIGN_INHERIT, "", "advanced", ()),
+    ("content_valign_mobile", "جای عمودی محتوا (موبایل)", _VALIGN_INHERIT, "", "advanced", ()),
+    ("card_position", "جای کارت محصول", (
+        ("side", "کنار متن (در دسکتاپ)"),
+        ("below", "زیر متن"),
+    ), "side", "advanced", ()),
+    ("product_source", "کارت محصول از کدام فهرست باشد", (
+        ("newest", "جدیدترین"),
+        ("best_sellers", "پرفروش‌ترین"),
+        ("discounted", "دارای تخفیف"),
+    ), "newest", "advanced", ()),
+)
+CHOICE_DEFAULTS = {key: default for key, _l, _c, default, _g, _v in CHOICES}
+CHOICE_VALUES = {key: frozenset(value for value, _label in choices) for key, _l, choices, _d, _g, _v in CHOICES}
+
+#: ``(key, merchant label, min, max, default, group)`` — every integer is clamped, never trusted
+INTEGERS = (
+    ("height_desktop", "ارتفاع بوم در دسکتاپ (درصد ارتفاع صفحه)", 40, 100, 85, "basic"),
+    ("height_tablet", "ارتفاع بوم در تبلت (درصد ارتفاع صفحه)", 40, 100, 75, "advanced"),
+    ("height_mobile", "ارتفاع بوم در موبایل (درصد ارتفاع صفحه)", 40, 100, 70, "advanced"),
+    ("scrim_strength", "شدت لایهٔ تیرگی (٪)", 0, 90, 45, "basic"),
+    ("panel_a_focal_x", "کانون تصویر اول — افقی (٪)", 0, 100, 50, "advanced"),
+    ("panel_a_focal_y", "کانون تصویر اول — عمودی (٪)", 0, 100, 50, "advanced"),
+    ("panel_b_focal_x", "کانون تصویر دوم — افقی (٪)", 0, 100, 50, "advanced"),
+    ("panel_b_focal_y", "کانون تصویر دوم — عمودی (٪)", 0, 100, 50, "advanced"),
+    ("panel_opacity", "شفافیت قاب پشت محتوا (٪)", 0, 90, 40, "advanced"),
+    ("panel_blur", "محو بودن پشت قاب شیشه‌ای (px)", 0, 30, 12, "advanced"),
+    ("panel_radius", "گردی گوشهٔ قاب و کارت (px)", 0, 40, 14, "advanced"),
+    ("content_max_width", "حداکثر عرض محتوا (px)", 320, 1200, 720, "advanced"),
+    ("category_limit", "تعداد دسته‌بندی در نوار", 2, 10, 6, "advanced"),
+)
+INTEGER_BOUNDS = {key: (low, high, default) for key, _l, low, high, default, _g in INTEGERS}
+
+#: ``(key, merchant label, max length)``
+TEXTS = (
+    ("eyebrow", "عنوان کوچک (بالای تیتر)", 60),
+    ("title", "تیتر اصلی", 90),
+    ("subtitle", "زیرعنوان", 220),
+    ("cta_label", "متن دکمه", 40),
+)
+TEXT_MAX = {key: limit for key, _l, limit in TEXTS}
+
+#: semantic colours (``""`` = automatic): fallback behind the image, and the accent (button fill / card accent)
+COLORS = (
+    ("fallback_color", "رنگ پس‌زمینه وقتی تصویر نیست"),
+    ("accent_color", "رنگ دکمه و تأکید"),
+)
+
+MEDIA_KEYS = ("panel_a_media_asset_id", "panel_b_media_asset_id")
+SLOT_HIDE_KEYS = ("hide_tablet", "hide_mobile")
+
+#: the stage's own keys (everything else — design / responsive / destination / motion … — travels through untouched)
+OWNED_KEYS = frozenset(
+    {"v", "slots"} | set(CHOICE_DEFAULTS) | set(INTEGER_BOUNDS) | set(TEXT_MAX) | {key for key, _l in COLORS} | set(MEDIA_KEYS)
+)
+
+
+# ----------------------------------------------------------------------------------------------------------------------------
+# helpers (all lenient: they coerce, they never raise)
+# ----------------------------------------------------------------------------------------------------------------------------
+
+def _choice(raw: dict, key: str) -> str:
+    value = raw.get(key, CHOICE_DEFAULTS[key])
+    return value if isinstance(value, str) and value in CHOICE_VALUES[key] else CHOICE_DEFAULTS[key]
+
+
+def _integer(raw: dict, key: str) -> int:
+    low, high, default = INTEGER_BOUNDS[key]
+    value = raw.get(key, default)
+    if isinstance(value, bool):
+        return default
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, number))
+
+
+def _text(raw: dict, key: str) -> str:
+    value = raw.get(key, "")
+    return value.strip()[: TEXT_MAX[key]] if isinstance(value, str) else ""
+
+
+def _color(raw: dict, key: str) -> str:
+    try:
+        return clean_semantic_color(raw.get(key, ""))
+    except SemanticColorError:
+        return ""
+
+
+def _media_id(raw: dict, key: str) -> int | None:
+    value = raw.get(key)
+    if value in (None, "", "null") or isinstance(value, bool):
+        return None
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def clean_slots(raw) -> list[dict]:
+    """Ordered, de-duplicated list of ``{"key", "hide_tablet", "hide_mobile"}``; unknown keys and duplicates are dropped."""
+    if not isinstance(raw, list):
+        return []
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for entry in raw:
+        if isinstance(entry, str):
+            entry = {"key": entry}
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("key")
+        if not isinstance(key, str) or key not in SLOT_KEYS or key in seen:
+            continue
+        seen.add(key)
+        rows.append({
+            "key": key,
+            "hide_tablet": entry.get("hide_tablet") is True,
+            "hide_mobile": entry.get("hide_mobile") is True,
+        })
+    return rows
+
+
+def _default_slot_rows() -> list[dict]:
+    return [{"key": key, "hide_tablet": False, "hide_mobile": False} for key in DEFAULT_SLOTS]
+
+
+def effective_slots(raw) -> list[dict]:
+    """The stored list, or the default four text slots when nothing valid is stored (an empty list means «use the default»)."""
+    return clean_slots(raw) or _default_slot_rows()
+
+
+# ----------------------------------------------------------------------------------------------------------------------------
+# write-time cleaner (the Section's legacy validator)
+# ----------------------------------------------------------------------------------------------------------------------------
+
+def clean_hero_stage_settings(raw: dict) -> dict:
+    """Keeps EVERY foreign key untouched (design / responsive / destination / motion …) and normalises only the keys this module owns
+    when they are present; an absent key stays absent (a bare save never rewrites a section)."""
+    if not isinstance(raw, dict):
+        raise ValueError("تنظیمات باید یک شیء JSON باشد")
+    cleaned = dict(raw)
+    for key in CHOICE_DEFAULTS:
+        if key in raw:
+            cleaned[key] = _choice(raw, key)
+    for key in INTEGER_BOUNDS:
+        if key in raw:
+            cleaned[key] = _integer(raw, key)
+    for key in TEXT_MAX:
+        if key in raw:
+            cleaned[key] = _text(raw, key)
+    for key, _label in COLORS:
+        if key in raw:
+            cleaned[key] = _color(raw, key)
+    for key in MEDIA_KEYS:
+        if key in raw:
+            media_id = _media_id(raw, key)
+            if media_id is None:
+                cleaned.pop(key, None)
+            else:
+                cleaned[key] = media_id
+    if "slots" in raw:
+        cleaned["slots"] = clean_slots(raw["slots"])
+    cleaned["v"] = SETTINGS_VERSION
+    return cleaned
+
+
+def default_settings() -> dict:
+    """What a brand-new stage starts with — a complete, valid, editable composition (never a locked preset)."""
+    return {
+        "v": SETTINGS_VERSION,
+        "header_mode": "merged",
+        "panel_layout": "single",
+        "text_tone": "light",
+        "content_align": "center",
+        "content_valign": "middle",
+        "scrim_style": "both",
+        "scrim_strength": 45,
+        "height_desktop": 85,
+        "eyebrow": "",
+        "title": "تیتر اصلی فروشگاه",
+        "subtitle": "",
+        "cta_label": "مشاهده محصولات",
+        "slots": _default_slot_rows(),
+    }
+
+
+# ----------------------------------------------------------------------------------------------------------------------------
+# render-time projection
+# ----------------------------------------------------------------------------------------------------------------------------
+
+def header_mode_of(raw) -> str:
+    source = raw if isinstance(raw, dict) else {}
+    return _choice(source, "header_mode")
+
+
+def resolve_stage_view(raw) -> dict:
+    """Never raises. ``attrs`` is the ordered ``[(name, value)]`` list the template writes as ``data-hs-<name>``; ``style`` is the
+    ``--hs-*`` custom-property declaration string (built only from clamped integers and allowlisted choices / semantic colours)."""
+    source = raw if isinstance(raw, dict) else {}
+    view: dict = {key: _choice(source, key) for key in CHOICE_DEFAULTS}
+    for key in INTEGER_BOUNDS:
+        view[key] = _integer(source, key)
+    for key in TEXT_MAX:
+        view[key] = _text(source, key)
+    for key, _label in COLORS:
+        view[key] = _color(source, key)
+
+    attrs = [
+        ("header", view["header_mode"]), ("layout", view["panel_layout"]), ("fit", view["image_fit"]),
+        ("scrim", view["scrim_style"]), ("tone", view["text_tone"]), ("align", view["content_align"]),
+        ("valign", view["content_valign"]), ("panel", view["content_panel"]), ("cta", view["cta_style"]),
+        ("title", view["title_size"]), ("weight", view["title_weight"]), ("border", view["panel_border"]),
+        ("shadow", view["panel_shadow"]), ("mobile-dual", view["mobile_dual"]), ("card", view["card_position"]),
+    ]
+    for key, name in (
+        ("content_align_tablet", "align-t"), ("content_align_mobile", "align-m"), ("content_valign_mobile", "valign-m"),
+        ("title_size_tablet", "title-t"), ("title_size_mobile", "title-m"),
+    ):
+        if view[key]:
+            attrs.append((name, view[key]))
+    view["attrs"] = attrs
+
+    css = [
+        f"--hs-h:{view['height_desktop']}vh", f"--hs-h-t:{view['height_tablet']}vh", f"--hs-h-m:{view['height_mobile']}vh",
+        f"--hs-scrim:{view['scrim_strength'] / 100:g}",
+        f"--hs-fx-a:{view['panel_a_focal_x']}%", f"--hs-fy-a:{view['panel_a_focal_y']}%",
+        f"--hs-fx-b:{view['panel_b_focal_x']}%", f"--hs-fy-b:{view['panel_b_focal_y']}%",
+        f"--hs-panel-op:{view['panel_opacity'] / 100:g}", f"--hs-panel-blur:{view['panel_blur']}px",
+        f"--hs-radius:{view['panel_radius']}px", f"--hs-maxw:{view['content_max_width']}px",
+    ]
+    if view["fallback_color"]:
+        css.append(f"--hs-fallback:{semantic_color_css(view['fallback_color'])}")
+    if view["accent_color"]:
+        css.append(f"--hs-accent:{semantic_color_css(view['accent_color'])}")
+    view["style"] = ";".join(css)
+    view["slots"] = effective_slots(source.get("slots"))
+    return view
