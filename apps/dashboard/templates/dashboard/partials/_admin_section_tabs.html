@@ -19,11 +19,12 @@
 {% endif %}
 {% if settings_index %}
 <div class="settings-search" data-au-search>
-  <label class="au-sr" for="settingsSearch">جست‌وجو در تنظیمات</label>
-  <input id="settingsSearch" class="au-input" type="search" autocomplete="off" placeholder="جست‌وجو در تنظیمات… (مثلاً دامنه، مالیات، پیامک)" aria-controls="settingsSearchResults" data-au-search-input>
+  <label class="settings-search-label" for="settingsSearch">جست‌وجو در تنظیمات <span class="settings-search-scope">فقط صفحه‌های تنظیمات</span></label>
+  <input id="settingsSearch" class="au-input" type="search" autocomplete="off" placeholder="مثلاً دامنه، مالیات، پیامک" aria-controls="settingsSearchResults" aria-describedby="settingsSearchHint" data-au-search-input>
   <ul id="settingsSearchResults" class="settings-search-results" role="listbox" hidden data-au-search-results>
     {% for item in settings_index %}<li role="option" hidden data-au-search-item data-keywords="{{ item.title }} {{ item.path }} {{ item.keywords }}"><a href="{{ item.href }}" data-palette-skip><b>{{ item.title }}</b><span>{{ item.path }}</span></a></li>{% endfor %}
     <li class="settings-search-empty" hidden data-au-search-empty>نتیجه‌ای پیدا نشد.</li>
   </ul>
+  <p id="settingsSearchHint" class="au-hint settings-search-hint">برای پیدا کردن سفارش، محصول یا مشتری از جست‌وجوی سراسری بالای صفحه (Ctrl+K) استفاده کنید.</p>
 </div>
 {% endif %}
