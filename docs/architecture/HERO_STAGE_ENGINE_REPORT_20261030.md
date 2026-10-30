@@ -50,3 +50,28 @@ No free pixel drag/resize or video background; slots can't be reordered per devi
 ## 7. Windows QA (read-only fetch)
 Fetch the local commits from the cloud bundle/branch handed over by the user (not pushed). In a disposable Store: Studio → قالب‌های آماده → pick each of the four → Inspector «بخش قهرمان»
 change header mode / panels / overlay / position / title size / CTA → Undo/Redo → Preview → publish on the test store → check 390 and 1440 in Firefox and Chromium.
+
+---
+## Addendum — Final Pre-Push Gate (2026-10-30)
+
+Code HEAD for the final test runs: `bc2ae4f0f669b01378712af2969f1bbe85054548` (the commit after it is documentation only).
+
+### Findings and fixes made during the gate
+1. **PostgreSQL deadlock (real, introduced by the first concurrency fix) — fixed.** `ensure_page_containers` locked the *page* row; R4 mutations lock *layout → draft → section(+page)*. A heal racing a mutation produced `deadlock detected` (≈1 in 3 stress runs). The heal now locks the Store's *layout* row first (`077c4ba1…`). New PG-only test `test_a_heal_and_an_r4_mutation_never_deadlock` fails 3/3 on the page lock and passes on the layout lock; 6 post-fix stress runs (heal × heal × mutation × draft-open × structure edit × publish; 175 requests + 50 stale-revision refusals each) had no error and PostgreSQL logged no deadlock after the fix.
+2. **Finance badge could look "saved" after a rejected save — fixed** (`86fdbf54…`): the badge now shows the stored value; a rejected form shows an explicit "not saved" note.
+3. **Test-harness race — fixed** (`bc2ae4f0…`): the browser chain grabbed the Preview frame while the Studio reloaded after a template apply.
+
+### Verified with real evidence (disposable DB/Store, Chromium)
+* merged mode: one `<header>` in the document, inside `.hs-stage`; stage is `isolation:isolate` (own stacking context); header box lies inside the shared background layer; the topmost element at the header position is the header; embedded header HTML is identical to the shell header on `/products/` (normalised) — same menu, search form (`/products/`), cart (`/cart/`), wishlist/account (login dialog) and category links; all 14 sampled links return 200.
+* overlay: header wrapper `position:absolute` at the stage top, body padded by header height + 12px; independent: shell header, none in the stage; stage hidden on a device → shell header for every width (never a page without a header). No horizontal scroll at 1440/768/390.
+* structure of the four templates differs in header mode, panel layout/split, alignment, vertical position, frame, slot set/order, product card vs category bar, and section sequence on the home page (not only colour/name). Closest pair: `editorial_noir` and `glass_commerce` (both merged + single panel; they differ in alignment, position, slots and following sections).
+
+### Documented limits
+* No free pixel drag/resize: composition is flow/grid + ordered slots + alignment + per-breakpoint size/alignment/hide. Slot **order is one global order** — per-device you can hide a slot and change alignment, not reorder it.
+* There is no "featured product" flag in the catalogue. The product-card slot lists "جدیدترین / پرفروش‌ترین / دارای تخفیف"; the UI never calls it "featured".
+* The stage embeds the header only as the first stand-alone top-level block of the home page; otherwise the shell header is used.
+
+### Test results (final)
+* Full suite (SQLite, parallel 4) on `bc2ae4f0`: Ran 11849, failures 34, errors 4, skipped 231 (passed 11580). All 38 failing ids are in `TEST_RECONCILIATION_20261029.md` (29 storefront_builder Vision-baseline + 8 environmental in portal/stores/sms…); **0 new**. One baseline id did not fail this run (`…test_product_image_views…test_reorders_by_posted_sequence`, a parallel-only flake). Not green.
+* PostgreSQL: hero stage 20 ok, stage templates 19 ok, concurrency 3 ok (×3 runs), stress module 4 ok (×6 runs).
+* Chromium on PostgreSQL: template chain / hide-per-device / existing-template regression 3 ok (×2 runs). The other 10 browser failures in `test_hero_stage_browser` are inherited from `test_engine_parity_browser`; the same module on the untouched base `b9562ccf` shows the same 2 failures + 8 errors (pre-existing, opt-in, not in the default suite).
