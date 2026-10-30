@@ -978,6 +978,7 @@ def _build_studio_context(
                 "header_label": card["header_variant_label"],
                 "footer_label": card["footer_variant_label"],
             }
+                "parts": r4_mutation_service.template_parts(card["preset"]),
             for card in cards
         ],
         "library": structure_library,

@@ -615,8 +615,51 @@
         '<div class="tile-actions">' +
           btn('preview-template', 'پیش‌نمایش', 'eye', 'outline', 'data-key="' + esc(t.key) + '" aria-label="پیش‌نمایش قالب ' + esc(t.label) + '" ' + (ui.busy ? 'disabled' : '')) +
           btn('switch-template', 'اعمال', 'check', '', 'data-key="' + esc(t.key) + '" aria-label="اعمال قالب ' + esc(t.label) + '" ' + (ui.busy || t.is_current ? 'disabled' : '')) +
-        '</div></article>';
+        '</div>' + templatePartActions(t) + '</article>';
     }).join('');
+  }
+
+  // «فقط هدر» / «فقط هیرو»: take ONE part of a Ready Template without re-applying the whole template (header.apply_template / hero.apply_template).
+  // Only the parts the template really has are offered; both are one Undo-able step and touch only the Draft.
+  function templatePartActions(t) {
+    var parts = t.parts || {};
+    var out = '';
+    if (parts.header) out += btn('apply-template-header', 'فقط هدرِ این قالب', 'check', 'part', 'data-key="' + esc(t.key) + '" title="هدرِ فروشگاه را مثلِ این قالب کن؛ هیرو و بقیهٔ بخش‌ها دست‌نخورده می‌مانند" ' + (ui.busy ? 'disabled' : ''));
+    if (parts.hero) out += btn('apply-template-hero', 'فقط هیرو (چیدمانِ هیرو)', 'check', 'part', 'data-key="' + esc(t.key) + '" title="چیدمانِ هیرو را مثلِ این قالب کن؛ متن‌ها، تصویرها و هدرِ فروشگاه شما تغییر نمی‌کنند" ' + (ui.busy ? 'disabled' : ''));
+    return out ? '<div class="tile-parts" aria-label="برداشتنِ یک بخش از قالب">' + out + '</div>' : '';
+  }
+
+  var TEMPLATE_PART_REFUSALS = {
+    template_has_no_header: 'این قالب سبکِ هدرِ جدا ندارد.',
+    template_has_no_hero_stage: 'هیروی این قالب از نوعِ «هیرو استیج» نیست؛ فقط هیروی قالب‌هایِ هیرو استیج را می‌شود جدا برداشت.',
+    section_locked: 'هیروی صفحه قفل است؛ ابتدا قفل را باز کنید.',
+    target_locked: 'بخشی بالای صفحه قفل است و جا برای افزودنِ هیرو نیست؛ قفل را باز کنید.',
+    stale_revision: 'نسخهٔ طراحی در همین حین تغییر کرده؛ صفحه را تازه کنید و دوباره امتحان کنید.'
+  };
+
+  function applyTemplatePart(part, key) {
+    var t = templateByKey(key);
+    if (!t || ui.busy || ui.lab.active) return;
+    ui.busy = true;
+    if (ui.modal) renderModal();
+    R4.enqueueMutation({
+      type: part === 'header' ? 'header.apply_template' : 'hero.apply_template',
+      template_key: t.key, template_version: t.version
+    }).then(function (result) {
+      ui.busy = false;
+      if (result && result.ok) {
+        closeModal(false);
+        R4.refreshPreview();
+        notify((part === 'header' ? 'هدرِ «' : 'چیدمانِ هیروی «') + t.label + '» اعمال شد. با «بازگرداندن» برمی‌گردد.');
+      } else {
+        if (ui.modal) renderModal();
+        notify(TEMPLATE_PART_REFUSALS[result && result.code] || 'اعمالِ این بخش انجام نشد؛ هیچ تغییری ذخیره نشد.');
+      }
+    }, function () {
+      ui.busy = false;
+      if (ui.modal) renderModal();
+      notify('اعمالِ این بخش انجام نشد؛ هیچ تغییری ذخیره نشد.');
+    });
   }
 
   // «پیش‌نمایش»: the customer view of the SAVED Draft in a new tab (read-only; never publishes). The tab is opened synchronously (popup blockers)
@@ -1369,6 +1412,8 @@
       case 'preview-template': previewTemplate(el.getAttribute('data-key')); break;
       case 'cancel-template-preview': cancelTemplatePreview(); break;
       case 'switch-template': switchTemplate(el.getAttribute('data-key')); break;
+      case 'apply-template-header': applyTemplatePart('header', el.getAttribute('data-key')); break;
+      case 'apply-template-hero': applyTemplatePart('hero', el.getAttribute('data-key')); break;
       case 'confirm-template-replace': {
         var replaceModal = ui.modal || {};
         var replaceKey = replaceModal.key;

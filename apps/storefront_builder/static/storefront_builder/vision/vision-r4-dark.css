@@ -478,3 +478,5 @@
 .vs :is(.rs-studio,html) .r4-cp-apply:hover:not(:disabled){background:var(--primary,#302e68)}
 .vs :is(.rs-studio,html) .r4-cp-apply:disabled{background:var(--disabled-bg,#192130);color:var(--disabled-ink,#b9c2d2)}
 .vs :is(.rs-studio,html) .r4-cp-cancel{border:1px solid var(--line,#2c3649);background:#111722}
+
+.rs-studio.vs .tile-parts .part{color:#c3cbd9;border-color:#2f3a4e}

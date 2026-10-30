@@ -1455,16 +1455,32 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
+def template_header_patch(preset) -> dict:
+    """The part of a Ready Template that is its HEADER STYLE (variant + show/sticky toggles) as a ``header.update`` patch — never the
+    merchant's announcement bar. Empty when the template carries no header recipe."""
+    overlay = preset.header if isinstance(preset.header, dict) else {}
+    return {
+        key: value for key, value in overlay.items()
+        if key in _HEADER_UPDATE_ALLOWED_PATCH_KEYS and not key.startswith("announcement_")
+    }
+
+
+def template_hero_stage_entry(preset):
+    """The Hero Stage row of a Ready Template's home page, or ``None`` (a slider/banner hero is not a stage recipe)."""
+    return next((entry for entry in (preset.pages or {}).get("home", ()) if entry.section_key == hero_stage.SECTION_KEY), None)
+
+
+def template_parts(preset) -> dict:
+    """What a Ready Template can offer on its own — drives the «فقط هدر» / «فقط هیرو» actions of the Studio gallery."""
+    return {"header": bool(template_header_patch(preset)), "hero": template_hero_stage_entry(preset) is not None}
+
+
 def _apply_header_from_template(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     """Take ONLY the header of a Ready Template: its variant and show/sticky toggles. Pages, sections, the hero, the footer, the palette and the
     merchant's announcement bar (a message, not a style) are left exactly as they are. One history step; goes through the same validated
     ``header.update`` path, so the typed Store Appearance manifest stays in sync."""
     preset = _resolve_ready_template(mutation.get("template_key"), mutation.get("template_version"))
-    overlay = preset.header if isinstance(preset.header, dict) else {}
-    patch = {
-        key: value for key, value in overlay.items()
-        if key in _HEADER_UPDATE_ALLOWED_PATCH_KEYS and not key.startswith("announcement_")
-    }
+    patch = template_header_patch(preset)
     if not patch:
         raise R4MutationError("template_has_no_header")
     _apply_header_update(draft=draft, mutation={"patch": patch})
@@ -1476,9 +1492,7 @@ def _apply_hero_from_template(*, draft: StorefrontLayoutVersion, mutation: dict)
     section stay untouched. When the home page has no stage yet, one is added at the very top (a stage is a normal single-instance section).
     Templates whose hero is not a Hero Stage (a slider, a banner…) have no recipe to take: refused with a stable code, never faked."""
     preset = _resolve_ready_template(mutation.get("template_key"), mutation.get("template_version"))
-    source = next(
-        (entry for entry in (preset.pages or {}).get("home", ()) if entry.section_key == hero_stage.SECTION_KEY), None,
-    )
+    source = template_hero_stage_entry(preset)
     if source is None:
         raise R4MutationError("template_has_no_hero_stage")
     recipe = hero_stage.layout_recipe(source.settings)
