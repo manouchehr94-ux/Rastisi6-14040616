@@ -298,6 +298,42 @@ def default_settings() -> dict:
 
 
 # ----------------------------------------------------------------------------------------------------------------------------
+# recipes — the LOOK of a stage as data, reusable across Ready Templates (never the merchant's words or pictures)
+# ----------------------------------------------------------------------------------------------------------------------------
+#: what the merchant wrote / chose for THIS Store: copying another template's look must never overwrite it
+CONTENT_KEYS = frozenset({
+    *(key for key, _label, _limit in TEXTS), *MEDIA_KEYS,
+    "bg_a_focal_x", "bg_a_focal_y", "bg_b_focal_x", "bg_b_focal_y",       # tuned to the merchant's own pictures
+})
+
+
+def layout_recipe_keys() -> tuple[str, ...]:
+    """Every design key of the stage (header mode, panels, split, alignment, scrim, frame, heights, slots, …) — i.e. all but the content."""
+    keys = [key for key, *_rest in CHOICES] + [key for key, *_rest in INTEGERS] + [key for key, _label in COLORS] + ["slots"]
+    return tuple(dict.fromkeys(key for key in keys if key not in CONTENT_KEYS))
+
+
+def layout_recipe(raw) -> dict:
+    """The complete design recipe of ``raw`` (a template's stage settings): absent keys take the engine default, so applying it never leaves
+    traces of the stage it replaces. Never raises on garbage (falls back to the defaults)."""
+    base = default_settings()
+    try:
+        cleaned = clean_hero_stage_settings({**base, **(raw if isinstance(raw, dict) else {})})
+    except ValueError:
+        cleaned = dict(base)
+    return {key: cleaned[key] for key in layout_recipe_keys() if key in cleaned}
+
+
+def apply_layout_recipe(current, recipe: dict) -> dict:
+    """``current`` with the recipe's design keys replaced and every content key (texts, pictures, focal points) and foreign key kept."""
+    merged = dict(current) if isinstance(current, dict) else {}
+    for key in layout_recipe_keys():
+        merged.pop(key, None)                  # a key the recipe leaves out returns to the engine default instead of lingering
+    merged.update({key: value for key, value in recipe.items() if key in layout_recipe_keys()})
+    return clean_hero_stage_settings({**default_settings(), **merged})
+
+
+# ----------------------------------------------------------------------------------------------------------------------------
 # render-time projection
 # ----------------------------------------------------------------------------------------------------------------------------
 

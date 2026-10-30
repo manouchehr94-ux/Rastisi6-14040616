@@ -16,6 +16,7 @@ from django.db import transaction
 
 from apps.storefront_builder import (
     appearance_registry,
+    hero_stage,
     layout_preset_registry,
     resource_source,
     section_registry,
@@ -110,6 +111,8 @@ _MUTATION_HISTORY_LABELS = {
     "footer.reset_to_baseline": "بازنشانی فوتر به قالب",
     "appearance.update": "ویرایش طراحی کلی",
     "header.update": "ویرایش هدر",
+    "header.apply_template": "اعمال هدرِ یک قالب",
+    "hero.apply_template": "اعمال چیدمانِ هیروی یک قالب",
     "footer.update": "ویرایش فوتر",
     "appearance.component.update": "تغییر جزء طراحی فروشگاه",
     "appearance.manifest.apply": "اعمال طراحی فروشگاه",
@@ -1452,6 +1455,55 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
+def _apply_header_from_template(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Take ONLY the header of a Ready Template: its variant and show/sticky toggles. Pages, sections, the hero, the footer, the palette and the
+    merchant's announcement bar (a message, not a style) are left exactly as they are. One history step; goes through the same validated
+    ``header.update`` path, so the typed Store Appearance manifest stays in sync."""
+    preset = _resolve_ready_template(mutation.get("template_key"), mutation.get("template_version"))
+    overlay = preset.header if isinstance(preset.header, dict) else {}
+    patch = {
+        key: value for key, value in overlay.items()
+        if key in _HEADER_UPDATE_ALLOWED_PATCH_KEYS and not key.startswith("announcement_")
+    }
+    if not patch:
+        raise R4MutationError("template_has_no_header")
+    _apply_header_update(draft=draft, mutation={"patch": patch})
+
+
+def _apply_hero_from_template(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Take ONLY the Hero Stage LOOK of a Ready Template (header mode, panels, split, alignment, scrim, frame, heights, slot order…) and
+    apply it to this Draft's stage — the merchant's own texts, pictures and focal points, the header chosen for the Store, and every other
+    section stay untouched. When the home page has no stage yet, one is added at the very top (a stage is a normal single-instance section).
+    Templates whose hero is not a Hero Stage (a slider, a banner…) have no recipe to take: refused with a stable code, never faked."""
+    preset = _resolve_ready_template(mutation.get("template_key"), mutation.get("template_version"))
+    source = next(
+        (entry for entry in (preset.pages or {}).get("home", ()) if entry.section_key == hero_stage.SECTION_KEY), None,
+    )
+    if source is None:
+        raise R4MutationError("template_has_no_hero_stage")
+    recipe = hero_stage.layout_recipe(source.settings)
+
+    page = draft.get_page("home")
+    stage = page.sections.filter(section_key=hero_stage.SECTION_KEY).order_by("order", "id").first()
+    try:
+        if stage is None:
+            stage = section_structure_service.add_section(draft=draft, section_key=hero_stage.SECTION_KEY, page_type="home")
+            while True:                                              # a new section lands last: walk it up to the top of the page
+                try:
+                    section_structure_service.move_section(draft=draft, section_id=stage.pk, direction="up")
+                except section_structure_service.SectionStructureError as exc:
+                    if exc.code == "move_boundary":
+                        break
+                    raise
+            stage.refresh_from_db()
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+    if stage.is_locked:
+        raise R4MutationError("section_locked")
+    stage.settings = hero_stage.apply_layout_recipe(stage.settings, recipe)
+    stage.save(update_fields=["settings"])
+
+
 #: Pre-Task-10 remediation — widened from ``footer_variant``-only to cover
 #: every REQUIRED EXISTING CAPABILITY toggle the legacy footer form exposes
 #: with no prior R4 equivalent (see headline finding #3). Pre-Task-10 final
@@ -1596,6 +1648,12 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "header.update":
         _apply_header_update(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.apply_template":
+        _apply_header_from_template(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "hero.apply_template":
+        _apply_hero_from_template(draft=draft, mutation=mutation)
         return
     if mutation_type == "footer.update":
         _apply_footer_update(draft=draft, mutation=mutation)
