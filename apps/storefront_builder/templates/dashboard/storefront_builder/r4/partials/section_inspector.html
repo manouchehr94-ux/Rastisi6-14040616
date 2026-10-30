@@ -5,7 +5,8 @@ Same schema, same field renderer (settings_field.html), same mutation pipeline a
 three primary tabs (محتوا / طراحی / پیشرفته), each a responsive two-column set of titled cards built by
 workspace_layout.build_workspace_tabs from field type + key (never from a section or template key).
 {% endcomment %}
-<div class="r4-inspector-panel r4-ws" data-r4-section-inspector data-r4-section-id="{{ section.pk }}">
+<div class="r4-inspector-panel r4-ws" data-r4-section-inspector data-r4-section-id="{{ section.pk }}"{% if media_upload_url %} data-r4-media-upload-url="{{ media_upload_url }}"{% endif %}>
+  {% if media_guide_spec %}{{ media_guide_spec|json_script:"r4MediaGuideSpec" }}{% endif %}
   <header class="r4-ws-header">
     <div class="r4-ws-identity">
       <span class="r4-ws-glyph" aria-hidden="true">{% rs_icon "sliders" %}</span>

@@ -361,6 +361,99 @@ class HeroStageBrowserTests(_parity.EngineGeometryParityBrowserTests):
         finally:
             context.close()
 
+    # ------------------------------------------------------------------------------------------------- picture picker (Inspector)
+    @staticmethod
+    def _fa(number):
+        return str(number).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+
+    def _picker(self, page, key):
+        return page.locator(f'[data-rs-workspace] .r4-mp:has(select[data-r4-field-key="{key}"])').first
+
+    def test_the_picture_picker_uploads_replaces_removes_warns_and_guides_per_slot(self):
+        from apps.storefront_builder.services import layout_service as svc
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "dual_atelier")                # dual panels, equal split, 88 vh
+            self._open_stage_inspector(page)
+            first, second = self._picker(page, "bg_a_media_asset_id"), self._picker(page, "bg_b_media_asset_id")
+            self.assertEqual(first.count(), 1)
+            self.assertEqual(second.count(), 1)
+
+            # 1. guide of THIS composition: equal split of 1920 px, 88 % of 1080 px
+            guide = first.locator(".r4-mp-guide").inner_text()
+            self.assertIn("پنل اول", guide)
+            self.assertIn(f"{self._fa(960)}×{self._fa(950)}", guide)
+            self.assertIn("حداقل قابل‌قبول", guide)
+            self.assertIn("موبایل", guide)
+            self.assertIn("منطقهٔ امن", guide)
+            self.assertIn("پنل دوم", second.locator(".r4-mp-guide").inner_text())
+
+            # 2. upload a NEW (deliberately small) picture in place: selected, named, thumbnailed, warned, saved
+            import io
+            from PIL import Image
+            buf = io.BytesIO()
+            Image.new("RGB", (400, 250), (200, 60, 60)).save(buf, "PNG")
+            first.locator("input.r4-mp-file").set_input_files({"name": "my-first-hero.png", "mimeType": "image/png", "buffer": buf.getvalue()})
+            page.wait_for_function(
+                "k=>{const s=document.querySelector(`[data-rs-workspace] select[data-r4-field-key=\"${k}\"]`);return s&&s.value!==''}",
+                arg="bg_a_media_asset_id", timeout=15000)
+            page.wait_for_timeout(1500)                                         # autosave
+            self.assertIn("my-first-hero", first.locator(".r4-mp-name").inner_text())
+            self.assertTrue(first.locator(".r4-mp-thumb img").is_visible())
+            self.assertIn(f"{self._fa(400)}×{self._fa(250)}", first.locator(".r4-mp-dims").inner_text())
+            self.assertIn("کوچک‌تر", first.locator(".r4-mp-warn").inner_text())
+            self.assertIn("is-warn", first.locator(".r4-mp-warn").get_attribute("class"))
+            stage = svc.get_or_create_draft(self.store, user=self.user).get_page("home").sections.get(section_key="hero_stage")
+            uploaded_id = int(stage.settings["bg_a_media_asset_id"])
+            from apps.content.models import MediaAsset
+            self.assertEqual(MediaAsset.objects.get(pk=uploaded_id).store_id, self.store.pk)
+
+            # 3. the guide follows the composition: single panel -> the full 1920 px width
+            self._set(page, "bg_layout", "single")
+            self.assertIn(f"{self._fa(1920)}×{self._fa(950)}", first.locator(".r4-mp-guide").inner_text())
+            self.assertIn("تصویر اصلی", first.locator(".r4-mp-guide").inner_text())
+            self.assertIn("فقط در حالتِ", second.locator(".r4-mp-guide").inner_text())
+
+            # 4. choose another picture from the library, thumbnails + names visible
+            first.locator(".r4-mp-actions button", has_text="انتخاب از کتابخانه").click()
+            tiles = first.locator(".r4-mp-tile")
+            self.assertGreaterEqual(tiles.count(), 2)
+            self.assertIn("browser-stage", " ".join(tiles.locator(".r4-mp-tile-name").all_inner_texts()))
+            first.locator(f'.r4-mp-tile[data-id="{self.asset.pk}"]').click()
+            page.wait_for_timeout(1500)
+            stage = svc.get_or_create_draft(self.store, user=self.user).get_page("home").sections.get(section_key="hero_stage")
+            self.assertEqual(int(stage.settings["bg_a_media_asset_id"]), self.asset.pk)
+
+            # 5. Undo walks back to the uploaded picture; the picker repaints from the programmatic value
+            page.keyboard.press("Escape")                                      # the settings dialog covers the toolbar
+            page.wait_for_timeout(800)
+            page.locator('[data-rastisi-action="undo"]').first.click()
+            page.wait_for_timeout(2500)
+            self._open_stage_inspector(page)
+            self.assertIn("my-first-hero", self._picker(page, "bg_a_media_asset_id").locator(".r4-mp-name").inner_text())
+
+            # 6. remove the picture: the field clears and the picker says so
+            self._picker(page, "bg_a_media_asset_id").locator(".r4-mp-remove").click()
+            page.wait_for_timeout(1500)
+            stage = svc.get_or_create_draft(self.store, user=self.user).get_page("home").sections.get(section_key="hero_stage")
+            self.assertFalse(stage.settings.get("bg_a_media_asset_id"))
+            self.assertIn("بدون تصویر", self._picker(page, "bg_a_media_asset_id").locator(".r4-mp-name").inner_text())
+            self.assertEqual(self.errors, [])
+        finally:
+            context.close()
+
+    def test_the_picture_picker_refuses_a_non_image_with_a_readable_message(self):
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "editorial_noir")
+            self._open_stage_inspector(page)
+            first = self._picker(page, "bg_a_media_asset_id")
+            first.locator("input.r4-mp-file").set_input_files({"name": "fake.png", "mimeType": "image/png", "buffer": b"<script>1</script>"})
+            page.wait_for_selector('[data-rs-workspace] .r4-mp-status.is-error', timeout=10000)
+            self.assertEqual(page.locator('[data-rs-workspace] select[data-r4-field-key="bg_a_media_asset_id"]').first.input_value(), "")
+        finally:
+            context.close()
+
     def test_an_existing_template_keeps_its_independent_header(self):
         context, page = self._page(1440, "/")                         # the fixture store runs a pre-existing template
         try:

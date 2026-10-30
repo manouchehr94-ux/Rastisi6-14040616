@@ -13,7 +13,7 @@ from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
 from apps.catalog.services.search_service import apply_text_search
 from apps.content.models import Menu
-from apps.core.services.rate_limit import RateLimitExceeded
+from apps.core.services.rate_limit import RateLimitExceeded, enforce_rate_limit
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
@@ -24,6 +24,7 @@ from . import (
     global_region_registry,
     group_style,
     layout_preset_registry,
+    media_guide,
     media_views,
     resource_source,
     section_registry,
@@ -977,8 +978,8 @@ def _build_studio_context(
                 "palette_swatch": card["palette_swatch"],
                 "header_label": card["header_variant_label"],
                 "footer_label": card["footer_variant_label"],
-            }
                 "parts": r4_mutation_service.template_parts(card["preset"]),
+            }
             for card in cards
         ],
         "library": structure_library,
@@ -1704,6 +1705,8 @@ def storefront_r4_section_inspector(request, pk):
             "color_choices": color_choices,
             "color_hex": semantic_colors.token_hex_map(global_appearance),
             "media_assets": media_assets,
+            "media_guide_spec": media_guide.spec_for_section(section.section_key) if media_assets is not None else None,
+            "media_upload_url": reverse("dashboard:storefront-builder-r4-media-upload") if media_assets is not None else "",
             "section": section,
             "definition": definition,
             "basic_fields": basic_fields,
@@ -1730,6 +1733,41 @@ def storefront_r4_section_inspector(request, pk):
             "background_context": background_context,
         },
     )
+
+
+#: a merchant uploading pictures from the Inspector: generous, but bounded per Store (the file validators still apply to every file)
+_MEDIA_UPLOAD_RATE_LIMIT = dict(max_attempts=60, window_seconds=3600, fail_open=True)
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_media_upload(request):
+    """Upload ONE picture into THIS Store's Media Library from the Inspector's picture picker (the same ``MediaAsset`` the section media
+    pickers and the Media Library use — no parallel store of files). The model's own validators run (size ≤ 5 MB, a real decodable image of an
+    allowed format). Store-scoped by ``resolve_store_for_service``; the file never leaves the Store's own library. Returns what the picker
+    needs: the new asset's id, URL and display name."""
+    import os
+
+    from django.core.exceptions import ValidationError
+
+    from apps.content.models import MediaAsset
+
+    store = resolve_store_for_service(request)
+    upload = request.FILES.get("image")
+    if upload is None:
+        return JsonResponse({"ok": False, "message": "فایلی برای بارگذاری انتخاب نشده است."}, status=400)
+    try:
+        enforce_rate_limit("storefront_layout.media_upload", str(store.pk), **_MEDIA_UPLOAD_RATE_LIMIT)
+    except RateLimitExceeded:
+        return JsonResponse({"ok": False, "message": "تعداد بارگذاری‌ها زیاد است؛ کمی بعد دوباره امتحان کنید."}, status=429)
+    asset = MediaAsset(store=store, image=upload)
+    try:
+        asset.full_clean()
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "message": " ".join(exc.messages) or "این فایل به‌عنوان تصویر پذیرفته نشد."}, status=400)
+    asset.save()
+    return JsonResponse({"ok": True, "id": asset.pk, "url": asset.image.url, "name": os.path.basename(asset.image.name)})
 
 
 @require_GET

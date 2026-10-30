@@ -98,7 +98,7 @@ class VisionStudioTests(StorefrontBuilderViewsTestCase):
         # the engine and its UI controller load unchanged, in the order r4_resize / r4_composer need (R4.studio exists before them)
         scripts = [s["src"].split("?")[0].rsplit("/", 1)[-1] for s in soup.find_all("script", src=True)]
         order = [s for s in scripts if s.startswith(("r4_", "vision"))]
-        self.assertEqual(order, ["r4_editor.js", "r4_color_picker.js", "r4_studio.js", "r4_resize.js", "r4_composer.js", "r4_announcement.js", "vision.js"])
+        self.assertEqual(order, ["r4_editor.js", "r4_color_picker.js", "r4_media_picker.js", "r4_studio.js", "r4_resize.js", "r4_composer.js", "r4_announcement.js", "vision.js"])
         data = json.loads(soup.find(id="rsStudioData").string)
         for key in ("layout_tree_url", "announcement_inspector_url", "draft_preview_url", "live_preview_url", "page_type"):
             self.assertIn(key, data)

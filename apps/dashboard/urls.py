@@ -322,6 +322,11 @@ urlpatterns = [
         name="storefront-builder-r4-resource-picker",
     ),
     path(
+        "storefront-builder/r4/media/upload/",
+        storefront_builder_r4_views.storefront_r4_media_upload,
+        name="storefront-builder-r4-media-upload",
+    ),
+    path(
         "storefront-builder/r4/history/",
         storefront_builder_r4_views.storefront_r4_history_command,
         name="storefront-builder-r4-history",

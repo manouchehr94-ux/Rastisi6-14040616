@@ -334,6 +334,33 @@ def apply_layout_recipe(current, recipe: dict) -> dict:
 
 
 # ----------------------------------------------------------------------------------------------------------------------------
+# picture guidance — what size / ratio / safe area each picture slot of THIS stage needs (data only; the Studio computes the numbers live)
+# ----------------------------------------------------------------------------------------------------------------------------
+#: reference screens the sizes are derived from (CSS px): a common desktop and a common phone
+GUIDE_VIEWPORTS = {"desktop": [1920, 1080], "mobile": [390, 844]}
+#: the grid fractions of the panel split (must mirror the CSS ``data-hs-split`` columns — a test pins both)
+GUIDE_SPLITS = {"equal": [1, 1], "wide_first": [3, 2], "wide_second": [2, 3], "first_dominant": [7, 3]}
+
+
+def media_guide_spec() -> dict:
+    """Per picture field: its role and the stage settings that drive its recommended size. The Inspector reads the live values of those
+    settings (layout, split, height, fit, text position, header mode) and shows size / ratio / minimum / crop / safe-area advice for
+    exactly the composition the merchant has chosen — not one fixed sentence for every template."""
+    return {
+        "viewports": GUIDE_VIEWPORTS,
+        "splits": GUIDE_SPLITS,
+        "slots": {
+            "bg_a_media_asset_id": {"slot": "a", "focal": ["bg_a_focal_x", "bg_a_focal_y"],
+                                    "role_single": "تصویر اصلیِ بوم (تمام‌عرض)", "role_dual": "پنل اول (سمت راست)"},
+            "bg_b_media_asset_id": {"slot": "b", "focal": ["bg_b_focal_x", "bg_b_focal_y"],
+                                    "role_single": "پنل دوم (فقط در حالتِ «دو پنل» استفاده می‌شود)", "role_dual": "پنل دوم (سمت چپ)"},
+        },
+        "driven_by": ["bg_layout", "bg_split", "height_desktop", "height_mobile", "mobile_dual", "image_fit",
+                      "content_align", "content_valign", "header_mode"],
+    }
+
+
+# ----------------------------------------------------------------------------------------------------------------------------
 # render-time projection
 # ----------------------------------------------------------------------------------------------------------------------------
 
