@@ -76,13 +76,20 @@ class FinanceAccordionTests(_FinanceBase):
         self.assertTrue(shop.gift_wrap_available)
         self.assertTrue(shop.gift_wrap_message_enabled)
 
-    def test_a_rejected_gift_wrap_form_opens_its_accordion(self):
+    def test_a_rejected_gift_wrap_form_never_looks_saved(self):
+        shop = ShopSettings.load(store=self.store)
+        shop.gift_wrap_available = False
+        shop.save(update_fields=["gift_wrap_available"])
         response = self.client.post(reverse("dashboard:settings-gift-wrap"), {
             "gift_wrap_available": "on", "gift_wrap_price": "-500", "gift_wrap_pricing_scope": "per_order",
         })
-        body = response.content.decode() if response.status_code == 200 else self.client.get(response["Location"]).content.decode()
-        if 'id="fin-gift-wrap"' in body:
-            self.assertIn('aria-expanded="true" aria-controls="fin-panel-gift-wrap"', body)
+        self.assertEqual(response.status_code, 200)                  # re-rendered with the errors, nothing saved
+        body = response.content.decode()
+        self.assertIn('data-testid="finance-gift-wrap-unsaved"', body)
+        self.assertIn('aria-expanded="true" aria-controls="fin-panel-gift-wrap"', body)
+        # the badge is the STORED state (still off) even though the switch shows what the merchant tried to send
+        self.assertIn('data-testid="finance-gift-wrap-status">غیرفعال', body)
+        self.assertRegex(body, r'name="gift_wrap_available" checked>')
         self.assertFalse(ShopSettings.load(store=self.store).gift_wrap_available)
 
     def test_tax_stays_a_read_only_summary_and_its_percent_is_never_touched(self):

@@ -31,7 +31,7 @@
     <button type="button" class="au-acc__trigger" aria-expanded="{% if gift_wrap_form.errors %}true{% else %}false{% endif %}" aria-controls="fin-panel-gift-wrap">
       <span class="au-acc__icon" aria-hidden="true">🎁</span>
       <span class="au-acc__text">
-        <span class="au-acc__title">کادوپیچی <span class="au-badge{% if gift_wrap_form.gift_wrap_available.value %} au-badge--ok{% endif %}" data-testid="finance-gift-wrap-status">{% if gift_wrap_form.gift_wrap_available.value %}فعال{% else %}غیرفعال{% endif %}</span></span>
+        <span class="au-acc__title">کادوپیچی <span class="au-badge{% if shop.gift_wrap_available %} au-badge--ok{% endif %}" data-testid="finance-gift-wrap-status">{% if shop.gift_wrap_available %}فعال{% else %}غیرفعال{% endif %}</span></span>
         <span class="au-acc__desc">افزونه‌ی اختیاریِ سبد خرید — مستقل از خانواده‌ی بصریِ فروشگاه</span>
       </span>
       <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
@@ -40,6 +40,7 @@
   <div class="au-acc__panel" id="fin-panel-gift-wrap"{% if not gift_wrap_form.errors %} hidden{% endif %}>
     <form method="post" action="{% url 'dashboard:settings-gift-wrap' %}" enctype="multipart/form-data">
       {% csrf_token %}
+      {% if gift_wrap_form.errors %}<div class="au-note au-note--danger" role="alert" data-testid="finance-gift-wrap-unsaved">تغییرات کادوپیچی ذخیره نشد؛ نشانِ «فعال» بالا همچنان وضعیتِ واقعیِ ذخیره‌شده است. خطاهای زیر را اصلاح و دوباره ذخیره کنید.</div>{% endif %}
       <div class="form-row">
         <div class="form-group">
           <label class="au-switch">
