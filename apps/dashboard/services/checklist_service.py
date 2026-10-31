@@ -216,22 +216,29 @@ def _search_visibility_complete(store, shop):
     return bool(url) and not seo_policy.is_non_public_host(urlsplit(url).netloc)
 
 
-def _sales_prerequisites_complete(store, shop):
-    """Everything that must exist before the shop CAN be published: basic information, an installed industry template, one real active
-    product, one active shipping method and one way to pay. Tax and a custom domain are optional and never block this."""
+def _publish_prerequisites_complete(store, shop):
+    """READY TO PUBLISH — the recommended minimum before opening the shop (this is the pre-existing rule, unchanged): basic information, an
+    installed industry template, one real active product and one active shipping method / pickup. A payment method is deliberately NOT here:
+    the platform's own publish authority (``onboarding_publish_service.complete_onboarding``) only needs an applied template, and a shop can
+    legitimately open as a showcase first. Tax and a custom domain are optional and never block this."""
     return (
         _store_information_complete(store, shop)
         and _industry_complete(store, shop)
         and _industry_template_complete(store, shop)
         and _product_publish_complete(store, shop)
         and _shipping_complete(store, shop)
-        and _payment_gateway_complete(store, shop)
     )
+
+
+def _sales_prerequisites_complete(store, shop):
+    """READY TO SELL — ready to publish AND a customer can actually pay: any ACTIVE payment method (an online gateway, cash on delivery or
+    card-to-card all count — they are the same ``PaymentGatewayConfig`` rows)."""
+    return _publish_prerequisites_complete(store, shop) and _payment_gateway_complete(store, shop)
 
 
 def _publish_complete(store, shop):
     """«انتشار فروشگاه» = the shop is REALLY public (publication authority) — not merely «ready to publish»."""
-    return is_publicly_visible(store) and _sales_prerequisites_complete(store, shop)
+    return is_publicly_visible(store) and _publish_prerequisites_complete(store, shop)
 
 
 def _industry_installation(store):
@@ -441,6 +448,9 @@ def build_setup_checklist(store, request):
     required = [step for step in steps if step["required"]]
     required_done = sum(1 for step in required if step["is_complete"])
     sell_blockers = [step for step in required if step["key"] != "publish" and not step["is_complete"]]
+    done_keys = {step["key"] for step in steps if step["is_complete"]}
+    publish_gate = {"store_info", "industry", "industry_template", "product_publish", "shipping"}
+    ready_to_publish = publish_gate <= done_keys
     publish = next((step for step in steps if step["key"] == "publish"), None)
     is_live = bool(publish and publish["is_complete"])
 
@@ -474,7 +484,8 @@ def build_setup_checklist(store, request):
         "required_total": len(required),
         "required_percent": round(required_done * 100 / len(required)) if required else 0,
         "sell_blockers": [step["label"] for step in sell_blockers],
-        "ready_to_publish": not sell_blockers,
+        "ready_to_publish": ready_to_publish,          # may open the shop (no payment needed)
+        "ready_to_sell": not sell_blockers,            # a customer can really buy (needs an active payment method too)
         "is_live": is_live,
         "primary_action": primary,
         "auto_done_labels": [step["label"] for step in steps if step["auto_done"]],

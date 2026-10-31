@@ -496,11 +496,11 @@ class BuildSetupChecklistTests(TestCase):
         )
         result = build_setup_checklist(self.store, self.request)
         step = next(s for s in result["steps"] if s["key"] == "publish")
-        self.assertFalse(step["is_complete"], "no way to pay yet")
-        PaymentGatewayConfig.objects.create(store=self.store, gateway_code=PaymentGatewayConfig.GatewayCode.COD, is_active=True)
-        result = build_setup_checklist(self.store, self.request)
-        step = next(s for s in result["steps"] if s["key"] == "publish")
-        self.assertTrue(step["is_complete"])
+        # payment is NOT a publish prerequisite (the platform's own publish authority only needs a template); it gates READY TO SELL
+        self.assertTrue(step["is_complete"], "a shop with no way to pay yet may still be published")
+        self.assertTrue(result["ready_to_publish"])
+        self.assertFalse(result["ready_to_sell"])
+        self.assertIn("درگاه پرداخت", result["sell_blockers"])
 
     def test_publish_step_not_blocked_by_optional_tax_or_domain(self):
         """مالیات و دامنه‌ی اختصاصی هرگز نباید در چکِ انتشار باشند — حتی
@@ -727,6 +727,56 @@ class HonestChecklistAggregatesTests(TestCase):
         self.assertFalse(result["is_live"])
         self.assertIn("انتخاب صنف", result["sell_blockers"])
         self.assertFalse(result["all_complete"])
+
+    def _publishable_store(self):
+        """Everything except a payment method."""
+        ShopSettings.objects.create(store=self.store, description="فروشگاه")
+        template = IndustryTemplate.objects.create(slug="rs-ind", name="پوشاک", version=1, readiness=IndustryTemplate.Readiness.PRODUCTION_READY)
+        StoreIndustryInstallation.objects.create(store=self.store, industry_template=template, installed_version=1,
+                                                 status=StoreIndustryInstallation.Status.COMPLETED)
+        main = Category.objects.create(store=self.store, name="پوشاک", slug="rs-main")
+        sub = Category.objects.create(store=self.store, name="تیشرت", slug="rs-sub", parent=main)
+        vendor = Vendor.objects.create(store=self.store, name="ف", slug="rs-vendor")
+        Product.objects.create(store=self.store, vendor=vendor, category=sub, name="تیشرت", slug="rs-p", sku="RS-1",
+                               price=Decimal("100000"), stock=5, status=Product.Status.ACTIVE)
+        ShippingMethod.objects.create(store=self.store, name="پست", slug="rs-post", cost=Decimal("50000"), is_active=True)
+
+    def test_ready_to_publish_does_not_need_payment_but_ready_to_sell_does(self):
+        self._publishable_store()
+        result = self._result()
+        self.assertTrue(result["ready_to_publish"])
+        self.assertFalse(result["ready_to_sell"])
+        self.assertEqual(result["sell_blockers"], ["درگاه پرداخت"])
+
+    def test_every_kind_of_active_payment_method_makes_the_shop_ready_to_sell(self):
+        """Online gateway, cash on delivery and card-to-card are the same PaymentGatewayConfig rows — none is privileged, none is excluded."""
+        self._publishable_store()
+        for code in (PaymentGatewayConfig.GatewayCode.COD, PaymentGatewayConfig.GatewayCode.CARD_TO_CARD, PaymentGatewayConfig.GatewayCode.ZIBAL):
+            PaymentGatewayConfig.objects.filter(store=self.store).delete()
+            PaymentGatewayConfig.objects.create(store=self.store, gateway_code=code, is_active=True)
+            result = self._result()
+            self.assertTrue(result["ready_to_sell"], code)
+            self.assertNotIn("درگاه پرداخت", result["sell_blockers"], code)
+
+    def test_an_inactive_payment_method_does_not_make_the_shop_ready_to_sell(self):
+        self._publishable_store()
+        PaymentGatewayConfig.objects.create(store=self.store, gateway_code=PaymentGatewayConfig.GatewayCode.COD, is_active=False)
+        self.assertFalse(self._result()["ready_to_sell"])
+
+    def test_a_public_shop_without_payment_is_live_but_not_ready_to_sell(self):
+        self._publishable_store()
+        self.store.onboarding_completed_at = timezone.now()
+        self.store.save(update_fields=["onboarding_completed_at"])
+        result = self._result()
+        self.assertTrue(result["is_live"])                 # it IS public — the checklist says so truthfully
+        self.assertFalse(result["ready_to_sell"])
+        self.assertFalse(result["all_complete"])           # no celebration until a customer can actually buy
+
+    def test_another_stores_payment_method_never_counts(self):
+        self._publishable_store()
+        other = Store.objects.create(name="Other", slug="rs-other", status=Store.Status.ACTIVE)
+        PaymentGatewayConfig.objects.create(store=other, gateway_code=PaymentGatewayConfig.GatewayCode.COD, is_active=True)
+        self.assertFalse(self._result()["ready_to_sell"])
 
     def test_a_store_that_is_not_public_is_never_reported_live(self):
         self.store.status = Store.Status.PROVISIONING

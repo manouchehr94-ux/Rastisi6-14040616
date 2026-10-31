@@ -5,8 +5,10 @@
     <div>
       <h3>چک‌لیست راه‌اندازی فروشگاه</h3>
       <div class="hint" data-testid="setup-summary">
-        {% if setup_checklist.is_live %}فروشگاه شما منتشر شده است؛ کارهای باقی‌مانده اختیاری‌اند.
-        {% elif setup_checklist.ready_to_publish %}همه‌ی کارهای ضروری انجام شد — فروشگاه آماده‌ی انتشار است.
+        {% if setup_checklist.is_live and setup_checklist.ready_to_sell %}فروشگاه شما منتشر شده و آماده‌ی فروش است؛ کارهای باقی‌مانده اختیاری‌اند.
+        {% elif setup_checklist.is_live %}فروشگاه شما منتشر شده است اما هنوز آماده‌ی فروش نیست.
+        {% elif setup_checklist.ready_to_sell %}همه‌ی کارهای ضروری انجام شد — فروشگاه آماده‌ی انتشار و فروش است.
+        {% elif setup_checklist.ready_to_publish %}فروشگاه آماده‌ی انتشار است؛ برای فروش هنوز یک روش پرداخت فعال لازم است.
         {% else %}{{ setup_checklist.required_done|fa_number }} از {{ setup_checklist.required_total|fa_number }} کار ضروری برای شروع فروش انجام شده است.{% endif %}
       </div>
     </div>
