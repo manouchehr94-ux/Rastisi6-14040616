@@ -1,0 +1,11 @@
+{
+  "template_key": "neon_digital_store",
+  "version": "1",
+  "content_hash": "9ad042a85374b5a7650053e78b4224ddb397e21bb3f6188b8efda619974ec5c9",
+  "preview_input_fingerprint": "723fd6543b67617261efab22e000eebfd46df6b25b47fbb5bec491aadaf3eb43",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

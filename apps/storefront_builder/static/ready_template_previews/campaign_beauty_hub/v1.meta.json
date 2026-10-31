@@ -1,0 +1,11 @@
+{
+  "template_key": "campaign_beauty_hub",
+  "version": "1",
+  "content_hash": "bb41b569611f154b94a4edbd1b614a38011d56212059e0a3923c8bc9748497ba",
+  "preview_input_fingerprint": "6d914389c1bd6012988777fbc7ed7b2af48af6b57f96a7ec90de00aa32d3e772",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}
