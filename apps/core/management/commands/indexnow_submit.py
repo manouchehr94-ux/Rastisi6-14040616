@@ -22,10 +22,11 @@ class Command(BaseCommand):
         store = Store.objects.filter(slug=opts["store"]).first()
         if store is None:
             raise CommandError("unknown store")
-        domain = (StoreDomain.objects.filter(store=store, retired_at__isnull=True, is_primary=True).first()
-                  or StoreDomain.objects.filter(store=store, retired_at__isnull=True).first())
+        verified = StoreDomain.objects.filter(store=store, retired_at__isnull=True,
+                                              verification_status=StoreDomain.VerificationStatus.VERIFIED)
+        domain = verified.filter(is_primary=True).first() or verified.first()
         if domain is None:
-            raise CommandError("the store has no domain")
+            raise CommandError("the store has no verified domain")
         request = RequestFactory().get("/", HTTP_HOST=domain.hostname, secure=True)
         request.store = store
         state = seo_policy.indexability(request, store)

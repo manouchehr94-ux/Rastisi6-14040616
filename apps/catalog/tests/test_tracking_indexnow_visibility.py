@@ -175,6 +175,43 @@ class TrackingAndIndexNowTests(TestCase):
         res = indexnow.submit(self.a, origin, [f"{origin}/"], indexable=True, transport=boom, sleep=lambda s: None)
         self.assertEqual(res.status, "failed")
 
+    @override_settings(RASTISI_INDEXNOW_ENABLED=True)
+    def test_a_host_that_is_not_a_verified_domain_of_the_store_is_never_submitted(self):
+        transport = mock.Mock(return_value=200)
+        pending = StoreDomain.objects.create(store=self.a, hostname="pending.example.com", domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN,
+                                             verification_status=StoreDomain.VerificationStatus.PENDING, verification_requested_at=timezone.now(),
+                                             verification_token="tok-pending-test")
+        for host in (pending.hostname, HOST_B, "never-registered.example.com"):             # unverified / another store's / unknown
+            res = indexnow.submit(self.a, f"https://{host}", [f"https://{host}/"], indexable=True, transport=transport)
+            self.assertEqual(res.status, "host_not_verified", host)
+        pending.verification_status = StoreDomain.VerificationStatus.VERIFIED
+        pending.verified_at = timezone.now()
+        pending.retired_at = timezone.now()                                                  # verified but retired
+        pending.save()
+        self.assertEqual(indexnow.submit(self.a, f"https://{pending.hostname}", [f"https://{pending.hostname}/"], indexable=True,
+                                         transport=transport).status, "host_not_verified")
+        transport.assert_not_called()
+
+    def test_is_verified_host_ignores_ports_and_is_store_scoped(self):
+        self.assertTrue(indexnow.is_verified_host(self.a, HOST_A))
+        self.assertTrue(indexnow.is_verified_host(self.a, f"{HOST_A}:8000"))
+        self.assertFalse(indexnow.is_verified_host(self.a, HOST_B))
+        self.assertFalse(indexnow.is_verified_host(self.b, HOST_A))
+        self.assertFalse(indexnow.is_verified_host(self.a, "not a host"))
+
+    def test_the_key_file_of_one_store_is_not_served_by_another_stores_verified_host(self):
+        self.assertEqual(self.client.get(f"/{indexnow.key_for_store(self.b)}.txt", HTTP_HOST=HOST_A).status_code, 404)
+        self.assertEqual(self.client.get(f"/{indexnow.key_for_store(self.b)}.txt", HTTP_HOST=HOST_B).status_code, 200)
+
+    def test_indexnow_is_off_by_default_in_the_project_settings(self):
+        import importlib
+        import os
+        with mock.patch.dict(os.environ):
+            os.environ.pop("RASTISI_INDEXNOW_ENABLED", None)
+            from shop_core import settings as project_settings
+            self.assertFalse(importlib.reload(project_settings).RASTISI_INDEXNOW_ENABLED)
+        importlib.reload(project_settings)
+
     def test_command_defaults_to_a_dry_run_that_sends_nothing(self):
         from io import StringIO
 

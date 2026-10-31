@@ -48,10 +48,26 @@ def key_matches(store, candidate: str) -> bool:
     return bool(candidate) and hmac.compare_digest(key_for_store(store), candidate)
 
 
+def is_verified_host(store, host: str) -> bool:
+    """True only when ``host`` (port ignored) is a VERIFIED, not retired domain of THIS store — independent of how the request was routed.
+    A key file or a submission for any other host (another store's, an unverified/pending/failed/retired one, a guessed name) is refused."""
+    from apps.stores.hostnames import normalize_hostname
+    from apps.stores.models import StoreDomain
+    from apps.stores.resolution import strip_port
+
+    try:
+        name = normalize_hostname(strip_port(host))
+    except Exception:                                                       # noqa: BLE001 - not a valid host name → not verified
+        return False
+    return StoreDomain.objects.filter(
+        store=store, hostname=name, verification_status=StoreDomain.VerificationStatus.VERIFIED, retired_at__isnull=True,
+    ).exists()
+
+
 @dataclass(frozen=True)
 class IndexNowResult:
     sent: bool
-    status: str            # disabled | not_public | nothing_to_send | sent | failed
+    status: str            # disabled | not_public | host_not_verified | nothing_to_send | sent | failed
     submitted: int = 0
     http_status: int | None = None
     detail: str = ""
@@ -93,6 +109,8 @@ def submit(store, origin: str, urls: Iterable[str], *, indexable: bool,
     if not indexable:
         return IndexNowResult(False, "not_public", detail="The store is not publicly indexable yet.")
     payload = build_payload(store, origin, urls)
+    if not is_verified_host(store, payload["host"]):
+        return IndexNowResult(False, "host_not_verified", detail="The host is not a verified domain of this store.")
     if not payload["urlList"]:
         return IndexNowResult(False, "nothing_to_send")
     send = transport or _post

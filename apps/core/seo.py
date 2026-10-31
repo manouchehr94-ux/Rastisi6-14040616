@@ -93,6 +93,7 @@ def indexnow_key_file(request, key):
         store = resolve_store_for_storefront(request)
     except Exception:                                         # noqa: BLE001
         raise Http404("not found")
-    if not indexnow.key_matches(store, key) or not seo_policy.indexability(request, store).indexable:
+    if (not indexnow.key_matches(store, key) or not indexnow.is_verified_host(store, request.get_host())
+            or not seo_policy.indexability(request, store).indexable):
         raise Http404("not found")
     return HttpResponse(key, content_type="text/plain")
