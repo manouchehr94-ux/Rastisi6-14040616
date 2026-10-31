@@ -5,4 +5,5 @@
 - Graphify is a navigation map, not the source of truth. Verify relevant source files and tests before editing.
 - Never commit `graphify-out/` or `.graphify-venv/`.
 - Preserve tenant isolation, Store scoping, permissions, and cross-host/domain behavior.
-- The canonical Git remote is `rastisi5`. Do not push to legacy `origin` unless explicitly requested.
+- Git remote for the current development cycle: `origin` = `https://github.com/manouchehr94-ux/Rastisi6-14040616` (owner decision, 2026-10-31; the Windows QA builds are received from it). Do not use `rastisi5` (a separate, older repository).
+- Never add, change or remove Git remotes, and never push, merge, deploy, migrate or backfill, without explicit authorization from the owner for that specific action.
