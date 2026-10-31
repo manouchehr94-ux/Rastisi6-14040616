@@ -120,9 +120,42 @@ addendum) holds skeletal templates at `review_required`, and a re-seed or
 Existing stores' installed categories/attributes are never touched by this.
 
 Skipping this step is exactly the production bug this section exists to
-prevent: a fresh database that never runs `seed_industry_templates` silently
-ends up with zero Industry Templates, and onboarding's industry-selection
-step falls back to its (otherwise correct) empty state for every merchant.
+prevent: a fresh database that never loads the catalogue ends up with zero
+Industry Templates. Choosing an industry is **mandatory** for a new shop (a
+business that is not listed picks «سایر (صنف آزاد)»), so onboarding's industry
+step now shows an honest «the industry list is not ready» message to the
+seller, writes an error to the log and offers no way around it — loading the
+catalogue is a platform bootstrap step, never something a customer request
+triggers.
+
+### 3.1 Platform bootstrap: `ensure_industry_registry`
+
+For a **fresh environment** (a new production/staging database, a QA/Windows
+database) use the controlled, repeatable bootstrap instead of the full seed:
+
+```
+python manage.py migrate
+python manage.py ensure_industry_registry            # read-only report; exit code 1 when not ready
+python manage.py ensure_industry_registry --apply    # loads ONLY the missing templates, then reports again
+python manage.py check --database default            # rastisi.W010 = the catalogue is not loaded / «سایر» not offerable
+```
+
+* It is idempotent: a database that is already complete is left byte-for-byte
+  as it was. `--apply` calls `seed_industry_templates --only-missing`, which
+  creates templates whose `(slug, version)` does not exist yet and never runs
+  `update_or_create` over an existing row (so it cannot change a record that an
+  operator edited, nor any Store installation). The six legacy templates it may
+  create are deprecated in the same run, so they are never offered.
+* "Ready" means: every registry entry exists in the database, at least one
+  template is offerable, and «سایر (صنف آزاد)» (`other`) is offerable — the
+  guarantee that every seller always has a valid choice.
+* Use the full `seed_industry_templates` (whose `update_or_create` re-syncs
+  existing rows) only deliberately — when the registry itself changed — and
+  never casually on production.
+* It is **not** run from a request, a login or a migration (a migration is the
+  wrong place: see above; a request would be heavy and customer-triggered).
+  Add the `--apply` line to the deploy pipeline right after `migrate`; this
+  repository contains no pipeline, so that edit is part of the deploy work.
 
 ## 4. Static files
 
