@@ -50,47 +50,10 @@
 <div class="card" style="margin-bottom:18px;text-align:center;padding:28px 20px">
   <div style="font-size:34px;line-height:1">🎉</div>
   <h3 style="margin-top:10px">فروشگاه شما آماده است!</h3>
-  <p class="hint" style="margin-top:4px">همه‌ی مراحل چک‌لیست راه‌اندازی تکمیل شده‌اند.</p>
+  <p class="hint" style="margin-top:4px">همه‌ی کارهای ضروری انجام شده و فروشگاه منتشر است؛ کارهای اختیاری را هر زمان خواستید ادامه دهید.</p>
 </div>
 {% elif setup_checklist %}
-<div class="card" x-data="{ setupChecklistOpen: true }" style="margin-bottom:18px">
-  <div class="card-head" style="cursor:pointer" @click="setupChecklistOpen = !setupChecklistOpen">
-    <div>
-      <h3>چک‌لیست راه‌اندازی فروشگاه</h3>
-      <div class="hint">{{ setup_checklist.completed_count|fa_number }} از {{ setup_checklist.total_count|fa_number }} مرحله تکمیل شده</div>
-    </div>
-    <span style="font-size:13px;font-weight:700;color:var(--primary)">{{ setup_checklist.percent|fa_number }}٪</span>
-  </div>
-  <div class="progress" style="margin:0 18px;margin-top:-1px"><i style="width:{{ setup_checklist.percent }}%"></i></div>
-  <div class="card-body" x-show="setupChecklistOpen" x-cloak>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px">
-      {% for step in setup_checklist.steps %}
-      <a href="{{ step.url }}" style="display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:11px;text-decoration:none;color:inherit;transition:.18s;border:1px solid var(--border){% if not step.is_unlocked %};background:var(--bg);color:var(--muted){% elif step.is_next %};border-color:var(--primary);box-shadow:0 0 0 1px var(--primary){% endif %}"
-         {% if not step.is_unlocked %}title="{{ step.locked_reason }} — همچنان می‌توانید این مرحله را هم‌اکنون باز کنید."{% endif %}
-         onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='{% if step.is_next %}var(--primary){% else %}var(--border){% endif %}'">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:18px">{% if step.is_complete %}✅{% elif not step.is_unlocked %}🔒{% else %}{{ step.icon }}{% endif %}</span>
-          <span style="flex:1;font-size:13px;font-weight:600">{{ step.label }}</span>
-          {% if step.is_complete %}
-          <span class="badge b-green">تکمیل‌شده</span>
-          {% elif not step.is_unlocked %}
-          <span class="badge b-gray">قفل</span>
-          {% elif step.is_next %}
-          <span class="btn btn-primary btn-sm">▶ مرحله‌ی بعدی</span>
-          {% else %}
-          <span class="btn btn-sm">شروع</span>
-          {% endif %}
-        </div>
-        {% if not step.is_unlocked %}
-        <div style="font-size:11px;color:var(--muted);padding-inline-start:28px">🔒 {{ step.locked_reason }}</div>
-        {% elif step.description %}
-        <div style="font-size:11px;color:var(--muted);padding-inline-start:28px">{{ step.description }}</div>
-        {% endif %}
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-</div>
+{% include "dashboard/partials/setup_checklist.html" %}
 {% endif %}
 
 <div class="grid g-4" style="margin-bottom:18px">

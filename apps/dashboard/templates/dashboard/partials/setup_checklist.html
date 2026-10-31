@@ -1,0 +1,70 @@
+{% load persian %}
+{# چک‌لیست راه‌اندازی فروشگاه — مراحل ضروری و اختیاری جدا، پیشرفتِ واقعی (فقط ضروری‌ها)، یک اقدامِ اصلی، و گروه‌بندی بر اساسِ هدفِ فروشنده. #}
+<div class="card setup-card" x-data="{ open: true }" style="margin-bottom:18px" data-testid="setup-checklist">
+  <div class="card-head" style="cursor:pointer" @click="open = !open" role="button" tabindex="0" @keydown.enter="open = !open" :aria-expanded="open">
+    <div>
+      <h3>چک‌لیست راه‌اندازی فروشگاه</h3>
+      <div class="hint" data-testid="setup-summary">
+        {% if setup_checklist.is_live %}فروشگاه شما منتشر شده است؛ کارهای باقی‌مانده اختیاری‌اند.
+        {% elif setup_checklist.ready_to_publish %}همه‌ی کارهای ضروری انجام شد — فروشگاه آماده‌ی انتشار است.
+        {% else %}{{ setup_checklist.required_done|fa_number }} از {{ setup_checklist.required_total|fa_number }} کار ضروری برای شروع فروش انجام شده است.{% endif %}
+      </div>
+    </div>
+    <span class="setup-pct" data-testid="setup-percent">{{ setup_checklist.required_percent|fa_number }}٪</span>
+  </div>
+  <div class="progress" style="margin:0 18px;margin-top:-1px" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ setup_checklist.required_percent }}" aria-label="پیشرفت کارهای ضروری"><i style="width:{{ setup_checklist.required_percent }}%"></i></div>
+  <div class="card-body" x-show="open" x-cloak>
+    {% if setup_checklist.primary_action %}
+    <div class="setup-primary" data-testid="setup-primary">
+      <div>
+        <b>قدم بعدی: {{ setup_checklist.primary_action.label }}</b>
+        {% if setup_checklist.primary_action.description %}<div class="hint">{{ setup_checklist.primary_action.description }}</div>{% endif %}
+        {% if setup_checklist.primary_action.state != "ready" %}<div class="hint">{{ setup_checklist.primary_action.state_label }}</div>{% endif %}
+      </div>
+      <a class="btn btn-primary" href="{{ setup_checklist.primary_action.url }}">ادامه‌ی راه‌اندازی</a>
+    </div>
+    {% endif %}
+    {% if setup_checklist.auto_done_labels %}
+    <p class="setup-auto" data-testid="setup-auto">🤖 راستی‌سی خودش انجام داد: {{ setup_checklist.auto_done_labels|join:"، " }}</p>
+    {% endif %}
+    {% if setup_checklist.sell_blockers %}
+    <p class="hint" data-testid="setup-blockers">برای شروع فروش هنوز لازم است: {{ setup_checklist.sell_blockers|join:"، " }}.</p>
+    {% endif %}
+    <div class="setup-groups">
+      {% for group in setup_checklist.groups %}
+      <details class="setup-group" data-group="{{ group.key }}"{% if not group.is_done %} open{% endif %}>
+        <summary>
+          <span>{{ group.label }}</span>
+          {% if group.required_total %}<small>{{ group.required_done|fa_number }} از {{ group.required_total|fa_number }} ضروری</small>{% else %}<small>اختیاری</small>{% endif %}
+        </summary>
+        <ul class="setup-steps">
+          {% for step in group.steps %}
+          <li class="setup-step setup-step--{{ step.state }}" data-step="{{ step.key }}" data-state="{{ step.state }}">
+            <a href="{{ step.url }}"{% if step.state == "blocked" and step.locked_reason %} title="{{ step.locked_reason }} — همچنان می‌توانید این مرحله را هم‌اکنون باز کنید."{% endif %}>
+              <span class="setup-step__icon" aria-hidden="true">{% if step.state == "done" %}✅{% elif step.state == "needs_action" %}⏳{% elif step.state == "processing" %}⚙️{% elif step.state == "needs_fix" %}⚠️{% else %}{{ step.icon }}{% endif %}</span>
+              <span class="setup-step__label">{{ step.label }}{% if step.description and step.state != "done" %}<small>{{ step.description }}</small>{% endif %}</span>
+              <span class="badge {% if step.state == 'done' %}b-green{% elif step.state == 'needs_action' %}b-amber{% elif step.state == 'processing' %}b-blue{% elif step.state == 'needs_fix' %}b-red{% else %}b-gray{% endif %}">{{ step.state_label }}{% if step.auto_done %} · خودکار{% endif %}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<style>
+.setup-pct{font-size:13px;font-weight:800;color:var(--primary)}
+.setup-primary{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px;border:1.5px solid var(--primary);border-radius:12px;background:var(--primary-soft);margin-bottom:12px}
+.setup-auto{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+.setup-groups{display:grid;gap:10px}
+.setup-group{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.setup-group>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;font-weight:800;font-size:13.5px;cursor:pointer;min-height:44px;background:var(--bg)}
+.setup-group>summary small{font-weight:600;color:var(--muted)}
+.setup-steps{list-style:none;margin:0;padding:0}
+.setup-step a{display:flex;align-items:center;gap:10px;padding:10px 14px;text-decoration:none;color:inherit;border-top:1px solid var(--border);min-height:44px}
+.setup-step a:hover,.setup-step a:focus-visible{background:var(--primary-soft);outline:0}
+.setup-step__label{flex:1;font-size:13px;font-weight:600;display:grid;gap:2px}
+.setup-step__label small{font-weight:500;font-size:11.5px;color:var(--muted)}
+.setup-step--blocked .setup-step__label,.setup-step--optional .setup-step__label{color:var(--muted)}
+</style>
