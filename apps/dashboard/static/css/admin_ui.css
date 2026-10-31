@@ -256,3 +256,38 @@
 .vis-item__body em { font-style: normal; font-weight: 700; color: var(--amber-ink); }
 @media (max-width: 640px) { .vis-list { padding: 4px 4px; } }
 .au-card > .au-hint { margin: 0; padding: 10px 20px 14px; }
+
+/* «یکپارچه‌سازی‌ها» — پنج گروهِ ساده (A–E) با خلاصهٔ وضعیت؛ جزئیاتِ فنی تا خواسته نشود بسته است */
+.int-page { display: grid; gap: 14px; }
+.int-summary { display: flex; gap: 18px; justify-content: space-between; align-items: stretch; flex-wrap: wrap; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--card, #fff); }
+.int-summary--ok { border-color: var(--green-soft); background: color-mix(in srgb, var(--green-soft) 45%, var(--card, #fff)); }
+.int-summary--todo { border-color: var(--amber-soft); background: color-mix(in srgb, var(--amber-soft) 40%, var(--card, #fff)); }
+.int-summary__main { flex: 1 1 320px; min-width: 0; }
+.int-summary__main h2 { margin: 0 0 6px; font-size: 16px; line-height: 1.7; }
+.int-summary__main p { margin: 0 0 6px; font-size: 13px; line-height: 1.9; color: var(--muted); }
+.int-summary__next { color: var(--ink, inherit) !important; font-weight: 700; }
+.int-summary__stats { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.int-summary__stats li { display: grid; place-items: center; gap: 2px; min-width: 92px; padding: 10px 12px; border-radius: 12px; background: var(--bg, #f7f7fa); text-align: center; }
+.int-summary__stats b { font-size: 20px; line-height: 1.2; }
+.int-summary__stats span { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.int-sec { border: 1px solid var(--border); border-radius: 14px; background: var(--card, #fff); overflow: hidden; }
+.int-sec > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-height: 52px; padding: 12px 16px; cursor: pointer; font-weight: 800; font-size: 14px; list-style: none; }
+.int-sec > summary::-webkit-details-marker { display: none; }
+.int-sec > summary::after { content: "▾"; margin-inline-start: auto; color: var(--muted); transition: transform .15s; }
+.int-sec[open] > summary::after { transform: rotate(180deg); }
+.int-sec__title { flex: 1 1 auto; min-width: 0; }
+.int-sec__body { padding: 4px 16px 16px; display: grid; gap: 10px; }
+.int-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--bg, #f1f1f5); color: var(--muted); }
+.int-chip--ok { background: var(--green-soft); color: var(--green-ink); }
+.int-chip--todo { background: var(--amber-soft); color: var(--amber-ink); }
+.int-chip--info { background: var(--blue-soft); color: var(--blue-ink); }
+.int-tech { margin-top: 8px; border: 1px dashed var(--border); border-radius: 10px; padding: 0 10px; }
+.int-tech > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 700; font-size: 13px; }
+.int-tech > summary small { color: var(--muted); font-weight: 500; font-size: 12px; }
+.int-sub { margin: 14px 0 0; font-size: 13.5px; }
+@media (max-width: 640px) {
+  .int-summary { padding: 14px; }
+  .int-summary__stats { width: 100%; }
+  .int-summary__stats li { flex: 1 1 0; min-width: 0; }
+  .int-sec__body { padding-inline: 12px; }
+}

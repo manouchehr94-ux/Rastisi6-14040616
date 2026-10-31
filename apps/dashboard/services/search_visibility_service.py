@@ -108,3 +108,71 @@ def store_live(store, request) -> bool:
         return False
     host = urlsplit(url).netloc
     return bool(host) and not seo_policy.is_non_public_host(host)
+
+
+# ---- the seller-facing structure of the integrations page (five plain-language groups) -------------------------------------------------
+#: the readiness rows a seller can act on (everything else RastiSi does by itself and is shown folded under «جزئیات فنی»)
+SELLER_FACING_ROWS = ("published", "public_host", "products")
+AUTOMATIC_ROWS = ("robots_sitemap", "structured_data", "ai_search", "indexnow")
+#: not-yet-built services, split by the group they will belong to (all are listed — never as connectable — under «امکانات آینده»)
+SALES_TOOL_PROVIDERS = frozenset({"torob"})
+TRUST_PROVIDERS = frozenset({"enamad"})
+
+
+def _chip(state, text):
+    return {"state": state, "text": text}
+
+
+def integration_overview(seo_rows: list[dict], integration_rows: list[dict]) -> dict:
+    """The summary + one status chip per group for the page. Pure presentation over data the page already has — it contacts nobody, enables
+    nothing and never promises indexing, a ranking or an appearance in an AI answer."""
+    by_key = {row["key"]: row for row in seo_rows}
+    seller_rows = [by_key[key] for key in SELLER_FACING_ROWS if key in by_key]
+    todo = [row for row in seller_rows if row["state"] == TODO]
+    automatic = [by_key[key] for key in AUTOMATIC_ROWS if key in by_key]
+    automatic_done = [row["title"] for row in automatic if row["state"] == OK]
+    if todo:
+        visibility_chip = _chip("todo", f"{len(todo)} کار باقی مانده")
+        headline = "برای دیده‌شدن در جست‌وجو هنوز کاری لازم است"
+        next_action = todo[0]["action"] or todo[0]["title"]
+    else:
+        visibility_chip = _chip("ok", "آماده برای جست‌وجو")
+        headline = "فروشگاه شما از نظر فنی برای دیده‌شدن در جست‌وجو آماده است"
+        next_action = ""
+
+    def _rows(codes):
+        return [row for row in integration_rows if row["provider"].code in codes]
+
+    analytics = [row for row in integration_rows if row["group"] == "live"]
+    connected_analytics = [row for row in analytics if row["is_connected"]]
+    if not connected_analytics:
+        stats_chip = _chip("off", "متصل‌نشده")
+    elif any(row["effect"]["state"] == "live" for row in connected_analytics):
+        stats_chip = _chip("ok", "فعال روی صفحه‌های عمومی")
+    elif any(row["effect"]["state"] == "privacy" for row in connected_analytics):
+        stats_chip = _chip("info", "شناسه ذخیره شد؛ بارگذاری هنوز فعال نشده")
+    else:
+        stats_chip = _chip("info", "شناسه ذخیره شد؛ پس از انتشار فعال می‌شود")
+    sales_connected = [row for row in _rows(SALES_TOOL_PROVIDERS) if row["is_connected"]]
+    trust_connected = [row for row in _rows(TRUST_PROVIDERS) if row["is_connected"]]
+    return {
+        "headline": headline,
+        "next_action": next_action,
+        "ready": not todo,
+        "automatic_done": automatic_done,
+        "needs_you": [row["title"] for row in todo],
+        "seller_rows": seller_rows,
+        "automatic_rows": automatic,
+        "manual_rows": [row for row in seo_rows if row["key"] not in SELLER_FACING_ROWS + AUTOMATIC_ROWS],
+        "sales_rows": _rows(SALES_TOOL_PROVIDERS),
+        "trust_rows": _rows(TRUST_PROVIDERS),
+        "analytics_rows": analytics,
+        "chips": {
+            "visibility": visibility_chip,
+            "stats": stats_chip,
+            "sales": _chip("info", "فقط شناسه ذخیره شده") if sales_connected else _chip("off", "متصل‌نشده"),
+            "trust": _chip("info", "فقط شناسه ذخیره شده") if trust_connected else _chip("off", "متصل‌نشده"),
+            "future": _chip("off", "به‌زودی"),
+        },
+        "not_available_count": len(NOT_AVAILABLE),
+    }

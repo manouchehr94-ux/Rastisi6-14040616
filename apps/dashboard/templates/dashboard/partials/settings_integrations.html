@@ -1,35 +1,105 @@
 {% load persian dashboard_extras %}
-<div class="au-page">
-  <div class="au-intro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-    <p>اینجا می‌بینید راستی‌سی برای دیده‌شدنِ فروشگاه‌تان چه کاری خودش انجام می‌دهد و چه چیزی را فقط شما می‌توانید وصل کنید. «ذخیره‌شده» با «فعال» فرق دارد: هر ردیف می‌گوید دقیقاً چه چیزی همین حالا اتفاق می‌افتد.</p></div>
-
-  <section class="au-card" data-testid="seo-readiness" aria-labelledby="seo-readiness-title">
-    <h3 id="seo-readiness-title" class="au-card__title">آمادگی برای دیده‌شدن در جست‌وجو</h3>
-    <ul class="vis-list">
-      {% for r in seo_readiness %}
-      <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
-        <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
-        <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
-      </li>
-      {% endfor %}
+{# «یکپارچه‌سازی‌ها» — پنج گروهِ ساده: A دیده‌شدن در جست‌وجو · B آمار و بازدیدکننده · C ابزارهای فروش و مقایسهٔ قیمت · D نماد و اعتماد · E امکانات آینده.
+   فقط وضعیتِ واقعی؛ هیچ اتصالِ نمایشی، هیچ وعدهٔ رتبه/ایندکس. جزئیاتِ فنی تا خواسته نشود بسته است. #}
+<div class="au-page int-page">
+  {% with ov=integration_overview %}
+  <section class="int-summary int-summary--{% if ov.ready %}ok{% else %}todo{% endif %}" data-testid="integration-summary" role="status">
+    <div class="int-summary__main">
+      <h2>{{ ov.headline }}</h2>
+      <p>اینجا می‌بینید راستی‌سی خودش چه کاری انجام داده، چه کاری فقط از شماست، و کدام سرویس واقعاً وصل است. «ذخیره‌شده» با «فعال» فرق دارد.</p>
+      {% if ov.next_action %}<p class="int-summary__next" data-testid="integration-next-action"><b>قدم بعدی:</b> {{ ov.next_action }}</p>
+      {% else %}<p class="int-summary__next" data-testid="integration-next-action">فعلاً نیازی به انجام کاری از طرف شما نیست.</p>{% endif %}
+    </div>
+    <ul class="int-summary__stats">
+      <li><b>{{ ov.automatic_done|length|fa_number }}</b><span>کارِ خودکارِ راستی‌سی</span></li>
+      <li><b>{{ ov.needs_you|length|fa_number }}</b><span>کار از طرف شما</span></li>
+      <li><b>{{ ov.not_available_count|fa_number }}</b><span>سرویسِ به‌زودی</span></li>
     </ul>
-    <p class="au-hint">راستی‌سی کارهای فنی را خودکار انجام می‌دهد؛ ایندکس‌شدن، رتبه یا نمایش در پاسخ‌های هوش مصنوعی را هیچ ابزاری تضمین نمی‌کند.</p>
   </section>
 
-  <h3 class="vis-group">ردیابی و تبلیغات — روی صفحه‌های عمومیِ فروشگاه اعمال می‌شود</h3>
-  <p class="au-hint">این ردیاب‌ها به‌صورت پیش‌فرض روی فروشگاه بارگذاری <strong>نمی‌شوند</strong>: تا زمانی که مدیر پلتفرم پایهٔ حقوقی و رضایت بازدیدکننده را تأیید و بارگذاری را روشن نکند، شناسه فقط ذخیره می‌ماند. فقط شناسه ذخیره می‌شود (کدِ دلخواه پذیرفته نمی‌شود) و فقط روی فروشگاهِ منتشرشده با آدرسِ عمومی بارگذاری می‌شود؛ روی آدرس‌های آزمایشی هیچ دادهٔ واقعی ارسال نمی‌شود. اگر داخل GTM هم تگِ GA4 دارید، همان را دوبار وصل نکنید.</p>
-  <div class="au-accs" data-testid="integration-accordions">
-    {% for row in integration_rows %}{% if row.group == "live" %}{% include "dashboard/partials/settings_integration_row.html" %}{% endif %}{% endfor %}
-  </div>
+  {# ── A ─────────────────────────────────────────────────────────────────────────────────────────────── #}
+  <details class="int-sec" data-testid="int-section-visibility" open>
+    <summary><span class="int-sec__title">A · دیده‌شدن در گوگل و جست‌وجوی هوشمند</span><span class="int-chip int-chip--{{ ov.chips.visibility.state }}" data-testid="int-chip-visibility">{{ ov.chips.visibility.text }}</span></summary>
+    <div class="int-sec__body">
+      <section class="au-card" data-testid="seo-readiness" aria-labelledby="seo-readiness-title">
+        <h3 id="seo-readiness-title" class="au-card__title">آمادگی برای دیده‌شدن در جست‌وجو</h3>
+        <ul class="vis-list">
+          {% for r in ov.seller_rows %}
+          <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
+            <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
+            <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <details class="int-tech" data-testid="seo-technical">
+          <summary>کارهایی که راستی‌سی خودکار انجام می‌دهد <small>({{ ov.automatic_done|length|fa_number }} مورد فعال — جزئیات فنی: نقشهٔ سایت، robots، Canonical، دادهٔ ساختاریافته)</small></summary>
+          <ul class="vis-list">
+            {% for r in ov.automatic_rows %}
+            <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
+              <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
+              <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% if ov.manual_rows %}
+        <h4 class="int-sub">گام‌های دستیِ شما (در حساب‌های خودتان)</h4>
+        <ul class="vis-list">
+          {% for r in ov.manual_rows %}
+          <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
+            <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
+            <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <p class="au-hint">راستی‌سی کارهای فنی را خودکار انجام می‌دهد؛ ایندکس‌شدن، رتبه یا نمایش در پاسخ‌های هوش مصنوعی را هیچ ابزاری تضمین نمی‌کند.</p>
+      </section>
+    </div>
+  </details>
 
-  <h3 class="vis-group">اعتماد و مقایسهٔ قیمت — فعلاً فقط ذخیرهٔ شناسه</h3>
-  <p class="au-hint">این دو هنوز چیزی در فروشگاه نمایش نمی‌دهند یا برای سرویسِ بیرونی نمی‌فرستند؛ شناسه‌ها برای زمانِ آماده‌شدنِ قابلیت نگه‌داری می‌شوند.</p>
-  <div class="au-accs" data-testid="integration-accordions-stored">
-    {% for row in integration_rows %}{% if row.group == "stored" %}{% include "dashboard/partials/settings_integration_row.html" %}{% endif %}{% endfor %}
-  </div>
+  {# ── B ─────────────────────────────────────────────────────────────────────────────────────────────── #}
+  <details class="int-sec" data-testid="int-section-stats">
+    <summary><span class="int-sec__title">B · آمار و بازدیدکنندگان</span><span class="int-chip int-chip--{{ ov.chips.stats.state }}" data-testid="int-chip-stats">{{ ov.chips.stats.text }}</span></summary>
+    <div class="int-sec__body">
+      <p class="au-hint">GA4، GTM و Meta Pixel به‌صورت پیش‌فرض روی فروشگاه بارگذاری <strong>نمی‌شوند</strong>: تا زمانی که مدیر پلتفرم پایهٔ حقوقی و رضایت بازدیدکننده را تأیید و بارگذاری را روشن نکند، شناسه فقط ذخیره می‌ماند. فقط شناسه ذخیره می‌شود (کدِ دلخواه پذیرفته نمی‌شود) و فقط روی فروشگاهِ منتشرشده با آدرسِ عمومی بارگذاری می‌شود. اگر داخل GTM هم تگِ GA4 دارید، همان را دوبار وصل نکنید.</p>
+      <div class="au-accs" data-testid="integration-accordions">
+        {% for row in ov.analytics_rows %}{% include "dashboard/partials/settings_integration_row.html" %}{% endfor %}
+      </div>
+    </div>
+  </details>
 
-  <h3 class="vis-group">هنوز در دسترس نیست</h3>
-  <ul class="vis-list" data-testid="visibility-not-available">
-    {% for n in visibility_not_available %}<li class="vis-item vis-item--off" data-key="{{ n.key }}"><span class="vis-item__mark" aria-hidden="true">–</span><span class="vis-item__body"><strong>{{ n.title }}</strong><span>{{ n.note }}</span></span></li>{% endfor %}
-  </ul>
+  {# ── C ─────────────────────────────────────────────────────────────────────────────────────────────── #}
+  <details class="int-sec" data-testid="int-section-sales">
+    <summary><span class="int-sec__title">C · ابزارهای فروش و مقایسهٔ قیمت</span><span class="int-chip int-chip--{{ ov.chips.sales.state }}" data-testid="int-chip-sales">{{ ov.chips.sales.text }}</span></summary>
+    <div class="int-sec__body">
+      <p class="au-hint">ترب فعلاً فقط شناسه را نگه می‌دارد؛ هنوز چیزی برای سرویسِ بیرونی ارسال نمی‌شود. فیدِ ترب و Google Merchant در «امکانات آینده» (گروه E) آمده‌اند.</p>
+      <div class="au-accs" data-testid="integration-accordions-stored">
+        {% for row in ov.sales_rows %}{% include "dashboard/partials/settings_integration_row.html" %}{% endfor %}
+      </div>
+    </div>
+  </details>
+
+  {# ── D ─────────────────────────────────────────────────────────────────────────────────────────────── #}
+  <details class="int-sec" data-testid="int-section-trust">
+    <summary><span class="int-sec__title">D · نمادها و اعتماد</span><span class="int-chip int-chip--{{ ov.chips.trust.state }}" data-testid="int-chip-trust">{{ ov.chips.trust.text }}</span></summary>
+    <div class="int-sec__body">
+      <p class="au-hint">«شناسهٔ ذخیره‌شده» با «تأییدِ واقعی» یکی نیست: راستی‌سی فقط قالبِ شناسه را می‌سنجد و از اینماد استعلام نمی‌کند.</p>
+      <div class="au-accs" data-testid="integration-accordions-trust">
+        {% for row in ov.trust_rows %}{% include "dashboard/partials/settings_integration_row.html" %}{% endfor %}
+      </div>
+    </div>
+  </details>
+
+  {# ── E ─────────────────────────────────────────────────────────────────────────────────────────────── #}
+  <details class="int-sec int-sec--future" data-testid="int-section-future">
+    <summary><span class="int-sec__title">E · امکانات آینده</span><span class="int-chip int-chip--{{ ov.chips.future.state }}" data-testid="int-chip-future">{{ ov.chips.future.text }}</span></summary>
+    <div class="int-sec__body">
+      <p class="au-hint">این سرویس‌ها هنوز ساخته نشده‌اند؛ هیچ‌کدام وصل یا فعال نیست و فرمِ اتصال ندارند.</p>
+      <ul class="vis-list" data-testid="visibility-not-available">
+        {% for n in visibility_not_available %}<li class="vis-item vis-item--off" data-key="{{ n.key }}"><span class="vis-item__mark" aria-hidden="true">–</span><span class="vis-item__body"><strong>{{ n.title }}</strong><span>{{ n.note }}</span></span></li>{% endfor %}
+      </ul>
+    </div>
+  </details>
+  {% endwith %}
 </div>

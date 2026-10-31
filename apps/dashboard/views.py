@@ -4345,6 +4345,9 @@ def _settings_context(
         "integration_rows": SimpleLazyObject(lambda: _integration_rows_with_effect(store, request)),
         "seo_readiness": SimpleLazyObject(lambda: search_visibility_service.seo_readiness(store, request)),
         "visibility_not_available": search_visibility_service.NOT_AVAILABLE,
+        "integration_overview": SimpleLazyObject(lambda: search_visibility_service.integration_overview(
+            search_visibility_service.seo_readiness(store, request), _integration_rows_with_effect(store, request),
+        )),
         "domain_overview": SimpleLazyObject(lambda: domain_settings_service.domain_overview(
             store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE),
         )),
