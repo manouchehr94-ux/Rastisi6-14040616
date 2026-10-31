@@ -1,0 +1,67 @@
+{% load persian dashboard_extras %}
+{% with code=row.provider.code %}
+    <div class="au-acc{% if integration_open == code %} is-open{% endif %}" id="int-{{ code }}" data-testid="integration-{{ code }}">
+      <div class="au-acc__head">
+        <button type="button" class="au-acc__trigger" aria-expanded="{% if integration_open == code %}true{% else %}false{% endif %}" aria-controls="int-panel-{{ code }}">
+          <span class="au-acc__icon" aria-hidden="true">{% if code == "enamad" %}🛡️{% elif code == "torob" %}🔎{% elif code == "google_analytics" %}📊{% elif code == "google_tag_manager" %}🏷️{% else %}📣{% endif %}</span>
+          <span class="au-acc__text">
+            <span class="au-acc__title">{{ row.provider.display_name }}
+              {% if row.effect.state == "live" %}<span class="au-badge au-badge--ok" data-testid="int-status" data-effect="live">{{ row.effect.text }}</span>
+              {% elif row.effect.state == "waiting" %}<span class="au-badge au-badge--info" data-testid="int-status" data-effect="waiting">{{ row.effect.text }}</span>
+              {% elif row.effect.state == "stored" %}<span class="au-badge au-badge--warn" data-testid="int-status" data-effect="stored">{{ row.effect.text }}</span>
+              {% elif row.can_reenable %}<span class="au-badge au-badge--warn" data-testid="int-status" data-effect="paused">غیرفعال — اطلاعات ذخیره است</span>
+              {% else %}<span class="au-badge" data-testid="int-status" data-effect="off">متصل‌نشده</span>{% endif %}
+            </span>
+            <span class="au-acc__desc">{{ row.provider.description|truncatechars:110 }}</span>
+          </span>
+          <svg class="au-acc__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        {% if row.is_connected or row.can_reenable %}
+        <form class="au-acc__ctrl" method="post" action="{% url 'dashboard:settings-integration-toggle' code %}">
+          {% csrf_token %}
+          <button type="submit" class="au-toggle" role="switch" aria-checked="{% if row.is_connected %}true{% else %}false{% endif %}" aria-label="فعال‌سازی {{ row.provider.display_name }}" data-testid="int-toggle"
+                  {% if row.is_connected %}data-au-confirm="اتصال {{ row.provider.display_name }} غیرفعال شود؟ اطلاعات ذخیره‌شده حفظ می‌شود و هر زمان می‌توانید دوباره فعالش کنید."{% endif %}>
+            <span class="au-toggle__track" aria-hidden="true"></span>
+            <span class="au-toggle__text">{% if row.is_connected %}فعال{% else %}غیرفعال{% endif %}</span>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+
+      <div class="au-acc__panel" id="int-panel-{{ code }}"{% if integration_open != code %} hidden{% endif %}>
+        <p class="au-hint" style="margin:0">{{ row.provider.description }}</p>
+        {% if row.connection.last_tested_at %}
+        <div class="au-note {% if row.connection.last_test_result == 'success' %}au-note--ok{% else %}au-note--danger{% endif %}" data-testid="int-last-test">
+          آخرین بررسی: {{ row.connection.last_tested_at|jalali_dt }} — {% if row.connection.last_test_result == "success" %}موفق{% else %}ناموفق{% endif %}: {{ row.connection.last_test_message }}
+        </div>
+        {% else %}<div class="au-note">هنوز بررسی انجام نشده است.</div>{% endif %}
+
+        <form method="post" action="{% url 'dashboard:settings-integration-connect' code %}" class="au-grid">
+          {% csrf_token %}
+          {% for field in row.provider.fields %}
+          <div class="au-field">
+            <label for="int-{{ code }}-{{ field.key }}">{{ field.label }}</label>
+            <input class="au-input au-input--ltr" id="int-{{ code }}-{{ field.key }}" type="{% if field.is_secret %}password{% else %}text{% endif %}" name="{{ field.key }}" dir="ltr" autocomplete="off"
+                   value="{% if not field.is_secret %}{{ row.credentials|get_item:field.key }}{% endif %}" placeholder="{{ field.placeholder }}">
+          </div>
+          {% endfor %}
+          <div class="au-acc__foot" style="grid-column:1/-1">
+            <button type="submit" class="au-btn au-btn--primary">{% if row.is_connected %}به‌روزرسانی اطلاعات{% else %}ذخیره و اتصال{% endif %}</button>
+            <a href="{{ row.provider.setup_guide }}" target="_blank" rel="noopener" class="au-btn au-btn--ghost">راهنمای اتصال</a>
+          </div>
+        </form>
+
+        {% if row.has_saved_credentials %}
+        <div class="au-acc__foot">
+          <form method="post" action="{% url 'dashboard:settings-integration-test' code %}">{% csrf_token %}
+            <button type="submit" class="au-btn au-btn--sm" title="قالبِ اطلاعاتِ ذخیره‌شده را بررسی می‌کند؛ با سرویسِ بیرونی تماسی گرفته نمی‌شود.">بررسی قالبِ اطلاعات</button></form>
+          {% if row.is_connected %}
+          <form method="post" action="{% url 'dashboard:settings-integration-disconnect' code %}" data-au-confirm="اتصال {{ row.provider.display_name }} قطع شود؟">{% csrf_token %}
+            <button type="submit" class="au-btn au-btn--sm au-btn--danger">قطع اتصال</button></form>
+          {% endif %}
+          <span class="au-hint">«بررسی قالب» فقط درستیِ قالبِ شناسه‌ها را می‌سنجد و به سرویس بیرونی درخواستی نمی‌فرستد.</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+{% endwith %}

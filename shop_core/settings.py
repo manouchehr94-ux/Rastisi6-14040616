@@ -187,6 +187,7 @@ TEMPLATES = [
                 "apps.portal.context_processors.platform_enamad_verification",
                 "apps.core.context_processors.shop_settings",
                 "apps.core.context_processors.seo",
+                "apps.core.context_processors.tracking",
                 "apps.catalog.context_processors.nav_categories",
                 "apps.cart.context_processors.cart_badge",
                 "apps.customers.context_processors.wishlist_membership",
@@ -572,3 +573,10 @@ EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env_str("DJANGO_DEFAULT_FROM_EMAIL", "no-reply@rastisi.ir")
 
 
+
+# ── Search visibility (platform-level; see apps/core/seo_policy.py and apps/core/indexnow.py) ──────────────────────────────────
+# AI crawlers that only collect TRAINING data are disallowed in robots.txt unless the platform owner sets this to "allow".
+# (Search/answer crawlers such as OAI-SearchBot, ChatGPT-User, PerplexityBot are governed separately and stay allowed.)
+RASTISI_AI_TRAINING_CRAWLERS = env_str("RASTISI_AI_TRAINING_CRAWLERS", "disallow")
+# Submitting changed URLs to IndexNow participants (Bing & co.). OFF unless the platform owner enables it explicitly; never on in QA.
+RASTISI_INDEXNOW_ENABLED = env_bool("RASTISI_INDEXNOW_ENABLED", default=False)

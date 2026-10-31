@@ -82,3 +82,17 @@ def robots_txt(request):
     state = seo_policy.indexability(request, store)
     origin = seo_policy.canonical_origin(request, store) if state.indexable else ""
     return HttpResponse("\n".join(seo_policy.robots_lines(origin=origin, indexable=state.indexable)), content_type="text/plain")
+
+
+def indexnow_key_file(request, key):
+    """``/<key>.txt`` — proves to IndexNow participants that this host's owner issued the key. Served only on a public, indexable host
+    and only for THIS store's own key (any other 32-hex name is a plain 404)."""
+    from . import indexnow
+
+    try:
+        store = resolve_store_for_storefront(request)
+    except Exception:                                         # noqa: BLE001
+        raise Http404("not found")
+    if not indexnow.key_matches(store, key) or not seo_policy.indexability(request, store).indexable:
+        raise Http404("not found")
+    return HttpResponse(key, content_type="text/plain")

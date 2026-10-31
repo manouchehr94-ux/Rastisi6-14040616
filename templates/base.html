@@ -54,8 +54,10 @@ the product quick view (MODAL).{% endcomment %}
 {% comment %}Shared password visibility toggle (eye button in its own gutter) — also covers the htmx-loaded customer login/signup modal.{% endcomment %}
 <script src="{% static 'core/password_toggle.js' %}?v=20261029-2" defer></script>
 {% block structured_data %}{% endblock %}
+{% include "partials/tracking_head.html" %}
 </head>
 <body x-data="{ loginOpen: false, mobileNavOpen: true, catMenuOpen: false, mobileDrawerOpen: false }" @open-login.window="loginOpen = true">
+{% include "partials/tracking_body.html" %}
 {% csrf_token %}
 
 {% block header %}{% endblock %}

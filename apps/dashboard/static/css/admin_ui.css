@@ -226,3 +226,33 @@
 .domain-step--done small { color: var(--green-ink); }
 .domain-guide { margin: 0; }
 .domain-guide summary { cursor: pointer; font-weight: 800; min-height: 40px; display: flex; align-items: center; }
+
+/* ---- domain page: in-panel actions ---- */
+.domain-add { display: grid; gap: 8px; margin-bottom: 16px; }
+.domain-add__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.domain-add__row .au-input { flex: 1 1 240px; }
+.domain-seller-status { display: inline-flex; align-self: start; font-weight: 800; font-size: 13px; padding: 4px 12px; border-radius: 999px; background: var(--amber-soft); color: var(--amber-ink); margin: 8px 0; }
+.domain-seller-status--ok { background: var(--green-soft); color: var(--green-ink); }
+.domain-seller-status--info { background: var(--primary-soft); color: var(--primary); }
+.domain-record { border: 1px dashed var(--border); border-radius: 12px; padding: 10px 12px; background: var(--card); margin: 8px 0; }
+.domain-record dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 6px 0; font-size: 13px; }
+.domain-record dt { color: var(--muted); font-weight: 700; }
+.domain-record dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .domain-record dl { grid-template-columns: 1fr; } }
+
+/* ── Integrations page: search-visibility readiness list + honest effect groups ── */
+.au-card__title { margin: 0; padding: 14px 20px; font-size: 15px; font-weight: 800; border-bottom: 1px solid var(--border); }
+.vis-group { margin: 22px 0 4px; font-size: 14.5px; font-weight: 800; }
+.vis-list { list-style: none; margin: 0; padding: 6px 12px; display: grid; gap: 2px; }
+.vis-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 8px; border-radius: 10px; }
+.vis-item + .vis-item { border-top: 1px dashed var(--border); border-radius: 0; }
+.vis-item__mark { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; background: var(--bg); color: var(--muted); }
+.vis-item--ok .vis-item__mark { background: var(--green-soft); color: var(--green-ink); }
+.vis-item--todo .vis-item__mark { background: var(--amber-soft); color: var(--amber-ink); }
+.vis-item--info .vis-item__mark { background: var(--blue-soft); color: var(--blue-ink); }
+.vis-item__body { display: grid; gap: 2px; min-width: 0; font-size: 13px; line-height: 1.8; }
+.vis-item__body strong { font-size: 13.5px; }
+.vis-item__body span { color: var(--muted); overflow-wrap: anywhere; }
+.vis-item__body em { font-style: normal; font-weight: 700; color: var(--amber-ink); }
+@media (max-width: 640px) { .vis-list { padding: 4px 4px; } }
+.au-card > .au-hint { margin: 0; padding: 10px 20px 14px; }

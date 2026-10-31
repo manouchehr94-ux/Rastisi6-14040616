@@ -466,3 +466,22 @@ def seo(request):
             pass
     request._seo_context = {"SEO_ORIGIN": origin, "SEO_NOINDEX": noindex, "SEO_NOINDEX_REASON": reason}
     return request._seo_context
+
+
+def tracking(request):
+    """``TRACKING_IDS`` for the public storefront templates: empty unless this request is a real, indexable public page of a Store
+    that connected the provider (see ``apps.stores.services.tracking_service``). Never raises."""
+    cached = getattr(request, "_tracking_context", None)
+    if cached is not None:
+        return cached
+    ids: dict = {}
+    store = getattr(request, "store", None)
+    if store is not None and not seo(request).get("SEO_NOINDEX", True):
+        try:
+            from apps.stores.services.tracking_service import active_tracking_ids
+
+            ids = active_tracking_ids(store)
+        except Exception:                                                   # noqa: BLE001 - analytics must never break a page
+            ids = {}
+    request._tracking_context = {"TRACKING_IDS": ids}
+    return request._tracking_context

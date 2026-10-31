@@ -113,7 +113,7 @@ from apps.core.services.audit_service import list_audit_events, record_audit_eve
 from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
-from apps.dashboard.services import domain_settings_service, import_proposals, import_service, import_xlsx
+from apps.dashboard.services import domain_settings_service, import_proposals, import_service, import_xlsx, search_visibility_service
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
 from apps.cart.services.coupon_service import (
@@ -4337,13 +4337,25 @@ def _settings_context(
         "industry_templates": _latest_active_industry_templates(),
         "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
         "industry_installation": _industry_installation_context(store),
-        "integration_rows": integration_service.connections_context(store=store),
+        "integration_rows": SimpleLazyObject(lambda: _integration_rows_with_effect(store, request)),
+        "seo_readiness": SimpleLazyObject(lambda: search_visibility_service.seo_readiness(store, request)),
+        "visibility_not_available": search_visibility_service.NOT_AVAILABLE,
         "domain_overview": SimpleLazyObject(lambda: domain_settings_service.domain_overview(
             store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE),
         )),
         "integration_open": request.session.pop("integration_open", ""),
         "active_page": "settings",
     }
+
+
+def _integration_rows_with_effect(store, request):
+    """Integration rows + the honest effect of each saved identifier (live on public pages / waiting for publish / stored only)."""
+    live = search_visibility_service.store_live(store, request)
+    rows = integration_service.connections_context(store=store)
+    for row in rows:
+        row["group"] = "live" if row["provider"].code in search_visibility_service.LIVE_ON_PUBLIC_PAGES else "stored"
+        row["effect"] = search_visibility_service.provider_effect(row["provider"].code, connected=row["is_connected"], store_live=live)
+    return rows
 
 
 def _latest_active_industry_templates():
