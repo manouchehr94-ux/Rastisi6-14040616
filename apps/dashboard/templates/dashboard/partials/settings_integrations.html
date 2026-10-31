@@ -32,7 +32,7 @@
           {% endfor %}
         </ul>
         <details class="int-tech" data-testid="seo-technical">
-          <summary>کارهایی که راستی‌سی خودکار انجام می‌دهد <small>({{ ov.automatic_done|length|fa_number }} مورد فعال — جزئیات فنی: نقشهٔ سایت، robots، Canonical، دادهٔ ساختاریافته)</small></summary>
+          <summary>کارهایی که راستی‌سی خودکار انجام می‌دهد <small>— {{ ov.automatic_done|length|fa_number }} مورد فعال؛ جزئیات فنی: نقشهٔ سایت، robots، Canonical، دادهٔ ساختاریافته</small></summary>
           <ul class="vis-list">
             {% for r in ov.automatic_rows %}
             <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
