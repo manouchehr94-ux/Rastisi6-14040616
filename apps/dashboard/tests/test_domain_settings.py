@@ -30,7 +30,7 @@ class DomainSettingsPageTests(PermissionEnforcementTestCase):
         path = reverse("portal:custom-domains", args=[self.store.public_id], urlconf="shop_core.urls_platform")
         self.assertTrue(link.endswith(path), link)
         self.assertContains(res, 'data-testid="portal-domains-link"')
-        self.assertContains(res, "مدیریت و راهنمای اتصال دامنه")
+        self.assertContains(res, "باز کردنِ پرتالِ مالک")                         # a quiet optional link, not the primary path
 
     def test_real_domain_statuses_and_next_step_are_shown(self):
         self.custom()
@@ -38,7 +38,8 @@ class DomainSettingsPageTests(PermissionEnforcementTestCase):
         res = self.client.get(self.url())
         self.assertContains(res, 'data-testid="custom-domain-row"')
         self.assertContains(res, "shop.example.com")
-        self.assertContains(res, "قدم بعدی")
+        self.assertContains(res, 'data-testid="domain-next-step"')
+        self.assertContains(res, 'data-testid="domain-phase"')
         self.assertEqual(res.context["domain_overview"]["custom_domains"][0]["overall"], "pending")
 
     @override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=(), RASTISI_CUSTOM_DOMAIN_CNAME_TARGET="")
@@ -55,7 +56,10 @@ class DomainSettingsPageTests(PermissionEnforcementTestCase):
         self.custom(verification_status="verified", is_primary=True, routing_status="connected", tls_status="ready",
                     routing_checked_at=timezone.now(), tls_checked_at=timezone.now())
         self._login(self.owner)
-        self.assertContains(self.client.get(self.url()), "فعال و آدرس اصلیِ فروشگاه")
+        res = self.client.get(self.url())
+        self.assertContains(res, "متصل و فعال")
+        self.assertContains(res, "فعلاً نیازی به انجام کاری از طرف شما نیست.")
+        self.assertNotContains(res, 'data-testid="domain-act-refresh"')
 
     def test_administrator_without_domain_manage_sees_status_but_no_portal_link(self):
         self.custom()

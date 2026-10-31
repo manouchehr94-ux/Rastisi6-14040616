@@ -55,7 +55,9 @@ class DomainPanelActionTests(PermissionEnforcementTestCase):
         self.assertEqual(d.store_id, self.store.id)
         self.assertEqual(d.domain_type, StoreDomain.DomainType.CUSTOM_DOMAIN)
         self.assertFalse(d.is_primary)  # adding never changes the live address
-        self.assertEqual(d.verification_status, StoreDomain.VerificationStatus.UNVERIFIED)
+        # the ownership record is issued right away (one button fewer) — it is only a generated token: nothing is queried or activated
+        self.assertEqual(d.verification_status, StoreDomain.VerificationStatus.PENDING)
+        self.assertTrue(d.verification_token)
         self.assertTrue(AuditLogEntry.objects.filter(store=self.store, action_code="store.custom_domain_requested").exists())
 
     def test_a_hostname_owned_by_another_store_cannot_be_taken_over(self):
@@ -198,18 +200,34 @@ class DomainPanelActionTests(PermissionEnforcementTestCase):
         self._login(self.owner)
         d = self.add()
         html = self.client.get(PAGE).content.decode()
-        self.assertIn('data-testid="domain-act-begin"', html)
+        self.assertIn('data-testid="domain-act-begin"', html)                      # (a legacy row that never got its record)
+        self.assertIn('data-phase="awaiting_ownership"', html)
         d.verification_status = S.PENDING
         d.verification_requested_at = timezone.now()
         d.verification_token = "tok123"
         d.save()
         html = self.client.get(PAGE).content.decode()
-        self.assertIn('data-testid="domain-act-check"', html)
+        self.assertIn('data-testid="domain-act-refresh"', html)                    # ONE «check status» button, not separate TXT / DNS buttons
+        self.assertNotIn('data-testid="domain-act-begin"', html)
+        self.assertIn('data-testid="domain-txt-record"', html)
         d.verification_status = S.VERIFIED
         d.verified_at = timezone.now()
         d.save()
+        with override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=("203.0.113.10",)):
+            html = self.client.get(PAGE).content.decode()
+        self.assertIn('data-phase="needs_action"', html)
+        self.assertIn('data-testid="domain-act-refresh"', html)
+        self.assertIn('data-testid="domain-routing-records"', html)
+
+    @override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=(), RASTISI_CUSTOM_DOMAIN_CNAME_TARGET="")
+    def test_when_the_platform_has_no_connection_targets_the_seller_is_told_honestly_there_is_nothing_to_do(self):
+        self.add(verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
+        self._login(self.owner)
         html = self.client.get(PAGE).content.decode()
-        self.assertIn('data-testid="domain-act-readiness"', html)
+        self.assertIn('data-phase="platform_wait"', html)
+        self.assertIn("فعلاً نیازی به انجام کاری از طرف شما نیست.", html)
+        self.assertNotIn('data-testid="domain-act-refresh"', html)                 # no dead button
+        self.assertNotIn('data-testid="domain-act-activate"', html)
 
     def test_page_never_renders_another_stores_domain_or_any_token_secret(self):
         self.add("foreign.example.com", store=self.other, verification_token="OTHERSECRETTOKEN")

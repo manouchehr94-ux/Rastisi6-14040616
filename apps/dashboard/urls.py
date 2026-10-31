@@ -265,6 +265,7 @@ urlpatterns = [
     path("settings/domain/<int:domain_id>/begin/", views_domain.settings_domain_begin, name="settings-domain-begin"),
     path("settings/domain/<int:domain_id>/check/", views_domain.settings_domain_check, name="settings-domain-check"),
     path("settings/domain/<int:domain_id>/readiness/", views_domain.settings_domain_readiness, name="settings-domain-readiness"),
+    path("settings/domain/<int:domain_id>/refresh/", views_domain.settings_domain_refresh, name="settings-domain-refresh"),
     path("settings/integrations/<str:provider_code>/connect/", views.settings_integration_connect, name="settings-integration-connect"),
     path("settings/integrations/<str:provider_code>/disconnect/", views.settings_integration_disconnect, name="settings-integration-disconnect"),
     path("settings/integrations/<str:provider_code>/toggle/", views.settings_integration_toggle, name="settings-integration-toggle"),

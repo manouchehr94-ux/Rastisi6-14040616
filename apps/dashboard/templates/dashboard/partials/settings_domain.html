@@ -1,5 +1,5 @@
 {% load persian %}
-{# «دامنه و آدرس فروشگاه»: خلاصه‌ی فقط‌خواندنی؛ مدیریتِ واقعیِ دامنه در پرتالِ مالک است (DOMAIN_MANAGE + Step-Up + Audit). #}
+{# «دامنه و آدرس فروشگاه»: ثبت و پیگیریِ دامنه داخلِ همین پنل (یک وضعیت + یک اقدامِ بعدی برای هر دامنه)؛ فقط تأییدِ نهایی با Step-Up در پرتالِ مالک است. #}
 <div class="au-page" data-testid="domain-settings">
   <div class="au-note au-note--{% if domain_overview.summary.tone == 'ok' %}ok{% elif domain_overview.summary.tone == 'warn' %}warn{% else %}info{% endif %} domain-summary" data-testid="domain-status-summary" data-summary="{{ domain_overview.summary.key }}" role="status">
     <b>{{ domain_overview.summary.title }}</b>
@@ -7,12 +7,12 @@
   </div>
 
   <div class="au-card domain-who" data-testid="domain-who-does-what">
-    <div class="au-card__head"><h2>🧭 چه کاری را کجا انجام می‌دهم؟</h2></div>
+    <div class="au-card__head"><h2>🧭 چه کاری با شما و چه کاری با راستی‌سی است؟</h2></div>
     <div class="au-card__body">
       <ul class="domain-who__list">
-        <li><b>در همین صفحه:</b> دامنه‌تان را ثبت می‌کنید، رکوردِ لازم را می‌بینید و کپی می‌کنید، و وضعیتِ تأییدِ مالکیت و اتصال را بررسی می‌کنید.</li>
-        <li><b>فعال‌سازیِ نهایی:</b> تنها قدمی که در «پرتالِ مالکِ راستی‌سی» انجام می‌شود، چون با تأییدِ دوباره (Step-Up) و ثبتِ سابقه همراه است.</li>
-        <li><b>رکوردهای DNS (TXT / A / CNAME):</b> در پنلِ شرکتی که دامنه را از آن خریده‌اید (ثبت‌کنندهٔ دامنه) اضافه می‌شوند؛ راستی‌سی مقدارهای لازم را همین‌جا نشان می‌دهد.</li>
+        <li><b>شما:</b> دامنه‌تان را وارد می‌کنید و هر جا لازم شد، یک رکورد را در پنلِ شرکتی که دامنه را از آن خریده‌اید کپی و اضافه می‌کنید.</li>
+        <li><b>راستی‌سی:</b> رکوردِ لازم را می‌سازد، مالکیت، DNS و HTTPS را بررسی می‌کند و وضعیت را همین‌جا نشان می‌دهد.</li>
+        <li><b>تأییدِ نهایی:</b> یک تأییدِ کوتاه با کدِ پیامکی در «پرتالِ مالکِ راستی‌سی»، تا بدونِ اجازهٔ شما آدرسِ فروشگاه عوض نشود.</li>
       </ul>
     </div>
   </div>
@@ -52,44 +52,67 @@
       </form>
       {% endif %}
       {% for d in domain_overview.custom_domains %}
-      <div class="au-note {% if d.tone == 'ok' %}au-note--ok{% elif d.tone == 'danger' %}au-note--danger{% else %}au-note--warn{% endif %}" data-testid="custom-domain-row">
-        <b dir="ltr">{{ d.hostname }}</b> —
-        {% if d.is_primary %}فعال و آدرس اصلیِ فروشگاه{% else %}هنوز فعال نشده{% endif %}
-        <div class="au-hint">مالکیت: {{ d.verification }} · اتصال DNS: {{ d.routing }} · HTTPS: {{ d.tls }}</div>
-        {% if d.next_step %}<div class="au-hint"><b>قدم بعدی:</b> {{ d.next_step }}{% if d.next_hint %} — {{ d.next_hint }}{% endif %}</div>{% endif %}
-        <div class="domain-seller-status domain-seller-status--{{ d.seller_tone }}" data-testid="domain-seller-status" data-action="{{ d.action }}">{{ d.seller_status }}{% if d.failed %} — مشکلی وجود دارد؛ راه‌حل را ببینید{% endif %}</div>
+      <div class="au-note {% if d.phase_tone == 'ok' %}au-note--ok{% elif d.phase_tone == 'danger' %}au-note--danger{% elif d.phase_tone == 'info' %}au-note--info{% else %}au-note--warn{% endif %} domain-row" data-testid="custom-domain-row" data-phase="{{ d.phase }}"
+           {% if d.auto_refresh %}data-autorefresh data-expected="{% if d.phase == 'awaiting_ownership' %}txt_missing{% elif d.phase == 'needs_action' %}routing_pending{% else %}tls_pending{% endif %}"{% endif %}>
+        <div class="domain-row__head"><b dir="ltr">{{ d.hostname }}</b>
+          <span class="domain-phase domain-phase--{{ d.phase_tone }}" data-testid="domain-phase" data-phase-key="{{ d.phase }}">{{ d.phase_label }}</span></div>
+        <p class="domain-next" data-testid="domain-next-step">{{ d.next_text }}</p>
+        {% if d.nothing_text %}<p class="domain-nothing" data-testid="domain-nothing-to-do">{{ d.nothing_text }}</p>{% endif %}
+        <span hidden class="domain-seller-status" data-testid="domain-seller-status" data-action="{{ d.action }}">{{ d.seller_status }}</span>
         {% if domain_overview.can_manage %}
-        {% if d.action == "begin" %}
-        <form method="post" action="{% url 'dashboard:settings-domain-begin' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-begin">شروع تأیید مالکیت</button></form>
-        {% elif d.action == "check_txt" %}
         {% if d.txt_record %}
         <div class="domain-record" data-testid="domain-txt-record">
           <p class="au-hint">در پنل DNS دامنه‌تان این رکورد را اضافه کنید:</p>
           <dl><dt>نوع</dt><dd dir="ltr">TXT</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ d.txt_record.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.txt_record.host }}">کپی</button></dd>
           <dt>مقدار</dt><dd dir="ltr"><bdi>{{ d.txt_record.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.txt_record.value }}">کپی</button></dd></dl>
         </div>
-        {% endif %}
-        <form method="post" action="{% url 'dashboard:settings-domain-check' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-check">بررسی مجدد</button></form>
-        {% elif d.action == "check_dns" or d.action == "wait_https" %}
-        {% if d.routing_records and d.routing_records.rows %}
+        {% elif d.routing_records and d.routing_records.rows and d.phase == "needs_action" %}
         <div class="domain-record" data-testid="domain-routing-records">
-          <p class="au-hint">برای اتصال دامنه، یکی از این رکوردها را (طبقِ نوعِ دامنه) ثبت کنید:</p>
-          {% for row in d.routing_records.rows %}<dl><dt>نوع</dt><dd dir="ltr">{{ row.type }}{% if row.recommended %} <small>(پیشنهادی)</small>{% endif %}</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ row.host }}</bdi></dd>
-          <dt>مقدار</dt><dd dir="ltr"><bdi>{{ row.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.value }}">کپی</button></dd></dl>{% endfor %}
+          <p class="au-hint">در پنل DNS دامنه‌تان این رکورد را اضافه کنید:</p>
+          {% for row in d.routing_records.rows %}{% if row.recommended or d.routing_records.rows|length == 1 %}<dl><dt>نوع</dt><dd dir="ltr">{{ row.type }}</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ row.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.host }}">کپی</button></dd>
+          <dt>مقدار</dt><dd dir="ltr"><bdi>{{ row.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.value }}">کپی</button></dd></dl>{% endif %}{% endfor %}
+          <span class="au-hint">اگر پنلِ DNSِ شما این نوع رکورد را نمی‌پذیرد، گزینهٔ دیگر در «تنظیمات پیشرفته» است.</span>
         </div>
-        {% elif d.routing_records %}<div class="au-note au-note--warn">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسطِ راستی‌سی تنظیم نشده؛ تا آن زمان این مرحله ممکن نیست.</div>{% endif %}
-        <form method="post" action="{% url 'dashboard:settings-domain-readiness' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-readiness">{% if d.action == "wait_https" %}بررسی دوباره{% else %}بررسی اتصال و HTTPS{% endif %}</button></form>
-        {% elif d.action == "activate" %}
-        <a class="au-btn au-btn--primary" href="{{ domain_overview.portal_url }}" data-testid="domain-act-activate">فعال‌سازی نهایی (با تأیید دوباره)</a>
-        <span class="au-hint">این قدم در پرتالِ مالک انجام می‌شود تا بدونِ تأیید، آدرسِ فروشگاه عوض نشود.</span>
         {% endif %}
+        <div class="domain-actions">
+        {% if d.button == "begin" %}
+        <form method="post" action="{% url 'dashboard:settings-domain-begin' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-begin">{{ d.button_label }}</button></form>
+        {% elif d.button == "refresh" %}
+        <form method="post" action="{% url 'dashboard:settings-domain-refresh' d.id %}" data-refresh-form>{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-refresh">{{ d.button_label }}</button></form>
+        {% elif d.button == "activate" %}
+        <a class="au-btn au-btn--primary" href="{{ domain_overview.portal_url }}" data-testid="domain-act-activate">{{ d.button_label }}</a>
+        <span class="au-hint">این تأیید در پرتالِ مالک انجام می‌شود (با کدِ پیامکی)؛ پس از آن وضعیتِ نهایی همین‌جا دیده می‌شود.</span>
         {% endif %}
-        <ol class="domain-steps" data-testid="domain-steps" aria-label="مرحله‌های اتصالِ این دامنه">
-          {% for step in d.steps %}<li class="domain-step domain-step--{{ step.state }}"><span class="domain-step__mark" aria-hidden="true"></span><span>{{ step.title }}</span><small>{{ step.state_label }}</small></li>{% endfor %}
-        </ol>
+        </div>
+        {% endif %}
+        {% if d.auto_refresh %}<span class="au-hint domain-autonote" data-testid="domain-autorefresh-note">این صفحه وضعیت را هر چند لحظه خودش بررسی می‌کند.</span>{% endif %}
+        <details class="domain-advanced" data-testid="domain-advanced">
+          <summary>تنظیمات پیشرفته</summary>
+          <div class="au-hint">مالکیت: {{ d.verification }} · اتصال DNS: {{ d.routing }} · HTTPS: {{ d.tls }}</div>
+          {% if d.next_step %}<div class="au-hint"><b>مرحلهٔ جاری:</b> {{ d.next_step }}{% if d.next_hint %} — {{ d.next_hint }}{% endif %}</div>{% endif %}
+          {% if domain_overview.can_manage %}
+          {% if d.all_txt_record %}
+          <div class="domain-record" data-testid="domain-adv-txt">
+            <p class="au-hint">رکورد تأیید مالکیت (TXT):</p>
+            <dl><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ d.all_txt_record.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.all_txt_record.host }}">کپی</button></dd>
+            <dt>مقدار</dt><dd dir="ltr"><bdi>{{ d.all_txt_record.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.all_txt_record.value }}">کپی</button></dd></dl>
+          </div>
+          {% endif %}
+          {% if d.all_routing_records.rows %}
+          <div class="domain-record" data-testid="domain-adv-routing">
+            <p class="au-hint">رکوردهای اتصال (یکی کافی است):</p>
+            {% for row in d.all_routing_records.rows %}<dl><dt>نوع</dt><dd dir="ltr">{{ row.type }}{% if row.recommended %} <small>(پیشنهادی)</small>{% endif %}</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ row.host }}</bdi></dd>
+            <dt>مقدار</dt><dd dir="ltr"><bdi>{{ row.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.value }}">کپی</button></dd></dl>{% endfor %}
+          </div>
+          {% elif d.verification != "تأییدنشده" %}<div class="au-note au-note--warn">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسطِ راستی‌سی تنظیم نشده است.</div>{% endif %}
+          {% endif %}
+          <ol class="domain-steps" data-testid="domain-steps" aria-label="مرحله‌های اتصالِ این دامنه">
+            {% for step in d.steps %}<li class="domain-step domain-step--{{ step.state }}"><span class="domain-step__mark" aria-hidden="true"></span><span>{{ step.title }}</span><small>{{ step.state_label }}</small></li>{% endfor %}
+          </ol>
+        </details>
       </div>
       {% empty %}
-      <p class="au-hint" style="margin:0">هنوز دامنه‌ی اختصاصی‌ای اضافه نشده است. اگر دامنه‌ی خودتان را دارید (مثل <bdi dir="ltr">shop.example.com</bdi>)، می‌توانید آن را به فروشگاه وصل کنید.</p>
+      <p class="au-hint" style="margin:0" data-testid="domain-register-phase"><span class="domain-phase domain-phase--info">{{ domain_overview.register_phase.label }}</span> {{ domain_overview.register_phase.text }}</p>
       {% endfor %}
       {% if not domain_overview.targets_configured %}
       <div class="au-note au-note--warn" data-testid="targets-missing">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسط مدیر زیرساختِ راستی‌سی تنظیم نشده است؛ تا آن زمان مرحله‌ی اتصال و فعال‌سازی ممکن نیست.</div>
@@ -102,16 +125,39 @@
       </ol>
       </details>
     </div>
-    <div class="au-card__foot">
-      {% if domain_overview.can_manage %}
-      <a class="au-btn au-btn--primary" href="{{ domain_overview.portal_url }}" data-testid="portal-domains-link">مدیریت و راهنمای اتصال دامنه</a>
-      <span class="au-hint">در پرتالِ مالکِ راستی‌سی باز می‌شود؛ ممکن است دوباره وارد شوید.</span>
-      {% else %}
-      <span class="au-hint" data-testid="owner-only">افزودن و فعال‌سازیِ دامنه فقط توسطِ مالکِ فروشگاه انجام می‌شود.</span>
-      {% endif %}
-    </div>
+    {% if domain_overview.can_manage %}
+    <div class="au-card__foot"><span class="au-hint">برای دیدنِ سابقه یا انجامِ تأییدِ نهایی می‌توانید «پرتالِ مالک» را هم باز کنید: <a href="{{ domain_overview.portal_url }}" data-testid="portal-domains-link">باز کردنِ پرتالِ مالک</a> (برای استفادهٔ عادی لازم نیست).</span></div>
+    {% else %}
+    <div class="au-card__foot"><span class="au-hint" data-testid="owner-only">افزودن و فعال‌سازیِ دامنه فقط توسطِ مالکِ فروشگاه انجام می‌شود.</span></div>
+    {% endif %}
   </div>
 </div>
+<style>
+.domain-row__head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.domain-phase{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;background:var(--bg,#f4f4f7)}
+.domain-next{margin:8px 0 4px;font-weight:700}.domain-nothing{margin:2px 0 8px;font-weight:700;color:var(--muted,#6b7280)}
+.domain-actions{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.domain-actions .au-btn{min-height:44px}
+.domain-advanced{margin-top:10px}.domain-advanced>summary{cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center}
+</style>
+<script>
+(function () {
+  // safe background re-check: only while this page waits for DNS / HTTPS; at most 6 POSTs, 45 s apart, only while the tab is visible
+  var row = document.querySelector('[data-autorefresh]');
+  var form = row && row.querySelector('form[data-refresh-form]');
+  if (!row || !form || !window.fetch) return;
+  var count = 0, MAX = 6, DELAY = 45000, expected = row.getAttribute('data-expected');
+  function tick() {
+    if (count >= MAX) return;
+    if (document.visibilityState !== 'visible') { setTimeout(tick, DELAY); return; }
+    count++;
+    fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok && d.outcome !== expected) location.reload(); else setTimeout(tick, DELAY); })
+      .catch(function () {});
+  }
+  setTimeout(tick, DELAY);
+})();
+</script>
 <script>
 document.addEventListener('click', function (e) {
   var btn = e.target.closest && e.target.closest('[data-copy]');

@@ -59,6 +59,11 @@ def _normalize_or_raise(raw_hostname: str) -> str:
             "دامنه‌ی اختصاصی نمی‌تواند زیردامنه‌ای از خودِ راستیسی باشد؛ برای نامِ دائمی از "
             "بخشِ «نامِ دائمی فروشگاه» استفاده کنید."
         )
+    from apps.core import seo_policy  # lazy: keeps this service free of an import-time dependency on the SEO module
+
+    if seo_policy.is_non_public_host(hostname):
+        # localhost / *.local / *.test … can never be reached by customers and ownership of them cannot be proven in public DNS
+        raise DomainVerificationError("این نام فقط برای آزمایش است و در اینترنت عمومی وجود ندارد؛ یک دامنهٔ واقعی (مثل shop.example.com) وارد کنید.")
     return hostname
 
 
@@ -417,3 +422,58 @@ def activate_custom_domain(*, store: Store, domain: StoreDomain, actor) -> Store
         after={"hostname": locked_domain.hostname},
     )
     return locked_domain
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# One «check my connection» step for the seller panel
+# ---------------------------------------------------------------------------------------------------------------------------
+@dataclass(frozen=True)
+class DomainAdvanceResult:
+    """What ONE «check status» press did. ``outcome`` is one of:
+
+    * ``txt_issued``        — the ownership record was generated (nothing was queried yet)
+    * ``txt_missing``       — the TXT record is not visible (yet); the seller has to add / wait for it
+    * ``verified_only``     — ownership just got verified but the DNS/HTTPS check could not run (see ``routing``)
+    * ``routing_unconfigured`` — the platform operator has not declared the A/CNAME targets: nothing the seller can do
+    * ``routing_pending``   — A/CNAME does not reach RastiSi yet
+    * ``tls_pending``       — DNS reaches RastiSi, HTTPS is not ready yet
+    * ``ready``             — DNS + HTTPS are ready: only the owner-level activation (Step-Up) is left
+    * ``active``            — nothing to do, the domain is already the shop's main address
+    """
+
+    outcome: str
+    ownership_just_verified: bool = False
+    routing: DnsRoutingCheck | None = None
+    tls: SslConnectionCheck | None = None
+
+
+def advance_domain_connection(*, domain: StoreDomain, actor) -> DomainAdvanceResult:
+    """Do, in order and stopping at the first thing only the seller or the platform can fix, whatever the domain's CURRENT state needs:
+    issue the TXT record → verify it → check DNS (A/CNAME) → check HTTPS. It only chains the existing checked functions (the same
+    ones the owner portal uses); it never activates a domain (activation stays behind the owner-level Step-Up) and never marks anything
+    verified by itself — ``check_dns_verification`` still has to find the real TXT record."""
+    if domain.domain_type != StoreDomain.DomainType.CUSTOM_DOMAIN:
+        raise DomainVerificationError("فقط دامنه‌ی اختصاصی بررسی اتصال دارد.")
+    if domain.is_primary and domain.verification_status == StoreDomain.VerificationStatus.VERIFIED:
+        return DomainAdvanceResult(outcome="active")
+
+    just_verified = False
+    if domain.verification_status in (StoreDomain.VerificationStatus.UNVERIFIED, StoreDomain.VerificationStatus.FAILED):
+        domain = begin_dns_verification(domain=domain, actor=actor)
+        return DomainAdvanceResult(outcome="txt_issued")
+    if domain.verification_status == StoreDomain.VerificationStatus.PENDING:
+        if not check_dns_verification(domain=domain, actor=actor):
+            return DomainAdvanceResult(outcome="txt_missing")
+        just_verified = True
+        domain.refresh_from_db()
+
+    result = refresh_custom_domain_readiness(domain=domain, actor=actor)
+    if not result.routing.configured:
+        outcome = "routing_unconfigured"
+    elif not result.routing.connected:
+        outcome = "routing_pending"
+    elif not (result.tls and result.tls.reachable):
+        outcome = "tls_pending"
+    else:
+        outcome = "ready"
+    return DomainAdvanceResult(outcome=outcome, ownership_just_verified=just_verified, routing=result.routing, tls=result.tls)
