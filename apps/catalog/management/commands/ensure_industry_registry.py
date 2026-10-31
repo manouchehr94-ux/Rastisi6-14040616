@@ -11,6 +11,7 @@ that is already complete — changes nothing. It does NOT run the full ``seed_in
 rows); use that one deliberately, with a plan, when the registry itself changed."""
 
 import json
+from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -29,7 +30,7 @@ class Command(BaseCommand):
         before = readiness.check_registry()
         if options["apply"] and (before.missing or not before.is_ready):
             if before.missing:
-                call_command("seed_industry_templates", only_missing=True, stdout=self.stderr)
+                call_command("seed_industry_templates", only_missing=True, stdout=StringIO())      # one summary line below, not 107 lines
             after = readiness.check_registry()
             applied = True
         else:

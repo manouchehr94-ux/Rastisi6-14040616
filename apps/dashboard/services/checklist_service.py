@@ -241,7 +241,9 @@ def _custom_domain_note(store, shop):
         return ""
     domain, phase = pending
     label = domain_settings_service.PHASE_LABELS[phase][0]
-    guidance = domain_settings_service.phase_guidance(domain, phase, fresh=False)
+    from apps.stores.services import domain_guide_service
+
+    guidance = domain_settings_service.phase_guidance(domain, phase, fresh=domain_guide_service.readiness_is_fresh(domain))
     text = domain_settings_service.NOTHING_TO_DO if guidance["needs_nothing"] else guidance["next_text"]
     return f"{domain.hostname} — {label}. {text}"
 

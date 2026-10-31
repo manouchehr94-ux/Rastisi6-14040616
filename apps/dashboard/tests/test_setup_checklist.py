@@ -1042,6 +1042,19 @@ class ChecklistDomainConsistencyTests(TestCase):
         self.assertEqual(step["state"], "processing")
         self.assertIn("فعلاً نیازی به انجام کاری از طرف شما نیست.", step["description"])
 
+    @override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=("203.0.113.10",))
+    def test_ready_domain_note_follows_the_freshness_of_the_last_check_like_the_domain_page(self):
+        """Found in browser QA: the note used to say «last check is stale» right after a successful check."""
+        now = timezone.now()
+        d = self._domain(verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=now,
+                         routing_status=StoreDomain.RoutingStatus.CONNECTED, tls_status=StoreDomain.TlsStatus.READY,
+                         routing_checked_at=now, tls_checked_at=now)
+        note = self._step()["description"]
+        self.assertIn("تأییدِ نهایی با کدِ پیامکی", note)
+        self.assertNotIn("قدیمی شده", note)
+        StoreDomain.objects.filter(pk=d.pk).update(routing_checked_at=now - timezone.timedelta(hours=3))
+        self.assertIn("قدیمی شده", self._step()["description"])
+
     def test_failed_verification_asks_for_a_fix(self):
         self._domain(verification_status=StoreDomain.VerificationStatus.FAILED)
         self.assertEqual(self._step()["state"], "needs_fix")

@@ -58,7 +58,6 @@
           <span class="domain-phase domain-phase--{{ d.phase_tone }}" data-testid="domain-phase" data-phase-key="{{ d.phase }}">{{ d.phase_label }}</span></div>
         <p class="domain-next" data-testid="domain-next-step">{{ d.next_text }}</p>
         {% if d.nothing_text %}<p class="domain-nothing" data-testid="domain-nothing-to-do">{{ d.nothing_text }}</p>{% endif %}
-        <span hidden class="domain-seller-status" data-testid="domain-seller-status" data-action="{{ d.action }}">{{ d.seller_status }}</span>
         {% if domain_overview.can_manage %}
         {% if d.txt_record %}
         <div class="domain-record" data-testid="domain-txt-record">
