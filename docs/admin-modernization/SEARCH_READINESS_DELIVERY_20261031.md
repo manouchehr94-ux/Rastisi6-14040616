@@ -1,5 +1,7 @@
 # RastiSi — Store launch, domain flow, Technical SEO and AI-search readiness (delivery report)
 
+> **Superseded in part by `PRE_PUSH_GATE_20261031_B.md`** (currency, tracker default, ready-to-publish vs ready-to-sell, IndexNow host check, push destination).
+
 Branch `feature/admin-panel-modernization-20261029` · base `1e1d140b4d6a83b688b0570a6befaf7b47841718` · **local commits only — nothing pushed, merged, deployed, migrated or backfilled.**
 
 ## A. Git status
