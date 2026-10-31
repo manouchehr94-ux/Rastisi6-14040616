@@ -67,7 +67,9 @@ class AdminV22ShellContractTests(SimpleTestCase):
         page = self._read("apps/dashboard/templates/dashboard/dashboard.html")
         partial = self._read("apps/dashboard/templates/dashboard/partials/setup_checklist.html")
         self.assertIn("partials/setup_checklist.html", page)
-        self.assertIn("setup_checklist.all_complete", page)
+        # a finished checklist is folded into a summary INSIDE the partial — dashboard.html must never swap it for another card
+        self.assertNotIn("setup_checklist.all_complete", page)
+        self.assertIn("setup_checklist.all_complete", partial)
         self.assertIn("چک‌لیست راه‌اندازی فروشگاه", partial)
         for token in ("setup_checklist.groups", "setup_checklist.required_percent", "setup_checklist.primary_action", "step.state", "step.url"):
             self.assertIn(token, partial)

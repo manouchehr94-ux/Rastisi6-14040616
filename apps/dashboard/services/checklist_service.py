@@ -493,6 +493,8 @@ def build_setup_checklist(store, request):
             "is_done": bool(required_members) and all(step["is_complete"] for step in required_members),
         })
 
+    optional = [step for step in steps if not step["required"]]
+    optional_pending = [step for step in optional if not step["is_complete"]]
     total_count = len(steps)
     return {
         "steps": steps,
@@ -509,6 +511,11 @@ def build_setup_checklist(store, request):
         "is_live": is_live,
         "primary_action": primary,
         "auto_done_labels": [step["label"] for step in steps if step["auto_done"]],
-        # the celebration only when every required step is done AND the shop is really public
+        # optional / growth steps: always reachable (also from the collapsed summary); never counted in the required progress
+        "optional_done": len(optional) - len(optional_pending),
+        "optional_total": len(optional),
+        "optional_pending": optional_pending,
+        # ONE predicate for the collapsed summary: every required step is done AND the shop is really public. The dashboard then
+        # shows the SAME checklist folded into a summary card (it is never removed): see ``partials/setup_checklist.html``.
         "all_complete": bool(required) and required_done == len(required) and is_live,
     }

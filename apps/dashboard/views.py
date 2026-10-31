@@ -535,6 +535,10 @@ def dashboard_home(request):
     context = dashboard_service.build_dashboard_context(store)
     context["active_page"] = "dashboard"
     context["setup_checklist"] = checklist_service.build_setup_checklist(store, request)
+    # the checklist is never removed: once the required steps are done it is folded into a summary card that can be reopened.
+    # ``?checklist=all`` opens it server-side (works without JS); the per-store key only namespaces the browser's remembered choice.
+    context["setup_checklist_open"] = request.GET.get("checklist") == "all"
+    context["setup_checklist_key"] = str(store.public_id)
     context["industry_summary"] = checklist_service.build_industry_summary(store)
     return render(request, "dashboard/dashboard.html", context)
 

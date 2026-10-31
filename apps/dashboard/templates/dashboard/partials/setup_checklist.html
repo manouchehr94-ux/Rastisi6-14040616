@@ -1,6 +1,36 @@
 {% load persian %}
 {# چک‌لیست راه‌اندازی فروشگاه — مراحل ضروری و اختیاری جدا، پیشرفتِ واقعی (فقط ضروری‌ها)، یک اقدامِ اصلی، و گروه‌بندی بر اساسِ هدفِ فروشنده. #}
-<div class="card setup-card" x-data="{ open: true }" style="margin-bottom:18px" data-testid="setup-checklist">
+<div class="card setup-card" id="setup-checklist" style="margin-bottom:18px" data-testid="setup-checklist"
+     data-mode="{% if setup_checklist.all_complete %}summary{% else %}full{% endif %}"
+     x-data="{ summary: {% if setup_checklist.all_complete %}true{% else %}false{% endif %}, open: {% if setup_checklist.all_complete and not setup_checklist_open %}false{% else %}true{% endif %}, key: 'rastisi.setup-checklist.{{ setup_checklist_key|escapejs }}',
+       init() { if (this.summary && !this.open) { try { if (window.localStorage.getItem(this.key) === 'open') this.open = true; } catch (e) {} } },
+       remember() { if (this.summary) { try { window.localStorage.setItem(this.key, this.open ? 'open' : 'closed'); } catch (e) {} } },
+       toggle() { this.open = !this.open; this.remember(); },
+       showGrowth() { this.open = true; this.remember(); this.$nextTick(() => { var g = document.querySelector('[data-goal-group=growth]'); if (g) { g.open = true; g.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }); } }">
+  {% if setup_checklist.all_complete %}
+  {# تکمیلِ مراحلِ ضروری: همان چک‌لیست به کارتِ خلاصه جمع می‌شود (حذف نمی‌شود) و هر زمان قابلِ بازشدن است. #}
+  <div class="card-head">
+    <div>
+      <h3>✅ راه‌اندازی اولیه فروشگاه تکمیل شد.</h3>
+      <div class="hint" data-testid="setup-summary">همه‌ی کارهای ضروری انجام شده و فروشگاه منتشر است؛ کارهای اختیاری را هر زمان خواستید ادامه دهید.</div>
+    </div>
+    <span class="setup-pct" data-testid="setup-percent">{{ setup_checklist.required_percent|fa_number }}٪</span>
+  </div>
+  <div class="progress" style="margin:0 18px;margin-top:-1px" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ setup_checklist.required_percent }}" aria-label="پیشرفت کارهای ضروری"><i style="width:{{ setup_checklist.required_percent }}%"></i></div>
+  <div class="card-body setup-summary" data-testid="setup-collapsed-summary">
+    <ul class="setup-facts">
+      <li data-testid="setup-fact-publish"><b>وضعیت انتشار:</b> منتشر شده و برای مشتریان قابل مشاهده است</li>
+      <li data-testid="setup-fact-required"><b>کارهای ضروری:</b> {{ setup_checklist.required_done|fa_number }} از {{ setup_checklist.required_total|fa_number }} انجام شده</li>
+      {% if setup_checklist.optional_total %}
+      <li data-testid="setup-fact-optional"><b>کارهای اختیاری:</b> {{ setup_checklist.optional_done|fa_number }} از {{ setup_checklist.optional_total|fa_number }} انجام شده{% if setup_checklist.optional_pending %} — مثلاً: {% for step in setup_checklist.optional_pending|slice:":3" %}{{ step.label }}{% if not forloop.last %}، {% endif %}{% endfor %}{% endif %}</li>
+      {% endif %}
+    </ul>
+    <div class="setup-actions">
+      <a class="btn btn-primary" data-testid="setup-view-all" href="{% if setup_checklist_open %}?{% else %}?checklist=all{% endif %}#setup-checklist" @click.prevent="toggle()"><span x-text="open ? 'بستن مراحل' : 'مشاهده همه مراحل'">{% if setup_checklist_open %}بستن مراحل{% else %}مشاهده همه مراحل{% endif %}</span></a>
+      <a class="btn" data-testid="setup-growth-link" href="?checklist=all#setup-group-growth" @click.prevent="showGrowth()">تنظیمات اختیاری و رشد فروشگاه</a>
+    </div>
+  </div>
+  {% else %}
   <div class="card-head" style="cursor:pointer" @click="open = !open" role="button" tabindex="0" @keydown.enter="open = !open" :aria-expanded="open">
     <div>
       <h3>چک‌لیست راه‌اندازی فروشگاه</h3>
@@ -15,7 +45,8 @@
     <span class="setup-pct" data-testid="setup-percent">{{ setup_checklist.required_percent|fa_number }}٪</span>
   </div>
   <div class="progress" style="margin:0 18px;margin-top:-1px" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ setup_checklist.required_percent }}" aria-label="پیشرفت کارهای ضروری"><i style="width:{{ setup_checklist.required_percent }}%"></i></div>
-  <div class="card-body" x-show="open" x-cloak>
+  {% endif %}
+  <div class="card-body" x-show="open" {% if setup_checklist.all_complete and not setup_checklist_open %}x-cloak{% endif %} data-testid="setup-full-list">
     {% if setup_checklist.primary_action %}
     <div class="setup-primary" data-testid="setup-primary">
       <div>
@@ -34,7 +65,7 @@
     {% endif %}
     <div class="setup-groups">
       {% for group in setup_checklist.groups %}
-      <details class="setup-group" data-goal-group="{{ group.key }}"{% if not group.is_done %} open{% endif %}>
+      <details class="setup-group" id="setup-group-{{ group.key }}" data-goal-group="{{ group.key }}"{% if not group.is_done %} open{% endif %}>
         <summary>
           <span>{{ group.label }}</span>
           {% if group.required_total %}<small>{{ group.required_done|fa_number }} از {{ group.required_total|fa_number }} ضروری</small>{% else %}<small>اختیاری</small>{% endif %}
@@ -60,6 +91,10 @@
 .setup-primary{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px;border:1.5px solid var(--primary);border-radius:12px;background:var(--primary-soft);margin-bottom:12px}
 .setup-auto{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
 .setup-groups{display:grid;gap:10px}
+.setup-summary{display:grid;gap:12px}
+.setup-facts{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
+.setup-actions{display:flex;gap:10px;flex-wrap:wrap}
+.setup-actions .btn{min-height:44px}
 .setup-group{border:1px solid var(--border);border-radius:12px;overflow:hidden}
 .setup-group>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;font-weight:800;font-size:13.5px;cursor:pointer;min-height:44px;background:var(--bg)}
 .setup-group>summary small{font-weight:600;color:var(--muted)}

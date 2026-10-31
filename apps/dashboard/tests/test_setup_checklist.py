@@ -574,26 +574,173 @@ class DashboardChecklistWidgetTests(TestCase):
             self.assertRegex(html, rf'data-step="{key}" data-state="(optional|needs_action|processing)"')
         self.assertNotIn("فروشگاه شما آماده است!", html)
 
-    def test_dashboard_success_state_when_all_complete_uses_the_new_wording(self):
+    def test_dashboard_never_drops_the_checklist_even_when_the_backend_says_everything_is_done(self):
+        """Regression (Windows QA f20f97cb): a finished checklist used to be REPLACED by a static «فروشگاه شما آماده است!» card."""
         from unittest import mock
 
         with mock.patch("apps.dashboard.services.checklist_service.build_setup_checklist",
-                        return_value={"steps": [], "completed_count": 1, "total_count": 1, "percent": 100, "all_complete": True}):
+                        return_value={"steps": [], "groups": [], "completed_count": 1, "total_count": 1, "percent": 100,
+                                      "required_done": 1, "required_total": 1, "required_percent": 100, "all_complete": True,
+                                      "optional_total": 0, "optional_done": 0, "optional_pending": []}):
             response = self.client.get(reverse("dashboard:dashboard"))
+        self.assertContains(response, 'data-testid="setup-checklist"')
+        self.assertContains(response, 'data-mode="summary"')
         self.assertContains(response, "کارهای ضروری انجام شده")
+        self.assertNotContains(response, "فروشگاه شما آماده است!")
 
-    def test_dashboard_shows_success_state_when_all_complete(self):
-        from unittest import mock
 
-        with mock.patch(
-            "apps.dashboard.services.checklist_service.build_setup_checklist",
-            return_value={
-                "steps": [], "completed_count": 12, "total_count": 12, "percent": 100, "all_complete": True,
-            },
-        ):
-            response = self.client.get(reverse("dashboard:dashboard"))
-        self.assertContains(response, "فروشگاه شما آماده است")
-        self.assertNotContains(response, "چک‌لیست راه‌اندازی فروشگاه")
+def _make_store_fully_set_up(store, *, payment=True, inquiry_only=False):
+    """Real rows for every required step (idempotent): info, installed industry template, categories, a product, shipping, payment, published."""
+    ShopSettings.objects.update_or_create(store=store, defaults={"description": "فروشگاه", "tax_setup_confirmed_at": timezone.now()})
+    template, _ = IndustryTemplate.objects.get_or_create(
+        slug="cl-ind", defaults={"name": "پوشاک", "version": 1, "readiness": IndustryTemplate.Readiness.PRODUCTION_READY})
+    StoreIndustryInstallation.objects.update_or_create(
+        store=store, defaults={"industry_template": template, "installed_version": 1, "status": StoreIndustryInstallation.Status.COMPLETED})
+    main, _ = Category.objects.get_or_create(store=store, slug="cl-main", defaults={"name": "پوشاک"})
+    sub, _ = Category.objects.get_or_create(store=store, slug="cl-sub", defaults={"name": "تیشرت", "parent": main})
+    vendor, _ = Vendor.objects.get_or_create(store=store, slug="cl-vendor", defaults={"name": "ف"})
+    product, _ = Product.objects.get_or_create(
+        store=store, slug="cl-p", defaults={"vendor": vendor, "category": sub, "name": "تیشرت", "sku": f"CL-{store.pk}",
+                                            "price": Decimal("100000"), "stock": 5, "status": Product.Status.ACTIVE})
+    if inquiry_only:
+        Product.objects.filter(pk=product.pk).update(price_mode_override="inquiry", is_price_inquiry=True)
+    ShippingMethod.objects.get_or_create(store=store, slug="cl-post", defaults={"name": "پست", "cost": Decimal("50000"), "is_active": True})
+    if payment:
+        PaymentGatewayConfig.objects.get_or_create(
+            store=store, gateway_code=PaymentGatewayConfig.GatewayCode.COD, defaults={"is_active": True})
+    store.status = Store.Status.ACTIVE
+    store.onboarding_completed_at = timezone.now()
+    store.save(update_fields=["status", "onboarding_completed_at"])
+
+
+class CollapsedChecklistTests(TestCase):
+    """M1 — the checklist is never removed: once the required steps are done it folds into a summary card that re-opens the SAME list."""
+
+    def setUp(self):
+        self.store = Store.objects.get(slug="akhlaghi")
+        self.staff = User.objects.create_user(username="09121121098", password="pass12345", is_staff=True)
+        _grant_akhlaghi_membership(self.staff)
+        self.client.login(username="09121121098", password="pass12345")
+        self.url = reverse("dashboard:dashboard")
+
+    def _html(self, query=""):
+        return self.client.get(self.url + query).content.decode()
+
+    @staticmethod
+    def _full_list_tag(html):
+        """The opening tag of the full 21-step list container (so attribute order never matters)."""
+        import re
+
+        return re.search(r"<div[^>]*data-testid=\"setup-full-list\"[^>]*>|<div[^>]*x-show=\"open\"[^>]*data-testid=\"setup-full-list\"[^>]*>", html).group(0)
+
+    # A — incomplete setup keeps the confirmed design untouched
+    def test_incomplete_store_keeps_the_full_checklist_design(self):
+        html = self._html()
+        self.assertIn('data-mode="full"', html)
+        self.assertEqual(html.count('class="setup-group"'), 5)
+        self.assertEqual(html.count('data-testid="setup-primary"'), 1)
+        self.assertIn("ادامه‌ی راه‌اندازی", html)
+        self.assertEqual(html.count("data-step="), 21)
+        self.assertNotIn('data-testid="setup-collapsed-summary"', html)
+
+    # B — every required step done: a summary card, and the same 21-step list is still in the page
+    def test_completed_store_shows_summary_and_keeps_all_21_steps_reachable(self):
+        _make_store_fully_set_up(self.store)
+        html = self._html()
+        self.assertIn('data-mode="summary"', html)
+        self.assertIn("راه‌اندازی اولیه فروشگاه تکمیل شد.", html)
+        self.assertIn('data-testid="setup-collapsed-summary"', html)
+        self.assertIn("مشاهده همه مراحل", html)
+        self.assertIn("تنظیمات اختیاری و رشد فروشگاه", html)
+        self.assertIn("منتشر شده", html)                                  # real publication status
+        self.assertEqual(html.count("data-step="), 21)                      # the SAME checklist, not a second one
+        self.assertEqual(html.count('class="setup-group"'), 5)
+        self.assertNotIn("فروشگاه شما آماده است!", html)
+        self.assertIn("x-cloak", self._full_list_tag(html))                  # folded by default…
+
+    def test_summary_can_be_opened_server_side_without_js_and_after_refresh(self):
+        _make_store_fully_set_up(self.store)
+        opened = self._html("?checklist=all")
+        self.assertNotIn("x-cloak", self._full_list_tag(opened))
+        self.assertIn("بستن مراحل", opened)
+        self.assertEqual(opened.count("data-step="), 21)
+        # a plain refresh goes back to the deterministic default derived from the backend state
+        self.assertIn("x-cloak", self._full_list_tag(self._html()))
+
+    def test_optional_steps_stay_reachable_from_the_summary(self):
+        _make_store_fully_set_up(self.store)
+        html = self._html()
+        self.assertIn('data-testid="setup-growth-link"', html)
+        for key in ("custom_domain", "search_visibility", "tax", "brands"):
+            self.assertIn(f'data-step="{key}"', html)
+        self.assertIn('id="setup-group-growth"', html)
+        self.assertIn('data-testid="setup-fact-optional"', html)
+
+    def test_summary_returns_to_the_full_checklist_when_a_required_step_is_undone(self):
+        _make_store_fully_set_up(self.store)
+        self.assertIn('data-mode="summary"', self._html())
+        ShippingMethod.objects.filter(store=self.store).update(is_active=False)
+        html = self._html()
+        self.assertIn('data-mode="full"', html)
+        self.assertIn("پیکربندی ارسال", html)
+
+    # C — live but not ready to take orders: never called «fully ready»
+    def test_published_but_without_payment_is_not_presented_as_ready(self):
+        _make_store_fully_set_up(self.store, payment=False)
+        result = build_setup_checklist(self.store, RequestFactory().get("/"))
+        self.assertTrue(result["is_live"])
+        self.assertFalse(result["ready_to_sell"])
+        html = self._html()
+        self.assertIn('data-mode="full"', html)
+        self.assertIn("منتشر شده است اما هنوز آماده‌ی فروش نیست", html)
+        self.assertIn("درگاه پرداخت", html.split('data-testid="setup-blockers"')[1][:200])
+        self.assertNotIn("راه‌اندازی اولیه فروشگاه تکمیل شد.", html)
+
+    # D — a fully price-inquiry shop keeps the existing ready_to_sell rule; the summary never promises «inquiries are received»
+    def test_inquiry_only_shop_summary_does_not_claim_it_receives_inquiries(self):
+        _make_store_fully_set_up(self.store, payment=False, inquiry_only=True)
+        html = self._html()
+        self.assertIn('data-mode="summary"', html)
+        self.assertNotIn("استعلام", html.split('data-testid="setup-collapsed-summary"')[1].split("</ul>")[0])
+        self.assertNotIn("دریافت سفارش", html)
+
+    def test_optional_counters_come_from_real_steps(self):
+        _make_store_fully_set_up(self.store)
+        result = build_setup_checklist(self.store, RequestFactory().get("/"))
+        optional = [s for s in result["steps"] if not s["required"]]
+        self.assertEqual(result["optional_total"], len(optional))
+        self.assertEqual(result["optional_done"], len([s for s in optional if s["is_complete"]]))
+        self.assertEqual(len(result["optional_pending"]), result["optional_total"] - result["optional_done"])
+
+    # isolation
+    def test_another_stores_completion_never_collapses_this_stores_checklist(self):
+        from django.conf import settings as dj_settings
+        from django.test import Client
+
+        host = f"cl-iso.{dj_settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
+        other = Store.objects.create(name="Done Shop", slug="cl-done-other", status=Store.Status.ACTIVE)
+        _make_store_fully_set_up(other)
+        self.assertTrue(build_setup_checklist(other, RequestFactory().get("/"))["all_complete"])
+        self.assertFalse(build_setup_checklist(self.store, RequestFactory().get("/"))["all_complete"])
+        # two ACTIVE stores now exist: the Store comes from the request host exactly as in production
+        StoreDomain.objects.create(store=self.store, hostname=host, is_primary=True, domain_type=StoreDomain.DomainType.PLATFORM_SUBDOMAIN,
+                                   verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
+        self.store.admin_subdomain = host.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        with override_settings(ALLOWED_HOSTS=[host, "testserver"]):
+            client = Client(HTTP_HOST=host)
+            client.login(username="09121121098", password="pass12345")
+            html = client.get(self.url).content.decode()
+        self.assertIn('data-mode="full"', html)
+
+    def test_domain_step_link_points_to_the_seller_panel_in_every_checklist_mode(self):
+        for complete in (False, True):
+            if complete:
+                _make_store_fully_set_up(self.store)
+            html = self._html()
+            step_html = html.split('data-step="custom_domain"')[1].split("</li>")[0]
+            self.assertIn('href="/admin-portal/settings/?section=domain"', step_html)
+            self.assertNotIn("/app/stores/", step_html)
 
 
 class BuildIndustrySummaryTests(TestCase):
