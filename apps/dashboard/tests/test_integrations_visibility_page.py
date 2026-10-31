@@ -78,6 +78,12 @@ class IntegrationsFiveGroupStructureTests(PermissionEnforcementTestCase):
         conn.set_credentials(creds)
         conn.save()
 
+    def test_no_template_comment_leaks_into_the_page(self):
+        html = self.page()
+        self.assertNotIn("{#", html)
+        self.assertNotIn("#}", html)
+        self.assertNotIn("{%", html)
+
     def test_summary_group_chips_and_the_five_groups_exist_in_order(self):
         html = self.page()
         for marker in ('data-testid="integration-summary"', 'data-testid="integration-next-action"', 'data-testid="int-section-visibility"',
