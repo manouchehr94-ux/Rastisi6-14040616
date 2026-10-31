@@ -970,3 +970,40 @@ html[dir="ltr"] .pcard-qv-dialog{transform:translate(-50%,-50%)}
 .pcard.style-cocoa_gift .pill-disc{background:var(--brand-accent,#f5224c);color:var(--brand-accent-fg,#fff);border-radius:999px;padding:3px 10px;font-weight:800}
 .pcard.style-cocoa_gift .pcard-cta{padding:0 14px 16px}
 .pcard.style-cocoa_gift .pcard-cta-btn{display:flex;width:100%;margin-top:6px;padding:10px 14px;border-radius:12px;background:var(--brand-primary,#704012);color:var(--brand-primary-fg,#fff);font-size:13px;font-weight:700}
+
+
+/* ========================================================================
+   Phones / touch — the ONE shared product card (every template, listing, category, search, collection, home rails)
+   Root causes fixed here (found by measuring a 360px listing: 98px-wide cards, 113px tall price block):
+   1. ``html[data-sfb-density=relaxed] .pcard .body`` kept 18px padding on phones — on a ~170px card that left ~130px for text, so titles and
+      «تومان» wrapped into 3–4 lines. The body padding is now phone-sized whatever the density.
+   2. the price + unit wrapped mid-amount. The amount and the unit stay together; the old price sits on its own line.
+   3. the «نمای سریع» pill was always visible on touch (hover-only on desktop) and covered the image; on touch it is an icon-only round button
+      under the wishlist heart with a ≥44px hit area (the accessible name is unchanged).
+   ======================================================================== */
+@media(max-width:680px){
+  html[data-sfb-density] .pcard .body,.pcard .body{padding:10px 10px 12px;gap:5px}
+  .pcard .brand{font-size:10.5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pcard .name{font-size:min(var(--sfb-product-name-size,13px),13px);line-height:1.55;height:calc(2 * 1.55em)}
+  .pcard .rate{gap:3px;font-size:10.5px;flex-wrap:nowrap;white-space:nowrap;overflow:hidden}
+  .pcard .price{padding-top:6px;gap:2px 6px;flex-wrap:wrap;align-items:flex-end}
+  .pcard .price .now{font-size:min(var(--sfb-price-size,15px),14px);line-height:1.5;white-space:nowrap;overflow-wrap:normal}
+  .pcard .price .old{display:block;font-size:10.5px;line-height:1.4;white-space:nowrap}
+  .pcard.ratio-portrait .img{aspect-ratio:4/5}
+  .pcard .pill{font-size:10.5px;padding:2px 7px}
+}
+/* Tablets / small laptops: 3–4 narrow columns with the relaxed 18px body padding left ~110px for the price (it wrapped mid-amount) */
+@media(max-width:1100px){
+  html[data-sfb-density] .pcard .body{padding-inline:12px}
+  .pcard .price .now{white-space:nowrap;overflow-wrap:normal}
+  .pcard .price{flex-wrap:wrap}
+}
+@media(max-width:680px),(hover:none){
+  .pcard-qv-trigger{inset-block-start:48px;inset-inline-start:auto;left:10px;right:auto;width:32px;height:32px;padding:0;justify-content:center;gap:0;opacity:1;transform:none}
+  .pcard-qv-trigger .pcard-qv-trigger-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .pcard-qv-trigger::after{content:"";position:absolute;inset:-6px}
+}
+@media(max-width:360px){
+  html[data-sfb-density] .pcard .body,.pcard .body{padding:8px 8px 10px}
+  .pcard .price .now{font-size:13.5px}
+}

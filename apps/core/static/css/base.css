@@ -30,7 +30,17 @@ a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:0;background:none}
 img{max-width:100%}
 /* عرضِ محتوا از Templateِ فعال می‌آید — پیش‌فرض دقیقاً همان ۱۲۴۰px قبلی. */
-.wrap{max-width:var(--sfb-content-width, 1240px);margin:0 auto;padding:0 18px}
+/* ONE gutter token (density) drives the page container's side padding AND the full-bleed math (``.rsec[data-width="full"]``). On phones the live
+   gutter never exceeds 12px, so a 390px screen keeps ~92% of its width for content instead of losing a quarter of it to padding. */
+:root{--sfb-gutter:18px;--sfb-gutter-live:var(--sfb-gutter)}
+/* ONE reusable page-width decision (every page container, header/footer rows and listings read it): the template's own content width is the
+   floor — it is never narrowed — and on wide monitors the container grows with the screen (84vw) up to a sane cap, instead of leaving
+   hundreds of dead pixels on both sides of a 1200px column at 1920px. */
+:root{--sfb-page-width:max(var(--sfb-content-width,1240px),min(84vw,var(--sfb-page-width-cap,1720px)))}
+html[data-sfb-density="compact"]{--sfb-gutter:12px}
+html[data-sfb-density="relaxed"]{--sfb-gutter:26px}
+@media(max-width:680px){:root{--sfb-gutter-live:min(var(--sfb-gutter),12px)}}
+.wrap{max-width:var(--sfb-page-width, 1240px);margin:0 auto;padding:0 var(--sfb-gutter-live)}
 .hidden{display:none!important}
 
 /* حرکت — احترام به prefers-reduced-motion صرف‌نظر از Templateِ انتخابی
@@ -44,8 +54,7 @@ html[data-sfb-motion="none"] *{transition:none!important;animation:none!importan
    مستقلِ از density ذاتیِ Template؛ همان الگویِ overrideهایِ بالا
    (data-sfb-motion) برایِ حاشیه‌ی افقیِ ظرفِ محتوا. «عادی» چیزی
    override نمی‌کند — دقیقاً همان ۱۸px قبلی. */
-html[data-sfb-density="compact"] .wrap{padding:0 12px}
-html[data-sfb-density="relaxed"] .wrap{padding:0 26px}
+/* (the density now only changes --sfb-gutter above; no per-density .wrap rule is needed) */
 
 /* اندازه‌ی فونتِ فیلدهایِ قابل‌ویرایش در موبایل حداقل ۱۶px — جلوگیری از
    Auto-zoomِ خودکارِ iOS Safari هنگامِ فوکوس (تصمیمِ صریحِ مالک، بندِ ۱۸

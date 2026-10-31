@@ -234,9 +234,7 @@ html[data-sfb-button-style="soft"] .btn-primary:hover{background:var(--violet-so
    بررسی می‌کند). به‌جایش فقط پدینگِ افقیِ خودِ ``.wrap`` (که body هیچ
    پدینگِ دیگری ندارد) خنثی می‌شود — تا لبه‌ی viewport بدونِ نیاز به
    واحدِ vw، پس بدونِ ریسکِ اسکرول‌بار. */
-.rsec[data-width="full"] > .section{max-width:none;margin-inline:-18px}
-html[data-sfb-density="compact"] .rsec[data-width="full"] > .section{margin-inline:-12px}
-html[data-sfb-density="relaxed"] .rsec[data-width="full"] > .section{margin-inline:-26px}
+.rsec[data-width="full"] > .section{max-width:none;margin-inline:calc(-1 * var(--sfb-gutter-live))}
 .rsec[data-height="compact"] .hero-inner{min-height:200px}
 .rsec[data-height="tall"] .hero-inner{min-height:480px}
 
@@ -458,7 +456,12 @@ html[data-sfb-density="relaxed"] .rsec[data-width="full"] > .section{margin-inli
 /* ========================================================================
    V3 universal shell/footer fidelity pass
    ======================================================================== */
-.wrap{width:min(var(--sfb-content-width,1320px),calc(100% - 28px))}
+.wrap{width:min(var(--sfb-page-width,1320px),calc(100% - 28px))}
+/* A ``.wrap`` INSIDE another ``.wrap`` is not a second page container. Twelve section templates still carry their own ``<div class="wrap">``
+   from when they were standalone pages; inside the page container (``.wrap.sfb-preview-sections``) it re-applied width + margin + the density
+   padding, so a phone lost ~100px of content width (a 2-column product grid got 250px → 113px cards with wrapped titles/prices) and a desktop lost
+   ~100px per side. The page container is the only one that sizes the content. */
+.wrap .wrap{width:auto;max-width:none;margin-inline:0;padding-inline:0}
 /* Storefront canvas. Everything a section paints (full-bleed fills, pop-out art) is
    bounded by this box, so the canvas edge — not the browser window — is the bleed
    boundary and no section can widen the document. overflow:clip is deliberate: it
@@ -483,7 +486,7 @@ main.sfb-storefront-canvas{overflow-x:clip}
 .footer-credibility{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 0;border-top:1px solid rgba(255,255,255,.13)}.footer-credibility-copy{display:flex;flex-direction:column;gap:4px}.footer-credibility-copy strong{font-size:10.5px}.footer-credibility-copy span{font-size:8.5px;color:rgba(255,255,255,.62)}.footer-credibility-media{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.footer .trust-badges,.footer .payment-logos{padding:0;border:0;display:flex;gap:7px}.footer .trust-badge-item{width:56px;height:60px;padding:4px;border-radius:4px}.footer .payment-logos span{width:54px;height:34px;padding:4px;border-radius:4px}
 .footer-bottom{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px 0;background:#3d3d45;box-shadow:0 0 0 100vmax #3d3d45;clip-path:inset(0 -100vmax)}.footer-bottom .copy{padding:0;border:0;background:transparent;box-shadow:none;clip-path:none;font-size:9px;justify-content:flex-start}.footer-bottom .socials{margin:0;display:flex;gap:6px}.footer-bottom .socials a{width:27px;height:27px}
 @media(max-width:1100px){.footer-main-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.footer-col-brand{grid-column:1/-1}.footer-credibility{align-items:flex-start;flex-direction:column}}
-@media(max-width:680px){.wrap{width:min(var(--sfb-content-width,1320px),calc(100% - 18px))}.footer-main-grid{grid-template-columns:1fr 1fr;gap:22px 16px;padding-top:24px}.footer-col-brand,.footer-col-contact{grid-column:1/-1}.footer .footer-description{grid-template-columns:1fr}.footer-bottom{align-items:flex-start;flex-direction:column}.footer-credibility-media{width:100%}}
+@media(max-width:680px){.wrap{width:min(var(--sfb-page-width,1320px),calc(100% - 8px))}.footer-main-grid{grid-template-columns:1fr 1fr;gap:22px 16px;padding-top:24px}.footer-col-brand,.footer-col-contact{grid-column:1/-1}.footer .footer-description{grid-template-columns:1fr}.footer-bottom{align-items:flex-start;flex-direction:column}.footer-credibility-media{width:100%}}
 @media(max-width:440px){.footer-main-grid{grid-template-columns:1fr}.footer-col-brand,.footer-col-contact{grid-column:auto}}
 
 /* ========================================================================
