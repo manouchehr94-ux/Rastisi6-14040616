@@ -128,6 +128,7 @@ class ThumbnailServiceTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class GalleryPreviewIntegrationTests(TestCase):
     """Tests B/I/K at the HTTP/template level, and the full no-mutation
     contract (E-H) plus tenant isolation (L) end-to-end."""

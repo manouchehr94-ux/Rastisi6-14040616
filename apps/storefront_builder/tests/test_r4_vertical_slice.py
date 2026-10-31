@@ -4,7 +4,7 @@ from pathlib import Path
 
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.storefront_builder import appearance_registry, global_region_registry, layout_preset_registry
@@ -2413,6 +2413,7 @@ class DraftReplacingEndpointTests(R4MutationApiTestCase):
 # ---------------------------------------------------------------------------
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class TemplateSwitchPreservingContentTests(R4MutationApiTestCase):
     """Template A -> merchant content -> switch to Template B -> merchant
     content remains, Template B's DNA applies.

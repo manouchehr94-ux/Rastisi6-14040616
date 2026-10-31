@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from django.db import transaction
 
-from .. import layout_preset_registry
+from .. import layout_preset_registry, template_gallery_policy
 from ..models import StorefrontLayout, StorefrontLayoutVersion
 from ..variant_contract import UnsupportedEngineSchemaVersionError, validate_template_provenance
 from . import layout_service, preset_service, r4_mutation_service
@@ -127,6 +127,12 @@ def select_ready_template(*, store, actor, template_key) -> SelectionResult:
     current_key, current_version = _identity_from_provenance(draft.template_provenance)
     if current_key == preset.key and current_version == preset.version:
         return SelectionResult(draft=draft, preset=preset, action="unchanged")
+    if not template_gallery_policy.is_selectable_key(preset.key):
+        # registered and renderable, but not offered for a NEW choice (owner-approved gallery subset); the template a Store already
+        # carries is never replaced by this path
+        raise ReadyTemplateSelectionError(
+            "template_not_available", "این قالب فعلاً برای انتخاب در دسترس نیست؛ یکی از قالب‌هایِ فهرست را انتخاب کنید.",
+        )
 
     if _is_untouched_bootstrap(layout, draft):
         try:

@@ -905,6 +905,14 @@
         else select({ kind: 'group', id: Number(chip.getAttribute('data-group-layout')) }, { menu: false });
         return;
       }
+      // The Store header drawn INSIDE a Hero Stage is still «the header»: any click on it (logo, menu link, search, cart…) opens the header picker
+      // — it must not select the whole stage just because the header lives in the stage's DOM (the seller changes the header design on its own).
+      if (R4.previewInteractive !== false && t.closest('.hs-header')) {
+        evt.preventDefault(); evt.stopPropagation();
+        st.sel = null; st.menu = false;
+        S.openGlobal('header');
+        return;
+      }
       // a click on a link inside a Section (a product card, a banner …) selects that Section instead of navigating the seller away; real
       // buttons / controls keep working, and the customer preview and the published storefront never see this listener
       if (R4.previewInteractive !== false) {

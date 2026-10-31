@@ -827,7 +827,7 @@ def storefront_r4_editor(request, template_name=R4_EDITOR_TEMPLATE):
             # stale-definition-under-a-client reason.
             "ready_templates": [
                 {"key": preset.key, "version": preset.version, "label": preset.label_fa}
-                for preset in layout_preset_registry.list_ready_templates()
+                for preset in layout_preset_registry.list_selectable_templates()
             ],
             "current_template_key": variant_contract.validate_template_provenance(
                 draft.template_provenance,
@@ -1124,6 +1124,8 @@ def storefront_r4_mutation(request):
         return JsonResponse({"ok": False, "code": "invalid_mutation_type"}, status=400)
 
     try:
+        if mutation_type == "appearance.template.apply":
+            r4_mutation_service.ensure_template_selectable(store=store, template_key=mutation.get("template_key"))
         new_revision = r4_mutation_service.apply_mutation(
             store=store, actor=request.user, base_revision=base_revision, mutation=mutation,
         )
@@ -2196,6 +2198,7 @@ def storefront_r4_switch_template(request):
     template_version = payload.get("template_version")
 
     try:
+        r4_mutation_service.ensure_template_selectable(store=store, template_key=template_key)
         r4_mutation_service.switch_template(
             store=store, actor=request.user, base_revision=base_revision,
             template_key=template_key, template_version=template_version,

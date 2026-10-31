@@ -244,6 +244,7 @@ class ReferenceVariantContractTests(SimpleTestCase):
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class ReferenceTemplateLifecycleTests(TestCase):
     """Gallery card -> first apply -> preservation-first switch -> publish ->
     public Home, for each of the three templates, through the real services."""

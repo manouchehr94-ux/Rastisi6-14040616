@@ -37,7 +37,8 @@ User = get_user_model()
 _HOST = "rastisi.localhost"
 _PASS = "a-very-strong-pass-1"
 
-READY = layout_preset_registry.list_ready_templates()
+#: the gallery offers only the owner-approved subset (template_gallery_policy); hidden templates stay registered but are not selectable
+READY = layout_preset_registry.list_selectable_templates()
 KEY_A, KEY_B = READY[0].key, READY[1].key
 NON_READY_KEY = next(k for k, v in layout_preset_registry.LAYOUT_PRESET_REGISTRY.items() if not v.is_ready_template)
 
@@ -96,10 +97,10 @@ class CatalogTests(Base):
     def test_gallery_exposes_exactly_the_canonical_current_ready_templates(self):
         response = self.get("template")
         cards = response.context["template_cards"]
-        self.assertEqual(len(READY), 50)  # the pinned catalog contract
-        self.assertEqual([c["preset"].key for c in cards], [p.key for p in layout_preset_registry.list_ready_templates()])
+        self.assertEqual(len(READY), 19)  # the pinned gallery contract (owner decision: 19 selectable templates)
+        self.assertEqual([c["preset"].key for c in cards], [p.key for p in layout_preset_registry.list_selectable_templates()])
         html = response.content.decode()
-        self.assertEqual(len(re.findall(r"<article class=\"ob-tpl-card", html)), 50)
+        self.assertEqual(len(re.findall(r"<article class=\"ob-tpl-card", html)), 19)
 
     def test_no_historical_versions_and_no_non_ready_presets(self):
         cards = self.get("template").context["template_cards"]
@@ -158,7 +159,7 @@ class CatalogTests(Base):
         for forbidden in ("A8_READY_TEMPLATES", "StorefrontSection(", "StorefrontSection.objects", "template_provenance =",
                           "template_baseline_snapshot", "apply_preset(", "switch_ready_template_preserving"):
             self.assertNotIn(forbidden, source)
-        self.assertIn("list_ready_templates", inspect.getsource(ready_template_card_service))
+        self.assertIn("list_selectable_templates", inspect.getsource(ready_template_card_service))
 
 
 # ── UI ──────────────────────────────────────────────────────────────────────
@@ -172,8 +173,8 @@ class GalleryUiTests(Base):
             preset = card["preset"]
             self.assertIn(f'data-name="{preset.label_fa}"', html)
             self.assertIn(f'alt="پیش‌نمایشِ قالبِ {preset.label_fa}"', html)
-        self.assertEqual(html.count('loading="lazy"'), 50)
-        self.assertEqual(html.count("data-ob-zoom"), 50)
+        self.assertEqual(html.count('loading="lazy"'), 19)
+        self.assertEqual(html.count("data-ob-zoom"), 19)
         self.assertIn("مشاهده بزرگ‌تر", html)
         self.assertIn("<dialog", html)
         # no 50 live preview iframes
@@ -202,7 +203,7 @@ class GalleryUiTests(Base):
         for query in ("", "?q=zzz", "?template_key=" + KEY_A, "?search=بازار"):
             response = self.client.get(self.url("template") + query, HTTP_HOST=_HOST)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(len(response.context["template_cards"]), 50)  # the server never filters/selects
+            self.assertEqual(len(response.context["template_cards"]), 19)  # the server never filters/selects
         self.assertIn("data-ob-tpl-search", response.content.decode())
         self.assertEqual(self.counts(), before)  # not even a Draft is created by GET
         self.store.refresh_from_db()

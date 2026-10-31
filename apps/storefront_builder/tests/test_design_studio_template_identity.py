@@ -1,3 +1,4 @@
+from django.test import override_settings
 """RastiSi Design Studio — Ready Template "current" identity is version-exact.
 
 ``list_ready_templates()`` returns the latest merchant-facing version per key;
@@ -71,6 +72,7 @@ class RegistryFixtureSanityTests(_TemplateIdentityCase):
         self.assertEqual(catalog[KEY], LATEST)
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class ExactVersionCurrentTests(_TemplateIdentityCase):
     def test_same_key_same_version_is_current(self):
         self._apply(self.latest)
@@ -108,6 +110,7 @@ class ExactVersionCurrentTests(_TemplateIdentityCase):
         )
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class StudioHistoricalTemplateTests(_TemplateIdentityCase):
     def setUp(self):
         super().setUp()
@@ -161,6 +164,7 @@ class StudioHistoricalTemplateTests(_TemplateIdentityCase):
         self.assertEqual((self.draft.edit_revision, dict(self.draft.template_provenance)), before)
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class GalleryAndStudioShareSemanticsTests(_TemplateIdentityCase):
     def _gallery_current(self):
         # ARCH-02b: the old dashboard gallery forwards to the Studio; its server cards and the Studio's client

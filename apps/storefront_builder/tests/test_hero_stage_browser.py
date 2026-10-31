@@ -334,27 +334,24 @@ class HeroStageBrowserTests(_parity.EngineGeometryParityBrowserTests):
         finally:
             context.close()
 
-    def test_the_gallery_offers_only_the_header_or_only_the_hero_of_a_template(self):
+    def test_the_gallery_offers_a_whole_template_or_only_the_hero_never_a_header_only_button(self):
         from apps.storefront_builder.services import layout_service as svc
         context, page = self._studio()
         try:
             self._apply_through_the_gallery(page, "dual_atelier")
             page.locator('[data-rastisi-action="templates"]').first.click()
             page.wait_for_selector("[data-rs-gallery-grid]")
-            # only the parts a template really has are offered: a legacy slider template offers its header but no hero recipe
-            self.assertEqual(page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-hero"]').count(), len(TEMPLATES))
-            page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-header"][data-key="glass_commerce"]').click()
-            page.wait_for_timeout(2500)
+            # the header is changed on its own from the canvas / Global Design (see test_studio_header_footer); the gallery has no «فقط هدر»
+            self.assertEqual(page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-header"]').count(), 0)
+            self.assertNotIn("فقط هدرِ این قالب", page.locator("[data-rs-gallery-grid]").inner_text())
             draft = svc.get_or_create_draft(self.store, user=self.user)
-            self.assertEqual(draft.effective_header_config()["header_variant"], "centered_brand")
-            self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "dual", "the hero is untouched")
-            page.locator('[data-rastisi-action="templates"]').first.click()
-            page.wait_for_selector("[data-rs-gallery-grid]")
+            header_before = draft.effective_header_config()["header_variant"]
+            self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "dual")
             page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-hero"][data-key="editorial_noir"]').click()
             page.wait_for_timeout(2500)
             draft = svc.get_or_create_draft(self.store, user=self.user)
             self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "single")
-            self.assertEqual(draft.effective_header_config()["header_variant"], "centered_brand", "the chosen header survives a hero-only apply")
+            self.assertEqual(draft.effective_header_config()["header_variant"], header_before, "the header survives a hero-only apply")
             self.assertEqual(draft.template_provenance["template"]["key"], "dual_atelier")
             audit = self._stage_audit(page)
             self.assertEqual((audit["headers"], audit["header"]), (1, True), "one header, inside the stage")

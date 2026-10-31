@@ -444,6 +444,9 @@ RASTISI_CUSTOM_DOMAIN_A_TARGETS = tuple(
 RASTISI_CUSTOM_DOMAIN_CNAME_TARGET = env_str(
     "RASTISI_CUSTOM_DOMAIN_CNAME_TARGET", ""
 ).lower().strip().rstrip(".")
+# Owner decision (1405/08/09): only the 19 curated Ready Templates are offered for a NEW choice (apps/storefront_builder/template_gallery_policy.py).
+# Nothing is deleted; set RASTISI_TEMPLATE_GALLERY_RESTRICTED=0 to offer every registered Ready Template again (no migration, no data change).
+RASTISI_TEMPLATE_GALLERY_RESTRICTED = env_bool("RASTISI_TEMPLATE_GALLERY_RESTRICTED", default=True)
 RASTISI_CUSTOM_DOMAIN_READINESS_MAX_AGE_SECONDS = env_int(
     "RASTISI_CUSTOM_DOMAIN_READINESS_MAX_AGE_SECONDS", default=900
 )

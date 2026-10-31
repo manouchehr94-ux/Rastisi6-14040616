@@ -48,6 +48,7 @@ def _akhlaghi():
 
 
 @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class TemplateGalleryTests(TestCase):
     def setUp(self):
         cache.clear()

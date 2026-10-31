@@ -20,7 +20,7 @@ Phase-1 RED/GREEN contract files are untouched):
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -360,6 +360,7 @@ class ExactSameTemplateNoOpTests(_ReviewCorrectionBase):
 _HOST = "sfb-r2-dashboard.rastisi.localhost"
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class DashboardReadyApplyConfirmationSplitTests(TestCase):
     def setUp(self):
         cache.clear()

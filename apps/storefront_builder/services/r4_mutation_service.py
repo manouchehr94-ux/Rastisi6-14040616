@@ -21,6 +21,8 @@ from apps.storefront_builder import (
     resource_source,
     section_registry,
     shell_geometry,
+    template_gallery_policy,
+    variant_contract,
 )
 from apps.storefront_builder.models import (
     APPEARANCE_COLOR_KEYS,
@@ -350,6 +352,7 @@ R4_ERROR_MESSAGES_FA = {
     ),
     "invalid_appearance_template": "قالب انتخاب‌شده قابل اعمال نیست؛ هیچ تغییری ذخیره نشد.",
     "unknown_appearance_template": "قالب انتخاب‌شده در فهرست قالب‌ها وجود ندارد.",
+    "template_not_selectable": "این قالب فعلاً برای انتخاب در دسترس نیست؛ یکی از قالب‌های فهرست را انتخاب کنید.",
     "template_version_mismatch": "نسخهٔ قالب تغییر کرده است؛ صفحه را تازه کنید و دوباره انتخاب کنید.",
     "invalid_preset": "این بازنشانی انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "baseline_reset_error": "بازنشانی به قالب انجام نشد؛ هیچ تغییری ذخیره نشد.",
@@ -1183,6 +1186,27 @@ def _resolve_ready_template(template_key, template_version):
     if preset.version != template_version:
         raise R4MutationError("template_version_mismatch")
     return preset
+
+
+def ensure_template_selectable(*, store, template_key) -> None:
+    """The gallery policy (``template_gallery_policy``) for a NEW choice made by a seller through a seller-facing entry point (Studio
+    gallery switch, ``appearance.template.apply`` from the Studio, the dashboard preset form). A registered Ready Template outside the
+    owner-approved subset cannot be chosen, EXCEPT the one this Store's Draft already carries (re-applying/resetting your own template is not
+    a new choice). Unknown keys fall through to the engine's own error codes. The engine itself (``switch_template``, ``apply_mutation``,
+    previews, publishing, repair commands) is deliberately NOT gated: hidden templates stay fully renderable, editable and applicable by
+    identity — only their selection by a seller is closed."""
+    if not isinstance(template_key, str) or template_gallery_policy.is_selectable_key(template_key):
+        return
+    preset = layout_preset_registry.get_layout_preset(template_key)
+    if preset is None or not preset.is_ready_template:
+        return
+    draft = layout_service.get_existing_draft(store)
+    try:
+        current_key = variant_contract.validate_template_provenance(draft.template_provenance)["template"]["key"] if draft else None
+    except Exception:  # noqa: BLE001 — an unreadable provenance simply means «no current template»
+        current_key = None
+    if current_key != template_key:
+        raise R4MutationError("template_not_selectable")
 
 
 def _replace_template_exact_with_checkpoint(

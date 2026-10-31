@@ -258,10 +258,12 @@
       return;
     }
 
-    // The Store header embedded INSIDE a Hero Stage is still «the header» for the merchant: a click on its plain area opens the header
-    // settings (as a click on the shell header does) instead of selecting the whole stage. Links/buttons keep their own behaviour.
+    // The Store header embedded INSIDE a Hero Stage is still «the header» for the merchant: ANY click on it opens the header settings
+    // (as a click on the shell header does) instead of selecting the whole stage.
+    // Links/buttons inside it (logo, menu, search, cart…) belong to the HEADER too: in the editor they must not navigate, and selecting the whole
+    // stage because the click landed on a menu link would hide the header picker from the merchant (menu-item editing is handled above).
     var embeddedHeader = target.closest('.hs-header');
-    if (embeddedHeader && !isInteractive(target, embeddedHeader)) {
+    if (embeddedHeader) {
       evt.preventDefault();
       evt.stopImmediatePropagation();
       window.parent.postMessage({ type: 'sfb:openHeaderSettings' }, window.location.origin);

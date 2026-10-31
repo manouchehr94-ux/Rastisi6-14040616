@@ -3,7 +3,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.catalog.models import Product, Vendor
@@ -72,6 +72,7 @@ class IsFirstRunStoreTests(TestCase):
         self.assertTrue(svc.is_first_run_store(store))
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class ApplyFirstRunPlaceholdersTests(TestCase):
     def setUp(self):
         self.store = _store(onboarding_required_at=timezone.now())
@@ -126,6 +127,7 @@ class ApplyFirstRunPlaceholdersTests(TestCase):
         self.assertEqual(render_service.hide_empty_public_sections(plain), plain)
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class SectionLevelReadinessTests(TestCase):
     """Follow-up: hero/category placeholders do not collapse just because the first product was added; product
     rows do (their data now exists); a deliberate later layout publish ends the as-delivered composition."""

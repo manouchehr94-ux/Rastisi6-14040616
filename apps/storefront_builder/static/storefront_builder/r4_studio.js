@@ -619,12 +619,13 @@
     }).join('');
   }
 
-  // «فقط هدر» / «فقط هیرو»: take ONE part of a Ready Template without re-applying the whole template (header.apply_template / hero.apply_template).
+  // «فقط هیرو»: take the hero part of a Ready Template without re-applying the whole template (header.apply_template / hero.apply_template).
   // Only the parts the template really has are offered; both are one Undo-able step and touch only the Draft.
   function templatePartActions(t) {
     var parts = t.parts || {};
     var out = '';
-    if (parts.header) out += btn('apply-template-header', 'فقط هدرِ این قالب', 'check', 'part', 'data-key="' + esc(t.key) + '" title="هدرِ فروشگاه را مثلِ این قالب کن؛ هیرو و بقیهٔ بخش‌ها دست‌نخورده می‌مانند" ' + (ui.busy ? 'disabled' : ''));
+    // (no header-only button here: the gallery is for choosing / previewing a WHOLE template. The header is changed on its own from the
+    //  Studio canvas — click the header — through the Global Design header picker; the ``header.apply_template`` mutation stays in the API.)
     if (parts.hero) out += btn('apply-template-hero', 'فقط هیرو (چیدمانِ هیرو)', 'check', 'part', 'data-key="' + esc(t.key) + '" title="چیدمانِ هیرو را مثلِ این قالب کن؛ متن‌ها، تصویرها و هدرِ فروشگاه شما تغییر نمی‌کنند" ' + (ui.busy ? 'disabled' : ''));
     return out ? '<div class="tile-parts" aria-label="برداشتنِ یک بخش از قالب">' + out + '</div>' : '';
   }
@@ -1412,7 +1413,6 @@
       case 'preview-template': previewTemplate(el.getAttribute('data-key')); break;
       case 'cancel-template-preview': cancelTemplatePreview(); break;
       case 'switch-template': switchTemplate(el.getAttribute('data-key')); break;
-      case 'apply-template-header': applyTemplatePart('header', el.getAttribute('data-key')); break;
       case 'apply-template-hero': applyTemplatePart('hero', el.getAttribute('data-key')); break;
       case 'confirm-template-replace': {
         var replaceModal = ui.modal || {};

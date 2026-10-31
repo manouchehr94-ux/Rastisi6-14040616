@@ -1,3 +1,4 @@
+from django.test import override_settings
 """What the Studio actually receives when the server refuses a template switch / reset / preview: a stable code, a
 precise Persian message (never the generic "save incomplete"), the exact locked sections — and NOTHING was mutated."""
 
@@ -12,6 +13,7 @@ from apps.storefront_builder.services import preset_service
 from .test_r4_mutation_api import R4MutationApiTestCase
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class RefusalHttpContractTests(R4MutationApiTestCase):
     def setUp(self):
         super().setUp()

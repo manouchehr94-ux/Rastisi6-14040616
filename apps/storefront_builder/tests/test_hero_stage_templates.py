@@ -51,6 +51,7 @@ def _stage_html(body):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class StageTemplateAcceptanceTests(R4MutationApiTestCase):
     def setUp(self):
         super().setUp()

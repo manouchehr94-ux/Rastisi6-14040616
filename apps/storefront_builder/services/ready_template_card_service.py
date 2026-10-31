@@ -2,14 +2,14 @@
 
 Shared by every surface that shows Ready Templates (Merchant Admin Template Gallery, the R4
 Design Studio gallery and the owner-onboarding Template step). It owns no catalog and no
-thumbnail logic of its own: presets come from ``layout_preset_registry.list_ready_templates()``
+thumbnail logic of its own: presets come from ``layout_preset_registry.list_selectable_templates()``
 and screenshots/thumbnails from ``template_preview_service`` (``resolve_real_screenshot`` with the
 canonical SVG fallback). Pure reads — never writes.
 """
 
 from django.templatetags.static import static
 
-from .. import appearance_registry, global_region_registry, layout_preset_registry
+from .. import appearance_registry, global_region_registry, layout_preset_registry, template_gallery_policy
 from . import template_preview_service
 
 
@@ -71,14 +71,18 @@ def build_ready_template_card(draft, preset, *, is_current):
 def build_ready_template_cards(draft, *, current_template_key, current_template_version):
     """Read projection of the ONE Ready Template catalog for merchant-facing
     galleries. Pure read — never a second catalog/registry: every card comes
-    from ``layout_preset_registry.list_ready_templates()`` (the latest
-    merchant-facing version per key).
+    from ``layout_preset_registry.list_selectable_templates()`` (the owner-approved
+    subset of the latest merchant-facing versions, ``template_gallery_policy``).
 
     A card is "current" only for the Draft's EXACT applied template identity
     (key AND version from its provenance). A Draft on an older historical
     version of the same key therefore never marks the newer catalog card as
-    current; that card stays available for an explicit switch."""
-    return [
+    current; that card stays available for an explicit switch.
+
+    A Store whose applied template is NOT in the selectable subset keeps its identity: the exact applied
+    version is pinned as an extra «current» card (``is_hidden_current``) — it is shown, never replaced and never
+    offered to anyone else."""
+    cards = [
         build_ready_template_card(
             draft,
             preset,
@@ -89,8 +93,15 @@ def build_ready_template_cards(draft, *, current_template_key, current_template_
                 and preset.version == current_template_version
             ),
         )
-        for preset in layout_preset_registry.list_ready_templates()
+        for preset in layout_preset_registry.list_selectable_templates()
     ]
+    if current_template_key and current_template_version and not any(card["is_current"] for card in cards):
+        applied = layout_preset_registry.get_layout_preset_version(current_template_key, current_template_version)
+        if applied is not None and applied.is_ready_template and not template_gallery_policy.is_selectable_key(applied.key):
+            pinned = build_ready_template_card(draft, applied, is_current=True)
+            pinned["is_hidden_current"] = True
+            cards.append(pinned)
+    return cards
 
 
 def resolve_applied_template_card(draft, cards, *, current_template_key, current_template_version):

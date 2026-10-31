@@ -29,7 +29,7 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -459,6 +459,7 @@ class ResetBehaviorTests(Phase1ConvergenceBase):
 # --------------------------------------------------------------------------
 # MERCHANT-FACING CONVERGENCE (54-58)
 # --------------------------------------------------------------------------
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class MerchantFacingConvergenceTests(Phase1ConvergenceBase):
     def test_r4_switch_template_is_preservation_first(self):
         merchant = StorefrontSection.objects.create(

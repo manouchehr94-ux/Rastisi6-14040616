@@ -629,6 +629,7 @@ def storefront_apply_layout_preset(request):
         # (confirmation required / locked sections) happen before any write.
         layout_service.get_or_create_draft(store, user=request.user)
         try:
+            r4_mutation_service.ensure_template_selectable(store=store, template_key=preset.key)
             r4_mutation_service.switch_template_current(
                 store=store, actor=request.user,
                 template_key=preset.key, template_version=preset.version,

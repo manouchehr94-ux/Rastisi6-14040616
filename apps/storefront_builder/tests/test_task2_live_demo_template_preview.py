@@ -471,6 +471,7 @@ class InvalidTemplateKeyTests(LiveDemoTemplatePreviewTestCase):
         self.assertIn(response.status_code, (302, 403))
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class GalleryStillHasFiftyTemplatesTests(LiveDemoTemplatePreviewTestCase):
     def test_gallery_still_lists_exactly_fifty_ready_templates(self):
         response = studio_gallery_response(self.admin_client)
