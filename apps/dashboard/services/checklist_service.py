@@ -19,6 +19,7 @@ from django.urls import reverse
 
 from apps.catalog.models import Attribute, Brand, Category, Product, ProductImage, ProductVariant, StoreIndustryInstallation
 from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
+from apps.dashboard.services import domain_settings_service
 from apps.orders.models import PaymentGatewayConfig, ShippingMethod
 from apps.stores.models import StoreDomain
 from apps.stores.services.publication_service import is_publicly_visible
@@ -197,22 +198,52 @@ def _custom_domain_complete(store, shop):
     return any(_domain_is_active(domain) for domain in _custom_domains(store))
 
 
+def _pending_domain_phase(store):
+    """(domain, phase) of the custom domain the seller is currently working on — the SAME phase the domain page shows (one source of truth:
+    ``domain_settings_service.domain_phase``) — or None when nothing has been started. An active domain is not «pending»."""
+    from apps.stores.services import domain_verification_service as dvs
+
+    targets = dvs.custom_domain_connection_instructions("")["configured"]
+    best = None
+    for domain in _custom_domains(store):
+        if _domain_is_active(domain):
+            continue
+        phase = domain_settings_service.domain_phase(domain, targets_configured=targets)
+        # a domain that needs the seller outranks one that is only waiting
+        rank = 0 if phase in (domain_settings_service.PHASE_ERROR,) else 1 if phase in (
+            domain_settings_service.PHASE_AWAITING_OWNERSHIP, domain_settings_service.PHASE_NEEDS_ACTION,
+            domain_settings_service.PHASE_AWAITING_FINAL) else 2
+        if best is None or rank < best[0]:
+            best = (rank, domain, phase)
+    return None if best is None else (best[1], best[2])
+
+
+_PHASE_TO_STATE = {
+    domain_settings_service.PHASE_AWAITING_OWNERSHIP: lambda: STATE_NEEDS_ACTION,
+    domain_settings_service.PHASE_NEEDS_ACTION: lambda: STATE_NEEDS_ACTION,
+    domain_settings_service.PHASE_AWAITING_FINAL: lambda: STATE_NEEDS_ACTION,
+    domain_settings_service.PHASE_CHECKING: lambda: STATE_PROCESSING,
+    domain_settings_service.PHASE_PLATFORM_WAIT: lambda: STATE_PROCESSING,       # RastiSi has to finish its side: nothing for the seller to do
+    domain_settings_service.PHASE_ERROR: lambda: STATE_NEEDS_FIX,
+}
+
+
 def _custom_domain_state(store, shop):
-    """Progress of a domain the seller started but that is not active yet: who has to act next."""
-    pending = [domain for domain in _custom_domains(store) if not _domain_is_active(domain)]
-    if not pending:
-        return None
-    states = []
-    for domain in pending:
-        if domain.verification_status != StoreDomain.VerificationStatus.VERIFIED:
-            states.append(STATE_NEEDS_ACTION)                     # the TXT record has to be added / re-checked by the seller
-        elif domain.routing_status != StoreDomain.RoutingStatus.CONNECTED:
-            states.append(STATE_NEEDS_ACTION)                     # the A / CNAME record
-        elif domain.tls_status != StoreDomain.TlsStatus.READY:
-            states.append(STATE_PROCESSING)                       # RastiSi is issuing HTTPS
-        else:
-            states.append(STATE_NEEDS_ACTION)                     # everything is ready: only the activation is left
-    return STATE_NEEDS_ACTION if STATE_NEEDS_ACTION in states else STATE_PROCESSING
+    """Progress of a domain the seller started but that is not active yet — derived from the domain page's own phase (never a second rule)."""
+    pending = _pending_domain_phase(store)
+    return None if pending is None else _PHASE_TO_STATE[pending[1]]()
+
+
+def _custom_domain_note(store, shop):
+    """The real situation of the started domain in one line (host · phase · next action), shown instead of the generic description."""
+    pending = _pending_domain_phase(store)
+    if pending is None:
+        return ""
+    domain, phase = pending
+    label = domain_settings_service.PHASE_LABELS[phase][0]
+    guidance = domain_settings_service.phase_guidance(domain, phase, fresh=False)
+    text = domain_settings_service.NOTHING_TO_DO if guidance["needs_nothing"] else guidance["next_text"]
+    return f"{domain.hostname} — {label}. {text}"
 
 
 def _search_visibility_complete(store, shop):
@@ -341,6 +372,8 @@ class _ChecklistStep:
     state_fn: Callable | None = None
     #: True when RastiSi itself produced the result (an installed industry template creates categories, attributes…)
     auto_fn: Callable | None = None
+    #: replaces ``description`` with a live sentence about the real situation of a started-but-unfinished step (e.g. the domain being connected)
+    note_fn: Callable | None = None
 
 
 #: کلیدهای زنجیره‌ی اصلیِ کاتالوگ — نگاه کنید به ``build_setup_checklist`` — هر مرحله فقط وقتی «باز» نمایش داده می‌شود که همه‌ی
@@ -412,7 +445,7 @@ def _steps():
         _ChecklistStep("tax", "اطلاعات مالیاتی (اختیاری)", "🧾", _tax_complete, lambda store, request: reverse("dashboard:tax-settings"),
                        description="در صورت نداشتن مالیات، گزینه «مالیات ندارم» را انتخاب کنید.", group="sales"),
         _ChecklistStep("custom_domain", "دامنه اختصاصی (اختیاری)", "🌐", _custom_domain_complete, _domain_page_url,
-                       description="فروشگاه بدون دامنه اختصاصی نیز روی زیردامنه راستیسی قابل استفاده است.", group="growth", state_fn=_custom_domain_state),
+                       description="فروشگاه بدون دامنه اختصاصی نیز روی زیردامنه راستیسی قابل استفاده است.", group="growth", state_fn=_custom_domain_state, note_fn=_custom_domain_note),
         _ChecklistStep("search_visibility", "دیده‌شدن در گوگل و بینگ", "🔎", _search_visibility_complete, settings_url("integrations"),
                        description="پس از انتشار روی آدرس عمومی، نقشهٔ سایت و داده‌های فنی به‌صورت خودکار آماده‌اند.", group="growth"),
     ]
@@ -455,11 +488,13 @@ def build_setup_checklist(store, request):
             if not chain_blocked_so_far:
                 blocking_label = step.label
             chain_blocked_so_far = True
+        live_note = "" if is_complete or step.note_fn is None else step.note_fn(store, shop)
+        description = live_note or (step.not_required_note if (step.required and not is_required and step.not_required_note) else step.description)
         steps.append({
             "key": step.key, "label": step.label, "icon": step.icon,
             "is_complete": is_complete, "is_unlocked": is_unlocked, "locked_reason": locked_reason,
             "url": step.url(store, request),
-            "description": step.not_required_note if (step.required and not is_required and step.not_required_note) else step.description,
+            "description": description,
             "group": step.group, "required": is_required, "state": state, "state_label": STATE_LABELS[state],
             "auto_done": bool(is_complete and step.auto_fn is not None and step.auto_fn(store, shop)),
             "is_next": False,

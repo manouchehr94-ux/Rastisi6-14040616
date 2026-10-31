@@ -81,7 +81,7 @@ def domain_phase(domain: StoreDomain, *, targets_configured: bool) -> str:
     return PHASE_ERROR if domain.verification_status == V.FAILED else PHASE_AWAITING_OWNERSHIP
 
 
-def _phase_guidance(domain: StoreDomain, phase: str, *, fresh: bool) -> dict:
+def phase_guidance(domain: StoreDomain, phase: str, *, fresh: bool) -> dict:
     """The one sentence + one button for a phase. Plain language: no DNS vocabulary beyond the record the seller must paste."""
     unverified = domain.verification_status == StoreDomain.VerificationStatus.UNVERIFIED
     if phase == PHASE_AWAITING_OWNERSHIP:
@@ -152,7 +152,7 @@ def domain_overview(store, request, *, can_manage: bool) -> dict:
         current = next((s for s in steps if s["state"] in (guide.CURRENT, guide.BLOCKED)), None)
         phase = domain_phase(domain, targets_configured=connection["configured"])
         phase_label, phase_tone = PHASE_LABELS[phase]
-        guidance = _phase_guidance(domain, phase, fresh=guide.readiness_is_fresh(domain))
+        guidance = phase_guidance(domain, phase, fresh=guide.readiness_is_fresh(domain))
         custom_rows.append({
             "phase": phase, "phase_label": phase_label, "phase_tone": phase_tone, **guidance,
             "nothing_text": NOTHING_TO_DO if guidance["needs_nothing"] else "",

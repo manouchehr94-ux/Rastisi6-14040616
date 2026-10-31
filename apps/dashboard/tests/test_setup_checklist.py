@@ -384,6 +384,7 @@ class BuildSetupChecklistTests(TestCase):
         self.assertEqual(step["label"], "اطلاعات مالیاتی (اختیاری)")
         self.assertIn("مالیات ندارم", step["description"])
 
+    @override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=("203.0.113.10",))
     def test_custom_domain_step_needs_an_ACTIVE_domain_not_just_a_verified_one(self):
         """«تکمیل‌شده» یعنی دامنه واقعاً فعال است (مالکیت + DNS + HTTPS + فعال‌سازی)؛ تأییدِ مالکیت تنها پیشرفت است، نه موفقیت."""
         StoreDomain.objects.create(
@@ -990,3 +991,83 @@ class HonestChecklistAggregatesTests(TestCase):
         step = next(s for s in self._result()["steps"] if s["key"] == "custom_domain")
         self.assertFalse(step["is_complete"])
         self.assertEqual(step["state"], "optional")
+
+
+class ChecklistDomainConsistencyTests(TestCase):
+    """M3 — the optional «دامنه اختصاصی» step tells the same truth as the domain page (one source: ``domain_settings_service.domain_phase``)."""
+
+    def setUp(self):
+        self.store = Store.objects.create(name="Dom Shop", slug="cl-domain", status=Store.Status.ACTIVE)
+        self.request = RequestFactory().get("/")
+
+    def _step(self):
+        return next(s for s in build_setup_checklist(self.store, self.request)["steps"] if s["key"] == "custom_domain")
+
+    def _domain(self, **kw):
+        defaults = dict(store=self.store, hostname="shop.example.com", domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN)
+        defaults.update(kw)
+        return StoreDomain.objects.create(**defaults)
+
+    def test_no_domain_is_optional_and_available_never_a_blocker(self):
+        step = self._step()
+        self.assertEqual(step["state"], "optional")
+        self.assertFalse(step["required"])
+        self.assertEqual(step["url"], "/admin-portal/settings/?section=domain")
+        self.assertNotIn("اختیاری", step["state_label"] + "x" if step["state"] != "optional" else "")
+
+    def test_requested_domain_shows_its_real_phase_and_next_action(self):
+        self._domain()
+        step = self._step()
+        self.assertEqual(step["state"], "needs_action")
+        self.assertIn("shop.example.com", step["description"])
+        self.assertIn("در انتظار تأیید مالکیت", step["description"])
+
+    def test_pending_txt_waits_for_the_seller(self):
+        self._domain(verification_status=StoreDomain.VerificationStatus.PENDING, verification_token="t", verification_requested_at=timezone.now())
+        self.assertEqual(self._step()["state"], "needs_action")
+
+    @override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=("203.0.113.10",))
+    def test_verified_without_dns_needs_the_seller_then_https_is_rastisi_work(self):
+        d = self._domain(verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
+        self.assertEqual(self._step()["state"], "needs_action")
+        StoreDomain.objects.filter(pk=d.pk).update(routing_status=StoreDomain.RoutingStatus.CONNECTED)
+        step = self._step()
+        self.assertEqual(step["state"], "processing")
+        self.assertIn("فعلاً نیازی به انجام کاری از طرف شما نیست.", step["description"])
+
+    @override_settings(RASTISI_CUSTOM_DOMAIN_A_TARGETS=(), RASTISI_CUSTOM_DOMAIN_CNAME_TARGET="")
+    def test_missing_platform_targets_is_not_presented_as_a_seller_task(self):
+        self._domain(verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
+        step = self._step()
+        self.assertEqual(step["state"], "processing")
+        self.assertIn("فعلاً نیازی به انجام کاری از طرف شما نیست.", step["description"])
+
+    def test_failed_verification_asks_for_a_fix(self):
+        self._domain(verification_status=StoreDomain.VerificationStatus.FAILED)
+        self.assertEqual(self._step()["state"], "needs_fix")
+
+    def test_active_domain_is_done(self):
+        self._domain(verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(),
+                     routing_status=StoreDomain.RoutingStatus.CONNECTED, tls_status=StoreDomain.TlsStatus.READY, is_primary=True)
+        step = self._step()
+        self.assertEqual(step["state"], "done")
+        self.assertTrue(step["is_complete"])
+
+    def test_a_started_domain_never_blocks_publishing_or_selling(self):
+        self._domain()
+        result = build_setup_checklist(self.store, self.request)
+        self.assertNotIn("دامنه اختصاصی (اختیاری)", result["sell_blockers"])
+        self.assertNotIn("custom_domain", [s["key"] for s in result["steps"] if s["required"]])
+
+    def test_another_stores_domain_phase_never_leaks(self):
+        other = Store.objects.create(name="Other", slug="cl-domain-other", status=Store.Status.ACTIVE)
+        StoreDomain.objects.create(store=other, hostname="theirs.example.com", domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN)
+        step = self._step()
+        self.assertEqual(step["state"], "optional")
+        self.assertNotIn("theirs.example.com", step["description"])
+
+    def test_a_public_shop_on_its_free_subdomain_is_not_blocked_by_having_no_custom_domain(self):
+        _make_store_fully_set_up(self.store)
+        result = build_setup_checklist(self.store, self.request)
+        self.assertTrue(result["all_complete"])
+        self.assertFalse(next(s for s in result["steps"] if s["key"] == "custom_domain")["is_complete"])
