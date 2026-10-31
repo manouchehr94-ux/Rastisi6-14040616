@@ -466,6 +466,13 @@ from django.test import override_settings
 _TEMP_MEDIA_DIR = tempfile.mkdtemp()
 
 
+def _clear_temp_media_dir():
+    """Empty the shared temp media dir. ``mkdtemp()`` runs at import, i.e. BEFORE ``--parallel`` forks, so every worker uses this same directory:
+    a sibling worker (or a thread of the «simultaneous» test) may remove entries between ``listdir`` and the delete — that race is not a failure."""
+    shutil.rmtree(_TEMP_MEDIA_DIR, ignore_errors=True)
+    os.makedirs(_TEMP_MEDIA_DIR, exist_ok=True)
+
+
 def _make_image(fmt='PNG', size=(100, 100)):
     from io import BytesIO
     from PIL import Image
@@ -484,12 +491,7 @@ class LogoUploadTests(SettingsViewsTestCase):
 
     def tearDown(self):
         # Clean temp files after each test
-        for f in os.listdir(_TEMP_MEDIA_DIR):
-            path = os.path.join(_TEMP_MEDIA_DIR, f)
-            if os.path.isdir(path):
-                shutil.rmtree(path)
-            else:
-                os.remove(path)
+        _clear_temp_media_dir()
 
     def test_valid_png_saves(self):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
@@ -582,12 +584,7 @@ class FaviconUploadTests(SettingsViewsTestCase):
     """Complete favicon upload lifecycle tests with isolated media."""
 
     def tearDown(self):
-        for f in os.listdir(_TEMP_MEDIA_DIR):
-            path = os.path.join(_TEMP_MEDIA_DIR, f)
-            if os.path.isdir(path):
-                shutil.rmtree(path)
-            else:
-                os.remove(path)
+        _clear_temp_media_dir()
 
     def _fav(self):
         from io import BytesIO
