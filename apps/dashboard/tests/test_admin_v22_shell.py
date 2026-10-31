@@ -62,13 +62,15 @@ class AdminV22ShellContractTests(SimpleTestCase):
         self.assertIn(".admin-section-tabs a[href]", js)
 
     def test_dashboard_setup_checklist_contract_is_preserved(self):
-        dashboard = self._read("apps/dashboard/templates/dashboard/dashboard.html")
-        self.assertIn("setup_checklist.all_complete", dashboard)
-        self.assertIn("چک‌لیست راه‌اندازی فروشگاه", dashboard)
-        self.assertIn("setup_checklist.steps", dashboard)
-        self.assertIn("setup_checklist.percent", dashboard)
-        self.assertIn("step.is_unlocked", dashboard)
-        self.assertIn("step.is_next", dashboard)
+        # the checklist markup lives in a partial that dashboard.html includes; it renders the honest model (required-only progress,
+        # goal groups, per-step state, one primary action) — the old «all steps / percent / is_unlocked» tokens are intentionally gone
+        page = self._read("apps/dashboard/templates/dashboard/dashboard.html")
+        partial = self._read("apps/dashboard/templates/dashboard/partials/setup_checklist.html")
+        self.assertIn("partials/setup_checklist.html", page)
+        self.assertIn("setup_checklist.all_complete", page)
+        self.assertIn("چک‌لیست راه‌اندازی فروشگاه", partial)
+        for token in ("setup_checklist.groups", "setup_checklist.required_percent", "setup_checklist.primary_action", "step.state", "step.url"):
+            self.assertIn(token, partial)
 
     def test_settings_remains_top_tab_navigation(self):
         settings_template = self._read("apps/dashboard/templates/dashboard/settings.html")

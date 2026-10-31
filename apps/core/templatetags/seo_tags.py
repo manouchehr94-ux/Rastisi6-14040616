@@ -24,7 +24,8 @@ def dump(data: dict) -> str:
 
 def _origin(context) -> str:
     request = context.get("request")
-    return context.get("SEO_ORIGIN") or (f"{request.scheme}://{request.get_host()}" if request else "")
+    origin = str(context.get("SEO_ORIGIN") or "")           # lazy value from the context processor → plain str
+    return origin or (f"{request.scheme}://{request.get_host()}" if request else "")
 
 
 def _absolute(origin: str, url: str) -> str:

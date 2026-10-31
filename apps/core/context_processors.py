@@ -1,3 +1,4 @@
+from django.utils.functional import SimpleLazyObject
 from apps.content.models import SocialLink
 from apps.core.color_utils import mix_hex, safe_hex
 from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
@@ -445,9 +446,10 @@ def shop_settings(request):
     }
 
 
-def seo(request):
-    """Storefront SEO facts for every template: the Store's canonical origin and whether this request may be indexed (see
-    ``apps.core.seo_policy``). Never raises: an unknown host / unprovisioned store just means «request origin, not indexable»."""
+def _seo_facts(request) -> dict:
+    """Computed at most once per request, and only when a template actually reads an ``SEO_*`` / ``TRACKING_IDS`` name (the admin
+    shell never does, so it pays no queries for them). Never raises: an unknown host / unprovisioned store just means «request
+    origin, not indexable»."""
     cached = getattr(request, "_seo_context", None)
     if cached is not None:
         return cached
@@ -468,20 +470,29 @@ def seo(request):
     return request._seo_context
 
 
-def tracking(request):
-    """``TRACKING_IDS`` for the public storefront templates: empty unless this request is a real, indexable public page of a Store
-    that connected the provider (see ``apps.stores.services.tracking_service``). Never raises."""
-    cached = getattr(request, "_tracking_context", None)
+def _tracking_ids(request) -> dict:
+    cached = getattr(request, "_tracking_ids", None)
     if cached is not None:
         return cached
     ids: dict = {}
     store = getattr(request, "store", None)
-    if store is not None and not seo(request).get("SEO_NOINDEX", True):
+    if store is not None and not _seo_facts(request)["SEO_NOINDEX"]:
         try:
             from apps.stores.services.tracking_service import active_tracking_ids
 
             ids = active_tracking_ids(store)
         except Exception:                                                   # noqa: BLE001 - analytics must never break a page
             ids = {}
-    request._tracking_context = {"TRACKING_IDS": ids}
-    return request._tracking_context
+    request._tracking_ids = ids
+    return ids
+
+
+def seo(request):
+    """Storefront SEO facts for every template (lazy — see ``_seo_facts``)."""
+    return {key: SimpleLazyObject(lambda key=key: _seo_facts(request)[key]) for key in ("SEO_ORIGIN", "SEO_NOINDEX", "SEO_NOINDEX_REASON")}
+
+
+def tracking(request):
+    """``TRACKING_IDS`` for the public storefront templates: empty unless this request is a real, indexable public page of a Store
+    that connected the provider (see ``apps.stores.services.tracking_service``). Lazy; never raises."""
+    return {"TRACKING_IDS": SimpleLazyObject(lambda: _tracking_ids(request))}

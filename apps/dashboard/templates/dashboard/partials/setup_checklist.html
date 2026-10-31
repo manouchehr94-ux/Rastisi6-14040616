@@ -32,7 +32,7 @@
     {% endif %}
     <div class="setup-groups">
       {% for group in setup_checklist.groups %}
-      <details class="setup-group" data-group="{{ group.key }}"{% if not group.is_done %} open{% endif %}>
+      <details class="setup-group" data-goal-group="{{ group.key }}"{% if not group.is_done %} open{% endif %}>
         <summary>
           <span>{{ group.label }}</span>
           {% if group.required_total %}<small>{{ group.required_done|fa_number }} از {{ group.required_total|fa_number }} ضروری</small>{% else %}<small>اختیاری</small>{% endif %}
