@@ -1,3 +1,4 @@
+from apps.portal.tests._industry import choose_other_industry, install_other_industry
 """Owner onboarding — the «قالب فروشگاه» (Ready Template) step and the publish boundary.
 
 The catalog is the Storefront Builder's ONE Ready Template registry
@@ -54,6 +55,7 @@ class Base(TestCase):
         cache.clear()  # per-Store rate-limit counters are keyed by pk, which a rolled-back DB can reuse
         self.owner = User.objects.create_user(username="tpl-owner@example.com", email="tpl-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ قالب")
+        install_other_industry(self.store)          # the industry choice is mandatory: these tests start AFTER that step
         plan = Plan.objects.create(code="tpl-plan", name="Tpl")
         version = PlanVersion.objects.create(plan=plan, version_number=1, status=PlanVersion.Status.PUBLISHED)
         StoreSubscription.objects.create(
@@ -375,7 +377,7 @@ class WizardTests(Base):
         )
         r = self.client.post(self.url("identity"), {"name": "نام"}, HTTP_HOST=_HOST)
         self.assertRedirects(r, self.url("industry"))
-        r = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        r = choose_other_industry(self.client, self.url("industry"), _HOST)
         self.assertRedirects(r, self.url("template"))
         html = self.get("template").content.decode()
         self.assertIn("مرحله 3 از 5", html.replace("۳", "3").replace("۵", "5"))
@@ -597,8 +599,11 @@ class RegressionTests(Base):
     def test_industry_template_stays_independent_of_the_ready_template(self):
         from apps.catalog.models import StoreIndustryInstallation
 
+        before = list(StoreIndustryInstallation.objects.filter(store=self.store).values_list("pk", "industry_template_id"))
+        self.assertEqual(len(before), 1)                      # the (mandatory) industry choice made earlier
         self.select(KEY_A)
-        self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+        # choosing a Ready Template neither installs nor changes any industry template
+        self.assertEqual(list(StoreIndustryInstallation.objects.filter(store=self.store).values_list("pk", "industry_template_id")), before)
 
     def test_the_demo_store_is_untouched(self):
         demo = Store.objects.filter(slug="rasti-mode-demo").first()
@@ -628,6 +633,7 @@ class PrePublishPrivacyTests(TestCase):
         cache.clear()
         self.owner = User.objects.create_user(username="priv-owner@example.com", email="priv-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ خصوصی")
+        install_other_industry(self.store)
         self.domain = self.store.domains.filter(is_primary=True).first().hostname
         self.client.force_login(self.owner)
 

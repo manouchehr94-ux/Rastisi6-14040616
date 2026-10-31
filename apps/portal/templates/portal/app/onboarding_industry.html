@@ -25,7 +25,7 @@
   {% else %}
   <div class="ob-card-head">
     <h2 id="ob-industry-title">{% if template_cards %}صنفِ فروشگاهتان را انتخاب کنید{% else %}صنفِ فروشگاه{% endif %}</h2>
-    {% if template_cards %}<p>با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پایه‌یِ همان کسب‌وکار ساخته می‌شود تا از صفر شروع نکنید. این مرحله اختیاری است.</p>{% else %}<p>این مرحله اختیاری است و ادامه دادن بدونِ آن هیچ مشکلی ایجاد نمی‌کند.</p>{% endif %}
+    {% if template_cards %}<p>با انتخابِ صنف، دسته‌بندی‌ها و ویژگی‌هایِ پایه‌یِ همان کسب‌وکار ساخته می‌شود تا از صفر شروع نکنید. انتخابِ صنف الزامی است؛ اگر صنفِ شما در فهرست نیست، «سایر (صنف آزاد)» را انتخاب کنید.</p>{% else %}<p>انتخابِ صنف برایِ ساختِ فروشگاه الزامی است.</p>{% endif %}
   </div>
 
   {% if template_cards %}
@@ -61,11 +61,6 @@
 
   </form>
 
-  <form method="post" id="ob-skip-form" data-ob-once>
-    {% csrf_token %}
-    <input type="hidden" name="action" value="skip">
-  </form>
-  <p class="ob-skip-explain">می‌توانید «فعلاً رد شو» را بزنید: بدونِ قالبِ صنف ادامه می‌دهید و دسته‌بندی‌ها و ویژگی‌ها را بعداً از پنلِ مدیریت می‌سازید.</p>
   <div class="ob-sticky-foot">
     <div class="ob-confirm{% if confirm_error %} has-error{% endif %}" data-ob-confirm>
       <p class="ob-confirm-title" data-ob-confirm-title>صنف انتخاب‌شده: <span data-ob-selected-name>هنوز انتخاب نشده</span></p>
@@ -73,18 +68,13 @@
       <label class="ob-check"><input type="checkbox" name="confirm_industry_install" value="1" data-ob-confirm-check form="ob-industry-form"{% if confirm_error %} aria-invalid="true" aria-describedby="ob-confirm-error"{% endif %}> این صنف را برای فروشگاهم نصب کن</label>
       {% if confirm_error %}<p class="ob-error" id="ob-confirm-error">برای نصب باید کادرِ تأییدِ بالا را علامت بزنید.</p>{% endif %}
     </div>
-  {% include "portal/onboarding/_actions.html" with form_id="ob-industry-form" continue_label="نصبِ صنفِ انتخاب‌شده" skip_form_id="ob-skip-form" install_mode=True loading_text="در حال نصب…" %}
+  {% include "portal/onboarding/_actions.html" with form_id="ob-industry-form" continue_label="نصبِ صنفِ انتخاب‌شده" install_mode=True loading_text="در حال نصب…" %}
   </div>
 
   {% else %}
-  {# ── بدونِ قالبِ قابل‌ارائه: بن‌بست نیست؛ رد شدن همیشه ممکن است ── #}
-  <div class="ob-alert ob-alert-info" role="status">در حال حاضر قالبِ صنفی برای ارائه موجود نیست.</div>
-  <p class="ob-skip-explain">می‌توانید بدونِ قالب ادامه دهید و دسته‌بندی‌ها و ویژگی‌ها را بعداً از پنلِ مدیریت بسازید.</p>
-  <form method="post" id="ob-skip-form" data-ob-once>
-    {% csrf_token %}
-    <input type="hidden" name="action" value="skip">
-  </form>
-  {% include "portal/onboarding/_actions.html" with form_id="ob-skip-form" continue_label="ادامه بدونِ قالبِ صنف" loading_text="در حال ادامه…" %}
+  {# ── فهرستِ صنف‌ها هنوز در سامانه بارگذاری نشده: ادامه ممکن نیست (انتخابِ صنف الزامی است)؛ پیامِ صادقانه، نه رد کردن بی‌صدا ── #}
+  <div class="ob-alert ob-alert-info" role="status" data-testid="industry-registry-not-ready">فهرستِ صنف‌ها هنوز در سامانه آماده نشده است. این مشکل از طرفِ شما نیست؛ لطفاً کمی بعد دوباره تلاش کنید یا با پشتیبانیِ راستی‌سی تماس بگیرید.</div>
+  <div class="ob-actions"><a class="ob-btn ob-btn-quiet" href="{% if ob_previous_url %}{{ ob_previous_url }}{% else %}{% url 'portal:app-home' %}{% endif %}">قبلی</a></div>
   {% endif %}
   {% endif %}
 </section>

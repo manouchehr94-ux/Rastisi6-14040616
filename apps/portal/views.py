@@ -19,7 +19,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from django.conf import settings
 
-from apps.catalog.models import IndustryTemplate
+from apps.catalog.models import IndustryTemplate, StoreIndustryInstallation
 from apps.catalog.services import industry_catalog_service, template_summary_service
 from apps.storefront_builder.services import ready_template_card_service, store_template_service
 from apps.billing.models import SubscriptionPaymentAttempt
@@ -1251,6 +1251,31 @@ INDUSTRY_CONFIRM_REQUIRED_MESSAGE = (
 )
 
 
+#: Owner decision: choosing an industry is MANDATORY for every new shop. A business that is not in the list picks «سایر (صنف آزاد)».
+#: Two different things live behind this rule and are kept apart in code: (a) the CHOICE of an industry — required, enforced here and in
+#: ``onboarding_publish_service`` — and (b) the one-time, irreversible INSTALL of the catalogue template into the Store, which is what the
+#: choice currently performs (``install_industry_template``; the model has no separate «chosen but not installed» state, so no migration here).
+INDUSTRY_REQUIRED_MESSAGE = (
+    "انتخابِ صنف برای ساختِ فروشگاه الزامی است. اگر صنفِ شما در فهرست نیست، «سایر (صنف آزاد)» را انتخاب کنید."
+)
+INDUSTRY_REGISTRY_NOT_READY_MESSAGE = (
+    "فهرستِ صنف‌ها هنوز در سامانه آماده نشده است. این مشکل از طرفِ شما نیست؛ لطفاً کمی بعد دوباره تلاش کنید یا با پشتیبانیِ راستی‌سی تماس بگیرید."
+)
+
+
+def _industry_missing_redirect(request, store):
+    """Redirect to the «صنف» step when a not-yet-published shop has no industry (mandatory rule); ``None`` when nothing is missing.
+    Shops whose onboarding is already complete are never sent back (no retro-active change to existing shops)."""
+    if store.onboarding_stage == Store.OnboardingStage.DONE or store.onboarding_completed_at:
+        return None
+    from apps.catalog.models import StoreIndustryInstallation
+
+    if StoreIndustryInstallation.objects.filter(store=store).exists():
+        return None
+    messages.error(request, INDUSTRY_REQUIRED_MESSAGE)
+    return redirect("portal:onboarding-industry", store_public_id=store.public_id)
+
+
 def _sector_tabs_for(template_cards) -> list:
     """فقط رسته‌هایی که واقعاً قالبِ قابل‌ارائه دارند (تبِ خالی دیده نمی‌شود)."""
     present = {card["sector"] for card in template_cards}
@@ -1327,6 +1352,10 @@ def onboarding(request, store_public_id):
     stage = store.onboarding_stage if store.onboarding_stage in _ONBOARDING_STAGE_URL_NAMES else (
         Store.OnboardingStage.IDENTITY
     )
+    if stage in (Store.OnboardingStage.TEMPLATE, Store.OnboardingStage.BRANDING, Store.OnboardingStage.REVIEW) and not (
+        StoreIndustryInstallation.objects.filter(store=store).exists()
+    ):
+        stage = Store.OnboardingStage.INDUSTRY          # mandatory industry: a shop that never chose one resumes at the «صنف» step
     if stage in (Store.OnboardingStage.BRANDING, Store.OnboardingStage.REVIEW) and (
         store_template_service.get_applied_template(store) is None
     ):
@@ -1380,7 +1409,7 @@ def onboarding_identity(request, store_public_id):
 
 @owner_required
 def onboarding_industry(request, store_public_id):
-    """مرحله‌ی ۲: انتخابِ صنف — اختیاری و رد-شدنی، اما فقط یک‌بار قابلِ نصب
+    """مرحله‌ی ۲: انتخابِ صنف — **الزامی** (تصمیمِ مالکِ محصول؛ «سایر (صنف آزاد)» برایِ صنفی که در فهرست نیست)، و فقط یک‌بار قابلِ نصب
     (``apps.catalog.services.industry_template_service``، ADR-25). اگر
     Store از قبل یک قالب نصب کرده، این مرحله فقط اطلاعِ همان نصب را نشان
     می‌دهد؛ هرگز دوباره نصب صدا زده نمی‌شود (idempotent-safe در برابرِ
@@ -1405,17 +1434,29 @@ def onboarding_industry(request, store_public_id):
         if not portal_action_allowed(request, store, SETTINGS_MANAGE):
             return portal_permission_denied(request)
 
+    registry_ready = True
+    if installation is None:
+        from apps.catalog.services import industry_registry_readiness
+
+        status = industry_registry_readiness.check_registry()
+        registry_ready = status.offerable_total > 0            # the seller can only be blocked when there is literally nothing to choose
+        if not status.is_ready:
+            # operator alert (never a customer-triggered seed): the platform has to run `ensure_industry_registry --apply`
+            logger.error("Industry registry not ready while a seller is at the mandatory industry step: %s", "; ".join(status.problems))
+
     if request.method == "POST" and installation is None:
         action = request.POST.get("action")
-        if action == "skip":
-            _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
-            return redirect("portal:onboarding-template", store_public_id=store.public_id)
+        if action == "skip" or not registry_ready:
+            # the industry choice is mandatory: there is no «skip» (a business not in the list picks «سایر (صنف آزاد)»),
+            # and while the catalogue is not loaded nothing can be installed — say so honestly instead of failing silently
+            messages.error(request, INDUSTRY_REQUIRED_MESSAGE if registry_ready else INDUSTRY_REGISTRY_NOT_READY_MESSAGE)
+            return redirect("portal:onboarding-industry", store_public_id=store.public_id)
 
         form = OnboardingIndustryForm(request.POST)
         valid = form.is_valid()
         template_id = form.cleaned_data["industry_template_id"] if valid else None
         if not template_id:
-            messages.error(request, "ابتدا یک صنف را انتخاب کنید؛ یا اگر صنفِ شما در فهرست نیست، این مرحله را رد کنید.")
+            messages.error(request, "ابتدا یک صنف را انتخاب کنید؛ اگر صنفِ شما در فهرست نیست، «سایر (صنف آزاد)» را انتخاب کنید.")
         else:
             selected_template_id = str(template_id)
             if not form.cleaned_data["confirm_industry_install"]:
@@ -1455,7 +1496,7 @@ def onboarding_industry(request, store_public_id):
         **_onboarding_shell_context(store, Store.OnboardingStage.INDUSTRY),
         "template_cards": template_cards, "installation": installation, "installed_summary": installed_summary,
         "selected_template_id": selected_template_id, "confirm_error": confirm_error,
-        "industry_sector_tabs": _sector_tabs_for(template_cards),
+        "industry_sector_tabs": _sector_tabs_for(template_cards), "registry_ready": registry_ready,
     })
 
 
@@ -1473,6 +1514,9 @@ def onboarding_template(request, store_public_id):
     if store.onboarding_stage == Store.OnboardingStage.DONE or store.onboarding_completed_at:
         # فروشگاهِ منتشرشده هرگز از این مسیر دوباره قالب عوض نمی‌کند؛ تغییرِ قالب در Storefront Builder است.
         return redirect("portal:store-created", store_public_id=store.public_id)
+    missing_industry = _industry_missing_redirect(request, store)
+    if missing_industry is not None:
+        return missing_industry
 
     error = None
     if request.method == "POST":
@@ -1531,6 +1575,9 @@ def onboarding_branding(request, store_public_id):
     from apps.core.models import ShopSettings
 
     store = _get_owned_store_or_404(request, store_public_id)
+    missing_industry = _industry_missing_redirect(request, store)
+    if missing_industry is not None:
+        return missing_industry
     shop_settings = ShopSettings.load(store=store)
 
     if request.method == "POST":
@@ -1576,6 +1623,9 @@ def onboarding_review(request, store_public_id):
     from apps.catalog.models import StoreIndustryInstallation
 
     store = _get_owned_store_or_404(request, store_public_id)
+    missing_industry = _industry_missing_redirect(request, store)
+    if missing_industry is not None:
+        return missing_industry
     shop_settings = ShopSettings.load(store=store)
     installation = StoreIndustryInstallation.objects.select_related("industry_template").filter(store=store).first()
     trial_domain = store.domains.filter(is_primary=True).first()
@@ -1593,6 +1643,8 @@ def onboarding_review(request, store_public_id):
             outcome = onboarding_publish_service.complete_onboarding(store=store, actor=request.user)
         except onboarding_publish_service.OnboardingPublishError as exc:
             messages.error(request, str(exc))
+            if exc.code == "no_industry":
+                return redirect("portal:onboarding-industry", store_public_id=store.public_id)
             if exc.code in ("no_template", "no_draft"):
                 return redirect("portal:onboarding-template", store_public_id=store.public_id)
             return redirect("portal:onboarding-review", store_public_id=store.public_id)

@@ -1,3 +1,4 @@
+from apps.portal.tests._industry import choose_other_industry
 """Section 19 — end-to-end journeys through the real HTTP interface,
 chaining together everything built this session (Sections 3-16) into one
 realistic lifecycle, plus a cross-cutting adversarial sweep. Individual
@@ -126,7 +127,7 @@ class JourneyATestCase(TestCase):
         # --- Complete the onboarding wizard (identity, skip industry, choose a Ready Template, skip branding, publish) ---
         base = f"/app/stores/{store.public_id}/onboarding"
         self.client.post(f"{base}/identity/", {"name": "فروشگاهِ سفر کامل"}, HTTP_HOST=_HOST)
-        self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, f"{base}/industry/", _HOST)
         select_template(self.client, f"{base}/template/")
         self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/review/", {}, HTTP_HOST=_HOST)

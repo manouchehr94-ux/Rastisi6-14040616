@@ -27,6 +27,7 @@ from apps.catalog.models import (
 from apps.catalog.services.template_validation_service import validate_and_persist
 from apps.core.models import ShopSettings
 from apps.portal.services import provisioning_service
+from apps.portal.tests._industry import choose_other_industry, install_other_industry
 from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store
 from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription
@@ -103,6 +104,8 @@ def make_skeletal_template(slug="journey-skeletal", name="اسکلتیِ نیا�
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class JourneyBase(TestCase):
     with_subscription = True
+    #: the industry choice is mandatory — by default a journey test starts AFTER the «صنف» step (classes about that step opt out)
+    with_industry = True
 
     def setUp(self):
         self.owner = User.objects.create_user(
@@ -110,6 +113,8 @@ class JourneyBase(TestCase):
         )
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ سفر")
         self.client.force_login(self.owner)
+        if self.with_industry:
+            install_other_industry(self.store)
         if self.with_subscription and not StoreSubscription.objects.filter(store=self.store).exists():
             plan = Plan.objects.create(code="journey-plan", name="Journey")
             version = PlanVersion.objects.create(plan=plan, version_number=1, status=PlanVersion.Status.PUBLISHED)
@@ -219,6 +224,7 @@ class ProgressIndicatorTests(JourneyBase):
 
 
 class IdentityStageTests(JourneyBase):
+    with_industry = False
     def test_every_field_error_is_rendered_and_values_are_preserved(self):
         response = self.client.post(
             self.url("identity"),
@@ -255,6 +261,7 @@ class IdentityStageTests(JourneyBase):
 
 
 class IndustryStageTests(JourneyBase):
+    with_industry = False
     def test_cards_come_from_real_template_data_and_are_simple(self):
         template = make_rich_template()
         make_skeletal_template()
@@ -269,7 +276,7 @@ class IndustryStageTests(JourneyBase):
         for detail in ("جنسِ پارچه", "کشور سازنده", "زیرگروه 3", "نگاشتِ ویژگی", "محورهایِ تنوع", "نوار اعلان"):
             self.assertNotIn(detail, card)
 
-    def test_install_cta_is_confirmation_grade_and_skip_is_explained(self):
+    def test_install_cta_is_confirmation_grade_and_there_is_no_skip(self):
         make_rich_template()
         html = self.get("industry").content.decode()
         self.assertIn("data-ob-confirm-check", html)
@@ -280,8 +287,11 @@ class IndustryStageTests(JourneyBase):
         self.assertIn("این صنف را برای فروشگاهم نصب کن", html)
         self.assertIn("data-ob-install-submit", html)
         self.assertNotIn("data-ob-install-submit disabled", html)  # JS enables/disables; no-JS can still submit (server decides)
-        self.assertIn("فعلاً رد شو", html)
-        self.assertIn("بدونِ قالبِ صنف ادامه می‌دهید و دسته‌بندی‌ها و ویژگی‌ها را بعداً از پنلِ مدیریت می‌سازید", html)
+        # mandatory industry (owner decision): no «skip» anywhere, and the free-form way out is explained
+        self.assertNotIn("فعلاً رد شو", html)
+        self.assertNotIn('value="skip"', html)
+        self.assertIn("انتخابِ صنف الزامی است", html)
+        self.assertIn("سایر (صنف آزاد)", html)
 
     def test_direct_post_without_confirmation_installs_nothing(self):
         """The one-time-install acknowledgement is enforced SERVER-side: a bare
@@ -329,10 +339,28 @@ class IndustryStageTests(JourneyBase):
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
 
-    def test_skip_and_already_installed_continue_do_not_require_confirmation(self):
+    def test_skip_is_refused_nothing_is_installed_and_the_stage_does_not_advance(self):
+        make_rich_template()
         skip = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
-        self.assertRedirects(skip, self.url("template"))
+        self.assertRedirects(skip, self.url("industry"), fetch_redirect_response=False)
         self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.IDENTITY)
+        self.assertContains(self.client.get(self.url("industry"), HTTP_HOST=_HOST), "انتخابِ صنف برای ساختِ فروشگاه الزامی است")
+
+    def test_a_shop_without_an_industry_cannot_reach_later_steps_or_publish(self):
+        make_rich_template()
+        self.set_stage(Store.OnboardingStage.REVIEW)
+        for stage in ("template", "branding", "review"):
+            with self.subTest(stage=stage):
+                response = self.client.get(self.url(stage), HTTP_HOST=_HOST)
+                self.assertRedirects(response, self.url("industry"), fetch_redirect_response=False)
+        publish = self.client.post(self.url("review"), {}, HTTP_HOST=_HOST)
+        self.assertRedirects(publish, self.url("industry"), fetch_redirect_response=False)
+        self.store.refresh_from_db()
+        self.assertIsNone(self.store.onboarding_completed_at)
+        dispatcher = self.client.get(f"/app/stores/{self.store.public_id}/onboarding/", HTTP_HOST=_HOST)
+        self.assertRedirects(dispatcher, self.url("industry"), fetch_redirect_response=False)
 
     def test_installed_continue_without_confirmation_is_fine(self):
         template = make_rich_template()
@@ -342,6 +370,7 @@ class IndustryStageTests(JourneyBase):
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
     def test_forged_post_cannot_install_a_review_required_template(self):
+        make_rich_template()                    # (the catalogue has something to offer, so the seller is not blocked by an empty registry)
         held = make_skeletal_template()
         response = self.client.post(
             self.url("industry"), {"industry_template_id": held.pk, **CONFIRM}, HTTP_HOST=_HOST,
@@ -354,6 +383,7 @@ class IndustryStageTests(JourneyBase):
         self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.IDENTITY)  # not advanced
 
     def test_forged_post_cannot_install_inactive_deprecated_or_draft_templates(self):
+        make_rich_template("forge-offerable", "قابل ارائه")
         rich = make_rich_template("forge-inactive", "غیرفعال")
         IndustryTemplate.objects.filter(pk=rich.pk).update(is_active=False)
         deprecated = make_rich_template("forge-deprecated", "منسوخ")
@@ -409,13 +439,19 @@ class IndustryStageTests(JourneyBase):
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
         self.assertEqual(Category.objects.filter(store=self.store).count(), 5)
 
-    def test_no_template_state_is_not_a_dead_end(self):
-        make_skeletal_template()  # only a review-required one exists → nothing offerable
-        response = self.get("industry")
-        self.assertContains(response, "در حال حاضر قالبِ صنفی برای ارائه موجود نیست.")
-        self.assertContains(response, "ادامه بدونِ قالبِ صنف")
-        skip = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
-        self.assertRedirects(skip, self.url("template"))
+    def test_no_offerable_template_is_an_honest_blocking_state_and_alerts_the_operator(self):
+        make_skeletal_template()  # only a review-required one exists → nothing offerable (the platform has not loaded its catalogue)
+        with self.assertLogs("apps.portal.views", level="ERROR") as logs:
+            response = self.get("industry")
+        self.assertContains(response, "فهرستِ صنف‌ها هنوز در سامانه آماده نشده است.")
+        self.assertContains(response, 'data-testid="industry-registry-not-ready"')
+        self.assertNotContains(response, "ادامه بدونِ قالبِ صنف")
+        self.assertNotContains(response, "فعلاً رد شو")
+        self.assertTrue(any("ensure" in line or "registry" in line.lower() for line in logs.output))
+        for payload in ({"action": "skip"}, {}):
+            blocked = self.client.post(self.url("industry"), payload, HTTP_HOST=_HOST)
+            self.assertRedirects(blocked, self.url("industry"), fetch_redirect_response=False)
+        self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
 
 
 class BrandingStageTests(JourneyBase):
@@ -459,7 +495,8 @@ class ReviewAndPublishTests(JourneyBase):
         self.assertIn(self.store.domains.filter(is_primary=True).first().hostname, html)
         for stage in ("identity", "industry", "template", "branding"):
             self.assertIn(f'href="{self.url(stage)}"', html)
-        self.assertIn("نصب نشده", html)
+        self.assertNotIn("نصب نشده", html)                 # the (mandatory) industry is installed: the summary names it
+        self.assertIn("سایر (صنف آزاد)", html)
         self.assertIn("انتشارِ فروشگاه", html)
         self.assertIn("با انتشار چه می‌شود؟", html)
         self.assertIn("هنوز منتشر نشده", html)

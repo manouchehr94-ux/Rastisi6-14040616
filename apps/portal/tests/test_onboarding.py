@@ -5,7 +5,9 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.catalog.models import StoreIndustryInstallation
 from apps.portal.services import provisioning_service
+from apps.portal.tests._industry import choose_other_industry, ensure_other_template
 from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 from apps.portal.tests._ready_template import select_template
 from apps.stores.models import Store, StoreDomain, StoreMembership
@@ -92,17 +94,30 @@ class OnboardingViewTests(TestCase):
         self.assertRedirects(response, self._url("template"))
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
-    def test_industry_stage_skip_advances_to_template_without_installing(self):
+    def test_industry_stage_cannot_be_skipped_the_choice_is_mandatory(self):
+        """Owner decision: choosing an industry is required; a business that is not listed picks «سایر (صنف آزاد)»."""
+        ensure_other_template()
         self._complete_identity()
         response = self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        self.assertRedirects(response, self._url("industry"))
+        self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+        self.store.refresh_from_db()
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.INDUSTRY)
+
+    def test_choosing_the_free_form_industry_advances_and_installs_it_once(self):
+        self._complete_identity()
+        response = choose_other_industry(self.client, self._url("industry"), _HOST)
         self.assertRedirects(response, self._url("template"))
-        self.assertFalse(hasattr(self.store, "industry_installation"))
+        self.assertEqual(StoreIndustryInstallation.objects.get(store=self.store).industry_template.slug, "other")
         self.store.refresh_from_db()
         self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.TEMPLATE)
+        again = choose_other_industry(self.client, self._url("industry"), _HOST)         # replay / back button
+        self.assertRedirects(again, self._url("template"))
+        self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
     def test_branding_stage_skip_advances_to_review(self):
         self._complete_identity()
-        self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, self._url("industry"), _HOST)
         response = self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         self.assertRedirects(response, self._url("review"))
         self.store.refresh_from_db()
@@ -110,7 +125,7 @@ class OnboardingViewTests(TestCase):
 
     def test_branding_stage_has_no_color_fields(self):
         self._complete_identity()
-        self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, self._url("industry"), _HOST)
         response = self.client.get(self._url("branding"), HTTP_HOST=_HOST)
         self.assertNotContains(response, "primary_color")
         self.assertNotContains(response, "accent_color")
@@ -121,7 +136,7 @@ class OnboardingViewTests(TestCase):
         from apps.core.models import ShopSettings
 
         self._complete_identity()
-        self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, self._url("industry"), _HOST)
         original = ShopSettings.load(store=self.store)
         original_primary, original_accent = original.primary_color, original.accent_color
 
@@ -143,7 +158,7 @@ class OnboardingViewTests(TestCase):
 
     def test_review_stage_publishes_and_completes_onboarding(self):
         self._complete_identity()
-        self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, self._url("industry"), _HOST)
         select_template(self.client, self._url("template"))
         self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         response = self.client.post(self._url("review"), {}, HTTP_HOST=_HOST)
@@ -159,7 +174,7 @@ class OnboardingViewTests(TestCase):
 
     def test_dispatcher_sends_a_completed_store_straight_to_store_created(self):
         self._complete_identity()
-        self.client.post(self._url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, self._url("industry"), _HOST)
         select_template(self.client, self._url("template"))
         self.client.post(self._url("branding"), {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(self._url("review"), {}, HTTP_HOST=_HOST)
@@ -287,7 +302,7 @@ class OnboardingIndustryTemplateVisibilityTests(TestCase):
     no-op today that keeps this class self-contained regardless of what any
     other fixture/test in the suite may have created."""
 
-    _EMPTY_STATE_TEXT = "در حال حاضر قالبِ صنفی برای ارائه موجود نیست."
+    _EMPTY_STATE_TEXT = "فهرستِ صنف‌ها هنوز در سامانه آماده نشده است."
 
     def setUp(self):
         from apps.catalog.models import IndustryTemplate
@@ -458,7 +473,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         # Complete the onboarding wizard — the same Store must now be publicly visible.
         base = f"/app/stores/{store.public_id}/onboarding"
         self.client.post(f"{base}/identity/", {"name": "فروشگاه چهارم"}, HTTP_HOST=_HOST)
-        self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST)
+        choose_other_industry(self.client, f"{base}/industry/", _HOST)
         select_template(self.client, f"{base}/template/")
         self.client.post(f"{base}/branding/", {"action": "skip"}, HTTP_HOST=_HOST)
         self.client.post(f"{base}/review/", {}, HTTP_HOST=_HOST)

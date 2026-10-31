@@ -21,6 +21,7 @@ from django.utils import timezone
 from apps.catalog.models import Category, Product, Vendor
 from apps.content.models import HeroSlide
 from apps.portal.services import provisioning_service
+from apps.portal.tests._industry import install_other_industry
 from apps.storefront_builder import appearance_registry, layout_preset_registry
 from apps.storefront_builder.models import StorefrontLayout, StorefrontLayoutVersion
 from apps.storefront_builder.services import store_template_service
@@ -43,10 +44,14 @@ def _public_get(store, path="/"):
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class FidelityBase(TestCase):
+    #: tests about an EMPTY catalogue (first-run placeholders) set this: the free-form industry's single generic category is removed
+    drop_industry_categories = False
+
     def setUp(self):
         cache.clear()
         self.owner = User.objects.create_user(username="fid-owner@example.com", email="fid-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه وفاداری")
+        install_other_industry(self.store, drop_categories=self.drop_industry_categories)   # mandatory industry: tests start AFTER that step
         self.client.force_login(self.owner)
 
     def url(self, stage, store=None):
@@ -93,6 +98,7 @@ class DraftAndPublishedStructureMatchTheCatalogTests(FidelityBase):
                 cache.clear()
                 owner = User.objects.create_user(username=f"fid-{key}@example.com", email=f"fid-{key}@example.com", password=_PASS)
                 store = provisioning_service.provision_trial_store(owner=owner, name=f"فروشگاه {key}")
+                install_other_industry(store, drop_categories=self.drop_industry_categories)
                 client = Client()
                 client.force_login(owner)
                 client.post(self.url("template", store), {"template_key": key}, HTTP_HOST=_HOST)
@@ -112,6 +118,8 @@ class DraftAndPublishedStructureMatchTheCatalogTests(FidelityBase):
 
 
 class FirstRunPlaceholderTests(FidelityBase):
+    drop_industry_categories = True
+
     def published_public_html(self, key):
         self.select(key)
         self.publish()
@@ -127,6 +135,7 @@ class FirstRunPlaceholderTests(FidelityBase):
                 cache.clear()
                 owner = User.objects.create_user(username=f"fp-{key}@example.com", email=f"fp-{key}@example.com", password=_PASS)
                 store = provisioning_service.provision_trial_store(owner=owner, name=f"فروشگاه {key}")
+                install_other_industry(store, drop_categories=self.drop_industry_categories)
                 client = Client()
                 client.force_login(owner)
                 client.post(self.url("template", store), {"template_key": key}, HTTP_HOST=_HOST)

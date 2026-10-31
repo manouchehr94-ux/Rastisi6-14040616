@@ -56,6 +56,7 @@ from apps.core.models import ShopSettings
 from apps.catalog.models import IndustryTemplate, StoreIndustryInstallation
 from apps.portal.models import OwnerProfile
 from apps.portal.services import provisioning_service
+from apps.portal.tests._industry import install_other_industry
 from apps.portal.services.platform_config_service import update_platform_configuration
 from apps.stores.authorization import (
     ALL_PERMISSIONS,
@@ -85,6 +86,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
             password=_STRONG_PASS,
         )
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه اصلی")
+        install_other_industry(self.store)          # the industry choice is mandatory: these tests start AFTER that step
 
         # An ACTIVE ANALYST member of the SAME store. ANALYST intentionally
         # lacks SETTINGS_MANAGE in the canonical ROLE_PERMISSIONS matrix.
@@ -173,6 +175,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
         self.assertEqual(self._snapshot(), before)
 
     def test_analyst_cannot_install_industry(self):
+        StoreIndustryInstallation.objects.filter(store=self.store).delete()     # (setUp installs the mandatory industry; this test is about installing)
         template = IndustryTemplate.objects.create(
             slug="perfume-auth001", name="عطر", version=1,
             readiness=IndustryTemplate.Readiness.PRODUCTION_READY,
@@ -201,6 +204,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
         )
         from apps.catalog.services.industry_template_service import install_industry_template
 
+        StoreIndustryInstallation.objects.filter(store=self.store).delete()     # (setUp installs the mandatory industry)
         install_industry_template(self.store, template)
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
 
@@ -222,6 +226,7 @@ class OnboardingMutationAuthorizationTests(TestCase):
         )
         from apps.catalog.services.industry_template_service import install_industry_template
 
+        StoreIndustryInstallation.objects.filter(store=self.store).delete()     # (setUp installs the mandatory industry)
         install_industry_template(self.store, template)
 
         self.client.force_login(self.owner)
