@@ -10,6 +10,7 @@ import json
 
 from django import template
 from django.urls import reverse
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 register = template.Library()
@@ -52,6 +53,42 @@ def jsonld_store(context):
     return dump({"@context": "https://schema.org", "@graph": [organization, website]})
 
 
+
+def _offers(product, url: str):
+    """schema.org Offer / AggregateOffer from the SAME pricing authority the cart and checkout use (``resolve_effective_price``), in ISO 4217
+    Rials (stored Toman × 10 — see ``apps.core.currency``). A variable product whose active variants have different prices is an
+    AggregateOffer (low/high), never a single invented price. ``None`` for a price-inquiry product."""
+    from apps.catalog.services.pricing_service import resolve_effective_price
+    from apps.core.currency import ISO_CURRENCY, toman_to_rial
+
+    if getattr(product, "is_price_inquiry", False):
+        return None
+    variants = []
+    if getattr(product, "is_variable", False):
+        variants = list(product.variants.filter(is_active=True, is_obsolete=False))
+    if variants:
+        prices = sorted({toman_to_rial(resolve_effective_price(product, v)) for v in variants})
+        in_stock = any(v.stock > 0 for v in variants)
+    else:
+        prices = [toman_to_rial(resolve_effective_price(product))]
+        in_stock = product.stock > 0
+    availability = "https://schema.org/" + ("InStock" if in_stock else "OutOfStock")
+    if len(prices) == 1:
+        return {"@type": "Offer", "priceCurrency": ISO_CURRENCY, "price": str(prices[0]), "availability": availability, "url": url}
+    return {"@type": "AggregateOffer", "priceCurrency": ISO_CURRENCY, "lowPrice": str(prices[0]), "highPrice": str(prices[-1]),
+            "offerCount": len(variants), "availability": availability, "url": url}
+
+
+@register.simple_tag
+def og_price_meta(product):
+    """``product:price:*`` Open Graph tags in ISO currency (lowest price for a variable product); nothing for a price-inquiry product."""
+    offers = _offers(product, "")
+    if not offers:
+        return ""
+    amount = offers.get("price") or offers.get("lowPrice")
+    return format_html('<meta property="product:price:amount" content="{}">\n<meta property="product:price:currency" content="{}">',
+                       amount, offers["priceCurrency"])
+
 @register.simple_tag(takes_context=True)
 def jsonld_product(context, product):
     """Product (+ Offer) and its BreadcrumbList. Only facts the Store really has."""
@@ -70,11 +107,9 @@ def jsonld_product(context, product):
             images.append(_absolute(origin, link))
     if images:
         node["image"] = images[0] if len(images) == 1 else images[:8]
-    if not getattr(product, "is_price_inquiry", False):
-        node["offers"] = {
-            "@type": "Offer", "priceCurrency": "IRT", "price": str(product.final_price),
-            "availability": "https://schema.org/" + ("InStock" if product.stock > 0 else "OutOfStock"), "url": url,
-        }
+    offers = _offers(product, url)
+    if offers:
+        node["offers"] = offers
     crumbs = [{"@type": "ListItem", "position": 1, "name": "خانه", "item": f"{origin}/"}]
     if getattr(product, "category", None):
         crumbs.append({"@type": "ListItem", "position": 2, "name": product.category.name,

@@ -158,7 +158,7 @@ class PublicStoreTests(TestCase):
         self.assertEqual(product["name"], 'کتانی </script> "ویژه"')               # parsed back intact, never able to close the tag
         self.assertEqual(product["description"], "توضیح واقعی محصول")
         self.assertEqual(product["offers"]["availability"], "https://schema.org/InStock")
-        self.assertEqual(product["offers"]["price"], "250000")
+        self.assertEqual((product["offers"]["priceCurrency"], product["offers"]["price"]), ("IRR", "2500000"))   # 250 000 Toman stored → Rials for Google
         self.assertEqual(product["url"], f"http://{HOST_A}/products/seo-shoe/")
         for invented in ("aggregateRating", "review", "shippingDetails", "hasMerchantReturnPolicy"):
             self.assertNotIn(invented, product)
@@ -170,7 +170,7 @@ class PublicStoreTests(TestCase):
         Product.objects.filter(pk=self.product.pk).update(stock=0, price=Decimal("300000"))
         product = next(node for node in self._ld(self._get("/products/seo-shoe/").content.decode())[0]["@graph"] if node["@type"] == "Product")
         self.assertEqual(product["offers"]["availability"], "https://schema.org/OutOfStock")
-        self.assertEqual(product["offers"]["price"], "300000")
+        self.assertEqual((product["offers"]["priceCurrency"], product["offers"]["price"]), ("IRR", "3000000"))
 
     def test_store_b_never_leaks_into_store_a(self):
         html = self._get("/products/seo-shoe/").content.decode() + self._get("/").content.decode() + self._get("/sitemap.xml").content.decode()

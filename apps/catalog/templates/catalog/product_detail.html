@@ -7,8 +7,7 @@
 {% block og_title %}{{ product.name }}{% endblock %}
 {% block og_tags %}{{ block.super }}
 {% if gallery_slides.0.url %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ gallery_slides.0.url }}">{% endif %}
-{% if not product.is_price_inquiry %}<meta property="product:price:amount" content="{{ product.final_price }}">{% endif %}
-<meta property="product:price:currency" content="IRT">{% endblock %}
+{% og_price_meta product %}{% endblock %}
 
 {% block structured_data %}
 <script type="application/ld+json">{% jsonld_product product %}</script>
