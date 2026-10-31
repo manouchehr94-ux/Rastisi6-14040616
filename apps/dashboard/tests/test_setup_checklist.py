@@ -772,6 +772,56 @@ class HonestChecklistAggregatesTests(TestCase):
         self.assertFalse(result["ready_to_sell"])
         self.assertFalse(result["all_complete"])           # no celebration until a customer can actually buy
 
+    def _set_inquiry(self, inquiry: bool):
+        Product.objects.filter(store=self.store).update(price_mode_override="inquiry" if inquiry else "standard", is_price_inquiry=inquiry)
+
+    def test_a_shop_whose_active_products_are_all_price_inquiry_does_not_need_a_payment_method(self):
+        """The project has a real price-inquiry flow (cart/checkout refused server-side): with nothing purchasable a payment method is meaningless."""
+        self._publishable_store()
+        self._set_inquiry(True)
+        result = self._result()
+        step = next(s for s in result["steps"] if s["key"] == "payment_gateway")
+        self.assertFalse(step["required"])
+        self.assertEqual(step["state"], "optional")
+        self.assertIn("استعلام قیمت", step["description"])
+        self.assertTrue(result["ready_to_sell"])
+        self.assertNotIn("درگاه پرداخت", result["sell_blockers"])
+        self.assertEqual(result["required_total"], 9)                      # 10 required steps minus the payment step
+
+    def test_one_purchasable_product_brings_the_payment_requirement_back(self):
+        self._publishable_store()
+        self._set_inquiry(True)
+        vendor = Vendor.objects.get(store=self.store, slug="rs-vendor")
+        Product.objects.create(store=self.store, vendor=vendor, category=Category.objects.get(store=self.store, slug="rs-sub"), name="قابل خرید",
+                               slug="rs-buy", sku="RS-2", price=Decimal("50000"), stock=2, status=Product.Status.ACTIVE)
+        result = self._result()
+        step = next(s for s in result["steps"] if s["key"] == "payment_gateway")
+        self.assertTrue(step["required"])
+        self.assertFalse(result["ready_to_sell"])
+        self.assertIn("درگاه پرداخت", result["sell_blockers"])
+
+    def test_with_no_active_product_yet_payment_stays_required(self):
+        result = self._result()
+        self.assertTrue(next(s for s in result["steps"] if s["key"] == "payment_gateway")["required"])
+
+    def test_inactive_or_other_stores_products_do_not_change_the_payment_requirement(self):
+        self._publishable_store()
+        self._set_inquiry(True)
+        other = Store.objects.create(name="Other", slug="rs-other-inq", status=Store.Status.ACTIVE)
+        v = Vendor.objects.create(store=other, name="o", slug="o-v")
+        c = Category.objects.create(store=other, name="o", slug="o-c")
+        Product.objects.create(store=other, vendor=v, category=c, name="o", slug="o-p", sku="O-1", price=Decimal("10"), stock=1, status=Product.Status.ACTIVE)
+        Product.objects.create(store=self.store, vendor=Vendor.objects.get(store=self.store, slug="rs-vendor"), category=Category.objects.get(store=self.store, slug="rs-sub"),
+                               name="پیش‌نویس", slug="rs-draft", sku="RS-3", price=Decimal("10"), stock=1, status=Product.Status.DRAFT)
+        self.assertFalse(next(s for s in self._result()["steps"] if s["key"] == "payment_gateway")["required"])
+
+    def test_an_inquiry_only_shop_that_has_a_payment_method_still_shows_it_done(self):
+        self._publishable_store()
+        self._set_inquiry(True)
+        PaymentGatewayConfig.objects.create(store=self.store, gateway_code=PaymentGatewayConfig.GatewayCode.COD, is_active=True)
+        step = next(s for s in self._result()["steps"] if s["key"] == "payment_gateway")
+        self.assertEqual(step["state"], "done")                            # being optional never hides real progress
+
     def test_another_stores_payment_method_never_counts(self):
         self._publishable_store()
         other = Store.objects.create(name="Other", slug="rs-other", status=Store.Status.ACTIVE)

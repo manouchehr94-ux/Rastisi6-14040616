@@ -153,6 +153,18 @@ def _payment_gateway_complete(store, shop):
     return PaymentGatewayConfig.objects.filter(store=store, is_active=True).exists()
 
 
+def _payment_required(store, shop) -> bool:
+    """A payment method is needed to SELL — unless nothing in the shop can be bought. The project has a real price-inquiry flow
+    (``pricing_mode_service``: a product, category or collection can be «استعلام قیمت»; the server refuses cart/checkout for it). So:
+    * no active product yet            → still required (we cannot know what the shop will sell);
+    * at least one directly purchasable active product → required (this shop has a checkout);
+    * active products exist and ALL are price-inquiry → not required (customers cannot check out, so a payment method is meaningless)."""
+    active = Product.objects.filter(store=store, status=Product.Status.ACTIVE, is_draft_placeholder=False)
+    if not active.exists():
+        return True
+    return active.filter(is_price_inquiry=False).exists()
+
+
 def _tax_complete(store, shop):
     """مالیات اختیاری است، اما مدیر باید صراحتاً تصمیم بگیرد — نه صرفِ
     وجودِ ``ShopSettings`` (که ``tax_enabled`` پیش‌فرضش True است و به‌تنهایی
@@ -321,6 +333,10 @@ class _ChecklistStep:
     group: str = "sales"
     #: needed before the shop can start selling. Everything else is optional/recommended and never blocks nor counts in the progress.
     required: bool = False
+    #: optional override: decides «required» from the store's real situation (e.g. no payment method needed when nothing can be bought)
+    required_fn: Callable | None = None
+    #: replaces ``description`` while the step is NOT required because of ``required_fn``
+    not_required_note: str = ""
     #: progress of a started-but-unfinished step: ``needs_action`` / ``processing`` / ``needs_fix`` (None = not started)
     state_fn: Callable | None = None
     #: True when RastiSi itself produced the result (an installed industry template creates categories, attributes…)
@@ -390,7 +406,9 @@ def _steps():
         _ChecklistStep("logo", "لوگو", "🖼️", _logo_complete, settings_url("general"), group="appearance"),
         _ChecklistStep("theme", "قالب و رنگ‌بندی", "🎨", _theme_complete,
                        lambda store, request: reverse("dashboard:storefront-builder-r4-editor") + "?panel=appearance", group="appearance"),
-        _ChecklistStep("payment_gateway", "درگاه پرداخت", "💳", _payment_gateway_complete, settings_url("payment-config"), group="sales", required=True),
+        _ChecklistStep("payment_gateway", "درگاه پرداخت", "💳", _payment_gateway_complete, settings_url("payment-config"), group="sales", required=True,
+                       required_fn=_payment_required,
+                       not_required_note="همه‌ی کالاهای فعال شما «استعلام قیمت» هستند و خرید مستقیم ندارند؛ تا وقتی کالایی با قیمت و سبد خرید ندارید روش پرداخت لازم نیست."),
         _ChecklistStep("tax", "اطلاعات مالیاتی (اختیاری)", "🧾", _tax_complete, lambda store, request: reverse("dashboard:tax-settings"),
                        description="در صورت نداشتن مالیات، گزینه «مالیات ندارم» را انتخاب کنید.", group="sales"),
         _ChecklistStep("custom_domain", "دامنه اختصاصی (اختیاری)", "🌐", _custom_domain_complete, _domain_page_url,
@@ -416,6 +434,7 @@ def build_setup_checklist(store, request):
     blocking_label = None
     for step in _steps():
         is_complete = bool(step.is_complete(store, shop))
+        is_required = bool(step.required_fn(store, shop)) if step.required_fn is not None else step.required
         if is_complete:
             completed_count += 1
         in_chain = step.key in CATALOG_CHAIN_KEYS
@@ -426,7 +445,7 @@ def build_setup_checklist(store, request):
             state = STATE_DONE
         elif progress:
             state = progress
-        elif not step.required:
+        elif not is_required:
             state = STATE_OPTIONAL
         elif not is_unlocked:
             state = STATE_BLOCKED
@@ -439,8 +458,9 @@ def build_setup_checklist(store, request):
         steps.append({
             "key": step.key, "label": step.label, "icon": step.icon,
             "is_complete": is_complete, "is_unlocked": is_unlocked, "locked_reason": locked_reason,
-            "url": step.url(store, request), "description": step.description,
-            "group": step.group, "required": step.required, "state": state, "state_label": STATE_LABELS[state],
+            "url": step.url(store, request),
+            "description": step.not_required_note if (step.required and not is_required and step.not_required_note) else step.description,
+            "group": step.group, "required": is_required, "state": state, "state_label": STATE_LABELS[state],
             "auto_done": bool(is_complete and step.auto_fn is not None and step.auto_fn(store, shop)),
             "is_next": False,
         })
