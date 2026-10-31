@@ -1,9 +1,9 @@
 {% extends "storefront_shell.html" %}
-{% load static persian catalog_extras storefront_builder_extras %}
+{% load static persian catalog_extras storefront_builder_extras seo_tags %}
 
 {% block title %}{{ product.seo_title|default:product.name }} | {{ SHOP_NAME }}{% endblock %}
 {% block meta_description %}<meta name="description" content="{{ product.seo_description|default:product.name }}">{% endblock %}
-{% block canonical %}{{ request.scheme }}://{{ request.get_host }}{% url 'catalog:product-detail' product.slug %}{% endblock %}
+{% block canonical %}{{ SEO_ORIGIN }}{% url 'catalog:product-detail' product.slug %}{% endblock %}
 {% block og_title %}{{ product.name }}{% endblock %}
 {% block og_tags %}{{ block.super }}
 {% if gallery_slides.0.url %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ gallery_slides.0.url }}">{% endif %}
@@ -11,8 +11,7 @@
 <meta property="product:price:currency" content="IRT">{% endblock %}
 
 {% block structured_data %}
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"{{ product.name|escapejs }}","sku":"{{ product.sku|escapejs }}"{% if product.brand %},"brand":{"@type":"Brand","name":"{{ product.brand.name|escapejs }}"}{% endif %}{% if gallery_slides.0.url %},"image":"{{ request.scheme }}://{{ request.get_host }}{{ gallery_slides.0.url }}"{% endif %}{% if not product.is_price_inquiry %},"offers":{"@type":"Offer","priceCurrency":"IRT","price":"{{ product.final_price }}","availability":"https://schema.org/{% if product.stock > 0 %}InStock{% else %}OutOfStock{% endif %}","url":"{{ request.scheme }}://{{ request.get_host }}{% url 'catalog:product-detail' product.slug %}"}}{% endif %}}</script>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"خانه","item":"{{ request.scheme }}://{{ request.get_host }}/"}{% if product.category %},{"@type":"ListItem","position":2,"name":"{{ product.category.name|escapejs }}","item":"{{ request.scheme }}://{{ request.get_host }}{% url 'catalog:product-list' %}?category={{ product.category.slug }}"}{% endif %},{"@type":"ListItem","position":{% if product.category %}3{% else %}2{% endif %},"name":"{{ product.name|escapejs }}"}]}</script>
+<script type="application/ld+json">{% jsonld_product product %}</script>
 {% endblock %}
 
 {% block extra_css %}

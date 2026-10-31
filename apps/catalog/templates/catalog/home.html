@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static persian %}
+{% load static persian seo_tags %}
 
 {% block meta_description %}<meta name="description" content="{{ SHOP_NAME }} — {{ SHOP_TAGLINE }}">{% endblock %}
 
@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block structured_data %}
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"{{ SHOP_NAME|escapejs }}","url":"{{ request.scheme }}://{{ request.get_host }}/"{% if SHOP_LOGO %},"logo":"{{ request.scheme }}://{{ request.get_host }}{{ SHOP_LOGO.url }}"{% endif %}}</script>
+<script type="application/ld+json">{% jsonld_store %}</script>
 {% endblock %}
 
 {% block content %}

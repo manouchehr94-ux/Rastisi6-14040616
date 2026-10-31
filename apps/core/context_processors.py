@@ -443,3 +443,26 @@ def shop_settings(request):
             is_active=True, show_in_header=True, store_id=shop.store_id,
         ).order_by("display_order", "id"),
     }
+
+
+def seo(request):
+    """Storefront SEO facts for every template: the Store's canonical origin and whether this request may be indexed (see
+    ``apps.core.seo_policy``). Never raises: an unknown host / unprovisioned store just means «request origin, not indexable»."""
+    cached = getattr(request, "_seo_context", None)
+    if cached is not None:
+        return cached
+    from apps.core import seo_policy
+
+    store = getattr(request, "store", None)
+    origin = f"{request.scheme}://{request.get_host()}"
+    noindex = False
+    reason = ""
+    if store is not None:
+        try:
+            state = seo_policy.indexability(request, store)
+            noindex, reason = not state.indexable, state.code
+            origin = seo_policy.canonical_origin(request, store)
+        except Exception:                                           # noqa: BLE001 - SEO facts must never break a page
+            pass
+    request._seo_context = {"SEO_ORIGIN": origin, "SEO_NOINDEX": noindex, "SEO_NOINDEX_REASON": reason}
+    return request._seo_context

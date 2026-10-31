@@ -22,15 +22,15 @@
 {% block meta_description %}{% endblock %}
 {% comment %}SEO: canonical/robots/OG on the tenant's own Host (ADR-90). Private pages
    override robots_meta with noindex; product/category pages override canonical.{% endcomment %}
-{% block robots_meta %}{% endblock %}
+{% block robots_meta %}{% if SEO_NOINDEX %}<meta name="robots" content="noindex,nofollow">{% endif %}{% endblock %}
 {% if SHOP_ENAMAD_VERIFICATION_META_NAME and SHOP_ENAMAD_VERIFICATION_META_CONTENT %}
 <meta name="{{ SHOP_ENAMAD_VERIFICATION_META_NAME }}" content="{{ SHOP_ENAMAD_VERIFICATION_META_CONTENT }}">
 {% endif %}
-<link rel="canonical" href="{% block canonical %}{{ request.scheme }}://{{ request.get_host }}{{ request.path }}{% endblock %}">
+<link rel="canonical" href="{% block canonical %}{{ SEO_ORIGIN }}{{ request.path }}{% endblock %}">
 {% block og_tags %}<meta property="og:site_name" content="{{ SHOP_NAME }}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{% block og_title %}{{ SHOP_NAME }}{% endblock %}">
-<meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">{% endblock %}
+<meta property="og:url" content="{{ SEO_ORIGIN }}{{ request.path }}">{% endblock %}
 {% if SHOP_FAVICON %}<link rel="icon" href="{{ SHOP_FAVICON.url }}">{% else %}<link rel="icon" href="{% static 'favicon.ico' %}">{% endif %}
 <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">

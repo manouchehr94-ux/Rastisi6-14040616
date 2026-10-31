@@ -3,7 +3,7 @@
 
 {% block title %}{{ collection.seo_title|default:collection.name }} | {{ SHOP_NAME }}{% endblock %}
 {% block meta_description %}<meta name="description" content="{{ collection.seo_description|default:collection.name }}">{% endblock %}
-{% block canonical %}{{ request.scheme }}://{{ request.get_host }}{% url 'catalog:collection-detail' collection.slug %}{% endblock %}
+{% block canonical %}{{ SEO_ORIGIN }}{% url 'catalog:collection-detail' collection.slug %}{% endblock %}
 {% block og_title %}{{ collection.name }}{% endblock %}
 {% block og_tags %}{{ block.super }}
 {% if collection.image %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ collection.image.url }}">{% endif %}{% endblock %}

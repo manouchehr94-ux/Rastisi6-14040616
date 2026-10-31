@@ -6,7 +6,7 @@
 ``django.contrib.sitemaps`` (که به Site وابسته است) view‌هایِ سبکِ
 request-scoped‌اند: دامنه‌یِ canonical همان Hostِ tenant است."""
 
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.urls import reverse
 
@@ -15,26 +15,31 @@ from apps.catalog.services.product_publish_service import storefront_listing_pro
 from apps.content.models import ContentPage
 from apps.stores.resolution import resolve_store_for_storefront
 
+from . import seo_policy
+
 #: بیشینه‌ی URLهایِ هر بخش در sitemap — کرانه‌دار تا کاتالوگِ بزرگ سرریز نکند.
 SITEMAP_LIMIT = 5000
 
 
-def _abs(request, path: str) -> str:
-    """URLِ مطلق روی همان Hostِ درخواست (دامنه‌یِ tenant)."""
-    return request.build_absolute_uri(path)
+def _abs(request, path: str, *, origin: str | None = None) -> str:
+    """URLِ مطلق روی دامنه‌یِ canonical این Store (یا Hostِ درخواست اگر canonical تعریف نشده)."""
+    return f"{origin}{path}" if origin else request.build_absolute_uri(path)
 
 
-def _sitemap_entries(request, store):
+def _sitemap_entries(request, store, origin=None):
     """فهرستِ (loc, lastmod) برایِ محتوایِ عمومیِ این Store."""
-    entries = [{"loc": _abs(request, reverse("catalog:home")), "lastmod": None, "priority": "1.0"}]
-    entries.append({"loc": _abs(request, reverse("catalog:product-list")), "lastmod": None, "priority": "0.8"})
+    def link(path):                                            # every URL is built on the Store's canonical origin
+        return _abs(request, path, origin=origin)
+
+    entries = [{"loc": link(reverse("catalog:home")), "lastmod": None, "priority": "1.0"}]
+    entries.append({"loc": link(reverse("catalog:product-list")), "lastmod": None, "priority": "0.8"})
 
     categories = (
         Category.objects.filter(store=store, is_active=True)
         .order_by("order", "name")[:SITEMAP_LIMIT]
     )
     for cat in categories:
-        loc = _abs(request, reverse("catalog:product-list")) + f"?category={cat.slug}"
+        loc = link(reverse("catalog:product-list")) + f"?category={cat.slug}"
         entries.append({"loc": loc, "lastmod": cat.updated_at, "priority": "0.6"})
 
     products = (
@@ -42,14 +47,14 @@ def _sitemap_entries(request, store):
         .order_by("-updated_at")[:SITEMAP_LIMIT]
     )
     for product in products:
-        loc = _abs(request, reverse("catalog:product-detail", args=[product.slug]))
+        loc = link(reverse("catalog:product-detail", args=[product.slug]))
         entries.append({"loc": loc, "lastmod": product.updated_at, "priority": "0.7"})
 
     pages = ContentPage.objects.filter(
         store=store, status=ContentPage.Status.PUBLISHED,
     ).order_by("slug")[:SITEMAP_LIMIT]
     for page in pages:
-        loc = _abs(request, reverse("content:page-detail", args=[page.slug]))
+        loc = link(reverse("content:page-detail", args=[page.slug]))
         entries.append({"loc": loc, "lastmod": getattr(page, "updated_at", None), "priority": "0.4"})
 
     return entries
@@ -58,24 +63,22 @@ def _sitemap_entries(request, store):
 def sitemap_xml(request):
     """sitemap.xmlِ محدود به این Store."""
     store = resolve_store_for_storefront(request)
-    entries = _sitemap_entries(request, store)
+    # a test host (localhost…) or a Store that is not public yet has NO sitemap: nothing may be offered to a search engine
+    if not seo_policy.indexability(request, store).indexable:
+        raise Http404("sitemap not available")
+    entries = _sitemap_entries(request, store, origin=seo_policy.canonical_origin(request, store))
     return render(
         request, "seo/sitemap.xml", {"entries": entries}, content_type="application/xml",
     )
 
 
 def robots_txt(request):
-    """robots.txt — مسیرهایِ خصوصی (سبد/تسویه/حساب) را از ایندکس کنار می‌گذارد و
-    به sitemapِ همین دامنه اشاره می‌کند."""
-    lines = [
-        "User-agent: *",
-        "Disallow: /cart/",
-        "Disallow: /checkout/",
-        "Disallow: /account/",
-        "Disallow: /admin/",
-        "Disallow: /admin-portal/",
-        "Disallow: /admin-panel/",
-        f"Sitemap: {_abs(request, reverse('sitemap-xml'))}",
-        "",
-    ]
-    return HttpResponse("\n".join(lines), content_type="text/plain")
+    """robots.txt — مسیرهایِ خصوصی (سبد/تسویه/حساب) را از ایندکس کنار می‌گذارد، خزنده‌هایِ «آموزشِ مدل» را (طبقِ سیاستِ پلتفرم)
+    می‌بندد، به sitemapِ دامنه‌یِ canonical اشاره می‌کند، و روی آدرسِ آزمایشی/فروشگاهِ منتشرنشده همه‌چیز را می‌بندد."""
+    try:
+        store = resolve_store_for_storefront(request)
+    except Exception:                                         # noqa: BLE001 - an unknown host is simply not indexable
+        store = None
+    state = seo_policy.indexability(request, store)
+    origin = seo_policy.canonical_origin(request, store) if state.indexable else ""
+    return HttpResponse("\n".join(seo_policy.robots_lines(origin=origin, indexable=state.indexable)), content_type="text/plain")

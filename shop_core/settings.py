@@ -186,6 +186,7 @@ TEMPLATES = [
                 "apps.portal.context_processors.turnstile",
                 "apps.portal.context_processors.platform_enamad_verification",
                 "apps.core.context_processors.shop_settings",
+                "apps.core.context_processors.seo",
                 "apps.catalog.context_processors.nav_categories",
                 "apps.cart.context_processors.cart_badge",
                 "apps.customers.context_processors.wishlist_membership",
