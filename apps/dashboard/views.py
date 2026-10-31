@@ -113,6 +113,7 @@ from apps.core.services.audit_service import list_audit_events, record_audit_eve
 from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
+from apps.stores.services import tracking_service
 from apps.dashboard.services import domain_settings_service, import_proposals, import_service, import_xlsx, search_visibility_service
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
@@ -4354,7 +4355,8 @@ def _integration_rows_with_effect(store, request):
     rows = integration_service.connections_context(store=store)
     for row in rows:
         row["group"] = "live" if row["provider"].code in search_visibility_service.LIVE_ON_PUBLIC_PAGES else "stored"
-        row["effect"] = search_visibility_service.provider_effect(row["provider"].code, connected=row["is_connected"], store_live=live)
+        row["effect"] = search_visibility_service.provider_effect(row["provider"].code, connected=row["is_connected"], store_live=live,
+                                                                      tracking_enabled=tracking_service.tracking_enabled())
     return rows
 
 

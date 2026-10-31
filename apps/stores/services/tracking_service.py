@@ -6,6 +6,8 @@ something a template may print. Rules:
 * only ACTIVE connections of THIS store — never another store's ids;
 * every identifier is re-validated against the strict provider pattern at render time (stored data is never trusted into a
   ``<script>``), so a malformed value renders nothing instead of becoming markup;
+* nothing is returned at all unless the platform enabled storefront tracking (``RASTISI_STOREFRONT_TRACKING_ENABLED``, default OFF — there is
+  no visitor-consent mechanism for tracking cookies in the project, so the safe default is «no third-party tracker before someone decided»);
 * nothing is returned for a request the SEO policy says is not a real public page (localhost/QA hosts, unpublished stores,
   admin/builder hosts) — a store that is not live must not feed real analytics or ad accounts.
 
@@ -14,6 +16,8 @@ Only identifiers go into the page. RastiSi never injects seller-supplied HTML/JS
 from __future__ import annotations
 
 import re
+
+from django.conf import settings
 
 from apps.stores.models import StoreIntegrationConnection
 
@@ -28,9 +32,13 @@ _FIELDS = {
 }
 
 
+def tracking_enabled() -> bool:
+    return bool(getattr(settings, "RASTISI_STOREFRONT_TRACKING_ENABLED", False))
+
+
 def active_tracking_ids(store) -> dict[str, str]:
     """``{"ga4": "G-…", "gtm": "GTM-…", "meta_pixel": "123…"}`` — only the active, well-formed ones of ``store``."""
-    if store is None:
+    if store is None or not tracking_enabled():
         return {}
     out: dict[str, str] = {}
     rows = StoreIntegrationConnection.objects.filter(store=store, is_active=True, provider_code__in=list(_FIELDS))

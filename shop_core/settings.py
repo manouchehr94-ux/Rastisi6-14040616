@@ -580,3 +580,7 @@ DEFAULT_FROM_EMAIL = env_str("DJANGO_DEFAULT_FROM_EMAIL", "no-reply@rastisi.ir")
 RASTISI_AI_TRAINING_CRAWLERS = env_str("RASTISI_AI_TRAINING_CRAWLERS", "disallow")
 # Submitting changed URLs to IndexNow participants (Bing & co.). OFF unless the platform owner enables it explicitly; never on in QA.
 RASTISI_INDEXNOW_ENABLED = env_bool("RASTISI_INDEXNOW_ENABLED", default=False)
+# Analytics / ad pixels (GA4, GTM, Meta pixel) on public storefront pages. OFF by default (privacy by default): the project has no
+# visitor-consent mechanism for tracking cookies (the only consent system, apps.customers.services.consent_service, covers promotional SMS/e-mail
+# of registered customers). Turn on only after the platform owner has confirmed the legal basis for the markets served.
+RASTISI_STOREFRONT_TRACKING_ENABLED = env_bool("RASTISI_STOREFRONT_TRACKING_ENABLED", default=False)

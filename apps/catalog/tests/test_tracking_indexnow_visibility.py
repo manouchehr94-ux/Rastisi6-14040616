@@ -23,7 +23,7 @@ def connect(store, code, **creds):
     return conn
 
 
-@override_settings(ALLOWED_HOSTS=[HOST_A, HOST_B, "testserver"])
+@override_settings(ALLOWED_HOSTS=[HOST_A, HOST_B, "testserver"], RASTISI_STOREFRONT_TRACKING_ENABLED=True)
 class TrackingAndIndexNowTests(TestCase):
     def setUp(self):
         self.a = Store.objects.get(slug="akhlaghi")
@@ -84,6 +84,29 @@ class TrackingAndIndexNowTests(TestCase):
         connect(self.a, "google_analytics", measurement_id="G-ABC1234DEF")
         html = self.client.get("/", HTTP_HOST="shop.localhost").content.decode()
         self.assertNotIn("G-ABC1234DEF", html)
+
+    # ── privacy by default ───────────────────────────────────────────────────────────────────────────────
+    def test_tracking_is_off_by_default_even_for_a_connected_public_store(self):
+        from django.conf import settings
+        connect(self.a, "google_analytics", measurement_id="G-ABC1234DEF")
+        connect(self.a, "google_tag_manager", container_id="GTM-ABC1234")
+        connect(self.a, "ad_pixel", pixel_id="1234567890123456")
+        with override_settings(RASTISI_STOREFRONT_TRACKING_ENABLED=False):
+            html = self.home()
+            for marker in ("G-ABC1234DEF", "GTM-ABC1234", "1234567890123456", "googletagmanager.com", "fbevents.js"):
+                self.assertNotIn(marker, html)
+            self.assertEqual(tracking_service.active_tracking_ids(self.a), {})
+        self.assertIn("G-ABC1234DEF", self.home())                       # …and only the explicit platform switch turns it on
+
+    def test_the_project_default_is_off(self):
+        import importlib
+        import os
+        from unittest import mock as m
+        with m.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RASTISI_STOREFRONT_TRACKING_ENABLED", None)
+            from shop_core import settings as project_settings
+            self.assertFalse(importlib.reload(project_settings).RASTISI_STOREFRONT_TRACKING_ENABLED)
+        importlib.reload(project_settings)
 
     # ── IndexNow ────────────────────────────────────────────────────────────────────────────────────────
     def test_key_is_stable_per_store_and_differs_between_stores(self):
@@ -169,6 +192,7 @@ class TrackingAndIndexNowTests(TestCase):
         self.assertEqual(svc.provider_effect("enamad", connected=True, store_live=True)["state"], "stored")
         self.assertEqual(svc.provider_effect("google_analytics", connected=True, store_live=False)["state"], "waiting")
         self.assertEqual(svc.provider_effect("google_analytics", connected=True, store_live=True)["state"], "live")
+        self.assertEqual(svc.provider_effect("google_analytics", connected=True, store_live=True, tracking_enabled=False)["state"], "privacy")
         self.assertEqual(svc.provider_effect("google_analytics", connected=False, store_live=True)["state"], "off")
 
 

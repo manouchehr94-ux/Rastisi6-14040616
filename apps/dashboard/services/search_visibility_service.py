@@ -84,11 +84,13 @@ def seo_readiness(store, request) -> list[dict]:
 LIVE_ON_PUBLIC_PAGES = frozenset({"google_analytics", "google_tag_manager", "ad_pixel"})
 
 
-def provider_effect(code: str, *, connected: bool, store_live: bool) -> dict:
+def provider_effect(code: str, *, connected: bool, store_live: bool, tracking_enabled: bool = True) -> dict:
     """The honest consequence of the saved identifier — drives the badge text of each integration row."""
     if code in LIVE_ON_PUBLIC_PAGES:
         if not connected:
             return {"state": "off", "text": "متصل‌نشده"}
+        if store_live and not tracking_enabled:
+            return {"state": "privacy", "text": "ذخیره شد — بارگذاری روی فروشگاه هنوز توسط مدیر پلتفرم (به‌خاطر حریم خصوصی و رضایت بازدیدکننده) فعال نشده است"}
         if store_live:
             return {"state": "live", "text": "فعال روی صفحه‌های عمومی"}
         return {"state": "waiting", "text": "ذخیره شد — پس از انتشارِ فروشگاه روی آدرسِ عمومی فعال می‌شود"}

@@ -8,6 +8,7 @@
             <span class="au-acc__title">{{ row.provider.display_name }}
               {% if row.effect.state == "live" %}<span class="au-badge au-badge--ok" data-testid="int-status" data-effect="live">{{ row.effect.text }}</span>
               {% elif row.effect.state == "waiting" %}<span class="au-badge au-badge--info" data-testid="int-status" data-effect="waiting">{{ row.effect.text }}</span>
+              {% elif row.effect.state == "privacy" %}<span class="au-badge au-badge--warn" data-testid="int-status" data-effect="privacy">{{ row.effect.text }}</span>
               {% elif row.effect.state == "stored" %}<span class="au-badge au-badge--warn" data-testid="int-status" data-effect="stored">{{ row.effect.text }}</span>
               {% elif row.can_reenable %}<span class="au-badge au-badge--warn" data-testid="int-status" data-effect="paused">غیرفعال — اطلاعات ذخیره است</span>
               {% else %}<span class="au-badge" data-testid="int-status" data-effect="off">متصل‌نشده</span>{% endif %}
