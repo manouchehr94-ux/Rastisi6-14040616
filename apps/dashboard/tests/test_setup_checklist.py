@@ -1055,6 +1055,14 @@ class ChecklistDomainConsistencyTests(TestCase):
         StoreDomain.objects.filter(pk=d.pk).update(routing_checked_at=now - timezone.timedelta(hours=3))
         self.assertIn("قدیمی شده", self._step()["description"])
 
+    def test_a_primary_verified_domain_with_unrecorded_routing_flags_does_not_break_the_dashboard(self):
+        """Found by the full suite (KeyError 'active'): legacy/seed rows can be primary + verified while routing/tls were never recorded.
+        The checklist must agree with the domain page (that domain IS the live address) instead of crashing."""
+        self._domain(verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(), is_primary=True)
+        step = self._step()
+        self.assertEqual(step["state"], "done")
+        self.assertTrue(step["is_complete"])
+
     def test_failed_verification_asks_for_a_fix(self):
         self._domain(verification_status=StoreDomain.VerificationStatus.FAILED)
         self.assertEqual(self._step()["state"], "needs_fix")

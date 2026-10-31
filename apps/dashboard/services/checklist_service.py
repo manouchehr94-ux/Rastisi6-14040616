@@ -184,14 +184,11 @@ def _custom_domains(store):
 
 
 def _domain_is_active(domain) -> bool:
-    """A custom domain is «connected» only when ownership is verified, DNS reaches RastiSi, HTTPS is ready AND it was activated as the
-    shop's address. «Verified» alone (or a pending request) never counts — that is only progress."""
-    return (
-        domain.verification_status == StoreDomain.VerificationStatus.VERIFIED
-        and domain.routing_status == StoreDomain.RoutingStatus.CONNECTED
-        and domain.tls_status == StoreDomain.TlsStatus.READY
-        and bool(domain.is_primary)
-    )
+    """A custom domain is «connected» only when it is the shop's ACTIVE address — the very same definition the domain page uses
+    (``domain_settings_service.domain_phase == PHASE_ACTIVE``: ownership verified AND activated as primary). «Verified» alone, or a pending
+    request, never counts — that is only progress. (``activate_custom_domain`` itself refuses to make a domain primary before DNS + HTTPS
+    were checked, so a primary verified domain is a live one even if an old row never recorded its routing/TLS flags.)"""
+    return domain_settings_service.domain_phase(domain, targets_configured=True) == domain_settings_service.PHASE_ACTIVE
 
 
 def _custom_domain_complete(store, shop):
@@ -224,6 +221,7 @@ _PHASE_TO_STATE = {
     domain_settings_service.PHASE_AWAITING_FINAL: lambda: STATE_NEEDS_ACTION,
     domain_settings_service.PHASE_CHECKING: lambda: STATE_PROCESSING,
     domain_settings_service.PHASE_PLATFORM_WAIT: lambda: STATE_PROCESSING,       # RastiSi has to finish its side: nothing for the seller to do
+    # (an ACTIVE domain never reaches this table: ``_pending_domain_phase`` skips it)
     domain_settings_service.PHASE_ERROR: lambda: STATE_NEEDS_FIX,
 }
 
