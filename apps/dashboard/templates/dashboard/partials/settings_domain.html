@@ -10,9 +10,9 @@
     <div class="au-card__head"><h2>🧭 چه کاری را کجا انجام می‌دهم؟</h2></div>
     <div class="au-card__body">
       <ul class="domain-who__list">
-        <li><b>در همین صفحه:</b> فقط وضعیتِ آدرس‌ها را می‌بینید؛ چیزی تغییر نمی‌کند.</li>
-        <li><b>افزودن، تأیید و فعال‌سازیِ دامنه:</b> در «پرتالِ مالکِ راستی‌سی» (فقط مالکِ فروشگاه) انجام می‌شود؛ هر تغییرِ حساس با تأییدِ دوباره و ثبتِ سابقه همراه است.</li>
-        <li><b>رکوردهای DNS (TXT / A / CNAME):</b> در پنلِ شرکتی که دامنه را از آن خریده‌اید (ثبت‌کنندهٔ دامنه) ثبت می‌شوند؛ راستی‌سی مقدارهای لازم را در پرتال نشان می‌دهد.</li>
+        <li><b>در همین صفحه:</b> دامنه‌تان را ثبت می‌کنید، رکوردِ لازم را می‌بینید و کپی می‌کنید، و وضعیتِ تأییدِ مالکیت و اتصال را بررسی می‌کنید.</li>
+        <li><b>فعال‌سازیِ نهایی:</b> تنها قدمی که در «پرتالِ مالکِ راستی‌سی» انجام می‌شود، چون با تأییدِ دوباره (Step-Up) و ثبتِ سابقه همراه است.</li>
+        <li><b>رکوردهای DNS (TXT / A / CNAME):</b> در پنلِ شرکتی که دامنه را از آن خریده‌اید (ثبت‌کنندهٔ دامنه) اضافه می‌شوند؛ راستی‌سی مقدارهای لازم را همین‌جا نشان می‌دهد.</li>
       </ul>
     </div>
   </div>
@@ -40,12 +40,50 @@
     <div class="au-card__head"><h2>🔗 دامنه‌ی اختصاصی <small class="au-hint">اختیاری — آدرسِ خودتان مثل shop.example.com</small></h2>
       {% if domain_overview.custom_domains %}<span class="au-sub">{{ domain_overview.custom_domains|length|fa_number }} دامنه</span>{% endif %}</div>
     <div class="au-card__body">
+      {% if domain_overview.can_manage %}
+      <form method="post" action="{% url 'dashboard:settings-domain-add' %}" class="domain-add" data-testid="domain-add-form">
+        {% csrf_token %}
+        <label for="domainHostname" class="au-label">دامنهٔ اختصاصی شما</label>
+        <div class="domain-add__row">
+          <input id="domainHostname" name="hostname" class="au-input au-input--ltr" dir="ltr" inputmode="url" autocomplete="off" required placeholder="shop.example.com">
+          <button type="submit" class="au-btn au-btn--primary">ثبت دامنه</button>
+        </div>
+        <span class="au-hint">فقط نامِ دامنه را بنویسید (بدون http و /). ثبتِ دامنه چیزی را در فروشگاهِ فعلی تغییر نمی‌دهد.</span>
+      </form>
+      {% endif %}
       {% for d in domain_overview.custom_domains %}
       <div class="au-note {% if d.tone == 'ok' %}au-note--ok{% elif d.tone == 'danger' %}au-note--danger{% else %}au-note--warn{% endif %}" data-testid="custom-domain-row">
         <b dir="ltr">{{ d.hostname }}</b> —
         {% if d.is_primary %}فعال و آدرس اصلیِ فروشگاه{% else %}هنوز فعال نشده{% endif %}
         <div class="au-hint">مالکیت: {{ d.verification }} · اتصال DNS: {{ d.routing }} · HTTPS: {{ d.tls }}</div>
         {% if d.next_step %}<div class="au-hint"><b>قدم بعدی:</b> {{ d.next_step }}{% if d.next_hint %} — {{ d.next_hint }}{% endif %}</div>{% endif %}
+        <div class="domain-seller-status domain-seller-status--{{ d.seller_tone }}" data-testid="domain-seller-status" data-action="{{ d.action }}">{{ d.seller_status }}{% if d.failed %} — مشکلی وجود دارد؛ راه‌حل را ببینید{% endif %}</div>
+        {% if domain_overview.can_manage %}
+        {% if d.action == "begin" %}
+        <form method="post" action="{% url 'dashboard:settings-domain-begin' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-begin">شروع تأیید مالکیت</button></form>
+        {% elif d.action == "check_txt" %}
+        {% if d.txt_record %}
+        <div class="domain-record" data-testid="domain-txt-record">
+          <p class="au-hint">در پنل DNS دامنه‌تان این رکورد را اضافه کنید:</p>
+          <dl><dt>نوع</dt><dd dir="ltr">TXT</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ d.txt_record.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.txt_record.host }}">کپی</button></dd>
+          <dt>مقدار</dt><dd dir="ltr"><bdi>{{ d.txt_record.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.txt_record.value }}">کپی</button></dd></dl>
+        </div>
+        {% endif %}
+        <form method="post" action="{% url 'dashboard:settings-domain-check' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-check">بررسی مجدد</button></form>
+        {% elif d.action == "check_dns" or d.action == "wait_https" %}
+        {% if d.routing_records and d.routing_records.rows %}
+        <div class="domain-record" data-testid="domain-routing-records">
+          <p class="au-hint">برای اتصال دامنه، یکی از این رکوردها را (طبقِ نوعِ دامنه) ثبت کنید:</p>
+          {% for row in d.routing_records.rows %}<dl><dt>نوع</dt><dd dir="ltr">{{ row.type }}{% if row.recommended %} <small>(پیشنهادی)</small>{% endif %}</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ row.host }}</bdi></dd>
+          <dt>مقدار</dt><dd dir="ltr"><bdi>{{ row.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.value }}">کپی</button></dd></dl>{% endfor %}
+        </div>
+        {% elif d.routing_records %}<div class="au-note au-note--warn">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسطِ راستی‌سی تنظیم نشده؛ تا آن زمان این مرحله ممکن نیست.</div>{% endif %}
+        <form method="post" action="{% url 'dashboard:settings-domain-readiness' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-readiness">{% if d.action == "wait_https" %}بررسی دوباره{% else %}بررسی اتصال و HTTPS{% endif %}</button></form>
+        {% elif d.action == "activate" %}
+        <a class="au-btn au-btn--primary" href="{{ domain_overview.portal_url }}" data-testid="domain-act-activate">فعال‌سازی نهایی (با تأیید دوباره)</a>
+        <span class="au-hint">این قدم در پرتالِ مالک انجام می‌شود تا بدونِ تأیید، آدرسِ فروشگاه عوض نشود.</span>
+        {% endif %}
+        {% endif %}
         <ol class="domain-steps" data-testid="domain-steps" aria-label="مرحله‌های اتصالِ این دامنه">
           {% for step in d.steps %}<li class="domain-step domain-step--{{ step.state }}"><span class="domain-step__mark" aria-hidden="true"></span><span>{{ step.title }}</span><small>{{ step.state_label }}</small></li>{% endfor %}
         </ol>
@@ -74,3 +112,13 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest && e.target.closest('[data-copy]');
+  if (!btn) return;
+  var text = btn.getAttribute('data-copy');
+  var done = function () { var old = btn.textContent; btn.textContent = 'کپی شد'; setTimeout(function () { btn.textContent = old; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done);
+  else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch (err) {} t.remove(); }
+});
+</script>

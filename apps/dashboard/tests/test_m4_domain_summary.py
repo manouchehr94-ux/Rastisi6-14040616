@@ -53,12 +53,18 @@ class DomainPageRenderTests(SimpleTestCase):
         overview.update(extra)
         return render_to_string(PARTIAL, {"domain_overview": overview})
 
-    def test_banner_who_does_what_and_guide_are_present_and_the_page_has_no_form(self):
+    def test_banner_who_does_what_and_guide_are_present_and_the_only_form_is_the_manager_add_form(self):
         html = self._html()
         for marker in ('data-testid="domain-status-summary"', 'data-summary="platform_only"', 'data-testid="domain-who-does-what"',
                        'data-testid="domain-six-steps"', 'data-testid="portal-domains-link"'):
             self.assertIn(marker, html)
+        self.assertEqual(html.count("<form"), 1)
+        self.assertIn('data-testid="domain-add-form"', html)
+
+    def test_a_viewer_who_cannot_manage_domains_gets_no_form_at_all(self):
+        html = self._html(can_manage=False)
         self.assertNotIn("<form", html)
+        self.assertNotIn('data-testid="domain-add-form"', html)
 
     def test_the_six_step_guide_is_open_for_a_shop_without_a_domain_and_folded_once_one_exists(self):
         self.assertRegex(self._html(), r'data-testid="domain-six-steps"\s+open')

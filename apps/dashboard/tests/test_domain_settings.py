@@ -1,5 +1,7 @@
 """Admin «دامنه و آدرس» (settings?section=domain): read-only overview + the real link to the owner-portal domain manager."""
 
+import re
+
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -71,11 +73,22 @@ class DomainSettingsPageTests(PermissionEnforcementTestCase):
         page = self.client.get(reverse("dashboard:shipping-setup"))
         self.assertNotContains(page, 'data-tab="settings-domain"')
 
-    def test_page_has_no_write_form(self):
+    def test_manager_gets_the_add_form_posting_to_the_panel_and_never_to_the_owner_portal(self):
         self._login(self.owner)
         html = self.client.get(self.url()).content.decode()
-        section = html[html.index('data-testid="domain-settings"'):]
-        self.assertNotIn('method="post"', section.split("</main>")[0][:12000])
+        self.assertIn('data-testid="domain-add-form"', html)
+        self.assertIn(f'action="{reverse("dashboard:settings-domain-add")}"', html)
+        section = html[html.index('data-testid="domain-settings"'):].split("</main>")[0]
+        for action in re.findall(r'<form[^>]*action="([^"]+)"', section):
+            self.assertTrue(action.startswith("/admin-portal/settings/domain/"), action)
+
+    def test_a_member_without_domain_manage_sees_the_page_without_any_form(self):
+        self._login(self.analyst)
+        res = self.client.get(self.url())
+        if res.status_code == 200:
+            html = res.content.decode()
+            section = html[html.index('data-testid="domain-settings"'):].split("</main>")[0] if 'data-testid="domain-settings"' in html else ""
+            self.assertNotIn('method="post"', section)
 
     def test_legacy_section_links_still_resolve(self):
         self._login(self.owner)

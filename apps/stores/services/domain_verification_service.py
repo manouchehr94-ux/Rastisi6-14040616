@@ -7,6 +7,7 @@
 جست‌وجو هرگز چیزی را «تأییدشده» نمی‌کند و فاکتور را در همان وضعیتِ
 ``PENDING`` نگه می‌دارد تا تاجر بتواند دوباره تلاش کند."""
 
+import ipaddress
 import secrets
 import socket
 import ssl
@@ -43,6 +44,15 @@ def _normalize_or_raise(raw_hostname: str) -> str:
         hostname = normalize_hostname(raw_hostname)
     except ValidationError as exc:
         raise DomainVerificationError("؛ ".join(exc.messages)) from exc
+
+    try:
+        ipaddress.ip_address(hostname.strip("[]"))
+    except ValueError:
+        pass
+    else:
+        # An IP literal can never prove ownership with a TXT record, and the later routing/TLS probes must never be pointed at
+        # an arbitrary address (SSRF) — only real domain names are accepted.
+        raise DomainVerificationError("به‌جای آدرس IP، نامِ دامنه را وارد کنید (مثل shop.example.com).")
 
     if is_rastisi_owned_hostname(hostname):
         raise DomainVerificationError(

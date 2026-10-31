@@ -5,7 +5,7 @@ from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import vision_views as storefront_builder_vision_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import card_transfer_views, cod_views, engagement_views, journal_views, payment_reconciliation_views, views
+from . import card_transfer_views, cod_views, engagement_views, journal_views, payment_reconciliation_views, views, views_domain
 
 app_name = "dashboard"
 
@@ -261,6 +261,10 @@ urlpatterns = [
     path("settings/sms/outbox/", views.sms_outbox_list, name="sms-outbox-list"),
     path("settings/sms/outbox/<int:pk>/retry/", views.sms_outbox_retry, name="sms-outbox-retry"),
 
+    path("settings/domain/add/", views_domain.settings_domain_add, name="settings-domain-add"),
+    path("settings/domain/<int:domain_id>/begin/", views_domain.settings_domain_begin, name="settings-domain-begin"),
+    path("settings/domain/<int:domain_id>/check/", views_domain.settings_domain_check, name="settings-domain-check"),
+    path("settings/domain/<int:domain_id>/readiness/", views_domain.settings_domain_readiness, name="settings-domain-readiness"),
     path("settings/integrations/<str:provider_code>/connect/", views.settings_integration_connect, name="settings-integration-connect"),
     path("settings/integrations/<str:provider_code>/disconnect/", views.settings_integration_disconnect, name="settings-integration-disconnect"),
     path("settings/integrations/<str:provider_code>/toggle/", views.settings_integration_toggle, name="settings-integration-toggle"),

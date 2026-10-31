@@ -16,6 +16,31 @@ from apps.stores.services import domain_guide_service as guide
 from apps.stores.services import domain_verification_service as dvs
 
 _TONE = {"active": "ok", "pending": "warn", "blocked": "danger"}
+#: what the seller does next, derived ONLY from the domain's real statuses
+ACTION_BEGIN, ACTION_CHECK_TXT, ACTION_CHECK_DNS, ACTION_WAIT_HTTPS, ACTION_ACTIVATE, ACTION_NONE = (
+    "begin", "check_txt", "check_dns", "wait_https", "activate", "none")
+
+_SELLER_STATUS = {
+    ACTION_BEGIN: ("آمادهٔ شروع بررسی", "warn"),
+    ACTION_CHECK_TXT: ("یک اقدام کوتاه از شما لازم است", "warn"),
+    ACTION_CHECK_DNS: ("یک اقدام کوتاه از شما لازم است", "warn"),
+    ACTION_WAIT_HTTPS: ("در حال اتصال دامنه", "info"),
+    ACTION_ACTIVATE: ("آمادهٔ فعال‌سازی نهایی", "ok"),
+    ACTION_NONE: ("اتصال موفق", "ok"),
+}
+
+
+def _next_action(domain: StoreDomain) -> str:
+    verified = domain.verification_status == StoreDomain.VerificationStatus.VERIFIED
+    if not verified:
+        return ACTION_BEGIN if domain.verification_status == StoreDomain.VerificationStatus.UNVERIFIED else ACTION_CHECK_TXT
+    if domain.routing_status != StoreDomain.RoutingStatus.CONNECTED:
+        return ACTION_CHECK_DNS
+    if domain.tls_status != StoreDomain.TlsStatus.READY:
+        return ACTION_WAIT_HTTPS
+    return ACTION_NONE if domain.is_primary else ACTION_ACTIVATE
+
+
 _STEP_LABEL = {guide.DONE: "انجام شد", guide.CURRENT: "مرحلهٔ فعلی", guide.TODO: "بعداً", guide.BLOCKED: "نیازمند رفع مشکل"}
 
 
@@ -60,9 +85,11 @@ def domain_overview(store, request, *, can_manage: bool) -> dict:
     custom_rows = []
     for domain in store.domains.filter(domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN).order_by("-is_primary", "-created_at"):
         steps = guide.steps(domain, targets_configured=connection["configured"])
+        action = _next_action(domain)
         overall = guide.overall_state(steps)
         current = next((s for s in steps if s["state"] in (guide.CURRENT, guide.BLOCKED)), None)
         custom_rows.append({
+            "id": domain.pk,
             "hostname": domain.hostname,
             "is_primary": bool(domain.is_primary and domain.verification_status == StoreDomain.VerificationStatus.VERIFIED),
             "verification": domain.get_verification_status_display(),
@@ -72,6 +99,12 @@ def domain_overview(store, request, *, can_manage: bool) -> dict:
             "tone": _TONE.get(overall, "warn"),
             "next_step": current["title"] if current else "",
             "next_hint": current["hint"] if current else "",
+            "action": action,
+            "seller_status": _SELLER_STATUS[action][0],
+            "seller_tone": _SELLER_STATUS[action][1],
+            "failed": domain.verification_status == StoreDomain.VerificationStatus.FAILED,
+            "txt_record": guide.txt_record(domain) if action in (ACTION_CHECK_TXT,) else None,
+            "routing_records": guide.routing_records(domain.hostname) if action in (ACTION_CHECK_DNS, ACTION_WAIT_HTTPS) else None,
             "steps": [{"title": step["title"], "state": step["state"], "state_label": _STEP_LABEL.get(step["state"], "")} for step in steps],
         })
     platform_domains = [
