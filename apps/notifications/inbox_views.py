@@ -93,7 +93,7 @@ def bell_context(request, site) -> dict:
     return {"nt_bell": {
         "summary_url": reverse(f"{site.ns}:inbox-summary"), "inbox_url": reverse(f"{site.ns}:inbox-home"), "prefs_url": reverse(f"{site.ns}:inbox-preferences"),
         "poll_seconds": max(15, int(getattr(settings, "RASTISI_NOTIF_POLL_SECONDS", 30))), "user_key": f"{request.user.pk}:{S.key_for(store)}",
-        "unread": svc.unread_count(request.user, store), "ns": site.ns,
+        "unread": svc.unread_count(request.user, store, membership=getattr(request, "store_membership", None)), "ns": site.ns,
     }}
 
 

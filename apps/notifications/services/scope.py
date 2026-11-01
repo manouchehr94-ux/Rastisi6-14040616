@@ -37,11 +37,11 @@ def store_recipients(store, permission: str = ""):
     return [m.user for m in members if not permission or auth.membership_has_permission(m, permission)]
 
 
-def allowed_type_keys(user, store=None) -> list[str]:
+def allowed_type_keys(user, store=None, membership=None) -> list[str]:
     """کلیدِ نوعِ رویدادهایی که ``user`` در این محدوده **اکنون** حق دریافتشان را دارد (برای فیلترِ صندوق؛ لغوِ دسترسی فوراً اثر می‌کند)."""
     if store is None:
         return [k for k, t in R.EVENT_TYPES.items() if t.scope == R.PLATFORM] if is_platform_staff(user) else []
-    membership = auth.get_active_membership(user, store)
+    membership = membership or auth.get_active_membership(user, store)      # the request already resolved it: no second query
     if membership is None or not user.is_active:
         return []
     return [k for k, t in R.EVENT_TYPES.items()

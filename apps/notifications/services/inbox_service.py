@@ -19,9 +19,9 @@ SEVERITY_LABELS = {1: "اطلاعاتی", 2: "معمولی", 3: "مهم", 4: "ب
 SEVERITY_TONES = {1: "info", 2: "normal", 3: "important", 4: "critical"}
 
 
-def visible(user, store=None):
+def visible(user, store=None, membership=None):
     """تمامِ اعلان‌هایِ این کاربر در این محدوده که الان مجاز به دیدنشان است (عضویتِ فعال + مجوزِ نوعِ رویداد؛ لغوِ دسترسی فوراً اثر می‌کند)."""
-    keys = S.allowed_type_keys(user, store)
+    keys = S.allowed_type_keys(user, store, membership)
     if not keys:
         return InboxItem.objects.none()
     return InboxItem.objects.filter(user=user, scope_key=S.key_for(store), event__type_key__in=keys).select_related("event")
@@ -31,9 +31,9 @@ def _active(qs, now):
     return qs.filter(archived_at__isnull=True).filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now))
 
 
-def unread_count(user, store=None, now=None) -> int:
+def unread_count(user, store=None, now=None, membership=None) -> int:
     now = now or timezone.now()
-    return _active(visible(user, store), now).filter(read_at__isnull=True).count()
+    return _active(visible(user, store, membership), now).filter(read_at__isnull=True).count()
 
 
 def get_item(user, store, public_id):
