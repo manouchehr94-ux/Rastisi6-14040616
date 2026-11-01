@@ -271,3 +271,47 @@ class IntegrationsPageTests(PermissionEnforcementTestCase):
         for phrase in ("تضمین می‌شود", "رتبه ۱", "حتماً ایندکس", "حتماً در ChatGPT"):
             self.assertNotIn(phrase, html)
         self.assertIn("تضمین نمی‌کند", html)
+
+
+class ServiceGuideTests(PermissionEnforcementTestCase):
+    """Every identifier service answers the same three questions, and its status comes from real state — never from the mere presence of an id."""
+
+    def page(self):
+        self._login(self.owner)
+        return self.client.get(reverse("dashboard:settings") + "?section=integrations").content.decode()
+
+    def status_of(self, html, code):
+        panel = html.split(f'data-testid="integration-{code}"')[1].split('data-testid="int-fact-saved"')[0]
+        return panel.split('data-testid="int-guide-status">')[1].split("<")[0]
+
+    def test_every_service_shows_the_three_questions(self):
+        html = self.page()
+        self.assertEqual(html.count('data-testid="int-guide"'), 5)
+        for question in ("راستی‌سی چه کاری انجام می‌دهد؟", "شما چه کاری باید انجام دهید؟", "وضعیت و قدم بعدی"):
+            self.assertEqual(html.count(question), 5)
+
+    def test_nothing_saved_means_the_customer_has_to_act(self):
+        html = self.page()
+        for code in ("google_analytics", "google_tag_manager", "ad_pixel", "torob", "enamad"):
+            self.assertEqual(self.status_of(html, code), "نیازمند اقدام مشتری", code)
+
+    def test_a_saved_tracker_id_waits_for_the_platform_and_is_not_called_active(self):
+        StoreIntegrationConnection.objects.filter(store=self.store).delete()
+        conn = StoreIntegrationConnection.objects.create(store=self.store, provider_code="google_analytics", is_active=True)
+        conn.set_credentials({"measurement_id": "G-ABC1234DEF"})
+        conn.save()
+        self.assertEqual(self.status_of(self.page(), "google_analytics"), "منتظر مدیر پلتفرم")
+        with override_settings(RASTISI_STOREFRONT_TRACKING_ENABLED=True), mock.patch.object(svs, "store_live", return_value=False):
+            self.assertEqual(self.status_of(self.page(), "google_analytics"), "آماده")
+        with override_settings(RASTISI_STOREFRONT_TRACKING_ENABLED=True), mock.patch.object(svs, "store_live", return_value=True):
+            self.assertEqual(self.status_of(self.page(), "google_analytics"), "فعال")
+
+    def test_an_invalid_stored_value_is_an_error_and_enamad_waits_for_a_verified_domain(self):
+        conn = StoreIntegrationConnection.objects.create(store=self.store, provider_code="ad_pixel", is_active=True)
+        conn.set_credentials({"pixel_id": "bad"})
+        conn.save()
+        self.assertEqual(self.status_of(self.page(), "ad_pixel"), "خطا")
+        integ = StoreIntegrationConnection.objects.create(store=self.store, provider_code="enamad", is_active=True)
+        integ.set_credentials({"enamad_id": "221617", "enamad_auth_code": "94MqMPJEnuahlSHjb9kP"})
+        integ.save()
+        self.assertEqual(self.status_of(self.page(), "enamad"), "نیازمند اقدام مشتری")

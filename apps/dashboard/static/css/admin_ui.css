@@ -304,6 +304,9 @@
 .pres-summary .vis-item .au-btn { margin-top: 2px; }
 .pres-sitemap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; }
 .pres-sitemap__url { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 12.5px; }
+.int-guide { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg, #f7f7fa); font-size: 13px; line-height: 1.9; }
+.int-guide dt { font-weight: 800; }
+.int-guide dd { margin: 0; color: var(--muted); }
 .int-readiness { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; line-height: 1.9; }
 .int-readiness p { margin: 0; }
 .int-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; line-height: 1.9; }

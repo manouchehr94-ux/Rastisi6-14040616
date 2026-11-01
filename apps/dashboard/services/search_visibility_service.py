@@ -93,6 +93,53 @@ def duplicate_tracking_warning(rows: list[dict]) -> str:
     return DUPLICATE_TRACKING_NOTE if {"google_analytics", "google_tag_manager"} <= codes else ""
 
 
+# ---- the three questions every service answers --------------------------------------------------------------------------------------
+STATUS_LABELS = {
+    "needs_customer": ("نیازمند اقدام مشتری", "todo"), "waiting_platform": ("منتظر مدیر پلتفرم", "info"), "ready": ("آماده", "ok"), "checking": ("در حال بررسی", "info"),
+    "active": ("فعال", "ok"), "error": ("خطا", "danger"), "unsupported": ("پشتیبانی نمی‌شود", "off"),
+}
+SERVICE_COPY = {
+    "google_analytics": ("شناسهٔ GA4 را ذخیره می‌کند و فقط پس از رضایت بازدیدکننده، اگر پلتفرم ردیابی را فعال کرده باشد، آمار را بارگذاری می‌کند.", "شناسهٔ اندازه‌گیری (G-…) را از حساب Google Analytics خودتان وارد کنید."),
+    "google_tag_manager": ("شناسهٔ GTM را ذخیره می‌کند و پس از رضایت بازدیدکننده (و فعال‌بودنِ پلتفرم) کانتینر را بارگذاری می‌کند.", "شناسهٔ کانتینر (GTM-…) را از حساب GTM خودتان وارد کنید."),
+    "ad_pixel": ("شناسهٔ پیکسل را ذخیره می‌کند و فقط با رضایتِ دستهٔ تبلیغات بارگذاری می‌کند.", "شناسهٔ پیکسل را از Meta Events Manager خودتان وارد کنید."),
+    "torob": ("شناسه را ذخیره می‌کند و آماده‌بودن اطلاعات کالاها را بررسی می‌کند؛ فید یا API ترب ساخته نمی‌شود.", "در ترب ثبت‌نام کنید و فروشگاه را آنجا تأیید کنید؛ شناسهٔ فروشنده را وارد کنید."),
+    "enamad": ("متاتگ مجاز را در صفحهٔ اصلی و نمادِ صادرشده را در فوتر قرار می‌دهد (فقط روی دامنهٔ اختصاصیِ تأییدشدهٔ شما).", "در اینماد درخواست دهید؛ متاتگ و بعد از صدور، شناسه و کد تأیید را وارد کنید."),
+}
+
+
+def service_guide(row: dict) -> dict:
+    """«What RastiSi does / what you do / status + next step» for one identifier service — computed from the row's real state, never from the mere presence of an id."""
+    code = row["provider"].code
+    does, you = SERVICE_COPY.get(code, ("", ""))
+    effect, validation = row["effect"]["state"], row["validation"]["state"]
+    if validation == "invalid":
+        key, nxt = "error", "قالب شناسه معتبر نیست؛ آن را اصلاح کنید."
+    elif not row["has_saved_credentials"]:
+        key, nxt = "needs_customer", you
+    elif effect == "paused":
+        key, nxt = "needs_customer", "شناسه ذخیره است؛ اگر می‌خواهید استفاده شود، آن را روشن کنید."
+    elif code in LIVE_ON_PUBLIC_PAGES:
+        key, nxt = {"privacy": ("waiting_platform", "منتظر تصمیم مدیر پلتفرم برای فعال‌کردن ردیابی؛ کاری از شما لازم نیست."),
+                    "waiting": ("ready", "فروشگاه را روی آدرس عمومی منتشر کنید؛ ردیابی پس از رضایت بازدیدکننده بارگذاری می‌شود."),
+                    "live": ("active", "کاری لازم نیست؛ بازدیدکننده در بنر رضایت تصمیم می‌گیرد.")}.get(effect, ("ready", ""))
+    elif code == "torob":
+        key, nxt = "ready", "شناسه ذخیره شد. ثبت‌نام و تأیید در ترب با شماست؛ راستی‌سی فعلاً فید یا API برای ترب ندارد."
+    elif code == "enamad":
+        states = [stage["state"] for stage in (row.get("enamad") or {}).get("stages", [])]
+        if "invalid" in states:
+            key, nxt = "error", "یکی از اطلاعات اینماد معتبر نیست."
+        elif "waiting_domain" in states:
+            key, nxt = "needs_customer", "دامنهٔ اختصاصی خود را وصل و تأیید کنید؛ تا آن زمان نماد نمایش داده نمی‌شود."
+        elif "ready" in states:
+            key, nxt = "active", "متاتگ/نماد روی دامنهٔ اختصاصی شما نمایش داده می‌شود؛ وضعیت واقعی نماد را در پنل اینماد ببینید."
+        else:
+            key, nxt = "ready", ""
+    else:
+        key, nxt = "ready", ""
+    label, tone = STATUS_LABELS[key]
+    return {"does": does, "you": you, "status": key, "label": label, "tone": tone, "next": nxt}
+
+
 def group_of(provider_code: str) -> str:
     """Which page group (B stats / C sales / D trust) holds this provider — so the page opens the group that contains the service just touched."""
     if provider_code in LIVE_ON_PUBLIC_PAGES:

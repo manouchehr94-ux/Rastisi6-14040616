@@ -4394,6 +4394,8 @@ def _integration_rows_with_effect(store, request):
                  "fields": [fields[k] for k in by_key[st["key"]]]}
                 for st in flow["stages"]
             ]
+    for row in rows:
+        row["guide"] = search_visibility_service.service_guide(row)
     return rows
 
 

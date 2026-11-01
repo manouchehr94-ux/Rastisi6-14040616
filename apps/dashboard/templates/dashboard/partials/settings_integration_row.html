@@ -27,7 +27,11 @@
       </div>
 
       <div class="au-acc__panel" id="int-panel-{{ code }}"{% if integration_open != code %} hidden{% endif %}>
-        <p class="au-hint" style="margin:0">{{ row.provider.description }}</p>
+        <dl class="int-guide" data-testid="int-guide" data-status="{{ row.guide.status }}">
+          <div><dt>راستی‌سی چه کاری انجام می‌دهد؟</dt><dd>{{ row.guide.does }}</dd></div>
+          <div><dt>شما چه کاری باید انجام دهید؟</dt><dd>{{ row.guide.you }}</dd></div>
+          <div><dt>وضعیت و قدم بعدی</dt><dd><span class="int-chip int-chip--{{ row.guide.tone }}" data-testid="int-guide-status">{{ row.guide.label }}</span> {{ row.guide.next }}</dd></div>
+        </dl>
         <ul class="int-facts" data-testid="int-facts">
           <li data-testid="int-fact-saved" data-on="{% if row.has_saved_credentials %}1{% else %}0{% endif %}"><b>ذخیره‌شده؟</b> {% if row.has_saved_credentials %}بله{% else %}هنوز نه{% endif %}</li>
           <li data-testid="int-fact-validation" data-state="{{ row.validation.state }}"><b>قالب معتبر؟</b> {{ row.validation.text }}</li>
@@ -81,7 +85,7 @@
           {% endfor %}
           <div class="au-acc__foot" style="grid-column:1/-1">
             <button type="submit" class="au-btn au-btn--primary" data-testid="int-save">ذخیره شناسه</button>
-            <a href="{{ row.provider.setup_guide }}" target="_blank" rel="noopener noreferrer" class="au-btn au-btn--ghost" data-testid="int-guide">{% if code == "torob" %}ثبت فروشگاه در ترب{% else %}راهنما (سایت رسمی){% endif %}</a>
+            <a href="{{ row.provider.setup_guide }}" target="_blank" rel="noopener noreferrer" class="au-btn au-btn--ghost" data-testid="int-setup-link">{% if code == "torob" %}ثبت فروشگاه در ترب{% else %}راهنما (سایت رسمی){% endif %}</a>
           </div>
         </form>
 
