@@ -407,6 +407,7 @@
     if (!bar || !region) return;
     var counts = tagRegion(cat);
     if (!counts[regionTab[cat]]) regionTab[cat] = 'models';
+    var keepFocus = bar.contains(document.activeElement);   // the bar is rebuilt below: keyboard focus must stay on the (new) active tab
     bar.textContent = '';
     bar.setAttribute('aria-label', 'ویرایش ' + info.title);
     RTABS.forEach(function (def) {
@@ -420,6 +421,7 @@
       b.tabIndex = on ? 0 : -1;
       bar.appendChild(b);
     });
+    if (keepFocus) { var active = bar.querySelector('[data-vs-rtab-btn="' + regionTab[cat] + '"]'); if (active) active.focus(); }
     $all('[data-vs-rtab]', region).forEach(function (node) {
       var tab = node.dataset.vsRtab;
       node.classList.toggle('vs-rt-hide', tab !== 'all' && tab !== regionTab[cat]);
@@ -694,6 +696,19 @@
     }, 20);
   });
   root.addEventListener('r4:global-closed', clearCategory);
+  // The docked Inspector is already open on one region and the seller clicks the OTHER one in the canvas: r4_studio.js only opens that region's
+  // <details> (no new «opened» event), so follow it here — the Inspector switches from header to footer (or back) instead of staying on the old one.
+  root.addEventListener('toggle', function (evt) {
+    var node = evt.target;
+    if (!node || !node.open || !currentCat || !CATS[currentCat] || !CATS[currentCat].dock) return;
+    var cat = node.id === 'rsGlobalFooter' ? 'footer' : node.id === 'rsGlobalHeader' ? 'header' : null;
+    if (!cat || cat === currentCat) return;
+    applyCategory(cat);
+    setTitle(cat);
+    setDialogRole(true);
+    paintScope(cat);
+    mirrorSaveState();
+  }, true);
   // Undo / Redo end in a deliberate full page reload (r4_editor.js): the docked header / footer Inspector would vanish right after the seller undid a model
   // change. A short-lived per-tab hint (never data, never shared) reopens the same Inspector on the same tab once the page is back.
   var REOPEN_KEY = 'rastisi.vs.reopenInspector';

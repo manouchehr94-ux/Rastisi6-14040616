@@ -75,3 +75,15 @@ class RegionInspectorContractTests(StorefrontBuilderViewsTestCase):
         self.assertIn("sessionStorage.setItem(REOPEN_KEY", JS)
         self.assertIn("Date.now() - hint.at > 20000", JS)
         self.assertRegex(JS, r"CATS\[hint\.cat\]\.dock")
+
+    def test_clicking_the_other_region_switches_the_open_inspector(self):
+        self.assertIn("root.addEventListener('toggle'", JS)
+        block = JS[JS.index("root.addEventListener('toggle'"):]
+        block = block[:block.index("// Undo / Redo end in")]
+        for needle in ("rsGlobalFooter", "rsGlobalHeader", "applyCategory(cat)", "cat === currentCat"):
+            self.assertIn(needle, block)
+
+    def test_keyboard_focus_stays_on_the_active_tab_when_the_bar_is_rebuilt(self):
+        paint = JS[JS.index("function paintRegionTabs(cat)"):JS.index("function selectRegionTab(tab)")]
+        self.assertIn("var keepFocus = bar.contains(document.activeElement)", paint)
+        self.assertIn("active.focus()", paint)
