@@ -6,7 +6,8 @@ a watermark kept in the engine's recorded results:
 * appeared / changed — sitemap entries (the SAME list robots/sitemap use) whose ``lastmod`` is newer than the watermark; on the first run, or when the
   store's public host changed (new / switched domain), every URL;
 * retired — products touched since the watermark that are no longer listable (unpublished / inactive / out of the storefront): their former URL is sent
-  so the engine learns it is gone. (A product HARD-deleted leaves no row to find; it simply drops out of the sitemap — documented limit.)
+  so the engine learns it is gone. A product HARD-deleted leaves no row, so ``apps.catalog.signals`` records a ``product.hard_deleted`` audit row (store + slug) when the
+  delete commits, and its former URL is retired from there (no new table, no migration; a product that was never publicly listed records nothing).
 
 Hard rules (all enforced here, none by the caller): the platform switch ``RASTISI_INDEXNOW_ENABLED`` (default OFF), the public-host guard, a VERIFIED
 domain of THIS store (``indexnow.is_verified_host``), the key of THIS store, only URLs on that exact host (no private paths, no localhost), de-duplication,
@@ -60,12 +61,18 @@ def _watermark(store) -> tuple[datetime | None, str]:
 def _retired_product_urls(store, request, origin, since) -> list[str]:
     from apps.catalog.models import Product
     from apps.catalog.services.product_publish_service import storefront_listing_products
+    from apps.catalog.signals import PRODUCT_HARD_DELETED
+    from apps.core.models import AuditLogEntry
 
     if since is None:
         return []
     listed = set(storefront_listing_products(store).values_list("pk", flat=True))
-    touched = Product.objects.filter(store=store, updated_at__gt=since).exclude(pk__in=listed).values_list("slug", flat=True)[:5000]
-    return [seo._abs(request, reverse("catalog:product-detail", args=[slug]), origin=origin) for slug in touched]
+    touched = list(Product.objects.filter(store=store, updated_at__gt=since).exclude(pk__in=listed).values_list("slug", flat=True)[:5000])
+    # rows that no longer exist: slugs recorded when a publicly listed product was hard-deleted since the watermark (this store only)
+    deleted = AuditLogEntry.objects.filter(store=store, action_code=PRODUCT_HARD_DELETED, created_at__gt=since).values_list("metadata", flat=True)[:5000]
+    existing = set(Product.objects.filter(store=store, slug__in=[m.get("slug") for m in deleted if isinstance(m, dict) and m.get("slug")]).values_list("slug", flat=True))
+    gone = [m["slug"] for m in deleted if isinstance(m, dict) and m.get("slug") and m["slug"] not in existing]       # a re-used slug is a live URL again: not «gone»
+    return [seo._abs(request, reverse("catalog:product-detail", args=[slug]), origin=origin) for slug in dict.fromkeys(touched + gone)]
 
 
 def plan(store, request, origin, *, since, previous_host, host) -> dict:

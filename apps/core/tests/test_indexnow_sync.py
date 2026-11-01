@@ -165,3 +165,85 @@ class IndexNowSyncTests(TestCase):
             transport = Transport(200)
             self.sync(transport=transport)
         self.assertEqual(transport.payloads[0]["urlList"], [f"https://{HOST}/"])
+
+
+class HardDeletedProductTests(TestCase):
+    """A product removed with ``delete()`` leaves no row — its former public URL is still announced as gone (no migration: the audit ledger carries the slug).
+    Real DB, fake transport, and a socket guard: nothing is ever sent for real."""
+
+    def setUp(self):
+        cache.clear()
+        guard = mock.patch("socket.socket.connect", side_effect=AssertionError("an external connection was attempted"))
+        guard.start()
+        self.addCleanup(guard.stop)
+        self.store = _store("inx-hd")
+        self.other = _store("inx-hd-other", host="other.brand-example.ir")
+        self.since = timezone.now() - timedelta(minutes=5)
+        from django.test import RequestFactory
+
+        self.request = RequestFactory().get("/", HTTP_HOST=HOST, secure=True)
+        self.request.get_host = lambda: HOST
+        self.origin = f"https://{HOST}"
+
+    def urls(self, store=None):
+        store = store or self.store
+        with mock.patch("apps.stores.services.publication_service.is_publicly_visible", return_value=True):
+            return indexnow_sync._retired_product_urls(store, self.request, self.origin, self.since)
+
+    def delete(self, product):
+        with self.captureOnCommitCallbacks(execute=True):
+            product.delete()
+
+    def test_a_listed_product_that_is_hard_deleted_is_sent_as_gone(self):
+        product = _product(self.store, "old-hat", status=Product.Status.ACTIVE)
+        self.assertEqual(self.urls(), [])                                    # still listed → nothing retired
+        self.delete(product)
+        self.assertEqual(self.urls(), [f"https://{HOST}/products/old-hat/"])
+        row = AuditLogEntry.objects.get(store=self.store, action_code="product.hard_deleted")
+        self.assertEqual((row.object_type, row.metadata), ("Product", {"slug": "old-hat"}))
+
+    def test_a_product_that_was_never_public_records_nothing(self):
+        draft = _product(self.store, "just-a-draft", status=Product.Status.DRAFT)
+        self.delete(draft)
+        self.assertFalse(AuditLogEntry.objects.filter(action_code="product.hard_deleted").exists())
+        self.assertEqual(self.urls(), [])
+
+    def test_it_is_scoped_to_the_store_and_a_reused_slug_is_a_live_url_not_a_gone_one(self):
+        product = _product(self.store, "twin", status=Product.Status.ACTIVE)
+        self.delete(product)
+        self.assertEqual(self.urls(self.other), [])                          # another store never sees it
+        _product(self.store, "twin", status=Product.Status.ACTIVE)           # the slug is taken again
+        self.assertEqual(self.urls(), [])
+
+    def test_older_deletions_than_the_watermark_are_not_resent(self):
+        product = _product(self.store, "ancient", status=Product.Status.ACTIVE)
+        self.delete(product)
+        self.since = timezone.now() + timedelta(seconds=1)
+        self.assertEqual(self.urls(), [])
+
+    def test_nothing_is_recorded_until_the_delete_has_committed(self):
+        product = _product(self.store, "rolled-back", status=Product.Status.ACTIVE)
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:       # a rolled-back transaction never runs its on_commit hooks
+            product.delete()
+        self.assertTrue(callbacks)
+        self.assertFalse(AuditLogEntry.objects.filter(action_code="product.hard_deleted").exists())
+
+    @override_settings(RASTISI_INDEXNOW_ENABLED=True)
+    def test_the_full_pass_sends_the_gone_url_through_the_fake_transport(self):
+        product = _product(self.store, "sold-for-good", status=Product.Status.ACTIVE)
+        transport = Transport(200, 200)
+        with mock.patch("apps.stores.services.publication_service.is_publicly_visible", return_value=True):
+            first = indexnow_sync.sync(self.store, transport=transport, sleep=lambda s: None)
+            self.assertEqual(first.status, automation.DONE)
+            self.delete(product)
+            second = indexnow_sync.sync(self.store, transport=transport, sleep=lambda s: None)
+        self.assertEqual(second.metrics["retired"], 1)
+        self.assertIn(f"https://{HOST}/products/sold-for-good/", transport.payloads[-1]["urlList"])
+
+    def test_platform_flag_off_still_sends_nothing(self):
+        product = _product(self.store, "quiet", status=Product.Status.ACTIVE)
+        self.delete(product)
+        transport = Transport(200)
+        result = indexnow_sync.sync(self.store, transport=transport, sleep=lambda s: None)
+        self.assertEqual(result.status, automation.DISABLED)
+        self.assertEqual(transport.payloads, [])
