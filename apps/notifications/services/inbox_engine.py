@@ -47,13 +47,13 @@ def preferences_for(users, scope_key: str) -> dict:
     return {u.pk: found.get(u.pk) or default_preference(u, scope_key) for u in users}
 
 
-def decide(etype: R.EventType, severity: int, pref: NotificationPreference) -> dict:
+def decide(etype: R.EventType, severity: int, pref: NotificationPreference, force_inbox: bool = False) -> dict:
     """Policy: چه چیزی برایِ این گیرنده ساخته/نمایش داده شود.
     * صندوق: دسته خاموش نباشد — مگر امنیتی/بحرانی (همیشه ثبت می‌شود).
     * Toast: صندوق + toast روشن + (اهمیت ≥ حداقل یا رویدادِ فوری)؛ «بی‌صداکردنِ کم‌اهمیت» اطلاعاتی/معمولیِ غیرفوری را حذف می‌کند.
     * مرورگر: صندوق + browser روشن + اهمیت ≥ حداقل (یا فوری)."""
     disabled = set(pref.disabled_categories or [])
-    inbox = (etype.category not in disabled) or severity >= R.CRITICAL or etype.category in R.ALWAYS_INBOX_CATEGORIES
+    inbox = force_inbox or (etype.category not in disabled) or severity >= R.CRITICAL or etype.category in R.ALWAYS_INBOX_CATEGORIES
     low = severity < R.IMPORTANT and not etype.urgent
     muted = pref.mute_low and low
     toast = inbox and pref.toast_enabled and not muted and (severity >= pref.min_toast_severity or etype.urgent)
@@ -127,9 +127,8 @@ def publish(
     prefs = preferences_for(recipients, scope_key)
     items, plans = [], []
     for user in recipients:
-        d = decide(etype, sev, prefs[user.pk])
-        if force_inbox is not None and user.pk in {x.pk for x in force_inbox}:
-            d["inbox"] = True                                           # اعلانِ آزمایشیِ خودِ کاربر همیشه دیده می‌شود (حتی اگر دسته را خاموش کرده)
+        forced = force_inbox is not None and user.pk in {x.pk for x in force_inbox}      # اعلانِ آزمایشیِ خودِ کاربر همیشه دیده می‌شود (حتی اگر دسته را خاموش کرده)
+        d = decide(etype, sev, prefs[user.pk], force_inbox=forced)
         if not d["inbox"]:
             continue
         items.append(InboxItem(event=event, user=user, scope_key=scope_key, popup=d["toast"]))

@@ -5,9 +5,15 @@ from apps.storefront_builder import r4_views as storefront_builder_r4_views
 from apps.storefront_builder import vision_views as storefront_builder_vision_views
 from apps.storefront_builder import views as storefront_builder_views
 
+from apps.notifications.inbox_views import VIEWS_DASH, url_patterns as _inbox_patterns
 from . import card_transfer_views, cod_views, engagement_views, journal_views, payment_reconciliation_views, views, views_domain
 
 app_name = "dashboard"
+
+
+def notification_inbox_urls():
+    return _inbox_patterns(VIEWS_DASH)
+
 
 # RastiSi Vision Studio — a second presentation of the SAME R4 session (route name ``vision-studio``; deliberately NOT prefixed with
 # ``storefront-builder-`` so the sidebar's active-state rules of the older tabs never claim it).
@@ -228,6 +234,7 @@ urlpatterns = [
     path("campaigns/<int:pk>/preview/", engagement_views.campaign_preview, name="campaign-preview"),
     path("campaigns/<int:pk>/delete/", engagement_views.campaign_delete, name="campaign-delete"),
     # ---- اعلان‌ها
+    *notification_inbox_urls(),     # صندوقِ اعلانِ مدیران (پیشوند inbox/ — با notifications/<event_key>/ برخورد نمی‌کند)
     path("notifications/", engagement_views.notification_templates, name="notification-templates"),
     path("notifications/history/", engagement_views.notification_history, name="notification-history"),
     path("payments/reconciliation/", payment_reconciliation_views.payment_reconciliation_list, name="payment-reconciliations"),
