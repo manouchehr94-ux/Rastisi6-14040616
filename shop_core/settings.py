@@ -587,3 +587,8 @@ RASTISI_INDEXNOW_ENABLED = env_bool("RASTISI_INDEXNOW_ENABLED", default=False)
 # visitor-consent mechanism for tracking cookies (the only consent system, apps.customers.services.consent_service, covers promotional SMS/e-mail
 # of registered customers). Turn on only after the platform owner has confirmed the legal basis for the markets served.
 RASTISI_STOREFRONT_TRACKING_ENABLED = env_bool("RASTISI_STOREFRONT_TRACKING_ENABLED", default=False)
+# Google Search Console connection (OAuth + Search Console API: list the seller's properties, submit / read the sitemap). OFF unless the platform owner enables
+# it AND provides an approved OAuth client (consent screen / verification is done in Google Cloud by the owner). Never on in QA; QA uses a fake transport.
+RASTISI_GSC_OAUTH_ENABLED = env_bool("RASTISI_GSC_OAUTH_ENABLED", default=False)
+RASTISI_GOOGLE_OAUTH_CLIENT_ID = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_ID", "")
+RASTISI_GOOGLE_OAUTH_CLIENT_SECRET = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_SECRET", "")
