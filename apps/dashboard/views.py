@@ -114,7 +114,10 @@ from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
 from apps.stores.services import tracking_service
-from apps.dashboard.services import domain_settings_service, import_proposals, import_service, import_xlsx, search_visibility_service
+from apps.dashboard.services import (
+    domain_settings_service, import_proposals, import_service, import_xlsx, search_presence_service, search_visibility_service,
+)
+from apps.stores.services import enamad_verification_service
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
 from apps.cart.services.coupon_service import (
@@ -4343,10 +4346,11 @@ def _settings_context(
         "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
         "industry_installation": _industry_installation_context(store),
         "integration_rows": SimpleLazyObject(lambda: _integration_rows_with_effect(store, request)),
-        "seo_readiness": SimpleLazyObject(lambda: search_visibility_service.seo_readiness(store, request)),
+        "search_presence": SimpleLazyObject(lambda: _search_presence(store, request)),
         "visibility_not_available": search_visibility_service.NOT_AVAILABLE,
+        "tracking_consent_note": search_visibility_service.TRACKING_CONSENT_NOTE,
         "integration_overview": SimpleLazyObject(lambda: search_visibility_service.integration_overview(
-            search_visibility_service.seo_readiness(store, request), _integration_rows_with_effect(store, request),
+            _search_presence(store, request), _integration_rows_with_effect(store, request),
         )),
         "domain_overview": SimpleLazyObject(lambda: domain_settings_service.domain_overview(
             store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE),
@@ -4356,14 +4360,37 @@ def _settings_context(
     }
 
 
+def _search_presence(store, request):
+    """Section A's facts, computed once per request (the summary and the cards read the same dict)."""
+    cached = getattr(request, "_rs_search_presence", None)
+    if cached is None:
+        domain = domain_settings_service.domain_overview(store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE))
+        cached = request._rs_search_presence = search_presence_service.presence(store, request, domain)
+    return cached
+
+
 def _integration_rows_with_effect(store, request):
-    """Integration rows + the honest effect of each saved identifier (live on public pages / waiting for publish / stored only)."""
+    """Integration rows + the honest status of each saved identifier: saved / format-valid / enabled / live — never «connected»."""
     live = search_visibility_service.store_live(store, request)
+    tracking_on = tracking_service.tracking_enabled()
     rows = integration_service.connections_context(store=store)
     for row in rows:
-        row["group"] = "live" if row["provider"].code in search_visibility_service.LIVE_ON_PUBLIC_PAGES else "stored"
-        row["effect"] = search_visibility_service.provider_effect(row["provider"].code, connected=row["is_connected"], store_live=live,
-                                                                      tracking_enabled=tracking_service.tracking_enabled())
+        provider, code = row["provider"], row["provider"].code
+        row["group"] = "live" if code in search_visibility_service.LIVE_ON_PUBLIC_PAGES else "stored"
+        row["effect"] = search_visibility_service.provider_effect(
+            code, connected=row["is_connected"], store_live=live, tracking_enabled=tracking_on, has_saved=row["has_saved_credentials"])
+        row["validation"] = search_visibility_service.validation_of(provider, row["credentials"], has_saved=row["has_saved_credentials"])
+        row["field_groups"] = [{"title": "", "hint": "", "fields": provider.fields, "state": "", "text": ""}]
+        if code == "enamad":
+            flow = enamad_verification_service.enamad_flow(store, row["credentials"], connected=row["is_connected"])
+            row["enamad"] = flow
+            by_key = {"meta": ("verification_meta_tag",), "badge": ("enamad_id", "enamad_auth_code")}
+            fields = {f.key: f for f in provider.fields}
+            row["field_groups"] = [
+                {"title": st["title"], "hint": st["hint"], "state": st["state"], "text": st["text"],
+                 "fields": [fields[k] for k in by_key[st["key"]]]}
+                for st in flow["stages"]
+            ]
     return rows
 
 
@@ -4956,7 +4983,7 @@ def settings_integration_connect(request, provider_code):
         messages.error(request, str(exc))
         request.session["integration_open"] = provider_code      # keep the form open so the error is seen next to the fields
     else:
-        messages.success(request, f"{provider.display_name} با موفقیت متصل شد")
+        messages.success(request, f"شناسهٔ {provider.display_name} ذخیره شد. ذخیره‌کردن شناسه به‌معنی فعال‌شدن ردیابی یا تأییدشدنِ اتصال نیست؛ وضعیت واقعی را در همین کارت ببینید.")
     return redirect("/admin-portal/settings/?section=integrations")
 
 
@@ -4970,7 +4997,7 @@ def settings_integration_disconnect(request, provider_code):
         return HttpResponse(status=404)
 
     integration_service.disconnect(store=store, provider_code=provider_code, actor=request.user)
-    messages.success(request, f"اتصالِ {provider.display_name} قطع شد")
+    messages.success(request, f"استفاده از شناسهٔ {provider.display_name} خاموش شد؛ شناسه ذخیره می‌ماند.")
     return redirect("/admin-portal/settings/?section=integrations")
 
 
@@ -5014,7 +5041,7 @@ def settings_integration_toggle(request, provider_code):
             messages.error(request, str(exc))
             request.session["integration_open"] = provider_code
         else:
-            messages.success(request, f"{provider.display_name} دوباره فعال شد.")
+            messages.success(request, f"استفاده از شناسهٔ {provider.display_name} دوباره روشن شد.")
     return redirect("/admin-portal/settings/?section=integrations")
 
 

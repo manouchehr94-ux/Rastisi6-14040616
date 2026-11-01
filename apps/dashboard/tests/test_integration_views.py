@@ -209,7 +209,7 @@ class IntegrationAccordionTests(TestCase):
         row = self.row("torob")
         self.assertFalse(row["is_connected"])
         self.assertTrue(row["can_reenable"])                    # data kept; «connected» and «enabled» are the same real flag
-        self.assertContains(self.client.get(self.url), "غیرفعال — اطلاعات ذخیره است")
+        self.assertContains(self.client.get(self.url), "ذخیره‌شده — خاموش")
         self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
         self.assertTrue(self.row("torob")["is_connected"])
         self.assertEqual(self.row("torob")["credentials"]["merchant_id"], "SHOP-77")

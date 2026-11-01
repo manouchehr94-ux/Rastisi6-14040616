@@ -18,8 +18,9 @@ class IntegrationsVisibilityPageTests(PermissionEnforcementTestCase):
 
     def test_readiness_card_and_groups_are_present(self):
         html = self.page()
-        for marker in ('data-testid="seo-readiness"', 'data-testid="seo-row-published"', 'data-testid="seo-row-public_host"',
-                       'data-testid="seo-row-robots_sitemap"', 'data-testid="seo-row-ai_search"', 'data-testid="seo-row-search_console"',
+        for marker in ('data-testid="presence-summary"', 'data-testid="presence-item-published"', 'data-testid="presence-item-address"',
+                       'data-testid="presence-item-infra"', 'data-testid="presence-item-next"', 'data-testid="presence-address"',
+                       'data-testid="presence-automatic"', 'data-testid="presence-search-console"', 'data-testid="presence-bing-ai"',
                        'data-testid="integration-accordions-stored"', 'data-testid="visibility-not-available"'):
             self.assertIn(marker, html)
 
@@ -29,19 +30,26 @@ class IntegrationsVisibilityPageTests(PermissionEnforcementTestCase):
         html = self.page()
         self.assertNotIn("متصل و فعال", html)
         self.assertIn('data-effect="stored"', html)
-        self.assertIn("فقط ذخیره شده", html)
+        self.assertIn("فقط شناسه ذخیره شده", html)
 
     def test_analytics_on_a_test_address_says_it_waits_for_publish_not_that_it_is_live(self):
         self.connect("google_analytics", measurement_id="G-ABC1234DEF")
+        from django.test import override_settings
+
         html = self.page()
-        self.assertIn('data-effect="waiting"', html)
+        self.assertIn('data-effect="privacy"', html)                       # the platform has not enabled tracking: saved, not running
+        self.assertNotIn('data-effect="live"', html)
+        with override_settings(RASTISI_STOREFRONT_TRACKING_ENABLED=True):
+            html = self.page()
+        self.assertIn('data-effect="waiting"', html)                       # tracking allowed, but the store is not live on a public address
         self.assertNotIn('data-effect="live"', html)
 
     def test_unavailable_services_are_listed_apart_and_without_connect_forms(self):
         html = self.page()
         section = html[html.index('data-testid="visibility-not-available"'):]
-        for name in ("Google Search Console", "Bing Webmaster Tools", "Merchant Center"):
+        for name in ("Bing Webmaster Tools", "Merchant Center"):
             self.assertIn(name, section)
+        self.assertNotIn("Search Console", section)                         # one place only (section A), never two contradictory ones
         self.assertNotIn("<form", section.split("</ul>")[0])
 
     def test_no_guarantee_wording_on_the_page(self):
@@ -93,16 +101,14 @@ class IntegrationsFiveGroupStructureTests(PermissionEnforcementTestCase):
         positions = [html.index(f'data-testid="int-section-{name}"') for name in ("visibility", "stats", "sales", "trust", "future")]
         self.assertEqual(positions, sorted(positions))
 
-    def test_technical_seo_detail_is_folded_and_the_seller_facing_rows_stay_visible(self):
+    def test_one_main_card_is_open_and_the_technical_detail_is_closed_by_default(self):
         html = self.page()
-        folded = html.split('data-testid="seo-technical"')[1].split("</details>")[0]
-        for key in ("robots_sitemap", "structured_data", "ai_search"):
-            self.assertIn(f'data-testid="seo-row-{key}"', folded)
-        tag = html[html.index('data-testid="seo-technical"') - 40:html.index('data-testid="seo-technical"') + 40]
-        self.assertNotIn(" open", tag)                                           # the technical fold is closed by default
-        for key in ("published", "public_host"):
-            self.assertNotIn(f'data-testid="seo-row-{key}"', folded)           # these are the seller-facing rows, outside the fold
-            self.assertIn(f'data-testid="seo-row-{key}"', html)
+        def tag(testid):
+            i = html.index(f'data-testid="{testid}"')
+            return html[html.rindex("<details", 0, i):html.index(">", i)]
+        self.assertIn(" open", tag("presence-address"))
+        for closed in ("presence-automatic", "presence-search-console", "presence-bing-ai"):
+            self.assertNotIn(" open", tag(closed), closed)
 
     def test_a_nothing_to_do_message_or_a_concrete_next_action_is_always_shown(self):
         text = self.page().split('data-testid="integration-next-action"')[1][:260]
@@ -111,9 +117,9 @@ class IntegrationsFiveGroupStructureTests(PermissionEnforcementTestCase):
     def test_nothing_is_presented_as_connected_without_a_saved_identifier(self):
         html = self.page()
         self.assertIn('data-testid="int-chip-stats"', html)
-        self.assertRegex(html, r'data-testid="int-chip-stats">متصل‌نشده<')
-        self.assertRegex(html, r'data-testid="int-chip-sales">متصل‌نشده<')
-        self.assertRegex(html, r'data-testid="int-chip-trust">متصل‌نشده<')
+        self.assertRegex(html, r'data-testid="int-chip-stats">شناسه‌ای ذخیره نشده<')
+        self.assertRegex(html, r'data-testid="int-chip-sales">شناسه‌ای ذخیره نشده<')
+        self.assertRegex(html, r'data-testid="int-chip-trust">شناسه‌ای ذخیره نشده<')
         self.assertNotIn("متصل و فعال", html)
 
     def test_saved_identifiers_are_chipped_as_stored_not_connected_and_tracking_stays_off_by_default(self):
@@ -131,7 +137,7 @@ class IntegrationsFiveGroupStructureTests(PermissionEnforcementTestCase):
         html = self.page()
         section = html.split('data-testid="int-section-future"')[1]
         self.assertNotIn("<form", section.split("</details>")[0])
-        for name in ("Google Search Console", "Bing Webmaster Tools", "Merchant Center"):
+        for name in ("Bing Webmaster Tools", "Merchant Center"):
             self.assertIn(name, section)
 
     def test_another_stores_connections_never_appear(self):
@@ -152,7 +158,7 @@ class IntegrationsFiveGroupStructureTests(PermissionEnforcementTestCase):
             self.client = Client(HTTP_HOST=host)
             html = self.page()
         self.assertNotIn("OTHERSTORE777", html)
-        self.assertRegex(html, r'data-testid="int-chip-sales">متصل‌نشده<')
+        self.assertRegex(html, r'data-testid="int-chip-sales">شناسه‌ای ذخیره نشده<')
 
     def test_no_guarantee_or_ranking_promise_anywhere(self):
         html = self.page()

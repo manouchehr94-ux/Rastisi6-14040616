@@ -1,18 +1,19 @@
 {% load persian dashboard_extras %}
-{% comment %}«یکپارچه‌سازی‌ها» — پنج گروهِ ساده: A دیده‌شدن در جست‌وجو · B آمار و بازدیدکننده · C ابزارهای فروش و مقایسهٔ قیمت · D نماد و اعتماد · E امکانات آینده.
-   فقط وضعیتِ واقعی؛ هیچ اتصالِ نمایشی، هیچ وعدهٔ رتبه/ایندکس. جزئیاتِ فنی تا خواسته نشود بسته است.{% endcomment %}
+{% comment %}«یکپارچه‌سازی‌ها» — پنج گروه: A دیده‌شدن در جست‌وجو (کارت‌های مرحله‌ای) · B آمار و بازدیدکننده · C ابزارهای فروش · D نماد و اعتماد · E امکانات آینده.
+   هر وضعیت از داده‌ی واقعی Backend می‌آید (search_presence_service / search_visibility_service)؛ هیچ اتصال یا تأییدِ نمایشی وجود ندارد.
+   «ذخیره‌شده» ≠ «قالب معتبر» ≠ «فعال» ≠ «ردیابی فعال است». جزئیات فنی پیش‌فرض بسته است.{% endcomment %}
 <div class="au-page int-page">
-  {% with ov=integration_overview %}
-  <section class="int-summary int-summary--{% if ov.ready %}ok{% else %}todo{% endif %}" data-testid="integration-summary" role="status">
+  {% with ov=integration_overview sp=search_presence %}
+  <section class="int-summary int-summary--{% if ov.ready and sp.indexable %}ok{% else %}todo{% endif %}" data-testid="integration-summary" role="status">
     <div class="int-summary__main">
       <h2>{{ ov.headline }}</h2>
-      <p>اینجا می‌بینید راستی‌سی خودش چه کاری انجام داده، چه کاری فقط از شماست، و کدام سرویس واقعاً وصل است. «ذخیره‌شده» با «فعال» فرق دارد.</p>
-      {% if ov.next_action %}<p class="int-summary__next" data-testid="integration-next-action"><b>قدم بعدی:</b> {{ ov.next_action }}</p>
+      <p>اینجا می‌بینید راستی‌سی خودش چه کاری انجام داده، چه کاری فقط از شماست، و هر سرویس دقیقاً در چه وضعیتی است. «ذخیره‌شده» با «فعال» و «ردیابی فعال است» فرق دارد؛ هیچ سرویسی «اتصال تأییدشده» ندارد.</p>
+      {% if ov.next_action %}<p class="int-summary__next" data-testid="integration-next-action"><b>قدم بعدی:</b> <span data-testid="next-action-label">{{ ov.next_action.label }}</span> <small>(دکمهٔ آن در بخش A است)</small></p>
       {% else %}<p class="int-summary__next" data-testid="integration-next-action">فعلاً نیازی به انجام کاری از طرف شما نیست.</p>{% endif %}
     </div>
     <ul class="int-summary__stats">
-      <li><b>{{ ov.automatic_done|length|fa_number }}</b><span>کارِ خودکارِ راستی‌سی</span></li>
-      <li><b>{{ ov.needs_you|length|fa_number }}</b><span>کار از طرف شما</span></li>
+      {% if ov.infra_active %}<li data-testid="stat-active"><b>{{ ov.infra_active|fa_number }}</b><span>قابلیت فنی فعال/آماده</span></li>{% endif %}
+      {% if ov.infra_waiting %}<li data-testid="stat-waiting"><b>{{ ov.infra_waiting|fa_number }}</b><span>قابلیت ساخته‌شده و منتظر آدرس عمومی/انتشار</span></li>{% endif %}
       <li><b>{{ ov.not_available_count|fa_number }}</b><span>سرویسِ به‌زودی</span></li>
     </ul>
   </section>
@@ -21,40 +22,88 @@
   <details class="int-sec" data-testid="int-section-visibility" open>
     <summary><span class="int-sec__title">A · دیده‌شدن در گوگل و جست‌وجوی هوشمند</span><span class="int-chip int-chip--{{ ov.chips.visibility.state }}" data-testid="int-chip-visibility">{{ ov.chips.visibility.text }}</span></summary>
     <div class="int-sec__body">
-      <section class="au-card" data-testid="seo-readiness" aria-labelledby="seo-readiness-title">
-        <h3 id="seo-readiness-title" class="au-card__title">آمادگی برای دیده‌شدن در جست‌وجو</h3>
+
+      <section class="au-card pres-summary" data-testid="presence-summary" aria-labelledby="pres-summary-title">
+        <h3 id="pres-summary-title" class="au-card__title">خلاصهٔ آمادگی</h3>
         <ul class="vis-list">
-          {% for r in ov.seller_rows %}
-          <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
-            <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
-            <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
+          {% for item in sp.summary_items %}
+          <li class="vis-item vis-item--{% if item.ok %}ok{% else %}todo{% endif %}" data-testid="presence-item-{{ item.key }}" data-ok="{% if item.ok %}1{% else %}0{% endif %}">
+            <span class="vis-item__mark" aria-hidden="true">{% if item.ok %}✓{% else %}!{% endif %}</span>
+            <span class="vis-item__body"><strong>{{ item.label }}</strong><span>{{ item.text }}</span></span>
           </li>
           {% endfor %}
+          <li class="vis-item vis-item--{% if sp.next_action %}todo{% else %}ok{% endif %}" data-testid="presence-item-next">
+            <span class="vis-item__mark" aria-hidden="true">{% if sp.next_action %}→{% else %}✓{% endif %}</span>
+            <span class="vis-item__body"><strong>اقدام بعدی شما</strong>
+              {% if sp.next_action %}<span><a class="au-btn au-btn--primary au-btn--sm" href="{{ sp.next_action.href }}" data-testid="presence-next-action">{{ sp.next_action.label }}</a></span>
+              {% else %}<span>فعلاً کاری از شما لازم نیست.</span>{% endif %}</span>
+          </li>
         </ul>
-        <details class="int-tech" data-testid="seo-technical">
-          <summary>کارهایی که راستی‌سی خودکار انجام می‌دهد <small>— {{ ov.automatic_done|length|fa_number }} مورد فعال؛ جزئیات فنی: نقشهٔ سایت، robots، Canonical، دادهٔ ساختاریافته</small></summary>
+        {% if sp.test_env_message %}<p class="au-note" data-testid="presence-test-env">{{ sp.test_env_message }}</p>{% endif %}
+      </section>
+
+      <details class="int-card" data-testid="presence-address" open>
+        <summary><span class="int-card__title">آدرس عمومی فروشگاه</span><span class="int-chip int-chip--{{ sp.address.tone }}" data-testid="presence-address-state" data-state="{{ sp.address.state }}">{{ sp.address.label }}</span></summary>
+        <div class="int-card__body">
+          <p data-testid="presence-address-text">{{ sp.address.text }}</p>
+          <a class="au-btn {% if sp.address.primary %}au-btn--primary{% else %}au-btn--ghost{% endif %}" href="{{ sp.address.href }}" data-testid="presence-address-button">تنظیمات دامنهٔ همین فروشگاه</a>
+        </div>
+      </details>
+
+      <details class="int-card" data-testid="presence-automatic">
+        <summary><span class="int-card__title">کارهایی که راستی‌سی خودکار انجام می‌دهد</span>
+          <span class="int-chip int-chip--{% if sp.counters.waiting %}info{% else %}ok{% endif %}" data-testid="presence-automatic-counter">{% if sp.counters.waiting %}{{ sp.counters.waiting|fa_number }} قابلیت ساخته شده و منتظر است{% else %}{{ sp.counters.active|add:sp.counters.ready|fa_number }} قابلیت فعال یا آماده{% endif %}</span></summary>
+        <div class="int-card__body">
           <ul class="vis-list">
-            {% for r in ov.automatic_rows %}
-            <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
-              <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
-              <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
+            {% for cap in sp.capabilities %}
+            <li class="vis-item" data-testid="presence-cap-{{ cap.key }}" data-state="{{ cap.state }}">
+              <span class="int-chip int-chip--{{ cap.tone }}" data-testid="presence-cap-{{ cap.key }}-state">{{ cap.label }}</span>
+              <span class="vis-item__body"><strong>{{ cap.title }}</strong><span>{{ cap.detail }}</span></span>
             </li>
             {% endfor %}
           </ul>
-        </details>
-        {% if ov.manual_rows %}
-        <h4 class="int-sub">گام‌های دستیِ شما (در حساب‌های خودتان)</h4>
-        <ul class="vis-list">
-          {% for r in ov.manual_rows %}
-          <li class="vis-item vis-item--{{ r.state }}" data-testid="seo-row-{{ r.key }}" data-state="{{ r.state }}">
-            <span class="vis-item__mark" aria-hidden="true">{% if r.state == "ok" %}✓{% elif r.state == "todo" %}!{% elif r.state == "off" %}–{% else %}i{% endif %}</span>
-            <span class="vis-item__body"><strong>{{ r.title }}</strong><span>{{ r.detail }}</span>{% if r.action %}<em>{{ r.action }}</em>{% endif %}</span>
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-        <p class="au-hint">راستی‌سی کارهای فنی را خودکار انجام می‌دهد؛ ایندکس‌شدن، رتبه یا نمایش در پاسخ‌های هوش مصنوعی را هیچ ابزاری تضمین نمی‌کند.</p>
-      </section>
+          <p class="au-hint">این قابلیت‌ها فقط صفحه‌ها را قابل‌خواندن می‌کنند؛ ایندکس‌شدن، رتبه یا نمایش در پاسخ هوش مصنوعی را هیچ ابزاری تضمین نمی‌کند.</p>
+        </div>
+      </details>
+
+      <details class="int-card" data-testid="presence-search-console">
+        <summary><span class="int-card__title">{{ sp.search_console.title }}</span><span class="int-chip int-chip--off" data-testid="presence-sc-state">اتصال خودکار هنوز در دسترس نیست</span></summary>
+        <div class="int-card__body">
+          <ul class="int-points">
+            <li>ثبت در Search Console برای ایندکس‌شدن <b>الزامی نیست</b>.</li>
+            <li>برای دیدن عملکرد و خطاهای سایت در گوگل مفید است.</li>
+            <li>مالکیت سایت باید توسط صاحب حساب مجاز گوگل تأیید شود؛ راستی‌سی این کار را به‌جای شما انجام نمی‌دهد.</li>
+          </ul>
+          <p class="au-hint" data-testid="presence-sc-auto">{{ sp.search_console.auto_connect_text }}</p>
+          {% if sp.search_console.sitemap_url %}
+          <div class="pres-sitemap" data-testid="presence-sitemap">
+            <span>آدرس نقشهٔ سایت برای ثبت:</span>
+            <bdi dir="ltr" class="pres-sitemap__url" data-testid="presence-sitemap-url">{{ sp.search_console.sitemap_url }}</bdi>
+            <button type="button" class="au-btn au-btn--sm" data-copy="{{ sp.search_console.sitemap_url }}" data-testid="presence-sitemap-copy">کپی</button>
+          </div>
+          <div class="au-acc__foot">
+            <a class="au-btn au-btn--ghost" href="{{ sp.search_console.links.search_console }}" target="_blank" rel="noopener noreferrer" data-testid="presence-sc-link">باز کردن Google Search Console</a>
+            <a class="au-btn au-btn--ghost" href="{{ sp.search_console.links.sitemap_guide }}" target="_blank" rel="noopener noreferrer" data-testid="presence-sc-guide">راهنمای ثبت نقشهٔ سایت (گوگل)</a>
+          </div>
+          {% else %}<p class="au-note" data-testid="presence-sc-waiting">{{ sp.search_console.waiting_text }}</p>{% endif %}
+        </div>
+      </details>
+
+      <details class="int-card int-card--tech" data-testid="presence-bing-ai">
+        <summary><span class="int-card__title">Bing و جست‌وجوی هوشمند <small>— جزئیات فنی</small></span></summary>
+        <div class="int-card__body">
+          {% for cap in sp.capabilities %}{% if cap.key == "indexnow" %}
+          <p data-testid="presence-indexnow"><span class="int-chip int-chip--{{ cap.tone }}" data-state="{{ cap.state }}">{{ cap.label }}</span> <b>{{ cap.title }}:</b> {{ cap.detail }}</p>
+          {% endif %}{% endfor %}
+          <p class="au-hint">IndexNow فقط «پیشنهادِ بازدید» برای موتورهای شرکت‌کننده است؛ ایندکس‌شدن در Bing را تضمین نمی‌کند.</p>
+          <h4 class="int-sub">خزنده‌ها: دو دستهٔ جدا</h4>
+          <ul class="vis-list" data-testid="presence-crawlers">
+            <li class="vis-item"><span class="int-chip int-chip--ok">مجاز</span><span class="vis-item__body"><strong>خزنده‌های جست‌وجو (پاسخ به پرسش کاربر)</strong><span dir="ltr">{{ sp.crawlers.search|join:", " }}</span></span></li>
+            <li class="vis-item"><span class="int-chip int-chip--{% if sp.crawlers.training_blocked %}off{% else %}info{% endif %}">{% if sp.crawlers.training_blocked %}مسدود{% else %}مجاز{% endif %}</span><span class="vis-item__body"><strong>خزنده‌های آموزش مدل هوش مصنوعی</strong><span dir="ltr">{{ sp.crawlers.training|join:", " }}</span><span>طبق سیاست پلتفرم؛ این تنظیم را فروشنده تغییر نمی‌دهد.</span></span></li>
+          </ul>
+          <p class="au-hint">سیاست خزنده‌ها (robots.txt) کاملاً جدا از ردیابی بازدیدکننده (بخش B) است: هیچ‌کدام دیگری را روشن یا خاموش نمی‌کند. هیچ تضمینی برای رتبهٔ گوگل یا نمایش در ChatGPT و سایر هوش‌های مصنوعی وجود ندارد.</p>
+        </div>
+      </details>
     </div>
   </details>
 
@@ -62,7 +111,8 @@
   <details class="int-sec" data-testid="int-section-stats">
     <summary><span class="int-sec__title">B · آمار و بازدیدکنندگان</span><span class="int-chip int-chip--{{ ov.chips.stats.state }}" data-testid="int-chip-stats">{{ ov.chips.stats.text }}</span></summary>
     <div class="int-sec__body">
-      <p class="au-hint">GA4، GTM و Meta Pixel به‌صورت پیش‌فرض روی فروشگاه بارگذاری <strong>نمی‌شوند</strong>: تا زمانی که مدیر پلتفرم پایهٔ حقوقی و رضایت بازدیدکننده را تأیید و بارگذاری را روشن نکند، شناسه فقط ذخیره می‌ماند. فقط شناسه ذخیره می‌شود (کدِ دلخواه پذیرفته نمی‌شود) و فقط روی فروشگاهِ منتشرشده با آدرسِ عمومی بارگذاری می‌شود. اگر داخل GTM هم تگِ GA4 دارید، همان را دوبار وصل نکنید.</p>
+      <p class="au-hint" data-testid="tracking-consent-note">{{ tracking_consent_note }} فقط شناسه ذخیره می‌شود (کد دلخواه پذیرفته نمی‌شود).</p>
+      {% if ov.duplicate_warning %}<p class="au-note au-note--danger" data-testid="duplicate-tracking-warning">{{ ov.duplicate_warning }}</p>{% endif %}
       <div class="au-accs" data-testid="integration-accordions">
         {% for row in ov.analytics_rows %}{% include "dashboard/partials/settings_integration_row.html" %}{% endfor %}
       </div>
@@ -73,7 +123,7 @@
   <details class="int-sec" data-testid="int-section-sales">
     <summary><span class="int-sec__title">C · ابزارهای فروش و مقایسهٔ قیمت</span><span class="int-chip int-chip--{{ ov.chips.sales.state }}" data-testid="int-chip-sales">{{ ov.chips.sales.text }}</span></summary>
     <div class="int-sec__body">
-      <p class="au-hint">ترب فعلاً فقط شناسه را نگه می‌دارد؛ هنوز چیزی برای سرویسِ بیرونی ارسال نمی‌شود. فیدِ ترب و Google Merchant در «امکانات آینده» (گروه E) آمده‌اند.</p>
+      <p class="au-hint">ترب فعلاً فقط شناسهٔ فروشنده را نگه می‌دارد؛ چیزی برای ترب ارسال نمی‌شود و فیدی ساخته نمی‌شود (جزئیات در «امکانات آینده»، گروه E).</p>
       <div class="au-accs" data-testid="integration-accordions-stored">
         {% for row in ov.sales_rows %}{% include "dashboard/partials/settings_integration_row.html" %}{% endfor %}
       </div>
@@ -84,7 +134,7 @@
   <details class="int-sec" data-testid="int-section-trust">
     <summary><span class="int-sec__title">D · نمادها و اعتماد</span><span class="int-chip int-chip--{{ ov.chips.trust.state }}" data-testid="int-chip-trust">{{ ov.chips.trust.text }}</span></summary>
     <div class="int-sec__body">
-      <p class="au-hint">«شناسهٔ ذخیره‌شده» با «تأییدِ واقعی» یکی نیست: راستی‌سی فقط قالبِ شناسه را می‌سنجد و از اینماد استعلام نمی‌کند.</p>
+      <p class="au-hint">«شناسهٔ ذخیره‌شده» با «تأییدِ واقعی» یکی نیست: راستی‌سی فقط قالب را می‌سنجد و از اینماد استعلام نمی‌کند.</p>
       <div class="au-accs" data-testid="integration-accordions-trust">
         {% for row in ov.trust_rows %}{% include "dashboard/partials/settings_integration_row.html" %}{% endfor %}
       </div>
@@ -103,3 +153,11 @@
   </details>
   {% endwith %}
 </div>
+<script>
+document.addEventListener('click', function (e) {
+  var b = e.target.closest && e.target.closest('[data-copy]');
+  if (!b) return;
+  var done = function () { var t = b.textContent; b.textContent = 'کپی شد'; setTimeout(function () { b.textContent = t; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(b.getAttribute('data-copy')).then(done, function () {});
+});
+</script>

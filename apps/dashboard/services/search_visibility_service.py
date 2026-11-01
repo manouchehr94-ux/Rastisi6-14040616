@@ -1,102 +1,80 @@
-"""Facts for the «visibility» part of the integrations page: what RastiSi already does for search engines on its own, what the seller
-still has to do (if anything), and which services are NOT available yet.
+"""Facts for the integrations page, outside section A (see ``search_presence_service`` for «دیده‌شدن در جست‌وجو»): what saving an identifier
+really does, which services are NOT available yet, and the summary + one status chip per group.
 
-Honesty rules (the page must never overstate):
-* «ready» is not «connected»: a row is ``ok`` only when the thing really happens now (checked from real state), ``todo`` when the
-  seller/store must act first, ``info`` for facts, ``off`` for something that is not available/enabled;
-* nothing here promises indexing, a ranking, or an appearance in any AI answer;
-* nothing contacts a search engine — every value comes from the database/settings."""
+One vocabulary for every service (the page never mixes them up):
+
+* **ذخیره‌شده** (saved)      — an identifier is stored for THIS store;
+* **قالب معتبر** (validated) — the stored value matches the provider's strict pattern. This is a FORMAT check made here and now; it is
+                               not a call to Google / Meta / Torob / eNamad and proves nothing about the account behind the value;
+* **فعال** (enabled)         — the seller switched the identifier on (``StoreIntegrationConnection.is_active``);
+* **ردیابی فعال است** (live) — a tracker really loads on public pages: enabled AND the platform allowed storefront tracking AND the store is
+                               published on a real public address (``tracking_service``'s own rules).
+
+«اتصال تأییدشده» (a connection confirmed by the other side) does not exist for any service: RastiSi has no API contract with any of them,
+so no row ever says it. Nothing here contacts anyone, promises indexing, a ranking, or an appearance in an AI answer."""
 
 from __future__ import annotations
 
 from urllib.parse import urlsplit
 
-from django.conf import settings
-
-from apps.catalog.services.product_publish_service import storefront_listing_products
-from apps.core import indexnow, seo_policy
+from apps.core import seo_policy
 from apps.stores.resolution import resolve_storefront_url_for_store
 from apps.stores.services.publication_service import is_publicly_visible
 
-OK, TODO, INFO, OFF = "ok", "todo", "info", "off"
-
 #: services that do NOT exist yet — shown separately so nobody mistakes them for connectable integrations
 NOT_AVAILABLE = (
-    {"key": "search_console", "title": "Google Search Console",
-     "note": "ثبتِ سایت‌مپ و پایش از طریق API نیازمندِ حسابِ گوگلِ خودِ شماست و هنوز متصل نشده. تا آن زمان: خودتان در Search Console دامنه را اضافه و آدرسِ سایت‌مپ را ثبت کنید."},
     {"key": "bing_webmaster", "title": "Bing Webmaster Tools",
-     "note": "اتصالِ حساب هنوز در دسترس نیست؛ ارسالِ خودکارِ تغییرات با IndexNow آماده‌ی فعال‌سازی توسطِ مدیرِ پلتفرم است."},
-    {"key": "merchant_center", "title": "Google Merchant Center / فیدِ محصول",
+     "note": "اتصال حساب هنوز در دسترس نیست. اطلاع‌رسانی IndexNow (در بخش «دیده‌شدن در جست‌وجو») به اتصال حساب وابسته نیست."},
+    {"key": "merchant_center", "title": "Google Merchant Center / فید محصول",
      "note": "هنوز فیدی ساخته یا ارسال نمی‌شود."},
-    {"key": "torob_feed", "title": "فیدِ ترب",
-     "note": "شناسهٔ فروشنده ذخیره می‌شود ولی فیدی برای ترب ساخته نمی‌شود."},
+    {"key": "torob_feed", "title": "فید ترب",
+     "note": "فیدی برای ترب ساخته یا ارسال نمی‌شود؛ شناسهٔ فروشنده فقط ذخیره می‌شود."},
 )
-
-
-def _row(key, state, title, detail, action=""):
-    return {"key": key, "state": state, "title": title, "detail": detail, "action": action}
-
-
-def seo_readiness(store, request) -> list[dict]:
-    published = is_publicly_visible(store)
-    try:
-        url = resolve_storefront_url_for_store(store, request) or ""
-    except Exception:                                                     # noqa: BLE001
-        url = ""
-    host = urlsplit(url).netloc if url else ""
-    public_host = bool(host) and not seo_policy.is_non_public_host(host)
-    indexable = published and public_host
-    origin = f"{urlsplit(url).scheme}://{host}" if host else ""
-    products = storefront_listing_products(store).count() if published else 0
-
-    rows = [
-        _row("published", OK if published else TODO, "فروشگاه منتشر شده",
-             "فروشگاه برای عموم باز است." if published else "تا فروشگاه منتشر نشود، هیچ موتورِ جست‌وجویی اجازهٔ دیدنِ صفحه‌ها را ندارد.",
-             "" if published else "ابتدا فروشگاه را منتشر کنید"),
-        _row("public_host", OK if public_host else TODO, "آدرسِ عمومی",
-             (f"صفحه‌ها با آدرسِ {host} معرفی می‌شوند." if public_host else
-              "این آدرس آزمایشی/محلی است و ایندکس نمی‌شود. فروشگاهِ واقعی با آدرسِ راستی‌سی یا دامنهٔ اختصاصیِ تأییدشده معرفی می‌شود."),
-             "" if public_host else "آدرسِ عمومی را در «دامنه و آدرس» ببینید"),
-        _row("robots_sitemap", OK if indexable else INFO, "robots.txt و نقشهٔ سایت",
-             (f"خودکار ساخته می‌شود: {origin}/sitemap.xml — فقط صفحه‌های عمومی (بدونِ سبد، پرداخت و حساب کاربری)." if indexable else
-              "پس از انتشار روی آدرسِ عمومی خودکار فعال می‌شود؛ تا آن زمان همهٔ صفحه‌ها برای موتورهای جست‌وجو بسته‌اند."),),
-        _row("products", OK if products else (TODO if published else INFO), "کالاهای قابل‌نمایش",
-             f"{products} کالا در نقشهٔ سایت و دادهٔ ساختاریافته (قیمت و موجودیِ واقعی) قرار می‌گیرد." if products else
-             "هنوز کالای منتشرشده‌ای نیست؛ بدونِ کالا چیزی برای نمایش در جست‌وجو نیست."),
-        _row("structured_data", OK if indexable else INFO, "دادهٔ ساختاریافته (JSON-LD)",
-             "نام فروشگاه، کالا، قیمت و موجودی از اطلاعاتِ واقعیِ خودتان ساخته می‌شود؛ امتیاز، نظر یا ارسالِ ساختگی اضافه نمی‌شود."),
-        _row("ai_search", INFO, "جست‌وجوی هوشمند (ChatGPT، Perplexity و مشابه)",
-             "ربات‌های «جست‌وجو» مجازند صفحه‌های عمومی را ببینند؛ ربات‌های «آموزشِ مدل» "
-             + ("طبقِ سیاستِ پلتفرم مسدودند." if seo_policy.ai_training_blocked() else "طبقِ سیاستِ پلتفرم مجازند.")
-             + " این تنظیم نمایش در پاسخِ هوش مصنوعی را تضمین نمی‌کند."),
-        _row("indexnow", INFO if indexnow.indexnow_enabled() else OFF, "اطلاع‌رسانیِ خودکار به Bing (IndexNow)",
-             "تغییرها به‌صورتِ پیشنهاد برای موتورهای شرکت‌کننده ارسال می‌شود؛ این به‌معنیِ ایندکس‌شدن نیست." if indexnow.indexnow_enabled()
-             else "هنوز توسطِ مدیرِ پلتفرم فعال نشده است."),
-        _row("search_console", TODO, "Google Search Console",
-             "به حسابِ گوگلِ شما نیاز دارد و خودکار نیست: دامنه را در Search Console اضافه کنید و آدرسِ نقشهٔ سایت را ثبت کنید."
-             + (f" آدرس: {origin}/sitemap.xml" if indexable else ""),
-             "راهنمای گوگل"),
-    ]
-    return rows
-
 
 # Provider code → what saving its identifier really does on the storefront today.
 LIVE_ON_PUBLIC_PAGES = frozenset({"google_analytics", "google_tag_manager", "ad_pixel"})
+SALES_TOOL_PROVIDERS = frozenset({"torob"})
+TRUST_PROVIDERS = frozenset({"enamad"})
+
+#: «saved ≠ live» in plain words, shown once above the trackers
+TRACKING_CONSENT_NOTE = (
+    "ذخیره‌کردن شناسه، ردیابی را روشن نمی‌کند. ردیابی بازدیدکننده فقط وقتی بارگذاری می‌شود که مدیر پلتفرم آن را فعال کرده باشد "
+    "(به پایهٔ حقوقی و رضایت بازدیدکننده بستگی دارد) و فروشگاه روی آدرس عمومی منتشر شده باشد. تا آن زمان شناسه فقط ذخیره می‌ماند."
+)
+DUPLICATE_TRACKING_NOTE = (
+    "اگر هم GA4 و هم GTM را فعال کنید و داخل کانتینر GTM هم تگ GA4 دارید، هر بازدید دوبار ثبت می‌شود. "
+    "یکی را انتخاب کنید: فقط GA4، یا فقط GTM (و GA4 را از داخل GTM اجرا کنید)."
+)
 
 
-def provider_effect(code: str, *, connected: bool, store_live: bool, tracking_enabled: bool = True) -> dict:
-    """The honest consequence of the saved identifier — drives the badge text of each integration row."""
+def provider_effect(code: str, *, connected: bool, store_live: bool, tracking_enabled: bool = True, has_saved: bool = False) -> dict:
+    """The honest consequence of the saved identifier — drives the badge of each integration row.
+    ``badge`` is the short word, ``text`` the full sentence; ``state`` is a stable key the tests and CSS read."""
     if code in LIVE_ON_PUBLIC_PAGES:
         if not connected:
-            return {"state": "off", "text": "متصل‌نشده"}
-        if store_live and not tracking_enabled:
-            return {"state": "privacy", "text": "ذخیره شد — بارگذاری روی فروشگاه هنوز توسط مدیر پلتفرم (به‌خاطر حریم خصوصی و رضایت بازدیدکننده) فعال نشده است"}
-        if store_live:
-            return {"state": "live", "text": "فعال روی صفحه‌های عمومی"}
-        return {"state": "waiting", "text": "ذخیره شد — پس از انتشارِ فروشگاه روی آدرسِ عمومی فعال می‌شود"}
+            if has_saved:
+                return {"state": "paused", "badge": "ذخیره‌شده — خاموش", "text": "شناسه ذخیره است ولی استفاده از آن خاموش است؛ ردیابی انجام نمی‌شود."}
+            return {"state": "off", "badge": "ذخیره نشده", "text": "هنوز شناسه‌ای ذخیره نشده است."}
+        if not tracking_enabled:
+            return {"state": "privacy", "badge": "شناسه ذخیره شد", "text": "شناسه ذخیره شد، اما ردیابی روی فروشگاه روشن نیست: بارگذاری ردیاب‌ها هنوز توسط مدیر پلتفرم (به‌خاطر حریم خصوصی و رضایت بازدیدکننده) فعال نشده است."}
+        if not store_live:
+            return {"state": "waiting", "badge": "شناسه ذخیره شد", "text": "شناسه ذخیره شد؛ ردیابی پس از انتشار فروشگاه روی آدرس عمومی فعال می‌شود."}
+        return {"state": "live", "badge": "ردیابی فعال است", "text": "ردیابی روی صفحه‌های عمومی فعال است."}
     if connected:
-        return {"state": "stored", "text": "فقط ذخیره شده — هنوز نمایش یا ارسالی انجام نمی‌شود"}
-    return {"state": "off", "text": "متصل‌نشده"}
+        return {"state": "stored", "badge": "شناسه ذخیره شد", "text": "فقط شناسه ذخیره شده است؛ اتصال عملیاتی یا ارسال داده‌ای انجام نمی‌شود."}
+    if has_saved:
+        return {"state": "paused", "badge": "ذخیره‌شده — خاموش", "text": "شناسه ذخیره است ولی استفاده از آن خاموش است."}
+    return {"state": "off", "badge": "ذخیره نشده", "text": "هنوز شناسه‌ای ذخیره نشده است."}
+
+
+def validation_of(provider, credentials: dict, *, has_saved: bool) -> dict:
+    """A live FORMAT check of the stored value (no network, no external account). Replaces the vague «هنوز بررسی انجام نشده»."""
+    if not has_saved:
+        return {"state": "empty", "text": "چیزی برای بررسی ذخیره نشده است."}
+    error = provider.validate(credentials)
+    if error:
+        return {"state": "invalid", "text": error}
+    return {"state": "valid", "text": "قالب شناسه معتبر است. فقط قالب بررسی می‌شود؛ درستیِ حساب پشت آن توسط گوگل/متا/ترب/اینماد از اینجا بررسی نمی‌شود."}
 
 
 def store_live(store, request) -> bool:
@@ -110,68 +88,54 @@ def store_live(store, request) -> bool:
     return bool(host) and not seo_policy.is_non_public_host(host)
 
 
-# ---- the seller-facing structure of the integrations page (five plain-language groups) -------------------------------------------------
-#: the readiness rows a seller can act on (everything else RastiSi does by itself and is shown folded under «جزئیات فنی»)
-SELLER_FACING_ROWS = ("published", "public_host", "products")
-AUTOMATIC_ROWS = ("robots_sitemap", "structured_data", "ai_search", "indexnow")
-#: not-yet-built services, split by the group they will belong to (all are listed — never as connectable — under «امکانات آینده»)
-SALES_TOOL_PROVIDERS = frozenset({"torob"})
-TRUST_PROVIDERS = frozenset({"enamad"})
+def duplicate_tracking_warning(rows: list[dict]) -> str:
+    codes = {row["provider"].code for row in rows if row["is_connected"]}
+    return DUPLICATE_TRACKING_NOTE if {"google_analytics", "google_tag_manager"} <= codes else ""
 
 
 def _chip(state, text):
     return {"state": state, "text": text}
 
 
-def integration_overview(seo_rows: list[dict], integration_rows: list[dict]) -> dict:
-    """The summary + one status chip per group for the page. Pure presentation over data the page already has — it contacts nobody, enables
-    nothing and never promises indexing, a ranking or an appearance in an AI answer."""
-    by_key = {row["key"]: row for row in seo_rows}
-    seller_rows = [by_key[key] for key in SELLER_FACING_ROWS if key in by_key]
-    todo = [row for row in seller_rows if row["state"] == TODO]
-    automatic = [by_key[key] for key in AUTOMATIC_ROWS if key in by_key]
-    automatic_done = [row["title"] for row in automatic if row["state"] == OK]
-    if todo:
-        visibility_chip = _chip("todo", f"{len(todo)} کار باقی مانده")
-        headline = "برای دیده‌شدن در جست‌وجو هنوز کاری لازم است"
-        next_action = todo[0]["action"] or todo[0]["title"]
+def integration_overview(presence: dict, integration_rows: list[dict]) -> dict:
+    """The summary + one chip per group. Pure presentation over data the page already has — contacts nobody, enables nothing."""
+    action = presence["next_action"]
+    counters = presence["counters"]
+    if action:
+        visibility_chip = _chip("todo", "یک قدم باقی مانده")
+    elif presence["indexable"]:
+        visibility_chip = _chip("ok", "فعال و آماده")
     else:
-        visibility_chip = _chip("ok", "آماده برای جست‌وجو")
-        headline = "فروشگاه شما از نظر فنی برای دیده‌شدن در جست‌وجو آماده است"
-        next_action = ""
+        visibility_chip = _chip("info", "منتظر آدرس عمومی")
 
     def _rows(codes):
         return [row for row in integration_rows if row["provider"].code in codes]
 
     analytics = [row for row in integration_rows if row["group"] == "live"]
-    connected_analytics = [row for row in analytics if row["is_connected"]]
-    if not connected_analytics:
-        stats_chip = _chip("off", "متصل‌نشده")
-    elif any(row["effect"]["state"] == "live" for row in connected_analytics):
-        stats_chip = _chip("ok", "فعال روی صفحه‌های عمومی")
-    elif any(row["effect"]["state"] == "privacy" for row in connected_analytics):
-        stats_chip = _chip("info", "شناسه ذخیره شد؛ بارگذاری هنوز فعال نشده")
+    saved_analytics = [row for row in analytics if row["is_connected"]]
+    if not saved_analytics:
+        stats_chip = _chip("off", "شناسه‌ای ذخیره نشده")
+    elif any(row["effect"]["state"] == "live" for row in saved_analytics):
+        stats_chip = _chip("ok", "ردیابی فعال است")
     else:
-        stats_chip = _chip("info", "شناسه ذخیره شد؛ پس از انتشار فعال می‌شود")
-    sales_connected = [row for row in _rows(SALES_TOOL_PROVIDERS) if row["is_connected"]]
-    trust_connected = [row for row in _rows(TRUST_PROVIDERS) if row["is_connected"]]
+        stats_chip = _chip("info", "شناسه ذخیره شد؛ ردیابی هنوز روشن نیست")
+    sales_saved = [row for row in _rows(SALES_TOOL_PROVIDERS) if row["is_connected"]]
+    trust_saved = [row for row in _rows(TRUST_PROVIDERS) if row["is_connected"]]
     return {
-        "headline": headline,
-        "next_action": next_action,
-        "ready": not todo,
-        "automatic_done": automatic_done,
-        "needs_you": [row["title"] for row in todo],
-        "seller_rows": seller_rows,
-        "automatic_rows": automatic,
-        "manual_rows": [row for row in seo_rows if row["key"] not in SELLER_FACING_ROWS + AUTOMATIC_ROWS],
+        "headline": presence["headline"],
+        "next_action": action,
+        "ready": not action,
+        "infra_active": counters["active"] + counters["ready"],
+        "infra_waiting": counters["waiting"],
         "sales_rows": _rows(SALES_TOOL_PROVIDERS),
         "trust_rows": _rows(TRUST_PROVIDERS),
         "analytics_rows": analytics,
+        "duplicate_warning": duplicate_tracking_warning(analytics),
         "chips": {
             "visibility": visibility_chip,
             "stats": stats_chip,
-            "sales": _chip("info", "فقط شناسه ذخیره شده") if sales_connected else _chip("off", "متصل‌نشده"),
-            "trust": _chip("info", "فقط شناسه ذخیره شده") if trust_connected else _chip("off", "متصل‌نشده"),
+            "sales": _chip("info", "فقط شناسه ذخیره شده") if sales_saved else _chip("off", "شناسه‌ای ذخیره نشده"),
+            "trust": _chip("info", "فقط شناسه ذخیره شده") if trust_saved else _chip("off", "شناسه‌ای ذخیره نشده"),
             "future": _chip("off", "به‌زودی"),
         },
         "not_available_count": len(NOT_AVAILABLE),
