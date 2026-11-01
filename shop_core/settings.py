@@ -200,6 +200,7 @@ TEMPLATES = [
                 "apps.dashboard.context_processors.support_mode_banner",
                 "apps.dashboard.context_processors.platform_link",
                 "apps.dashboard.context_processors.storefront_link",
+                "apps.notifications.context_processors.inbox_bell",
                 "apps.dashboard.context_processors.nav_badges",
             ],
         },
@@ -596,5 +597,14 @@ RASTISI_GSC_OAUTH_ENABLED = env_bool("RASTISI_GSC_OAUTH_ENABLED", default=False)
 # Periodic read-only re-checks of pending / unready custom domains (apps.stores.services.domain_autocheck_service). OFF unless the platform owner enables it (it performs real DNS / HTTPS lookups
 # from the server). Never activates a domain and never changes DNS or certificates.
 RASTISI_DOMAIN_AUTOCHECK_ENABLED = env_bool("RASTISI_DOMAIN_AUTOCHECK_ENABLED", default=False)
+
+# ---- Notification Engine (apps.notifications): the in-app Inbox / toast / polling are always on; EXTERNAL channels are OFF by default -------------------------------
+# Web Push to the browser vendors' push services (needs VAPID keys from the environment — never in the repository), e-mail and mobile push.
+RASTISI_NOTIF_WEBPUSH_ENABLED = env_bool("RASTISI_NOTIF_WEBPUSH_ENABLED", default=False)
+RASTISI_NOTIF_EMAIL_ENABLED = env_bool("RASTISI_NOTIF_EMAIL_ENABLED", default=False)
+RASTISI_NOTIF_MOBILE_ENABLED = env_bool("RASTISI_NOTIF_MOBILE_ENABLED", default=False)
+RASTISI_VAPID_PRIVATE_KEY = env_str("RASTISI_VAPID_PRIVATE_KEY", "")       # PEM or base64url raw P-256 scalar; empty ⇒ Web Push unavailable
+RASTISI_VAPID_SUBJECT = env_str("RASTISI_VAPID_SUBJECT", "")               # e.g. mailto:ops@your-domain
+RASTISI_NOTIF_POLL_SECONDS = env_int("RASTISI_NOTIF_POLL_SECONDS", default=30)
 RASTISI_GOOGLE_OAUTH_CLIENT_ID = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_ID", "")
 RASTISI_GOOGLE_OAUTH_CLIENT_SECRET = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_SECRET", "")
