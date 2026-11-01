@@ -114,6 +114,8 @@ _MUTATION_HISTORY_LABELS = {
     "appearance.update": "ویرایش طراحی کلی",
     "header.update": "ویرایش هدر",
     "header.apply_template": "اعمال هدرِ یک قالب",
+    "header.set_placement": "جایگاه هدر",
+    "header.apply_recipe": "اعمال هدرِ حرفه‌ای",
     "hero.apply_template": "اعمال چیدمانِ هیروی یک قالب",
     "footer.update": "ویرایش فوتر",
     "appearance.component.update": "تغییر جزء طراحی فروشگاه",
@@ -1510,6 +1512,50 @@ def _apply_header_from_template(*, draft: StorefrontLayoutVersion, mutation: dic
     _apply_header_update(draft=draft, mutation={"patch": patch})
 
 
+def _apply_header_set_placement(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Move the Store's header between «above the page» / «inside the Hero Stage» / «floating over the picture» WITHOUT touching the header model,
+    the hero's pictures or texts, the footer or any other section. It is one validated ``section.update_settings`` of the page's first top-level
+    Hero Stage (``header_mode``) — the same schema path the stage's own Inspector uses — so Undo/Redo, revisions and tenant scoping are the
+    engine's. Without such a stage the request is refused with a stable code: the header is never half-embedded or drawn twice."""
+    from .. import header_placement
+
+    placement = mutation.get("placement")
+    if placement not in header_placement.PLACEMENT_KEYS:
+        raise R4MutationError("invalid_placement")
+    state = header_placement.placement_state(draft)
+    if placement == "independent" and state["stage"] is None:
+        return                                            # nothing embeds the header: already independent
+    if state["stage"] is None:
+        raise R4MutationError("header_placement_needs_stage")
+    if placement != "independent":
+        if state["reason"] == "stage_hidden":
+            raise R4MutationError("header_placement_stage_hidden")
+        if state["reason"] == "stage_locked":
+            raise R4MutationError("section_locked")
+    elif state["stage"].is_locked:
+        raise R4MutationError("section_locked")
+    _apply_section_update_settings(
+        store=draft.layout.store, draft=draft,
+        mutation={"section_id": state["stage"].pk, "patch": {"header_mode": placement}},
+    )
+
+
+def _apply_header_recipe(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Apply a Header Recipe (model + placement read off a Ready Template of the registry) to this Draft, in one history step. The MODEL is always
+    applied; the PLACEMENT only when the home page opens with a usable Hero Stage — otherwise the header stays independent (honest degradation,
+    reported to the seller by the Inspector) and nothing else changes: hero, footer, palette, pages and the merchant's announcement bar are kept."""
+    from .. import header_placement
+
+    recipe = header_placement.get_recipe(mutation.get("recipe_key"))
+    if recipe is None:
+        raise R4MutationError("unknown_header_recipe")
+    preset = layout_preset_registry.get_layout_preset(recipe["key"])
+    _apply_header_update(draft=draft, mutation={"patch": template_header_patch(preset)})
+    state = header_placement.placement_state(draft)
+    if state["stage"] is not None and state["available"]:
+        _apply_header_set_placement(draft=draft, mutation={"placement": recipe["placement"]})
+
+
 def _apply_hero_from_template(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     """Take ONLY the Hero Stage LOOK of a Ready Template (header mode, panels, split, alignment, scrim, frame, heights, slot order…) and
     apply it to this Draft's stage — the merchant's own texts, pictures and focal points, the header chosen for the Store, and every other
@@ -1692,6 +1738,12 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "hero.apply_template":
         _apply_hero_from_template(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.set_placement":
+        _apply_header_set_placement(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.apply_recipe":
+        _apply_header_recipe(draft=draft, mutation=mutation)
         return
     if mutation_type == "footer.update":
         _apply_footer_update(draft=draft, mutation=mutation)

@@ -197,6 +197,8 @@ class R4MutationSecurityCoverageTests(R4MutationApiTestCase):
             "header.apply_template": lambda: {"type": "header.apply_template", "template_key": "editorial_noir", "template_version": "1"},
             # adding the stage at the top walks it past the page's sections, so a LOCKED neighbour refuses it (target_locked, nothing changes);
             # the working shape therefore starts from an unlocked home page of the caller's own Draft
+            "header.set_placement": lambda: {"type": "header.set_placement", "placement": "independent"},
+            "header.apply_recipe": lambda: {"type": "header.apply_recipe", "recipe_key": "dual_atelier"},
             "hero.apply_template": lambda: (
                 d.get_page("home").sections.update(is_locked=False),
                 {"type": "hero.apply_template", "template_key": "dual_atelier", "template_version": "1"},
@@ -219,7 +221,7 @@ class R4MutationSecurityCoverageTests(R4MutationApiTestCase):
     # ------------------------------------------------------------------------------------------------- completeness
     def test_the_protection_table_covers_exactly_the_dispatcher(self):
         self.assertEqual(set(self._payloads()), _dispatched_types())
-        self.assertEqual(len(_dispatched_types()), 31)
+        self.assertEqual(len(_dispatched_types()), 33)
         self.assertTrue(ID_TARGETED <= set(self._payloads()))
         self.assertTrue(DRAFT_PINNED <= set(self._payloads()))
 
