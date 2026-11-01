@@ -102,6 +102,7 @@
   window.addEventListener('storage', function (e) { if (e.key === SHOWN_KEY) { /* تب دیگر نشان داد */ } });
 
   /* ---- پنل ---- */
+  btn.setAttribute('aria-expanded', 'false');        // الگوی ARIA فقط با JS اضافه می‌شود (بدونِ JS دکمه کاری نمی‌کند)
   function open() { panel.hidden = false; btn.setAttribute('aria-expanded', 'true'); var f = panel.querySelector('a, button'); if (f) f.focus(); poll(); }
   function close(back) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); if (back) btn.focus(); }
   btn.addEventListener('click', function () { panel.hidden ? open() : close(true); });
