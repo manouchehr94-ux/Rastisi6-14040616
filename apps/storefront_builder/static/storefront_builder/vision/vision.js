@@ -621,6 +621,7 @@
     enhanceSwitches(gd());
     enhanceClarity();
     enhanceGalleries();
+    enhanceRecipes();
     renameRegions();
     updateSummaries();
     if (currentCat) { applyCategory(currentCat); filterPalettes(); }
@@ -979,6 +980,19 @@
       var help = select.nextElementSibling;
       (help && help.classList.contains('vs-help') ? help : select).insertAdjacentElement('afterend', wrap);
       if (galleryFlash && galleryFlash.region === region) later(function () { galleryFlash = null; var f = wrap.querySelector('.vs-gcard__flash'); if (f) f.remove(); }, 3200);
+    });
+  }
+  // the professional-header recipes (rendered by the server, one per registry recipe) get the picture of their header model: the SAME registry thumbnail
+  // the model gallery shows, so a recipe never carries an invented preview
+  function enhanceRecipes() {
+    var items = (GALLERY.header && GALLERY.header.items) || [];
+    $all('#r4GlobalDesign li[data-r4-recipe]').forEach(function (li) {
+      if (li.querySelector('.vs-recipe-thumb')) return;
+      var item = items.filter(function (it) { return it.key === li.dataset.variant; })[0];
+      if (!item) return;
+      var media = thumb(item);
+      media.classList.add('vs-recipe-thumb');
+      li.insertBefore(media, li.firstChild);
     });
   }
   function pickModel(region, key) {

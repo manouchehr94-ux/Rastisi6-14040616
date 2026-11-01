@@ -2164,6 +2164,36 @@ window.RastiSiR4 = {
     });
   }
 
+  var HEADER_PLACEMENT_REFUSALS = {
+    header_placement_needs_stage: 'بالای صفحهٔ اصلی «بوم هدر و هیرو» نیست؛ هدر فقط به‌صورت مستقل نمایش داده می‌شود و چیزی تغییر نکرد.',
+    header_placement_stage_hidden: 'بوم هدر و هیرو در بعضی دستگاه‌ها پنهان است؛ هدر یکپارچه فعال نشد تا سبد خرید همیشه در دسترس بماند.',
+    section_locked: 'بوم هدر و هیرو قفل است؛ ابتدا قفل آن را باز کنید.',
+    stale_revision: 'نسخهٔ طراحی در همین حین تغییر کرده؛ صفحه را تازه کنید و دوباره امتحان کنید.',
+  };
+  function applyHeaderPlacementMutation(button, mutation) {
+    var box = button.closest('[data-r4-header-placement]');
+    if (box) box.setAttribute('aria-busy', 'true');
+    var wanted = button.getAttribute('data-placement') || mutation.placement || '';
+    var isRecipe = mutation.type === 'header.apply_recipe';
+    var say = function (text) {
+      var status = globalDesignPanel && globalDesignPanel.querySelector('[data-r4-placement-status]');
+      if (status) status.textContent = text;
+    };
+    return R4.enqueueMutation(mutation).then(function (result) {
+      if (result && result.ok) {
+        return refreshGlobalDesignAndPreview().then(function () {
+          var fresh = globalDesignPanel && globalDesignPanel.querySelector('[data-r4-header-placement]');
+          var mode = fresh ? fresh.getAttribute('data-mode') : '';
+          if (isRecipe && wanted && mode !== wanted) say('مدل هدر اعمال شد؛ چون بالای صفحه «بوم هدر و هیرو» نیست، هدر مستقل نمایش داده می‌شود. با «بازگرداندن» برمی‌گردد.');
+          else say('اعمال شد و در پیش‌نویس ذخیره شد. با «بازگرداندن» برمی‌گردد.');
+        });
+      }
+      if (box) box.removeAttribute('aria-busy');
+      say(HEADER_PLACEMENT_REFUSALS[result && result.code] || 'این تغییر انجام نشد؛ هیچ چیز ذخیره نشد.');
+      return result;
+    });
+  }
+
   if (globalDesignPanel) {
     globalDesignPanel.addEventListener('click', function (evt) {
       if (evt.target.closest('[data-r4-global-design-close]')) closeGlobalDesign();
@@ -2215,6 +2245,18 @@ window.RastiSiR4 = {
         }).then(function (result) {
           if (result && result.ok) refreshGlobalDesignAndPreview();
         });
+        return;
+      }
+      // Header placement / professional header recipe: Draft-only mutations through the one boundary; the panel and the preview are re-read from the
+      // server afterwards (the server decides what was applied and what could not be), and the outcome is stated in plain words.
+      var placementButton = evt.target.closest('[data-r4-placement]');
+      if (placementButton) {
+        applyHeaderPlacementMutation(placementButton, { type: 'header.set_placement', placement: placementButton.getAttribute('data-r4-placement') });
+        return;
+      }
+      var recipeButton = evt.target.closest('[data-r4-apply-recipe]');
+      if (recipeButton) {
+        applyHeaderPlacementMutation(recipeButton, { type: 'header.apply_recipe', recipe_key: recipeButton.getAttribute('data-r4-apply-recipe') });
         return;
       }
       if (evt.target.closest('#r4ResetHeaderButton')) {

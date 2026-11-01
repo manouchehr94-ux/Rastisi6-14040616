@@ -25,8 +25,7 @@ STAGE = {"dual_atelier": ("atelier_nav", "merged"), "editorial_noir": ("editoria
 NO_STAGE = "street_drop"
 
 
-@override_settings(ALLOWED_HOSTS=["*"])
-class HeaderPlacementTests(R4MutationApiTestCase):
+class _Helpers:
     def setUp(self):
         super().setUp()
         cache.clear()
@@ -71,6 +70,9 @@ class HeaderPlacementTests(R4MutationApiTestCase):
         """Is the header drawn INSIDE the stage? (the element, not the stylesheet that mentions the class)"""
         return bool(re.search(r'class="[^"]*\bhs-header\b', html))
 
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class HeaderPlacementTests(_Helpers, R4MutationApiTestCase):
     # recipes -----------------------------------------------------------------------------------------------------------------
     def test_the_four_stage_templates_are_the_recipes_read_from_the_registry(self):
         recipes = {r["key"]: (r["variant"], r["placement"]) for r in header_placement.list_recipes()}
@@ -187,3 +189,40 @@ class HeaderPlacementTests(R4MutationApiTestCase):
         self.assertEqual(before, after)
         # the mutation carries no section/draft id the caller could aim at another Store
         self.assertEqual(StorefrontLayoutVersion.objects.filter(layout__store=other).count(), 1)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class HeaderPlacementInspectorMarkupTests(_Helpers, R4MutationApiTestCase):
+    """The Inspector block the Studio renders (Vision and the older R4 route share the one Global Design partial)."""
+
+    def _soup(self):
+        from bs4 import BeautifulSoup
+
+        return BeautifulSoup(self.client.get(reverse("dashboard:vision-studio")).content.decode(), "html.parser")
+
+    def test_on_a_stage_template_the_modes_and_the_four_recipes_are_offered(self):
+        self._apply_whole("dual_atelier")
+        box = self._soup().select_one("#rsGlobalHeader [data-r4-header-placement]")
+        self.assertEqual(box["data-mode"], "merged")
+        self.assertEqual(box["data-available"], "1")
+        radios = box.select("[data-r4-placement]")
+        self.assertEqual([r["data-r4-placement"] for r in radios], ["independent", "merged", "overlay"])
+        self.assertEqual([r["aria-checked"] for r in radios], ["false", "true", "false"])
+        self.assertFalse([r for r in radios if r.has_attr("disabled")])
+        recipes = box.select("li[data-r4-recipe]")
+        self.assertEqual([r["data-r4-recipe"] for r in recipes], list(STAGE))
+        self.assertEqual([r["data-r4-recipe"] for r in recipes if "is-current" in r["class"]], ["dual_atelier"])
+        self.assertIsNone(box.select_one("[data-r4-placement-reason]"))
+        # exactly one model select remains: the recipes and the placement never become a second model picker
+        self.assertEqual(len(self._soup().select("#r4GlobalHeaderVariant")), 1)
+
+    def test_on_a_template_without_a_stage_the_integrated_modes_are_disabled_and_explained(self):
+        self._apply_whole(NO_STAGE)
+        box = self._soup().select_one("#rsGlobalHeader [data-r4-header-placement]")
+        self.assertEqual(box["data-available"], "0")
+        self.assertEqual(box["data-mode"], "independent")
+        disabled = {r["data-r4-placement"] for r in box.select("[data-r4-placement][disabled]")}
+        self.assertEqual(disabled, {"merged", "overlay"})
+        self.assertIn("بوم هدر و هیرو", box.select_one("[data-r4-placement-reason]").get_text())
+        for recipe in box.select("li[data-r4-recipe]"):
+            self.assertIn("فقط مدل هدر", recipe.get_text())

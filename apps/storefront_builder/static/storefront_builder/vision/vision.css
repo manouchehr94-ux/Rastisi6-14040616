@@ -421,8 +421,8 @@
 /* ---- header / footer Inspector: the Global Design panel docked beside the canvas (no dimming, no big modal) ----
    Same element and same form as the modal; only its placement changes. The preview stays visible and clickable, so a chosen model shows on the Draft at once. */
 .rs-studio.vs[data-vs-dock="region"]{--vs-panel-w:420px}
-.rs-studio.vs[data-vs-dock="region"] .vs-dlayer.context-panel{background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-start;align-items:stretch;padding:var(--vs-bar-h) 0 0}
-.rs-studio.vs[data-vs-dock="region"] .vs-design-modal{pointer-events:auto;width:var(--vs-panel-w);height:auto;border-radius:0;border-width:0 0 0 1px;box-shadow:-18px 0 50px rgba(0,0,0,.35)}
+.rs-studio.vs[data-vs-dock="region"] .vs-dlayer.context-panel{background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-start;align-items:stretch;padding:var(--vs-bar-h) 0 0;overflow:clip}   /* clip, not hidden: a focused control must never scroll the layer up under the toolbar */
+.rs-studio.vs[data-vs-dock="region"] .vs-design-modal{pointer-events:auto;width:var(--vs-panel-w);height:calc(100dvh - var(--vs-bar-h));max-height:calc(100dvh - var(--vs-bar-h));border-radius:0;border-width:0 0 0 1px;box-shadow:-18px 0 50px rgba(0,0,0,.35)}
 .rs-studio.vs[data-vs-dock="region"] .vs-modal__scroll{padding:14px 16px 18px}
 .rs-studio.vs[data-vs-dock="region"] .vs-modal__head h2{font-size:16px}
 .rs-studio.vs[data-vs-dock="region"] .vs-modal__scopebar{padding:6px 14px;gap:6px;flex:0 0 auto}
@@ -445,8 +445,21 @@
   /* narrow screens: the Inspector becomes a bottom sheet so the canvas stays visible above it */
   .rs-studio.vs[data-vs-dock="region"]{--vs-panel-w:100vw}
   .rs-studio.vs[data-vs-dock="region"] .vs-dlayer.context-panel{align-items:flex-end;justify-content:center;padding:0}
-  .rs-studio.vs[data-vs-dock="region"] .vs-design-modal{width:100vw;max-height:58dvh;border-width:1px 0 0;box-shadow:0 -18px 50px rgba(0,0,0,.45)}
+  .rs-studio.vs[data-vs-dock="region"] .vs-design-modal{width:100vw;height:auto;max-height:58dvh;border-width:1px 0 0;box-shadow:0 -18px 50px rgba(0,0,0,.45)}
 }
+
+/* header placement + recipes inside the docked Inspector */
+.vs .r4-header-placement{padding:12px;border:1px solid #263450;border-radius:14px;background:#13203a;margin:12px 0}
+.vs .r4-header-placement h5{margin:0;font-size:14px;color:#e4ebf7}
+.vs .r4-placement-choice{border-color:#33456a;color:#d6deec;background:#0f192c}
+.vs .r4-placement-choice[aria-checked="true"]{background:rgba(124,109,240,.22);color:#fff;border-color:#a79df7;box-shadow:none}
+.vs .r4-recipe{border-color:#263450;background:#0f192c}
+.vs .r4-recipe.is-current{border-color:#a79df7}
+.vs .r4-recipe__apply{background:#7c6df0;border:1px solid #a79df7;color:#fff;font-weight:700}
+.vs .r4-recipe__apply:disabled{background:#26324d;border-color:#3a4a66;color:#c8d3e6;cursor:default}
+.vs .vs-recipe-thumb{flex:0 0 100%;min-height:70px;max-height:96px;border-radius:8px;overflow:hidden}
+.vs .vs-recipe-thumb>img{width:100%;max-height:96px;object-fit:cover;object-position:top center}
+.vs .r4-recipe__note{color:#f1c27d}
 
 /* the template gallery's "peek" docks beside the preview instead of dimming it */
 .rs-studio.vs[data-rs-drawer="template-preview"] .vs-dlayer.context-panel{background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-end;align-items:stretch;padding:var(--vs-bar-h) 0 0}

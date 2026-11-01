@@ -442,6 +442,26 @@ def _announcement_image_url(draft, header) -> str:
         return ""
 
 
+def _header_placement_context(draft: StorefrontLayoutVersion, header: dict) -> dict:
+    from . import header_placement
+
+    state = header_placement.describe(draft)
+    variant_labels = {
+        v.key: v.label_fa for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_HEADER_REGION)
+    }
+    placement_labels = dict(header_placement.PLACEMENTS)
+    recipes = []
+    for recipe in header_placement.list_recipes():
+        recipes.append({
+            **recipe,
+            "variant_label": variant_labels.get(recipe["variant"], recipe["variant"]),
+            "placement_label": placement_labels.get(recipe["placement"], recipe["placement"]),
+            "current": recipe["variant"] == header.get("header_variant") and recipe["placement"] == state["mode"],
+            "placement_applies": state["available"],
+        })
+    return {**state, "recipes": recipes}
+
+
 def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
     """R4 Task 11 (Section 23) — the Global Design panel's ENTIRE read
     projection: server-authoritative current config + registry-driven
@@ -483,6 +503,9 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
             {"key": v.key, "label_fa": v.label_fa}
             for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_HEADER_REGION)
         ],
+        # Header placement + the Header Recipes (model + placement pairs read off the Ready Template registry): the Inspector offers them next to
+        # the model cards; the availability is the production embedding decision, never a guess.
+        "header_placement": _header_placement_context(draft, header),
         "footer_variants": [
             {"key": v.key, "label_fa": v.label_fa}
             for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_FOOTER_REGION)

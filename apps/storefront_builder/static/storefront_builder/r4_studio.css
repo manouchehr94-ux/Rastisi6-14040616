@@ -714,6 +714,20 @@ body:has(.rs-studio[data-r4-sidebar-expanded="true"]) .sidebar{display:flex!impo
 /* ---- V5 announcement strip block (global design panel) ---- */
 .rs-studio .r4-announce-block{display:flex;flex-direction:column;gap:8px}
 .rs-studio .r4-announce-entry{display:flex;flex-direction:column;gap:8px;margin:6px 0}
+/* header placement + professional header recipes (Global Design → header) */
+.rs-studio .r4-header-placement{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.rs-studio .r4-header-placement[aria-busy="true"]{opacity:.65;pointer-events:none}
+.rs-studio .r4-placement-choices{display:flex;flex-wrap:wrap;gap:6px}
+.rs-studio .r4-placement-choice{flex:1 1 30%;min-height:40px;padding:6px 10px;border:1px solid var(--r4-border,#d5dbe6);border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.rs-studio .r4-placement-choice[aria-checked="true"]{border-color:#7c6df0;box-shadow:inset 0 0 0 1px #7c6df0;font-weight:700}
+.rs-studio .r4-placement-choice:disabled{opacity:.5;cursor:not-allowed}
+.rs-studio .r4-placement-choice:focus-visible,.rs-studio .r4-recipe__apply:focus-visible{outline:2px solid #7c6df0;outline-offset:2px}
+.rs-studio .r4-recipe-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.rs-studio .r4-recipe{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--r4-border,#d5dbe6);border-radius:12px}
+.rs-studio .r4-recipe.is-current{border-color:#7c6df0}
+.rs-studio .r4-recipe__text{display:flex;flex-direction:column;gap:2px;flex:1 1 140px;min-width:0}
+.rs-studio .r4-recipe__text small{opacity:.75;font-size:12px;line-height:1.6}
+.rs-studio .r4-recipe__apply{min-height:38px;padding:6px 14px;border-radius:10px;cursor:pointer}
 .rs-studio .r4-announce-image{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fafafc}
 .rs-studio .r4-announce-image-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .rs-studio .r4-announce-thumb{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:40px;padding:0 6px;border:1px dashed #c9ccd6;border-radius:8px;background:#fff;color:var(--muted);font-size:11px}

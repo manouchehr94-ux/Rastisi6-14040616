@@ -1526,10 +1526,10 @@ def _apply_header_set_placement(*, draft: StorefrontLayoutVersion, mutation: dic
     if placement == "independent" and state["stage"] is None:
         return                                            # nothing embeds the header: already independent
     if state["stage"] is None:
-        raise R4MutationError("header_placement_needs_stage")
+        raise R4MutationError("header_placement_needs_stage", payload={"message": f"{header_placement.REASONS['no_stage']} هیچ تغییری ذخیره نشد."})
     if placement != "independent":
         if state["reason"] == "stage_hidden":
-            raise R4MutationError("header_placement_stage_hidden")
+            raise R4MutationError("header_placement_stage_hidden", payload={"message": f"{header_placement.REASONS['stage_hidden']} هیچ تغییری ذخیره نشد."})
         if state["reason"] == "stage_locked":
             raise R4MutationError("section_locked")
     elif state["stage"].is_locked:
