@@ -593,5 +593,8 @@ RASTISI_CONSENT_POLICY_VERSION = env_int("RASTISI_CONSENT_POLICY_VERSION", 1)
 # Google Search Console connection (OAuth + Search Console API: list the seller's properties, submit / read the sitemap). OFF unless the platform owner enables
 # it AND provides an approved OAuth client (consent screen / verification is done in Google Cloud by the owner). Never on in QA; QA uses a fake transport.
 RASTISI_GSC_OAUTH_ENABLED = env_bool("RASTISI_GSC_OAUTH_ENABLED", default=False)
+# Periodic read-only re-checks of pending / unready custom domains (apps.stores.services.domain_autocheck_service). OFF unless the platform owner enables it (it performs real DNS / HTTPS lookups
+# from the server). Never activates a domain and never changes DNS or certificates.
+RASTISI_DOMAIN_AUTOCHECK_ENABLED = env_bool("RASTISI_DOMAIN_AUTOCHECK_ENABLED", default=False)
 RASTISI_GOOGLE_OAUTH_CLIENT_ID = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_ID", "")
 RASTISI_GOOGLE_OAUTH_CLIENT_SECRET = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_SECRET", "")
