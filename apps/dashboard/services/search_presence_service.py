@@ -21,7 +21,8 @@ from urllib.parse import urlsplit
 from django.urls import reverse
 
 from apps.catalog.services.product_publish_service import storefront_listing_products
-from apps.core import indexnow, seo_policy
+from apps.core import automation, indexnow, seo_policy
+from apps.stores.integrations import search_console
 from apps.stores.models import StoreDomain
 from apps.stores.resolution import resolve_storefront_url_for_store
 from apps.stores.services.publication_service import is_publicly_visible
@@ -104,7 +105,7 @@ def _address_state(facts, domain) -> str:
     return ADDRESS_PUBLIC_READY if facts["public_host"] else ADDRESS_NONE
 
 
-def _infrastructure(facts) -> list[dict]:
+def _infrastructure(facts, store=None) -> list[dict]:
     """robots.txt, sitemap, canonical, JSON-LD, the indexability policy and IndexNow — each with its OWN state."""
     if facts["resolve_failed"]:
         wait = ERROR
@@ -137,7 +138,10 @@ def _infrastructure(facts) -> list[dict]:
     elif not facts["verified_custom"]:
         caps.append(_cap("indexnow", "اطلاع‌رسانی IndexNow", UNAVAILABLE, "فقط برای دامنهٔ اختصاصیِ تأییدشده کار می‌کند؛ آدرس رایگان راستی‌سی پوشش داده نمی‌شود."))
     else:
-        caps.append(_cap("indexnow", "اطلاع‌رسانی IndexNow", READY, "با تغییر کالاها، آدرس‌های تغییرکرده به‌عنوان پیشنهاد برای موتورهای شرکت‌کننده ارسال می‌شود؛ ایندکس‌شدن را تضمین نمی‌کند."))
+        last = automation.last_result(store, "indexnow_sync") if store is not None else None
+        tail = "" if not last else (" آخرین ارسال ثبت‌شده: پذیرفته شد." if last["ok"] else " آخرین ارسال ثبت‌شده ناموفق بود و دوباره تلاش می‌شود.")
+        caps.append(_cap("indexnow", "اطلاع‌رسانی IndexNow", READY,
+                         "با تغییر کالاها، آدرس‌های تغییرکرده به‌عنوان پیشنهاد برای موتورهای شرکت‌کننده ارسال می‌شود؛ ایندکس‌شدن را تضمین نمی‌کند." + tail))
     return caps
 
 
@@ -195,10 +199,11 @@ def presence(store, request, domain: dict | None = None) -> dict:
     """The whole of section A as plain data (JSON-safe, no model instances)."""
     facts = _public_facts(store, request)
     address_state = _address_state(facts, domain)
-    caps = _infrastructure(facts)
+    caps = _infrastructure(facts, store)
     action = _next_action(facts, address_state, request, store)
     items, infra = _summary(facts, address_state, caps, action)
     label, tone = ADDRESS_LABELS[address_state]
+    gsc = search_console.status(store)
     origin = facts["origin"]
     sitemap_url = f"{origin}/sitemap.xml" if facts["indexable"] else ""
     return {
@@ -223,8 +228,11 @@ def presence(store, request, domain: dict | None = None) -> dict:
         "counters": _counters(caps),
         "search_console": {
             "title": "مدیریت حضور در گوگل",
-            "auto_connect_available": False,
-            "auto_connect_text": "اتصال خودکار هنوز در دسترس نیست؛ راستی‌سی به حساب Google شما وصل نمی‌شود و وضعیتی از گوگل نمی‌خواند.",
+            "auto_connect_available": gsc["state"] not in ("disabled", "not_configured"),
+            "auto_state": gsc["state"],
+            "auto_label": "اتصال خودکار هنوز در دسترس نیست" if gsc["state"] in ("disabled", "not_configured") else gsc["text"],
+            "auto_connect_text": ("اتصال خودکار هنوز در دسترس نیست؛ راستی‌سی به حساب Google شما وصل نمی‌شود و وضعیتی از گوگل نمی‌خواند."
+                                  if gsc["state"] in ("disabled", "not_configured") else gsc["text"]),
             "sitemap_url": sitemap_url,
             "links": GUIDE_LINKS,
             "waiting_text": "" if facts["indexable"] else "پس از فعال‌شدن آدرس عمومی، آدرس نقشهٔ سایت و راهنمای ثبت اینجا نمایش داده می‌شود.",

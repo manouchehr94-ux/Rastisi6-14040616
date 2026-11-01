@@ -315,3 +315,29 @@ class ServiceGuideTests(PermissionEnforcementTestCase):
         integ.set_credentials({"enamad_id": "221617", "enamad_auth_code": "94MqMPJEnuahlSHjb9kP"})
         integ.save()
         self.assertEqual(self.status_of(self.page(), "enamad"), "نیازمند اقدام مشتری")
+
+
+class PresenceAutomationStatusTests(PermissionEnforcementTestCase):
+    """Section A shows the REAL state of the Search Console layer and of the last automatic IndexNow pass — never an invented 'connected'."""
+
+    def test_search_console_chip_follows_the_real_layer_state(self):
+        public = {"storefront_is_local": False, "custom_domains": []}
+        self.assertEqual(_presence(self.store, published=True, url=PUBLIC_URL, domain=public)["search_console"]["auto_state"], "disabled")
+        with override_settings(RASTISI_GSC_OAUTH_ENABLED=True, RASTISI_GOOGLE_OAUTH_CLIENT_ID="c", RASTISI_GOOGLE_OAUTH_CLIENT_SECRET="s"):
+            p = _presence(self.store, published=True, url=PUBLIC_URL, domain=public)
+        self.assertEqual(p["search_console"]["auto_state"], "not_connected")
+        self.assertTrue(p["search_console"]["auto_connect_available"])
+        self.assertNotIn("متصل است", p["search_console"]["auto_label"])               # never «connected» without a stored grant
+
+    def test_the_last_indexnow_result_is_shown_truthfully(self):
+        from apps.core.models import AuditLogEntry
+        from apps.core.services.audit_service import record_audit_event
+
+        StoreDomain.objects.create(store=self.store, hostname="shop.brand-example.ir", domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN,
+                                   verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(), verification_token="")
+        public = {"storefront_is_local": False, "custom_domains": []}
+        with override_settings(RASTISI_INDEXNOW_ENABLED=True):
+            record_audit_event(store=self.store, action_code="automation.indexnow_sync", metadata={"status": "failed"}, result=AuditLogEntry.ResultStatus.FAILURE)
+            detail = next(c["detail"] for c in _presence(self.store, published=True, url=PUBLIC_URL, domain=public)["capabilities"] if c["key"] == "indexnow")
+        self.assertIn("ناموفق", detail)
+        self.assertNotIn("ایندکس شد", detail)

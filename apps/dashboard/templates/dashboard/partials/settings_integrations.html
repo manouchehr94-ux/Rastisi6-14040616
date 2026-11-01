@@ -67,7 +67,7 @@
       </details>
 
       <details class="int-card" data-testid="presence-search-console">
-        <summary><span class="int-card__title">{{ sp.search_console.title }}</span><span class="int-chip int-chip--off" data-testid="presence-sc-state">اتصال خودکار هنوز در دسترس نیست</span></summary>
+        <summary><span class="int-card__title">{{ sp.search_console.title }}</span><span class="int-chip int-chip--{% if sp.search_console.auto_connect_available %}info{% else %}off{% endif %}" data-testid="presence-sc-state" data-state="{{ sp.search_console.auto_state }}">{{ sp.search_console.auto_label }}</span></summary>
         <div class="int-card__body">
           <ul class="int-points">
             <li>ثبت در Search Console برای ایندکس‌شدن <b>الزامی نیست</b>.</li>
