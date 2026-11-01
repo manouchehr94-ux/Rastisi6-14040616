@@ -168,6 +168,9 @@ def submit(order_id: int, *, store, customer, source_last4, tracking_number) -> 
         object_type="CardTransferSubmission", object_id=submission.pk, object_label=order.code,
         after={"amount": str(order.grand_total), "source_last4": last4, "tracking": tracking}, request_id=f"c2c-submit-{submission.pk}",
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.card_transfer_submitted(submission)
     return submission
 
 

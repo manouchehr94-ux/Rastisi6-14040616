@@ -125,6 +125,17 @@ def decrement_stock_for_order_item(*, store, product, variant, quantity, order, 
         stock_before=stock_before, stock_after=stock_before - quantity,
         order=order, actor=actor,
     )
+    _announce_stock_crossing(store, product, variant, stock_before, stock_before - quantity)
+
+
+def _announce_stock_crossing(store, product, variant, before: int, after: int) -> None:
+    """اعلانِ مدیر فقط هنگامِ عبور از آستانه یا اتمامِ موجودی؛ آستانه: تنظیمِ همان کالا/تنوع، وگرنه مقدارِ پیش‌فرضِ داشبورد."""
+    from apps.dashboard.services.dashboard_service import LOW_STOCK_THRESHOLD
+    from apps.notifications.services import admin_events
+
+    own = getattr(variant, "low_stock_threshold", None) if variant is not None else None
+    threshold = own if own is not None else LOW_STOCK_THRESHOLD
+    admin_events.stock_crossed(store, product, variant, before, after, threshold)
 
 
 def restock_order(*, store, order, actor=None) -> None:

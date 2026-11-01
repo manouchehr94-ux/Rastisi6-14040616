@@ -135,6 +135,9 @@ def check_dns_verification(*, domain: StoreDomain, actor) -> bool:
 
     expected_value = f"{VERIFICATION_VALUE_PREFIX}{domain.verification_token}"
     if not _txt_records_match(domain.hostname, expected_value):
+        from apps.notifications.services import admin_events
+
+        admin_events.domain_verification(domain, False)
         return False
 
     locked = StoreDomain.objects.select_for_update().get(pk=domain.pk)
@@ -146,6 +149,9 @@ def check_dns_verification(*, domain: StoreDomain, actor) -> bool:
         store=locked.store, actor=actor, action_code="store.custom_domain_verified",
         object_type="StoreDomain", object_id=locked.pk, object_label=locked.hostname,
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.domain_verification(locked, True)
     return True
 
 

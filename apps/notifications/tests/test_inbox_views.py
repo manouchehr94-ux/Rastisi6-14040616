@@ -69,7 +69,7 @@ class BellAndPageTests(_V):
         self.assertIn('data-nt-bell', html)
         self.assertIn('data-unread="2"', html)
         self.assertIn('notifications/inbox.js', html)
-        self.assertIn(self.url("notification-summary"), html)
+        self.assertIn(self.url("inbox-summary"), html)
         self.assertEqual(Client(HTTP_HOST=self.host_a).get(self.url("dashboard")).status_code, 302)                      # anonymous: no page, therefore no bell
 
     def test_the_counter_belongs_to_the_user_and_the_store(self):
@@ -80,23 +80,23 @@ class BellAndPageTests(_V):
     def test_inbox_page_lists_filters_and_paginates(self):
         for i in range(25):
             self.ev(dedupe_key=f"p{i}", title=f"اعلان شماره {i}")
-        html = self.client.get(self.url("notification-inbox")).content.decode()
+        html = self.client.get(self.url("inbox-home")).content.decode()
         self.assertEqual(html.count('data-testid="inbox-row"'), svc.PAGE_SIZE)
         self.assertIn("صفحه ۱ از ۲", html)
-        self.assertEqual(self.client.get(self.url("notification-inbox") + "?page=2").content.decode().count('data-testid="inbox-row"'), 5)
-        self.assertEqual(self.client.get(self.url("notification-inbox") + "?q=شماره 7").content.decode().count('data-testid="inbox-row"'), 1)
-        empty = self.client.get(self.url("notification-inbox") + "?q=چیزیکهنیست").content.decode()
+        self.assertEqual(self.client.get(self.url("inbox-home") + "?page=2").content.decode().count('data-testid="inbox-row"'), 5)
+        self.assertEqual(self.client.get(self.url("inbox-home") + "?q=شماره 7").content.decode().count('data-testid="inbox-row"'), 1)
+        empty = self.client.get(self.url("inbox-home") + "?q=چیزیکهنیست").content.decode()
         self.assertIn('data-testid="inbox-empty"', empty)
         self.assertIn("نتیجه‌ای پیدا نشد", empty)
 
     def test_empty_inbox_has_an_explanatory_state(self):
-        html = self.client.get(self.url("notification-inbox")).content.decode()
+        html = self.client.get(self.url("inbox-home")).content.decode()
         self.assertIn('data-testid="inbox-empty"', html)
         self.assertIn("اعلانی نیست", html)
 
     def test_titles_are_escaped_everywhere_no_xss(self):
         self.ev(dedupe_key="x1", title="<script>alert(1)</script>", summary="<img src=x onerror=alert(2)>")
-        for url in (self.url("notification-inbox"), self.url("notification-detail", public_id=self.item().public_id)):
+        for url in (self.url("inbox-home"), self.url("inbox-detail", public_id=self.item().public_id)):
             html = self.client.get(url).content.decode()
             self.assertNotIn("<script>alert(1)</script>", html)
             self.assertNotIn("<img src=x", html)
@@ -104,12 +104,12 @@ class BellAndPageTests(_V):
 
     def test_the_page_never_shows_another_stores_or_users_items(self):
         eng.publish("order.canceled", store=self.other, title="راز فروشگاه دیگر", link_kwargs={"code": "X"})
-        self.assertNotIn("راز فروشگاه دیگر", self.client.get(self.url("notification-inbox")).content.decode())
+        self.assertNotIn("راز فروشگاه دیگر", self.client.get(self.url("inbox-home")).content.decode())
         self._login(self.analyst)
         self.ev(dedupe_key="own")
-        self.assertIn("لغو سفارش DM-1", self.client.get(self.url("notification-inbox")).content.decode())
+        self.assertIn("لغو سفارش DM-1", self.client.get(self.url("inbox-home")).content.decode())
         self._login(self.catalog_manager)
-        self.assertNotIn("لغو سفارش DM-1", self.client.get(self.url("notification-inbox")).content.decode())
+        self.assertNotIn("لغو سفارش DM-1", self.client.get(self.url("inbox-home")).content.decode())
 
 
 class ActionTests(_V):
@@ -119,45 +119,45 @@ class ActionTests(_V):
     def test_actions_persist_and_the_json_mode_returns_the_new_counter(self):
         ev = self.ev(dedupe_key="a1")
         item = self.item(event=ev)
-        r = self.client.post(self.url("notification-action", public_id=item.public_id, action="read"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        r = self.client.post(self.url("inbox-action", public_id=item.public_id, action="read"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.json(), {"ok": True, "unread": 0})
         self.assertIsNotNone(InboxItem.objects.get(pk=item.pk).read_at)
         for action, field in (("pin", "pinned"), ("archive", "archived_at")):
-            self.client.post(self.url("notification-action", public_id=item.public_id, action=action))
+            self.client.post(self.url("inbox-action", public_id=item.public_id, action=action))
             self.assertTrue(getattr(InboxItem.objects.get(pk=item.pk), field))
-        bad = self.client.post(self.url("notification-action", public_id=item.public_id, action="explode"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        bad = self.client.post(self.url("inbox-action", public_id=item.public_id, action="explode"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(bad.status_code, 400)
 
     def test_html_form_post_redirects_back_only_inside_the_inbox(self):
         item = self.item(event=self.ev(dedupe_key="a2"))
-        r = self.client.post(self.url("notification-action", public_id=item.public_id, action="read"), {"next": self.url("notification-inbox") + "?view=unread"})
-        self.assertEqual(r["Location"], self.url("notification-inbox") + "?view=unread")
-        r = self.client.post(self.url("notification-action", public_id=item.public_id, action="unread"), {"next": "https://evil.example/phish"})
-        self.assertEqual(r["Location"], self.url("notification-inbox"))
-        r = self.client.post(self.url("notification-action", public_id=item.public_id, action="unread"), {"next": "/admin-portal/orders/"})
-        self.assertEqual(r["Location"], self.url("notification-inbox"))
+        r = self.client.post(self.url("inbox-action", public_id=item.public_id, action="read"), {"next": self.url("inbox-home") + "?view=unread"})
+        self.assertEqual(r["Location"], self.url("inbox-home") + "?view=unread")
+        r = self.client.post(self.url("inbox-action", public_id=item.public_id, action="unread"), {"next": "https://evil.example/phish"})
+        self.assertEqual(r["Location"], self.url("inbox-home"))
+        r = self.client.post(self.url("inbox-action", public_id=item.public_id, action="unread"), {"next": "/admin-portal/orders/"})
+        self.assertEqual(r["Location"], self.url("inbox-home"))
 
     def test_idor_someone_elses_item_is_404_for_every_action_and_page(self):
         ev = self.ev(dedupe_key="idor")
         theirs = self.item(user=self.administrator, event=ev)
-        self.assertEqual(self.client.post(self.url("notification-action", public_id=theirs.public_id, action="read"), HTTP_X_REQUESTED_WITH="XMLHttpRequest").status_code, 404)
-        self.assertEqual(self.client.get(self.url("notification-detail", public_id=theirs.public_id)).status_code, 404)
-        self.assertEqual(self.client.get(self.url("notification-go", public_id=theirs.public_id)).status_code, 404)
+        self.assertEqual(self.client.post(self.url("inbox-action", public_id=theirs.public_id, action="read"), HTTP_X_REQUESTED_WITH="XMLHttpRequest").status_code, 404)
+        self.assertEqual(self.client.get(self.url("inbox-detail", public_id=theirs.public_id)).status_code, 404)
+        self.assertEqual(self.client.get(self.url("inbox-go", public_id=theirs.public_id)).status_code, 404)
         self.assertIsNone(InboxItem.objects.get(pk=theirs.pk).read_at)
 
     def test_cross_store_member_cannot_read_this_stores_item_even_with_its_uuid(self):
         item = self.item(event=self.ev(dedupe_key="xs"))
         client = Client(HTTP_HOST=self.host_a)                                                    # this store's admin host, but a member of ANOTHER store
         client.force_login(self.other_owner)
-        self.assertIn(client.get(self.url("notification-detail", public_id=item.public_id)).status_code, (302, 403, 404))
+        self.assertIn(client.get(self.url("inbox-detail", public_id=item.public_id)).status_code, (302, 403, 404))
         theirs = Client(HTTP_HOST=self.host_b)                                                    # their own host: the uuid still resolves to nothing
         theirs.force_login(self.other_owner)
-        self.assertEqual(theirs.get(self.url("notification-detail", public_id=item.public_id)).status_code, 404)
+        self.assertEqual(theirs.get(self.url("inbox-detail", public_id=item.public_id)).status_code, 404)
 
     def test_mark_all_read(self):
         for i in range(3):
             self.ev(dedupe_key=f"m{i}")
-        r = self.client.post(self.url("notification-all-read"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        r = self.client.post(self.url("inbox-read-all"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.json()["marked"], 3)
         self.assertEqual(svc.unread_count(self.owner, self.store), 0)
 
@@ -165,33 +165,33 @@ class ActionTests(_V):
         item = self.item(event=self.ev(dedupe_key="csrf"))
         strict = Client(enforce_csrf_checks=True, HTTP_HOST=self.host_a)
         strict.force_login(self.owner)
-        for url in (self.url("notification-action", public_id=item.public_id, action="read"), self.url("notification-all-read"), self.url("notification-test"),
-                    self.url("notification-push-subscribe"), self.url("notification-push-unsubscribe"), self.url("notification-preferences")):
+        for url in (self.url("inbox-action", public_id=item.public_id, action="read"), self.url("inbox-read-all"), self.url("inbox-test"),
+                    self.url("inbox-push-subscribe"), self.url("inbox-push-unsubscribe"), self.url("inbox-preferences")):
             self.assertEqual(strict.post(url, {}).status_code, 403, url)
         self.assertIsNone(InboxItem.objects.get(pk=item.pk).read_at)
 
     def test_get_is_rejected_for_mutations(self):
         item = self.item(event=self.ev(dedupe_key="get"))
-        self.assertEqual(self.client.get(self.url("notification-action", public_id=item.public_id, action="read")).status_code, 405)
-        self.assertEqual(self.client.get(self.url("notification-all-read")).status_code, 405)
+        self.assertEqual(self.client.get(self.url("inbox-action", public_id=item.public_id, action="read")).status_code, 405)
+        self.assertEqual(self.client.get(self.url("inbox-read-all")).status_code, 405)
 
     def test_go_marks_read_and_opens_the_entity_only_when_the_destination_is_permitted(self):
         item = self.item(event=self.ev(dedupe_key="go1"))
-        r = self.client.get(self.url("notification-go", public_id=item.public_id))
+        r = self.client.get(self.url("inbox-go", public_id=item.public_id))
         self.assertEqual(r["Location"], self.url("order-detail", code=self.order.code))
         self.assertIsNotNone(InboxItem.objects.get(pk=item.pk).read_at)
         NotificationEvent.objects.filter(pk=item.event_id).update(link_permission="settings.manage")        # destination needs more than the receiver has
         self._login(self.order_manager)
         mine = self.item(user=self.order_manager, event=item.event)
-        r = self.client.get(self.url("notification-go", public_id=mine.public_id))
-        self.assertEqual(r["Location"], self.url("notification-detail", public_id=mine.public_id))        # not bypassing the destination's permission
+        r = self.client.get(self.url("inbox-go", public_id=mine.public_id))
+        self.assertEqual(r["Location"], self.url("inbox-detail", public_id=mine.public_id))        # not bypassing the destination's permission
         self.assertNotIn("order-detail", r["Location"])
 
     def test_a_stored_link_cannot_become_an_open_redirect(self):
         ev = self.ev(dedupe_key="redir")
         NotificationEvent.objects.filter(pk=ev.pk).update(link_name="https://evil.example/", link_kwargs={})
         item = self.item(event=ev)
-        r = self.client.get(self.url("notification-go", public_id=item.public_id))
+        r = self.client.get(self.url("inbox-go", public_id=item.public_id))
         self.assertTrue(r["Location"].startswith("/admin-portal/"))
         self.assertNotIn("evil.example", r["Location"])
 
@@ -200,14 +200,14 @@ class ActionTests(_V):
         m = StoreMembership.objects.get(user=self.order_manager, store=self.store)
         StoreMembership.objects.filter(pk=m.pk).update(status=StoreMembership.MembershipStatus.REVOKED, revoked_at=timezone.now())
         self._login(self.order_manager)
-        for url in (self.url("notification-inbox"), self.url("notification-summary")):
+        for url in (self.url("inbox-home"), self.url("inbox-summary")):
             self.assertEqual(self.client.get(url).status_code, 302)                                  # staff_required: no active membership ⇒ out
 
 
 class SummaryApiTests(_V):
     def test_summary_is_json_no_store_and_scoped(self):
         self.ev(dedupe_key="s1", title="مهم")
-        r = self.client.get(self.url("notification-summary"))
+        r = self.client.get(self.url("inbox-summary"))
         self.assertEqual(r.status_code, 200)
         self.assertIn("no-store", r["Cache-Control"])
         data = r.json()
@@ -219,38 +219,38 @@ class SummaryApiTests(_V):
 
     def test_toast_once_then_not_again_with_the_cursor(self):
         self.ev(dedupe_key="s2", title="فوری")
-        first = self.client.get(self.url("notification-summary")).json()
+        first = self.client.get(self.url("inbox-summary")).json()
         self.assertEqual(len(first["toasts"]), 1)
-        second = self.client.get(self.url("notification-summary") + f"?since={first['now_ms']}").json()
+        second = self.client.get(self.url("inbox-summary") + f"?since={first['now_ms']}").json()
         self.assertEqual(second["toasts"], [])
 
     def test_anonymous_gets_a_redirect_not_data(self):
-        r = Client(HTTP_HOST=self.host_a).get(self.url("notification-summary"))
+        r = Client(HTTP_HOST=self.host_a).get(self.url("inbox-summary"))
         self.assertEqual(r.status_code, 302)
         self.assertNotIn("application/json", r.get("Content-Type", ""))
 
     def test_a_malformed_cursor_is_ignored(self):
-        self.assertEqual(self.client.get(self.url("notification-summary") + "?since=abc").status_code, 200)
+        self.assertEqual(self.client.get(self.url("inbox-summary") + "?since=abc").status_code, 200)
 
     def test_polling_cost_is_constant_in_queries(self):
         for i in range(12):
             self.ev(dedupe_key=f"q{i}")
         with self.assertNumQueries(self._queries()):
-            self.client.get(self.url("notification-summary"))
+            self.client.get(self.url("inbox-summary"))
 
     def _queries(self):
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
         with CaptureQueriesContext(connection) as ctx:
-            self.client.get(self.url("notification-summary"))
+            self.client.get(self.url("inbox-summary"))
         self.assertLessEqual(len(ctx), 14)
         return len(ctx)
 
 
 class PreferenceTests(_V):
     def test_save_and_reload_persists_per_user_and_scope(self):
-        r = self.client.post(self.url("notification-preferences"), {"toast_enabled": "", "mute_low": "1", "min_toast_severity": "4", "categories": ["orders", "security"], "browser_enabled": "1"})
+        r = self.client.post(self.url("inbox-preferences"), {"toast_enabled": "", "mute_low": "1", "min_toast_severity": "4", "categories": ["orders", "security"], "browser_enabled": "1"})
         self.assertEqual(r.status_code, 302)
         pref = NotificationPreference.objects.get(user=self.owner, scope_key=S.key_for(self.store))
         self.assertFalse(pref.toast_enabled)
@@ -260,22 +260,22 @@ class PreferenceTests(_V):
         self.assertNotIn("orders", pref.disabled_categories)
         self.assertNotIn("security", pref.disabled_categories)                                    # security can never be switched off
         self.assertFalse(NotificationPreference.objects.filter(user=self.administrator).exists())
-        page = self.client.get(self.url("notification-preferences")).content.decode()
+        page = self.client.get(self.url("inbox-preferences")).content.decode()
         self.assertIn('data-testid="prefs-form"', page)
 
     def test_only_categories_the_user_may_receive_are_offered(self):
         self._login(self.content_editor)
-        page = self.client.get(self.url("notification-preferences")).content.decode()
+        page = self.client.get(self.url("inbox-preferences")).content.decode()
         self.assertIn('data-cat="customers"', page)                                              # review.pending (CONTENT_MANAGE)
         self.assertNotIn('data-cat="finance"', page)
         self.assertNotIn('data-cat="security"', page)
 
     def test_invalid_severity_input_is_ignored(self):
-        self.client.post(self.url("notification-preferences"), {"min_toast_severity": "999", "categories": ["orders"]})
+        self.client.post(self.url("inbox-preferences"), {"min_toast_severity": "999", "categories": ["orders"]})
         self.assertEqual(NotificationPreference.objects.get(user=self.owner).min_toast_severity, 3)
 
     def test_the_page_states_email_and_mobile_are_not_active(self):
-        page = self.client.get(self.url("notification-preferences")).content.decode()
+        page = self.client.get(self.url("inbox-preferences")).content.decode()
         self.assertIn("به‌زودی", page)
         self.assertNotIn("name=\"email_enabled\"", page)
 
@@ -286,26 +286,26 @@ class PreferenceTests(_V):
 
 class PushEndpointTests(_V):
     def sub(self, payload=None, **kw):
-        return self.client.post(self.url("notification-push-subscribe"), data=json.dumps(payload or VALID_SUB), content_type="application/json", **kw)
+        return self.client.post(self.url("inbox-push-subscribe"), data=json.dumps(payload or VALID_SUB), content_type="application/json", **kw)
 
     def test_subscribe_validates_registers_and_unsubscribes(self):
         self.assertEqual(self.sub().status_code, 200)
         self.assertEqual(WebPushSubscription.objects.filter(user=self.owner, revoked_at__isnull=True).count(), 1)
         self.assertEqual(self.sub({"endpoint": "https://evil.example/x", "keys": VALID_SUB["keys"]}).status_code, 400)
         self.assertEqual(self.sub({"endpoint": "http://fcm.googleapis.com/x", "keys": VALID_SUB["keys"]}).status_code, 400)
-        r = self.client.post(self.url("notification-push-unsubscribe"), data=json.dumps({"endpoint": VALID_SUB["endpoint"]}), content_type="application/json")
+        r = self.client.post(self.url("inbox-push-unsubscribe"), data=json.dumps({"endpoint": VALID_SUB["endpoint"]}), content_type="application/json")
         self.assertEqual(r.json()["revoked"], 1)
 
     def test_subscribe_requires_login_and_garbage_is_a_400(self):
-        self.assertEqual(Client(HTTP_HOST=self.host_a).post(self.url("notification-push-subscribe"), data="{}", content_type="application/json").status_code, 302)
-        r = self.client.post(self.url("notification-push-subscribe"), data="not json", content_type="application/json")
+        self.assertEqual(Client(HTTP_HOST=self.host_a).post(self.url("inbox-push-subscribe"), data="{}", content_type="application/json").status_code, 302)
+        r = self.client.post(self.url("inbox-push-subscribe"), data="not json", content_type="application/json")
         self.assertEqual(r.status_code, 400)
 
     def test_form_removal_of_a_device_cannot_touch_someone_elses(self):
         self.sub()
         mine = WebPushSubscription.objects.get(user=self.owner)
         self._login(self.administrator)
-        self.client.post(self.url("notification-push-unsubscribe"), {"device": mine.pk})
+        self.client.post(self.url("inbox-push-unsubscribe"), {"device": mine.pk})
         mine.refresh_from_db()
         self.assertIsNone(mine.revoked_at)
 
@@ -315,7 +315,7 @@ class PushEndpointTests(_V):
 
     def test_the_stored_endpoint_never_appears_in_any_page_or_api_response(self):
         self.sub()
-        pages = [self.client.get(self.url(n)).content.decode() for n in ("notification-preferences", "notification-inbox", "notification-summary")]
+        pages = [self.client.get(self.url(n)).content.decode() for n in ("inbox-preferences", "inbox-home", "inbox-summary")]
         for body in pages:
             self.assertNotIn("abc123", body)
             self.assertNotIn(VALID_SUB["keys"]["auth"], body)
@@ -324,27 +324,27 @@ class PushEndpointTests(_V):
 class TestNotificationAndWorkerFileTests(_V):
     def test_the_test_notification_goes_to_the_requester_only_and_is_visible_even_if_the_category_is_off(self):
         NotificationPreference.objects.create(user=self.owner, scope_key=S.key_for(self.store), disabled_categories=["system"])
-        r = self.client.post(self.url("notification-test"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        r = self.client.post(self.url("inbox-test"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.json(), {"ok": True})
         self.assertEqual(svc.unread_count(self.owner, self.store), 1)
         self.assertEqual(svc.unread_count(self.administrator, self.store), 0)
         self.assertEqual(svc.summary(self.owner, self.store)["toasts"][0]["title"], "اعلان آزمایشی")
 
     def test_the_test_notification_is_rate_limited(self):
-        codes = [self.client.post(self.url("notification-test"), HTTP_X_REQUESTED_WITH="XMLHttpRequest").status_code for _ in range(12)]
+        codes = [self.client.post(self.url("inbox-test"), HTTP_X_REQUESTED_WITH="XMLHttpRequest").status_code for _ in range(12)]
         self.assertEqual(codes[:10], [200] * 10)
         self.assertIn(429, codes[10:])
 
     def test_service_worker_is_served_with_scope_header_and_receives_no_payload_logic(self):
-        r = self.client.get(self.url("notification-sw"))
+        r = self.client.get(self.url("inbox-sw"))
         self.assertEqual(r.status_code, 200)
         self.assertIn("javascript", r["Content-Type"])
         self.assertEqual(r["Service-Worker-Allowed"], "/admin-portal/")
         body = r.content.decode()
-        self.assertIn(self.url("notification-summary"), body)
+        self.assertIn(self.url("inbox-summary"), body)
         self.assertNotIn("__SUMMARY_URL__", body)
         self.assertNotIn("event.data", body)                                                      # nothing is read from the push payload
-        self.assertEqual(Client(HTTP_HOST=self.host_a).get(self.url("notification-sw")).status_code, 302)
+        self.assertEqual(Client(HTTP_HOST=self.host_a).get(self.url("inbox-sw")).status_code, 302)
 
     def test_management_commands_run_and_are_safe_with_flags_off(self):
         from django.core.management import call_command
@@ -373,33 +373,80 @@ class PlatformScopeTests(_V):
     def test_platform_staff_sees_platform_events_with_a_bell_and_a_store_owner_gets_a_404(self):
         eng.publish("platform.store_created", title="فروشگاه تازه")
         staff = self.c(self.platform)
-        page = staff.get(self.purl("notification-inbox"))
+        page = staff.get(self.purl("inbox-home"))
         self.assertEqual(page.status_code, 200)
         self.assertIn("فروشگاه تازه", page.content.decode())
         home = staff.get(self.purl("home")).content.decode()
         self.assertIn("data-nt-bell", home)
-        self.assertEqual(self.c(self.owner).get(self.purl("notification-inbox")).status_code, 404)
-        self.assertEqual(self.c(self.owner).get(self.purl("notification-summary")).status_code, 404)
+        self.assertEqual(self.c(self.owner).get(self.purl("inbox-home")).status_code, 404)
+        self.assertEqual(self.c(self.owner).get(self.purl("inbox-summary")).status_code, 404)
 
     def test_platform_items_are_invisible_in_store_panels_and_vice_versa(self):
         eng.publish("platform.store_created", title="فقط پلتفرم")
         self.ev(dedupe_key="pv", title="فقط فروشگاه")
-        self.assertNotIn("فقط پلتفرم", self.client.get(self.url("notification-inbox")).content.decode())
-        self.assertNotIn("فقط فروشگاه", self.c(self.platform).get(self.purl("notification-inbox")).content.decode())
+        self.assertNotIn("فقط پلتفرم", self.client.get(self.url("inbox-home")).content.decode())
+        self.assertNotIn("فقط فروشگاه", self.c(self.platform).get(self.purl("inbox-home")).content.decode())
         self.assertEqual(svc.unread_count(self.platform, None), 1)
 
     def test_platform_item_ids_cannot_be_used_from_a_store_panel(self):
         eng.publish("platform.store_created", title="x")
         item = InboxItem.objects.get(user=self.platform)
-        self.assertEqual(self.client.get(self.url("notification-detail", public_id=item.public_id)).status_code, 404)
+        self.assertEqual(self.client.get(self.url("inbox-detail", public_id=item.public_id)).status_code, 404)
 
     def test_platform_preferences_do_not_touch_store_preferences(self):
-        self.c(self.platform).post(self.purl("notification-preferences"), {"toast_enabled": "1", "categories": ["system"]})
+        self.c(self.platform).post(self.purl("inbox-preferences"), {"toast_enabled": "1", "categories": ["system"]})
         self.assertTrue(NotificationPreference.objects.filter(user=self.platform, scope_key="platform").exists())
         self.assertFalse(NotificationPreference.objects.filter(user=self.platform, scope_key__startswith="store:").exists())
 
     def test_platform_test_notification_and_sw_scope(self):
         staff = self.c(self.platform)
-        self.assertEqual(staff.post(self.purl("notification-test"), HTTP_X_REQUESTED_WITH="XMLHttpRequest").status_code, 200)
+        self.assertEqual(staff.post(self.purl("inbox-test"), HTTP_X_REQUESTED_WITH="XMLHttpRequest").status_code, 200)
         self.assertEqual(svc.unread_count(self.platform, None), 1)
-        self.assertEqual(staff.get(self.purl("notification-sw"))["Service-Worker-Allowed"], "/")
+        self.assertEqual(staff.get(self.purl("inbox-sw"))["Service-Worker-Allowed"], "/")
+
+
+class ScriptContractTests(PermissionEnforcementTestCase):
+    """inbox.js / sw.js run in the browser (exercised in Chromium — see the QA report); these pin the invariants that must never regress."""
+
+    @classmethod
+    def _read(cls, name):
+        from pathlib import Path
+
+        return (Path(__file__).resolve().parents[1] / "static" / "notifications" / name).read_text(encoding="utf-8")
+
+    def test_inbox_js_builds_dom_safely_and_polls_responsibly(self):
+        js = self._read("inbox.js")
+        for forbidden in ("innerHTML", "outerHTML", "document.write", "eval(", "insertAdjacentHTML", "new Function"):
+            self.assertNotIn(forbidden, js)
+        self.assertIn("textContent", js)
+        self.assertIn("document.hidden", js)                       # no polling from a hidden tab
+        self.assertIn("BroadcastChannel", js)                      # multi-tab coordination
+        self.assertIn("Math.min(delay * 2, 300)", js)              # exponential backoff on errors, capped
+        self.assertIn("user_key", js)                              # account-switch guard
+        self.assertIn("window.location.reload()", js)
+        self.assertNotIn("localStorage.setItem('nt_unread", js)    # read/unread state lives in the database, never in the browser
+        self.assertIn("requestPermission", js)                     # permission only from an explicit click
+        self.assertEqual(js.count("requestPermission"), 1)
+
+    def test_permission_is_requested_only_inside_a_click_handler(self):
+        js = self._read("inbox.js")
+        before = js[: js.index("requestPermission")]
+        self.assertIn("enable.addEventListener('click'", before[-400:])
+
+    def test_service_worker_never_reads_a_push_payload_and_only_opens_same_site_paths(self):
+        sw = self._read("sw.js")
+        self.assertNotIn("event.data", sw)
+        self.assertNotIn("innerHTML", sw)
+        self.assertIn("target.charAt(0) !== '/'", sw)
+        self.assertIn("credentials: 'same-origin'", sw)
+        self.assertIn("if (!item) return;", sw)                   # nothing unread ⇒ no OS notification
+
+    def test_templates_do_not_inline_user_content_into_scripts(self):
+        from pathlib import Path
+
+        tpl = Path(__file__).resolve().parents[1] / "templates" / "notifications"
+        for path in tpl.rglob("*.html"):
+            body = path.read_text(encoding="utf-8")
+            self.assertNotIn("|safe", body, path.name)
+            self.assertNotIn("mark_safe", body, path.name)
+            self.assertNotIn("{% autoescape off", body, path.name)

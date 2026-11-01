@@ -159,19 +159,27 @@ def enter_grace_period(subscription, *, actor=None, grace_end=None, idempotency_
 
 @transaction.atomic
 def mark_past_due(subscription, *, actor=None, idempotency_key="") -> StoreSubscription:
-    return _transition(
+    result = _transition(
         subscription, to_status=S.PAST_DUE, event_type=ET.PAST_DUE, actor=actor,
         reason="", idempotency_key=idempotency_key,
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.subscription_state(result, "past_due")
+    return result
 
 
 @transaction.atomic
 def suspend_subscription(subscription, *, actor=None, reason="", idempotency_key="") -> StoreSubscription:
-    return _transition(
+    result = _transition(
         subscription, to_status=S.SUSPENDED, event_type=ET.SUSPENDED, actor=actor,
         reason=reason, idempotency_key=idempotency_key,
         extra_fields={"suspended_at": timezone.now()},
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.subscription_state(result, "suspended")
+    return result
 
 
 @transaction.atomic

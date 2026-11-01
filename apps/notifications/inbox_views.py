@@ -74,9 +74,9 @@ def _url(c, name, **kw):
 
 def _back(request, c):
     nxt = request.POST.get("next", "")
-    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()) and nxt.startswith(_url(c, "notification-inbox")):
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()) and nxt.startswith(_url(c, "inbox-home")):
         return redirect(nxt)
-    return redirect(_url(c, "notification-inbox"))
+    return redirect(_url(c, "inbox-home"))
 
 
 def bell_context(request, site) -> dict:
@@ -91,7 +91,7 @@ def bell_context(request, site) -> dict:
     from django.conf import settings
 
     return {"nt_bell": {
-        "summary_url": reverse(f"{site.ns}:notification-summary"), "inbox_url": reverse(f"{site.ns}:notification-inbox"),
+        "summary_url": reverse(f"{site.ns}:inbox-summary"), "inbox_url": reverse(f"{site.ns}:inbox-home"), "prefs_url": reverse(f"{site.ns}:inbox-preferences"),
         "poll_seconds": max(15, int(getattr(settings, "RASTISI_NOTIF_POLL_SECONDS", 30))), "user_key": f"{request.user.pk}:{S.key_for(store)}",
         "unread": svc.unread_count(request.user, store), "ns": site.ns,
     }}
@@ -115,7 +115,7 @@ def build(site):
             "views": [("", "فعال"), ("unread", "خوانده‌نشده"), ("pinned", "سنجاق‌شده"), ("snoozed", "به‌تعویق‌افتاده"), ("archived", "بایگانی")],
             "ranges": [("", "همه‌ی زمان‌ها"), ("1", "۲۴ ساعت اخیر"), ("7", "۷ روز اخیر"), ("30", "۳۰ روز اخیر"), ("90", "۹۰ روز اخیر")],
             "severities": [(str(v), l) for v, l in Severity.choices], "snoozes": [("1h", "یک ساعت"), ("4h", "چهار ساعت"), ("tomorrow", "تا فردا"), ("week", "یک هفته")],
-            "active_nav": "notifications", "nt_urls": {"inbox": _url(c, "notification-inbox"), "prefs": _url(c, "notification-preferences"), "all_read": _url(c, "notification-all-read")},
+            "active_nav": "notifications", "nt_urls": {"inbox": _url(c, "inbox-home"), "prefs": _url(c, "inbox-preferences"), "all_read": _url(c, "inbox-read-all")},
         })
 
     @guard
@@ -142,8 +142,8 @@ def build(site):
         link = svc.resolve_link(item.event, site.ns) if S.can_open_link(c.user, item.event) else ""
         return render(request, "notifications/detail.html", {
             "base_template": site.base, "site": site, "item": item, "event": item.event, "link": link, "severity_label": svc.SEVERITY_LABELS[item.event.severity],
-            "tone": svc.SEVERITY_TONES[item.event.severity], "category_label": R.category_label(item.event.category), "inbox_url": _url(c, "notification-inbox"),
-            "go_url": _url(c, "notification-go", public_id=item.public_id), "active_nav": "notifications",
+            "tone": svc.SEVERITY_TONES[item.event.severity], "category_label": R.category_label(item.event.category), "inbox_url": _url(c, "inbox-home"),
+            "go_url": _url(c, "inbox-go", public_id=item.public_id), "active_nav": "notifications",
         })
 
     @guard
@@ -182,7 +182,7 @@ def build(site):
         target = svc.resolve_link(item.event, site.ns) if S.can_open_link(c.user, item.event) else ""
         if not target:
             messages.info(request, "دسترسیِ لازم برای صفحه‌ی مرتبط را ندارید یا این صفحه دیگر وجود ندارد.")
-            return redirect(_url(c, "notification-detail", public_id=item.public_id))
+            return redirect(_url(c, "inbox-detail", public_id=item.public_id))
         return redirect(target)
 
     @guard
@@ -203,7 +203,7 @@ def build(site):
             pref.disabled_categories = [k for k, _v, _h in categories if k not in enabled and k not in R.ALWAYS_INBOX_CATEGORIES]
             pref.save()
             messages.success(request, "تنظیمات اعلان‌ها ذخیره شد.")
-            return redirect(_url(c, "notification-preferences"))
+            return redirect(_url(c, "inbox-preferences"))
         devices = WebPushSubscription.objects.filter(user=c.user, scope_key=c.scope_key, revoked_at__isnull=True).order_by("-last_seen_at")
         from django.conf import settings
 
@@ -211,8 +211,8 @@ def build(site):
             "base_template": site.base, "site": site, "pref": pref, "categories": categories, "disabled": set(pref.disabled_categories or []),
             "always": R.ALWAYS_INBOX_CATEGORIES, "devices": devices, "severities": [(v, l) for v, l in Severity.choices if v >= 2],
             "push": {"enabled": bool(getattr(settings, "RASTISI_NOTIF_WEBPUSH_ENABLED", False)), "configured": webpush.is_configured(), "public_key": webpush.public_key_b64u(),
-                     "subscribe_url": _url(c, "notification-push-subscribe"), "unsubscribe_url": _url(c, "notification-push-unsubscribe"), "sw_url": _url(c, "notification-sw")},
-            "test_url": _url(c, "notification-test"), "inbox_url": _url(c, "notification-inbox"), "scope_label": "پلتفرم راستی‌سی" if site.platform else request.store.name,
+                     "subscribe_url": _url(c, "inbox-push-subscribe"), "unsubscribe_url": _url(c, "inbox-push-unsubscribe"), "sw_url": _url(c, "inbox-sw")},
+            "test_url": _url(c, "inbox-test"), "inbox_url": _url(c, "inbox-home"), "scope_label": "پلتفرم راستی‌سی" if site.platform else request.store.name,
             "active_nav": "notifications",
         })
 
@@ -243,7 +243,7 @@ def build(site):
         if _wants_json(request) or request.content_type == "application/json":
             return JsonResponse({"ok": True, "revoked": n})
         messages.success(request, "دستگاه حذف شد." if n else "دستگاهی پیدا نشد.")
-        return redirect(_url(c, "notification-preferences"))
+        return redirect(_url(c, "inbox-preferences"))
 
     @guard
     @require_POST
@@ -258,7 +258,7 @@ def build(site):
         if _wants_json(request):
             return JsonResponse({"ok": True})
         messages.success(request, "اعلان آزمایشی ارسال شد؛ باید در زنگ بالای صفحه دیده شود.")
-        return redirect(_url(c, "notification-preferences"))
+        return redirect(_url(c, "inbox-preferences"))
 
     @guard
     @require_GET
@@ -269,16 +269,16 @@ def build(site):
         if not path:
             raise Http404
         with open(path, encoding="utf-8") as fh:
-            body = fh.read().replace("__SUMMARY_URL__", reverse(f"{site.ns}:notification-summary")).replace("__INBOX_URL__", reverse(f"{site.ns}:notification-inbox"))
+            body = fh.read().replace("__SUMMARY_URL__", reverse(f"{site.ns}:inbox-summary")).replace("__INBOX_URL__", reverse(f"{site.ns}:inbox-home"))
         response = HttpResponse(body, content_type="application/javascript; charset=utf-8")
         response["Service-Worker-Allowed"] = "/admin-portal/" if not site.platform else "/"
         response["Cache-Control"] = "no-cache"
         return response
 
     return {
-        "notification-inbox": inbox_page, "notification-summary": summary_api, "notification-detail": detail_page, "notification-action": item_action,
-        "notification-all-read": all_read, "notification-go": go, "notification-preferences": preferences, "notification-push-subscribe": push_subscribe,
-        "notification-push-unsubscribe": push_unsubscribe, "notification-test": send_test, "notification-sw": service_worker,
+        "inbox-home": inbox_page, "inbox-summary": summary_api, "inbox-detail": detail_page, "inbox-action": item_action,
+        "inbox-read-all": all_read, "inbox-go": go, "inbox-preferences": preferences, "inbox-push-subscribe": push_subscribe,
+        "inbox-push-unsubscribe": push_unsubscribe, "inbox-test": send_test, "inbox-sw": service_worker,
     }
 
 
@@ -296,15 +296,15 @@ def url_patterns(views: dict):
 
     v = views
     return [
-        path("inbox/", v["notification-inbox"], name="notification-inbox"),
-        path("inbox/api/summary/", v["notification-summary"], name="notification-summary"),
-        path("inbox/read-all/", v["notification-all-read"], name="notification-all-read"),
-        path("inbox/preferences/", v["notification-preferences"], name="notification-preferences"),
-        path("inbox/push/subscribe/", v["notification-push-subscribe"], name="notification-push-subscribe"),
-        path("inbox/push/unsubscribe/", v["notification-push-unsubscribe"], name="notification-push-unsubscribe"),
-        path("inbox/test/", v["notification-test"], name="notification-test"),
-        path("inbox/sw.js", v["notification-sw"], name="notification-sw"),
-        path("inbox/<uuid:public_id>/", v["notification-detail"], name="notification-detail"),
-        path("inbox/<uuid:public_id>/go/", v["notification-go"], name="notification-go"),
-        path("inbox/<uuid:public_id>/<slug:action>/", v["notification-action"], name="notification-action"),
+        path("inbox/", v["inbox-home"], name="inbox-home"),
+        path("inbox/api/summary/", v["inbox-summary"], name="inbox-summary"),
+        path("inbox/read-all/", v["inbox-read-all"], name="inbox-read-all"),
+        path("inbox/preferences/", v["inbox-preferences"], name="inbox-preferences"),
+        path("inbox/push/subscribe/", v["inbox-push-subscribe"], name="inbox-push-subscribe"),
+        path("inbox/push/unsubscribe/", v["inbox-push-unsubscribe"], name="inbox-push-unsubscribe"),
+        path("inbox/test/", v["inbox-test"], name="inbox-test"),
+        path("inbox/sw.js", v["inbox-sw"], name="inbox-sw"),
+        path("inbox/<uuid:public_id>/", v["inbox-detail"], name="inbox-detail"),
+        path("inbox/<uuid:public_id>/go/", v["inbox-go"], name="inbox-go"),
+        path("inbox/<uuid:public_id>/<slug:action>/", v["inbox-action"], name="inbox-action"),
     ]

@@ -227,7 +227,10 @@ def contact(request):
         if form.is_valid() and _turnstile_form_is_valid(
             request, form, action="contact"
         ):
-            ContactMessage.objects.create(**form.cleaned_data)
+            message = ContactMessage.objects.create(**form.cleaned_data)
+            from apps.notifications.services import admin_events
+
+            admin_events.platform_contact_message(message)
             messages.success(request, "پیام شما دریافت شد؛ به‌زودی با شما تماس می‌گیریم.")
             return redirect("portal:contact")
     else:

@@ -422,7 +422,12 @@ PALETTE_EXTRAS: tuple = (
 )
 
 # Dashboard URL names that are not navigable pages (auth/handoff plumbing).
-NON_NAVIGATIONAL_URL_NAMES = frozenset({"login", "handoff", "exit-support-mode"})
+NON_NAVIGATIONAL_URL_NAMES = frozenset({
+    "login", "handoff", "exit-support-mode",
+    # صندوق اعلانِ مدیر: مقصدِ زنگِ Header (نه یک تبِ بخش‌ها) — apps.notifications.inbox_views
+    "inbox-home", "inbox-summary", "inbox-detail", "inbox-action", "inbox-read-all", "inbox-go", "inbox-preferences",
+    "inbox-push-subscribe", "inbox-push-unsubscribe", "inbox-test", "inbox-sw",
+})
 
 
 # --------------------------------------------------------------------------- #

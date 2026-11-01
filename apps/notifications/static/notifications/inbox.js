@@ -1,4 +1,4 @@
-/* زنگ/Toast/Polling اعلانِ مدیران — بدونِ وابستگی، بدونِ innerHTML (همه‌چیز با textContent/DOM API).
+/* زنگ/Toast/Polling اعلانِ مدیران — بدونِ وابستگی، بدونِ تزریقِ HTML (همه‌چیز با textContent/DOM API).
    * Polling کنترل‌شده: فقط تبِ قابل‌مشاهده، فقط «تبِ رهبر» (چندتبی)، backoff روی خطا، کندتر شدن در نبودِ تغییر، توقف در خروج/تغییرِ کاربر.
    * Toast: هر اعلان در همه‌ی تب‌ها فقط یک‌بار (BroadcastChannel + localStorage کلیددار به کاربر)؛ وضعیتِ خوانده‌شدن همیشه از سرور است (نه localStorage). */
 (function () {

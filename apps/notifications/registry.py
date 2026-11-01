@@ -81,8 +81,10 @@ EVENT_TYPES: dict[str, EventType] = _t(
     # ---------------------------------------------------------------- کالا و موجودی
     EventType("import.failed", "خطا در ورود گروهی", "catalog", IMPORTANT, permission=A.IMPORT_EXPORT_VIEW, link_name="import-detail",
               source="dashboard.import_service (وضعیت FAILED / COMPLETED_WITH_ERRORS)"),
+    EventType("stock.out", "اتمام موجودی", "catalog", IMPORTANT, permission=A.INVENTORY_MANAGE, link_name="inventory-list", groupable=True,
+              source="catalog.inventory_service.decrement_stock_for_order_item (رسیدن به صفر)"),
     EventType("stock.low", "موجودی کم", "catalog", IMPORTANT, permission=A.INVENTORY_MANAGE, link_name="inventory-list", groupable=True,
-              source="orders.order_service (کاهش موجودی تا زیر آستانه‌ی «low_stock_threshold»)"),
+              source="catalog.inventory_service.decrement_stock_for_order_item (عبور از آستانه‌ی low_stock_threshold)"),
     # ---------------------------------------------------------------- مشتریان
     EventType("review.pending", "نظر جدید نیازمند بررسی", "customers", NORMAL, permission=A.CONTENT_MANAGE, link_name="dashboard", groupable=True,
               source="catalog.views.product_review_submit → business_events.review_created"),
@@ -105,7 +107,7 @@ EVENT_TYPES: dict[str, EventType] = _t(
     EventType("integration.sync_failed", "خطا در عملیات خودکار SEO/IndexNow", "integrations", IMPORTANT, permission=A.SETTINGS_MANAGE, link_name="settings",
               groupable=True, source="core.automation.run (نتیجه‌ی FAILED با کدِ خطا)"),
     # ---------------------------------------------------------------- سیستمی
-    EventType("system.test", "اعلان آزمایشی", "system", NORMAL, link_name="notification-inbox", urgent=True, retention_days=7,
+    EventType("system.test", "اعلان آزمایشی", "system", NORMAL, link_name="inbox-home", urgent=True, retention_days=7,
               source="inbox_views.send_test (فقط به خودِ درخواست‌دهنده)"),
     # ================================================================ پلتفرم
     EventType("platform.store_created", "فروشگاه جدید ساخته شد", "account", NORMAL, scope=PLATFORM, link_name="stores",
@@ -116,7 +118,7 @@ EVENT_TYPES: dict[str, EventType] = _t(
               source="portal.views.contact (ContactMessage)"),
     EventType("platform.jobs_unhealthy", "هشدار عملیاتی: کارهای زمان‌بندی‌شده", "infra", CRITICAL, scope=PLATFORM, link_name="home",
               source="core.management.commands.check_background_jobs (سطح CRITICAL)"),
-    EventType("platform.test", "اعلان آزمایشی پلتفرم", "system", NORMAL, scope=PLATFORM, link_name="notification-inbox", urgent=True, retention_days=7,
+    EventType("platform.test", "اعلان آزمایشی پلتفرم", "system", NORMAL, scope=PLATFORM, link_name="inbox-home", urgent=True, retention_days=7,
               source="inbox_views.send_test"),
 )
 

@@ -118,6 +118,10 @@ def run(operation: str, store, fn: Callable[[bool], dict | None], *, enabled: bo
             metadata=result.as_metadata(), request_id=request_id,
             result=AuditLogEntry.ResultStatus.SUCCESS if result.status == DONE else AuditLogEntry.ResultStatus.FAILURE,
         )
+    if result.status == FAILED and record:
+        from apps.notifications.services import admin_events
+
+        admin_events.automation_failed(store, operation, result.reason)
     return result
 
 

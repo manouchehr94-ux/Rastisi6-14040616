@@ -1429,6 +1429,9 @@ def _finalize_rollback(job, rows, executed, *, actor, detail: str):
     job.completed_at = timezone.now()
     job.save(update_fields=_JOB_COUNTER_FIELDS)
     _generate_error_report(job)
+    from apps.notifications.services import admin_events
+
+    admin_events.import_failed(job)
     record_audit_event(
         store=job.store, actor=actor, action_code="import.execution_rolled_back",
         object_type="ImportJob", object_id=str(job.pk),

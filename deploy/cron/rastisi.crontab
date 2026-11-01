@@ -11,6 +11,11 @@ JOB=/srv/rastisi/deploy/cron/run_job.sh
 
 # notifications: deliver queued e-mail/SMS (store method routing happens inside) — every 5 minutes
 */5  * * * *  $JOB outbox        process_notification_outbox --limit 200
+# admin inbox: deliver queued external channels (Web Push / e-mail / mobile). Every channel is OFF by default (RASTISI_NOTIF_*_ENABLED) — with all flags off this is a no-op that only marks rows "skipped". Not installed by the repository.
+*/5  * * * *  $JOB inbox_delivery process_inbox_deliveries --limit 200
+# admin inbox retention (expired events and their per-user rows; pinned items stay) — daily
+45   3 * * *  $JOB inbox_prune     prune_notifications
+
 # campaigns + occasions (birthday etc.) → queue only; delivery is the outbox job above — hourly
 15   * * * *  $JOB engagement    run_engagement_jobs --no-deliver
 # inventory reservations — every 10 minutes

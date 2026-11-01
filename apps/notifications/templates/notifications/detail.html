@@ -4,7 +4,7 @@
 {% block page_title %}جزئیات اعلان{% endblock %}
 {% block page_sub %}{{ category_label }}{% endblock %}
 {% block content %}
-<div class="nt-page" data-testid="notification-detail">
+<div class="nt-page" data-testid="inbox-detail">
   <p><a class="nt-link" href="{{ inbox_url }}">← بازگشت به صندوق</a></p>
   {% if messages %}{% for m in messages %}<p class="nt-note" role="status">{{ m }}</p>{% endfor %}{% endif %}
   <article class="nt-card nt-row--{{ tone }}">
