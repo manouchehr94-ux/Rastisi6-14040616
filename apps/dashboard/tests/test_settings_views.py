@@ -463,14 +463,16 @@ import shutil
 
 from django.test import override_settings
 
-_TEMP_MEDIA_DIR = tempfile.mkdtemp()
+class IsolatedMediaMixin:
+    """Every TEST gets its own empty MEDIA_ROOT (a fresh temp dir, removed afterwards). The previous module-level ``mkdtemp()`` ran at import — before ``--parallel`` forked —
+    so all workers shared ONE directory and a sibling's cleanup could delete a file another worker had just saved (FaviconUploadTests.test_replacement_saves_new flake).
+    Test-only: the real upload/storage logic is unchanged."""
 
-
-def _clear_temp_media_dir():
-    """Empty the shared temp media dir. ``mkdtemp()`` runs at import, i.e. BEFORE ``--parallel`` forks, so every worker uses this same directory:
-    a sibling worker (or a thread of the «simultaneous» test) may remove entries between ``listdir`` and the delete — that race is not a failure."""
-    shutil.rmtree(_TEMP_MEDIA_DIR, ignore_errors=True)
-    os.makedirs(_TEMP_MEDIA_DIR, exist_ok=True)
+    def setUp(self):
+        super().setUp()
+        media_root = tempfile.mkdtemp(prefix=f"rs-media-{os.getpid()}-")
+        self.addCleanup(shutil.rmtree, media_root, ignore_errors=True)
+        self.enterContext(override_settings(MEDIA_ROOT=media_root))
 
 
 def _make_image(fmt='PNG', size=(100, 100)):
@@ -485,13 +487,8 @@ def _make_image(fmt='PNG', size=(100, 100)):
     return SimpleUploadedFile(f'test.{ext}', buf.getvalue(), content_type=ct)
 
 
-@override_settings(MEDIA_ROOT=_TEMP_MEDIA_DIR)
-class LogoUploadTests(SettingsViewsTestCase):
+class LogoUploadTests(IsolatedMediaMixin, SettingsViewsTestCase):
     """Complete logo upload lifecycle tests with isolated media."""
-
-    def tearDown(self):
-        # Clean temp files after each test
-        _clear_temp_media_dir()
 
     def test_valid_png_saves(self):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
@@ -579,12 +576,34 @@ class LogoUploadTests(SettingsViewsTestCase):
         self.assertTrue(ShopSettings.load().logo)
 
 
-@override_settings(MEDIA_ROOT=_TEMP_MEDIA_DIR)
-class FaviconUploadTests(SettingsViewsTestCase):
-    """Complete favicon upload lifecycle tests with isolated media."""
+class IsolatedMediaTests(IsolatedMediaMixin, SettingsViewsTestCase):
+    """The fixture itself: a private, initially-empty MEDIA_ROOT per test, so no other worker's cleanup can remove what this test saved."""
 
-    def tearDown(self):
-        _clear_temp_media_dir()
+    seen = set()
+
+    def test_media_root_is_private_empty_and_unique_per_test(self):
+        from django.conf import settings
+
+        root = settings.MEDIA_ROOT
+        self.assertTrue(os.path.isdir(root))
+        self.assertEqual(os.listdir(root), [])
+        self.assertNotIn(root, type(self).seen)
+        type(self).seen.add(root)
+
+    def test_a_second_test_gets_another_directory_and_a_wipe_elsewhere_cannot_touch_it(self):
+        from django.conf import settings
+
+        root = settings.MEDIA_ROOT
+        self.assertNotIn(root, type(self).seen)
+        type(self).seen.add(root)
+        marker = os.path.join(root, "kept.txt")
+        open(marker, "w").write("x")
+        shutil.rmtree(tempfile.gettempdir() + "/does-not-exist-rs", ignore_errors=True)       # a sibling's cleanup targets ITS directory only
+        self.assertTrue(os.path.exists(marker))
+
+
+class FaviconUploadTests(IsolatedMediaMixin, SettingsViewsTestCase):
+    """Complete favicon upload lifecycle tests with isolated media."""
 
     def _fav(self):
         from io import BytesIO
