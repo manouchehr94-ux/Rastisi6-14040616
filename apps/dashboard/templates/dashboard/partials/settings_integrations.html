@@ -52,7 +52,7 @@
 
       <details class="int-card" data-testid="presence-automatic">
         <summary><span class="int-card__title">کارهایی که راستی‌سی خودکار انجام می‌دهد</span>
-          <span class="int-chip int-chip--{% if sp.counters.waiting %}info{% else %}ok{% endif %}" data-testid="presence-automatic-counter">{% if sp.counters.waiting %}{{ sp.counters.waiting|fa_number }} قابلیت ساخته شده و منتظر است{% else %}{{ sp.counters.active|add:sp.counters.ready|fa_number }} قابلیت فعال یا آماده{% endif %}</span></summary>
+          <span class="int-chip int-chip--{{ sp.counters.tone }}" data-testid="presence-automatic-counter">{{ sp.counters.text }}</span></summary>
         <div class="int-card__body">
           <ul class="vis-list">
             {% for cap in sp.capabilities %}
@@ -108,7 +108,7 @@
   </details>
 
   {# ── B ─────────────────────────────────────────────────────────────────────────────────────────────── #}
-  <details class="int-sec" data-testid="int-section-stats">
+  <details class="int-sec" data-testid="int-section-stats"{% if integration_open_group == "stats" %} open{% endif %}>
     <summary><span class="int-sec__title">B · آمار و بازدیدکنندگان</span><span class="int-chip int-chip--{{ ov.chips.stats.state }}" data-testid="int-chip-stats">{{ ov.chips.stats.text }}</span></summary>
     <div class="int-sec__body">
       <p class="au-hint" data-testid="tracking-consent-note">{{ tracking_consent_note }} فقط شناسه ذخیره می‌شود (کد دلخواه پذیرفته نمی‌شود).</p>
@@ -120,7 +120,7 @@
   </details>
 
   {# ── C ─────────────────────────────────────────────────────────────────────────────────────────────── #}
-  <details class="int-sec" data-testid="int-section-sales">
+  <details class="int-sec" data-testid="int-section-sales"{% if integration_open_group == "sales" %} open{% endif %}>
     <summary><span class="int-sec__title">C · ابزارهای فروش و مقایسهٔ قیمت</span><span class="int-chip int-chip--{{ ov.chips.sales.state }}" data-testid="int-chip-sales">{{ ov.chips.sales.text }}</span></summary>
     <div class="int-sec__body">
       <p class="au-hint">ترب فعلاً فقط شناسهٔ فروشنده را نگه می‌دارد؛ چیزی برای ترب ارسال نمی‌شود و فیدی ساخته نمی‌شود (جزئیات در «امکانات آینده»، گروه E).</p>
@@ -131,7 +131,7 @@
   </details>
 
   {# ── D ─────────────────────────────────────────────────────────────────────────────────────────────── #}
-  <details class="int-sec" data-testid="int-section-trust">
+  <details class="int-sec" data-testid="int-section-trust"{% if integration_open_group == "trust" %} open{% endif %}>
     <summary><span class="int-sec__title">D · نمادها و اعتماد</span><span class="int-chip int-chip--{{ ov.chips.trust.state }}" data-testid="int-chip-trust">{{ ov.chips.trust.text }}</span></summary>
     <div class="int-sec__body">
       <p class="au-hint">«شناسهٔ ذخیره‌شده» با «تأییدِ واقعی» یکی نیست: راستی‌سی فقط قالب را می‌سنجد و از اینماد استعلام نمی‌کند.</p>

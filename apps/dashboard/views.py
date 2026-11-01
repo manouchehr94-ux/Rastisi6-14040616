@@ -4355,7 +4355,8 @@ def _settings_context(
         "domain_overview": SimpleLazyObject(lambda: domain_settings_service.domain_overview(
             store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE),
         )),
-        "integration_open": request.session.pop("integration_open", ""),
+        "integration_open": (integration_open := request.session.pop("integration_open", "")),
+        "integration_open_group": search_visibility_service.group_of(integration_open),
         "active_page": "settings",
     }
 
@@ -4983,6 +4984,7 @@ def settings_integration_connect(request, provider_code):
         messages.error(request, str(exc))
         request.session["integration_open"] = provider_code      # keep the form open so the error is seen next to the fields
     else:
+        request.session["integration_open"] = provider_code
         messages.success(request, f"شناسهٔ {provider.display_name} ذخیره شد. ذخیره‌کردن شناسه به‌معنی فعال‌شدن ردیابی یا تأییدشدنِ اتصال نیست؛ وضعیت واقعی را در همین کارت ببینید.")
     return redirect("/admin-portal/settings/?section=integrations")
 
@@ -4997,6 +4999,7 @@ def settings_integration_disconnect(request, provider_code):
         return HttpResponse(status=404)
 
     integration_service.disconnect(store=store, provider_code=provider_code, actor=request.user)
+    request.session["integration_open"] = provider_code
     messages.success(request, f"استفاده از شناسهٔ {provider.display_name} خاموش شد؛ شناسه ذخیره می‌ماند.")
     return redirect("/admin-portal/settings/?section=integrations")
 

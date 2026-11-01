@@ -93,6 +93,17 @@ def duplicate_tracking_warning(rows: list[dict]) -> str:
     return DUPLICATE_TRACKING_NOTE if {"google_analytics", "google_tag_manager"} <= codes else ""
 
 
+def group_of(provider_code: str) -> str:
+    """Which page group (B stats / C sales / D trust) holds this provider — so the page opens the group that contains the service just touched."""
+    if provider_code in LIVE_ON_PUBLIC_PAGES:
+        return "stats"
+    if provider_code in SALES_TOOL_PROVIDERS:
+        return "sales"
+    if provider_code in TRUST_PROVIDERS:
+        return "trust"
+    return ""
+
+
 def _chip(state, text):
     return {"state": state, "text": text}
 

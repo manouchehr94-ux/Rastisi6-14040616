@@ -178,6 +178,19 @@ def _summary(facts, address_state, caps, action):
     return items, infra
 
 
+def _counters(caps) -> dict:
+    """Counts + the plain sentence for the card chip. Never «0 …» while capabilities exist and merely wait; an error is said as an error."""
+    count = lambda *states: sum(1 for c in caps if c["state"] in states)          # noqa: E731
+    active, ready, waiting, errors = count(ACTIVE), count(READY), count(WAITING_ADDRESS, WAITING_PUBLISH), count(ERROR)
+    if errors:
+        text, tone = "خطا در تشخیص آدرس عمومی", "danger"
+    elif waiting:
+        text, tone = f"{waiting} قابلیت ساخته شده و منتظر است", "info"
+    else:
+        text, tone = f"{active + ready} قابلیت فعال یا آماده", "ok"
+    return {"active": active, "ready": ready, "waiting": waiting, "errors": errors, "total": len(caps), "text": text, "tone": tone}
+
+
 def presence(store, request, domain: dict | None = None) -> dict:
     """The whole of section A as plain data (JSON-safe, no model instances)."""
     facts = _public_facts(store, request)
@@ -207,11 +220,7 @@ def presence(store, request, domain: dict | None = None) -> dict:
                         ADDRESS_NONE: "هنوز آدرس عمومیِ قابل‌استفاده‌ای ثبت نشده است.",
                     }[address_state]},
         "capabilities": caps,
-        "counters": {
-            "active": sum(1 for c in caps if c["state"] == ACTIVE), "ready": sum(1 for c in caps if c["state"] == READY),
-            "waiting": sum(1 for c in caps if c["state"] in (WAITING_ADDRESS, WAITING_PUBLISH)),
-            "total": len(caps),
-        },
+        "counters": _counters(caps),
         "search_console": {
             "title": "مدیریت حضور در گوگل",
             "auto_connect_available": False,

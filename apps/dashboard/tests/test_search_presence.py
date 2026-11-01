@@ -90,6 +90,8 @@ class PresenceStateTests(PermissionEnforcementTestCase):
             p = sps.presence(self.store, request, {"storefront_is_local": False, "custom_domains": []})
         self.assertEqual(p["address"]["state"], sps.ADDRESS_ERROR)
         self.assertEqual(_caps(p)["robots"], sps.ERROR)
+        self.assertEqual(p["counters"]["text"], "خطا در تشخیص آدرس عمومی")          # said as an error, never «0 capabilities»
+        self.assertEqual(p["counters"]["tone"], "danger")
         self.assertEqual(p["next_action"]["key"], "domain")
 
     def test_indexnow_has_its_own_honest_state(self):
