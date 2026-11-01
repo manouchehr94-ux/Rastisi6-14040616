@@ -1,1 +1,1 @@
-{% if TRACKING_IDS.gtm %}<noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ TRACKING_IDS.gtm|urlencode }}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>{% endif %}
+{% comment %}Intentionally empty: GTM's <noscript> iframe would load a tracker with no consent possible, so it is not printed. See tracking_head.html.{% endcomment %}

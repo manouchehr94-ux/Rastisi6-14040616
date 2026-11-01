@@ -502,4 +502,9 @@ def seo(request):
 def tracking(request):
     """``TRACKING_IDS`` for the public storefront templates: empty unless this request is a real, indexable public page of a Store
     that connected the provider (see ``apps.stores.services.tracking_service``). Lazy; never raises."""
-    return {"TRACKING_IDS": SimpleLazyObject(lambda: _tracking_ids(request))}
+    def _consent():
+        from apps.core import consent
+
+        return consent.build_config(_tracking_ids(request))
+
+    return {"TRACKING_IDS": SimpleLazyObject(lambda: _tracking_ids(request)), "CONSENT_CONFIG": SimpleLazyObject(_consent)}

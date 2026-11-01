@@ -50,7 +50,7 @@ class TrackingAndIndexNowTests(TestCase):
         self.assertIn("G-ABC1234DEF", html)
         self.assertIn("GTM-ABC1234", html)
         self.assertIn("1234567890123456", html)
-        self.assertIn("ns.html?id=GTM-ABC1234", html)
+        self.assertNotIn("ns.html", html)                       # no <noscript> tracker: it could never ask for consent
 
     def test_another_stores_ids_never_appear(self):
         connect(self.b, "google_analytics", measurement_id="G-BBBB1234")
