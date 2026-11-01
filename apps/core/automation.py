@@ -84,7 +84,7 @@ def _lock_key(operation: str, store, key: str) -> str:
 
 def run(operation: str, store, fn: Callable[[bool], dict | None], *, enabled: bool = True, dry_run: bool = False, host: str = "",
         require_public: bool = True, key: str = "", attempts: int = MAX_ATTEMPTS, backoff: float = 2.0, sleep: Callable[[float], None] = time.sleep,
-        lock_ttl: int = 300, actor=None, record: bool = True) -> Result:
+        lock_ttl: int = 300, actor=None, record: bool = True, should_record: Callable[[dict], bool] | None = None) -> Result:
     """Run ``fn(dry_run)`` for ONE store under the guarantees listed in the module docstring. ``fn`` returns a metrics dict (or ``None``), raises
     ``TransientError`` to be retried, ``PermanentError`` to stop. ``key`` identifies one logical run (the same key is never executed twice)."""
     if not enabled:
@@ -112,7 +112,7 @@ def run(operation: str, store, fn: Callable[[bool], dict | None], *, enabled: bo
         result = _attempt(fn, attempts, backoff, sleep)
     finally:
         cache.delete(lock)
-    if record and result.status in (DONE, FAILED):
+    if record and result.status in (DONE, FAILED) and (result.status == FAILED or should_record is None or should_record(result.metrics)):
         record_audit_event(
             store=store, actor=actor, action_code=ACTION_PREFIX + operation, object_type="Automation", object_label=operation,
             metadata=result.as_metadata(), request_id=request_id,
