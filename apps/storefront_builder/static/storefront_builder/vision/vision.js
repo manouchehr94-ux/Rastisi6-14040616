@@ -694,6 +694,20 @@
     }, 20);
   });
   root.addEventListener('r4:global-closed', clearCategory);
+  // Undo / Redo end in a deliberate full page reload (r4_editor.js): the docked header / footer Inspector would vanish right after the seller undid a model
+  // change. A short-lived per-tab hint (never data, never shared) reopens the same Inspector on the same tab once the page is back.
+  var REOPEN_KEY = 'rastisi.vs.reopenInspector';
+  root.addEventListener('r4:history', function () {
+    if (!currentCat || !CATS[currentCat] || !CATS[currentCat].dock) return;
+    try { sessionStorage.setItem(REOPEN_KEY, JSON.stringify({ cat: currentCat, tab: regionTab[currentCat], at: Date.now() })); } catch (e) { /* storage blocked: the Inspector simply stays closed */ }
+  });
+  (function reopenAfterHistory() {
+    var hint = null;
+    try { hint = JSON.parse(sessionStorage.getItem(REOPEN_KEY) || 'null'); sessionStorage.removeItem(REOPEN_KEY); } catch (e) { hint = null; }
+    if (!hint || !CATS[hint.cat] || !CATS[hint.cat].dock || Date.now() - hint.at > 20000) return;
+    regionTab[hint.cat] = hint.tab || 'models';
+    later(function () { openCategory(hint.cat); }, 500);
+  }());
   root.addEventListener('r4:global-refreshed', function () { later(refreshDesign, 0); });
   var designHost = gd();
   // R4 replaces the panel's innerHTML after a save. Re-dress it in the same microtask (before the browser paints) and keep the dialog where the seller

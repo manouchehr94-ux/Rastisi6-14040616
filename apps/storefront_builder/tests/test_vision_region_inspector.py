@@ -68,3 +68,10 @@ class RegionInspectorContractTests(StorefrontBuilderViewsTestCase):
         self.assertIn("dispatchEvent(new Event('change'", pick)
         self.assertNotIn("fetch(", pick)
         self.assertNotIn("XMLHttpRequest", pick)
+
+    def test_the_inspector_reopens_after_undo_and_redo_reload_the_page(self):
+        # r4_editor.js ends every history command in a deliberate full reload; a per-tab hint (not data) brings the docked Inspector back
+        self.assertIn("root.addEventListener('r4:history'", JS)
+        self.assertIn("sessionStorage.setItem(REOPEN_KEY", JS)
+        self.assertIn("Date.now() - hint.at > 20000", JS)
+        self.assertRegex(JS, r"CATS\[hint\.cat\]\.dock")
