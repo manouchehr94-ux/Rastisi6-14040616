@@ -86,11 +86,8 @@ PROVIDERS: dict[str, IntegrationProvider] = {
         display_name="اینماد (eNamad)",
         category=IntegrationCategory.TRUST,
         description=(
-            "برای احراز دسترسی فنی، متاتگِ داده‌شده توسط اینماد را وارد کنید. "
-            "پس از صدورِ نماد، «شناسه» و «کدِ تأیید» را (که اینماد نمایش می‌دهد) "
-            "اینجا وارد کنید تا نمادِ نهایی به‌صورتِ امن نمایش داده شود. "
-            "HTML/اسکریپتِ دلخواه هرگز پذیرفته نمی‌شود — فقط این دو شناسه، و "
-            "RastiSi خودش تصویر/لینکِ امن را می‌سازد."
+            "دو مرحله‌ی جدا: ۱) احراز دسترسی فنی با متاتگِ اینماد؛ ۲) پس از صدورِ نماد، شناسه و کدِ تأییدِ آن. "
+            "HTML/اسکریپتِ دلخواه هرگز پذیرفته نمی‌شود؛ راستی‌سی خودش تصویر و پیوندِ امن را می‌سازد."
         ),
         setup_guide="https://enamad.ir",
         fields=(
@@ -108,8 +105,11 @@ PROVIDERS: dict[str, IntegrationProvider] = {
         code="torob",
         display_name="ترب (Torob)",
         category=IntegrationCategory.COMPARISON,
-        description="اتصالِ فیدِ محصولات به ترب برایِ نمایش در نتایجِ مقایسه‌ی قیمت.",
-        setup_guide="https://torob.com/seller/",
+        description=(
+            "فقط شناسه‌ی فروشنده‌ی شما در ترب ذخیره می‌شود. راستی‌سی فعلاً فیدی برای ترب نمی‌سازد و داده‌ای به ترب نمی‌فرستد؛ "
+            "صفحه‌های عمومیِ محصولات (با قیمت و موجودیِ واقعی در داده‌ی ساختاریافته) پس از انتشار روی آدرس عمومی قابل‌خواندن‌اند."
+        ),
+        setup_guide="https://torob.com/sell/",
         fields=(IntegrationField(key="merchant_id", label="شناسه‌ی فروشنده در ترب"),),
         validate=_require_non_empty("merchant_id", "شناسه‌ی فروشنده"),
     ),
@@ -117,7 +117,7 @@ PROVIDERS: dict[str, IntegrationProvider] = {
         code="google_analytics",
         display_name="گوگل آنالیتیکس (GA4)",
         category=IntegrationCategory.ANALYTICS,
-        description="ردیابیِ بازدید و رفتارِ کاربران با شناسه‌ی اندازه‌گیریِ GA4.",
+        description="شناسه‌ی اندازه‌گیریِ GA4 را ذخیره می‌کنید؛ ردیابی فقط وقتی روشن می‌شود که پلتفرم آن را فعال کرده باشد و فروشگاه روی آدرس عمومی منتشر شده باشد.",
         setup_guide="https://analytics.google.com",
         fields=(IntegrationField(key="measurement_id", label="شناسه‌ی اندازه‌گیری", placeholder="G-XXXXXXXXXX"),),
         validate=_require_pattern("measurement_id", "شناسه‌ی اندازه‌گیری", r"^G-[A-Z0-9]{6,10}$", "G-ABC1234DEF"),
@@ -126,7 +126,7 @@ PROVIDERS: dict[str, IntegrationProvider] = {
         code="google_tag_manager",
         display_name="گوگل تگ منیجر (GTM)",
         category=IntegrationCategory.ANALYTICS,
-        description="مدیریتِ متمرکزِ تگ‌های ردیابی از طریقِ کانتینرِ GTM.",
+        description="شناسه‌ی کانتینر GTM را ذخیره می‌کنید؛ ردیابی فقط با فعال‌بودنِ پلتفرم و انتشار روی آدرس عمومی بارگذاری می‌شود. اگر داخل GTM تگ GA4 دارید، GA4 را جداگانه فعال نکنید.",
         setup_guide="https://tagmanager.google.com",
         fields=(IntegrationField(key="container_id", label="شناسه‌ی کانتینر", placeholder="GTM-XXXXXXX"),),
         validate=_require_pattern("container_id", "شناسه‌ی کانتینر", r"^GTM-[A-Z0-9]{4,8}$", "GTM-ABC1234"),
@@ -135,7 +135,7 @@ PROVIDERS: dict[str, IntegrationProvider] = {
         code="ad_pixel",
         display_name="پیکسلِ تبلیغاتی (متا/اینستاگرام)",
         category=IntegrationCategory.MARKETING,
-        description="ردیابیِ تبدیل برایِ کمپین‌های تبلیغاتیِ متا (فیسبوک/اینستاگرام).",
+        description="شناسه‌ی پیکسل متا را ذخیره می‌کنید؛ ردیابی فقط با فعال‌بودنِ پلتفرم و انتشار روی آدرس عمومی بارگذاری می‌شود.",
         setup_guide="https://business.facebook.com/events_manager",
         fields=(IntegrationField(key="pixel_id", label="شناسه‌ی پیکسل", placeholder="1234567890123456"),),
         validate=_require_pattern("pixel_id", "شناسه‌ی پیکسل", r"^\d{10,20}$", "1234567890123456"),
