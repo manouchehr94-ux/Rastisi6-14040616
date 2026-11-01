@@ -172,6 +172,27 @@ class PublicStoreTests(TestCase):
         self.assertEqual(product["offers"]["availability"], "https://schema.org/OutOfStock")
         self.assertEqual((product["offers"]["priceCurrency"], product["offers"]["price"]), ("IRR", "3000000"))
 
+    def test_retiring_or_deleting_a_product_removes_it_from_the_sitemap_at_once(self):
+        self.assertIn("/products/seo-shoe/", self._get("/sitemap.xml").content.decode())
+        Product.objects.filter(pk=self.product.pk).update(status=Product.Status.DRAFT)
+        self.assertNotIn("/products/seo-shoe/", self._get("/sitemap.xml").content.decode())           # no stale cached copy
+        Product.objects.filter(pk=self.product.pk).update(status=Product.Status.ACTIVE)
+        self.assertIn("/products/seo-shoe/", self._get("/sitemap.xml").content.decode())
+        Product.objects.filter(pk=self.product.pk).delete()
+        self.assertNotIn("seo-shoe", self._get("/sitemap.xml").content.decode())
+
+    def test_a_new_verified_custom_domain_moves_every_canonical_url_with_it(self):
+        StoreDomain.objects.filter(store=self.store_a, hostname=HOST_A).update(is_primary=False)          # the seller moves the shop to a new primary domain
+        StoreDomain.objects.create(store=self.store_a, hostname="shop.moved-example.ir", is_primary=True, domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN,
+                                   verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now(), verification_token="")
+        sitemap = self._get("/sitemap.xml").content.decode()
+        robots = self._get("/robots.txt").content.decode()
+        html = self._get("/products/seo-shoe/").content.decode()
+        self.assertIn("http://shop.moved-example.ir/products/seo-shoe/", sitemap)
+        self.assertNotIn(f"http://{HOST_A}/products", sitemap)
+        self.assertIn("Sitemap: http://shop.moved-example.ir/sitemap.xml", robots)
+        self.assertIn('rel="canonical" href="http://shop.moved-example.ir/products/seo-shoe/"', html)
+
     def test_store_b_never_leaks_into_store_a(self):
         html = self._get("/products/seo-shoe/").content.decode() + self._get("/").content.decode() + self._get("/sitemap.xml").content.decode()
         self.assertNotIn(HOST_B, html)
