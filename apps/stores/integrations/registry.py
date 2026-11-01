@@ -46,6 +46,7 @@ class IntegrationField:
     label: str
     is_secret: bool = False
     placeholder: str = ""
+    kind: str = "text"            # "text" | "checkbox" (a checkbox is a setting, not an identifier: it never counts as «saved data»)
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,7 @@ PROVIDERS: dict[str, IntegrationProvider] = {
             ),
             IntegrationField(key="enamad_id", label="شناسه‌ی نمادِ نهایی (پس از صدور)", placeholder="221617"),
             IntegrationField(key="enamad_auth_code", label="کدِ تأییدِ نمادِ نهایی (پس از صدور)", placeholder="94MqMPJEnuahlSHjb9kP"),
+            IntegrationField(key="enamad_show_badge", label="نمایش نماد در فوتر فروشگاه (فقط روی دامنهٔ اختصاصیِ تأییدشده)", kind="checkbox"),
         ),
         validate=validate_enamad_integration_values,
     ),

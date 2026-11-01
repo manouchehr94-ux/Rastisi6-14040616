@@ -73,7 +73,7 @@ def reconnect_with_saved(*, store, provider_code: str, actor) -> StoreIntegratio
     provider = _require_provider(provider_code)
     connection = get_or_create_connection(store=store, provider_code=provider_code)
     saved = connection.get_credentials()
-    if not any(saved.get(f.key) for f in provider.fields):
+    if not any(saved.get(f.key) for f in provider.fields if f.kind != "checkbox"):
         raise IntegrationError("اطلاعاتی ذخیره نشده است؛ ابتدا اطلاعات اتصال را وارد و ذخیره کنید.")
     return connect(store=store, provider_code=provider_code, values={f.key: saved.get(f.key, "") for f in provider.fields}, actor=actor)
 
@@ -109,7 +109,7 @@ def connections_context(*, store) -> list[dict]:
         connection = existing.get(provider.code)
         credentials = connection.get_credentials() if connection else {}
         is_connected = bool(connection and connection.is_active)
-        has_saved = any(credentials.get(f.key) for f in provider.fields)
+        has_saved = any(credentials.get(f.key) for f in provider.fields if f.kind != "checkbox")
         rows.append({
             "provider": provider,
             "connection": connection,

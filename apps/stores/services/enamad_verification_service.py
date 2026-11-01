@@ -267,6 +267,8 @@ def store_enamad_badge_for_request(
         return None
 
     credentials = connection.get_credentials()
+    if credentials.get("enamad_show_badge") == "0":                       # the seller switched the footer seal off (the ids stay saved)
+        return None
     try:
         return parse_enamad_badge_identifiers(
             credentials.get("enamad_id", ""), credentials.get("enamad_auth_code", ""),
@@ -299,6 +301,7 @@ def enamad_flow(store, credentials: dict, *, connected: bool) -> dict:
     meta_raw = str(credentials.get("verification_meta_tag") or "").strip()
     badge_id = str(credentials.get("enamad_id") or "").strip()
     badge_code = str(credentials.get("enamad_auth_code") or "").strip()
+    badge_hidden = credentials.get("enamad_show_badge") == "0"
 
     def _stage(key, title, hint, saved, error, where):
         if not saved:
@@ -307,6 +310,8 @@ def enamad_flow(store, credentials: dict, *, connected: bool) -> dict:
             state, text = "invalid", error
         elif not connected:
             state, text = "paused", "ذخیره شده ولی خاموش است؛ نمایش داده نمی‌شود."
+        elif key == "badge" and badge_hidden:
+            state, text = "hidden", "ذخیره شد ولی نمایش نماد در فوتر خاموش است."
         elif not verified_domain:
             state, text = "waiting_domain", "ذخیره شد؛ پس از تأیید دامنهٔ اختصاصی شما " + where + " قرار می‌گیرد."
         else:

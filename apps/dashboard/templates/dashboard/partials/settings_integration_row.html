@@ -65,11 +65,17 @@
             {% if group.title %}<legend>{{ group.title }} <span class="int-chip int-chip--{% if group.state == 'ready' %}ok{% elif group.state == 'invalid' %}danger{% elif group.state == 'empty' %}off{% else %}info{% endif %}">{{ group.text }}</span></legend>
             <p class="au-hint">{{ group.hint }}</p>{% endif %}
             {% for field in group.fields %}
+            {% if field.kind == "checkbox" %}
+            <div class="au-field au-field--check">
+              <label for="int-{{ code }}-{{ field.key }}"><input id="int-{{ code }}-{{ field.key }}" type="checkbox" name="{{ field.key }}" value="1" data-testid="int-{{ field.key }}"{% if row.credentials|get_item:field.key != "0" %} checked{% endif %}> {{ field.label }}</label>
+            </div>
+            {% else %}
             <div class="au-field">
               <label for="int-{{ code }}-{{ field.key }}">{{ field.label }}</label>
               <input class="au-input au-input--ltr" id="int-{{ code }}-{{ field.key }}" type="{% if field.is_secret %}password{% else %}text{% endif %}" name="{{ field.key }}" dir="ltr" autocomplete="off"
                      value="{% if not field.is_secret %}{{ row.credentials|get_item:field.key }}{% endif %}" placeholder="{{ field.placeholder }}">
             </div>
+            {% endif %}
             {% endfor %}
           </fieldset>
           {% endfor %}

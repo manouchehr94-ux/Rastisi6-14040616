@@ -4387,7 +4387,7 @@ def _integration_rows_with_effect(store, request):
         if code == "enamad":
             flow = enamad_verification_service.enamad_flow(store, row["credentials"], connected=row["is_connected"])
             row["enamad"] = flow
-            by_key = {"meta": ("verification_meta_tag",), "badge": ("enamad_id", "enamad_auth_code")}
+            by_key = {"meta": ("verification_meta_tag",), "badge": ("enamad_id", "enamad_auth_code", "enamad_show_badge")}
             fields = {f.key: f for f in provider.fields}
             row["field_groups"] = [
                 {"title": st["title"], "hint": st["hint"], "state": st["state"], "text": st["text"],
@@ -4979,7 +4979,7 @@ def settings_integration_connect(request, provider_code):
     if provider is None:
         return HttpResponse(status=404)
 
-    values = {f.key: request.POST.get(f.key, "").strip() for f in provider.fields}
+    values = {f.key: ("1" if request.POST.get(f.key) else "0") if f.kind == "checkbox" else request.POST.get(f.key, "").strip() for f in provider.fields}
     try:
         integration_service.connect(store=store, provider_code=provider_code, values=values, actor=request.user)
     except integration_service.IntegrationError as exc:
