@@ -861,6 +861,7 @@ _APPEARANCE_UPDATE_ALLOWED_PATCH_KEYS = frozenset({
     "radius", "button_radius", "density",
     "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
     "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
+    "page_width_mode", "page_max_width", "page_gutter",
     "color_overrides", "theme_overrides",
     # explicit, labelled merchant action: drop EVERY global colour / region-colour override (never a side effect of anything else)
     "clear_global_color_overrides",
@@ -1319,6 +1320,7 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     for field in (
         "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
         "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
+        "page_width_mode", "page_max_width", "page_gutter",
     ):
         if field in patch:
             candidate[field] = patch[field]
@@ -1363,6 +1365,9 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     try:
         cleaned = layout_service.validate_appearance_config(candidate)
     except layout_service.AppearanceConfigValidationError as exc:
+        if any(key in patch for key in appearance_registry.PAGE_LAYOUT_KEYS):
+            # the page-width validator's own Persian sentence names the control and its bounds, so the seller sees WHY nothing was saved
+            raise R4MutationError("invalid_appearance_config", payload={"message": f"{exc}؛ هیچ تغییری ذخیره نشد."}) from exc
         raise R4MutationError("invalid_appearance_config") from exc
 
     # Phase 1 (Task 4) — delegate the final appearance_config transformation to
@@ -1373,6 +1378,8 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # can be a semantic no-op (for example, boutique keeps the default motion),
     # but template-owned fields such as template_slug/font still changed and
     # must be visible to record_change(), which reloads the Draft from the DB.
+    if patch.get("page_width_mode") == "standard":
+        cleaned = {**cleaned, "page_width_mode": "standard"}      # tell the authority merge to REMOVE the stored mode and its custom numbers
     if patch.get("heading_style") == "default":
         # the sparse key is absent from ``cleaned`` when it is the default; tell the authority merge to REMOVE the stored one
         cleaned = {**cleaned, "heading_style": "default"}

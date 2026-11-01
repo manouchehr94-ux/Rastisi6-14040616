@@ -326,6 +326,7 @@
     typography: { title: 'نوع نوشته و فونت‌ها' },
     buttons: { title: 'دکمه‌ها' },
     shape: { title: 'شکل و تراکم' },
+    layout: { title: 'چیدمان و عرض صفحات' },
     images: { title: 'تصاویر و رسانه‌ها' },
     motion: { title: 'حرکت و افکت‌ها' },
     header: { title: 'سربرگ (هدر)', region: 'rsGlobalHeader', dock: true },
@@ -338,7 +339,7 @@
     palette_slug: 'colors', color_overrides: 'colors', theme_overrides: 'colors',
     font: 'typography', type_scale: 'typography', heading_style: 'typography',
     button_style: 'buttons', button_radius: 'buttons',
-    radius: 'shape', density: 'shape', content_width: 'shape', grid_density: 'shape', card_shadow: 'shape', hero_style: 'shape',
+    radius: 'shape', density: 'shape', content_width: 'layout', page_width_mode: 'layout', page_max_width: 'layout', page_gutter: 'layout', grid_density: 'shape', card_shadow: 'shape', hero_style: 'shape',
     template_slug: 'shape', card_hover: 'shape motion',
     image_fit: 'images', image_hover: 'images motion', card_image_crossfade: 'images', card_image_zoom: 'images',
     motion: 'motion'
@@ -606,6 +607,8 @@
     if (buttonStyle) setSummary('buttons', buttonStyle + (buttonRadius && buttonRadius.value !== '' ? ' · گردی ' + faDigits(buttonRadius.value) : ''));
     var radius = ctl('radius');
     var density = optionText(ctl('density'));
+    var pageWidth = optionText(ctl('page_width_mode'));
+    if (pageWidth) setSummary('layout', 'عرض صفحه‌ها: ' + pageWidth);
     if (density) setSummary('shape', (radius && radius.value !== '' ? 'گردی ' + faDigits(radius.value) + ' · ' : '') + 'تراکم ' + density);
     var fit = optionText(ctl('image_fit'));
     if (fit) setSummary('images', fit);
@@ -780,7 +783,7 @@
   // ---- clarity: plain names, one sentence of effect, where it acts, what state it is in ------------------------
   // Wording only (vsUx, keyed by the real field key). Controls without an entry keep R4's own label. Nothing here changes a value.
   var SCOPES = {
-    colors: 'کل فروشگاه', typography: 'کل فروشگاه', buttons: 'کل فروشگاه', shape: 'کل فروشگاه', images: 'کل فروشگاه', motion: 'کل فروشگاه',
+    colors: 'کل فروشگاه', typography: 'کل فروشگاه', buttons: 'کل فروشگاه', shape: 'کل فروشگاه', layout: 'کل فروشگاه · همهٔ صفحه‌ها', images: 'کل فروشگاه', motion: 'کل فروشگاه',
     header: 'کل فروشگاه · بالای همهٔ صفحه‌ها', footer: 'کل فروشگاه · پایین همهٔ صفحه‌ها', bottom_nav: 'کل فروشگاه · نوار پایین صفحه',
     theme: 'کل فروشگاه'
   };

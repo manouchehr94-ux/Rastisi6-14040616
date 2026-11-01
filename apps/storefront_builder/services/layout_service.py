@@ -647,8 +647,40 @@ def validate_appearance_config(config: dict) -> dict:
     # a standalone helper so the page-scoped validator below reuses the
     # exact same per-field choice-set checks, never a second copy.
     _apply_structural_page_fields(config, cleaned)
+    _apply_page_layout_fields(config, cleaned)
 
     return cleaned
+
+
+def _apply_page_layout_fields(config: dict, cleaned: dict) -> None:
+    """«چیدمان و عرض صفحات» — sparse, Store-global (never a Page override: the container is the shared shell of every page).
+
+    ``standard`` (or absent) writes NOTHING, so an untouched Store keeps its stored shape. ``wide`` / ``full`` write only the mode. ``custom``
+    writes the mode plus both numbers, each inside its bounded range; a number that is missing takes the default, one that is out of range or
+    not a whole number is refused with a plain sentence — never clamped silently."""
+    mode = config.get("page_width_mode")
+    if not mode or mode == "standard":
+        return
+    if mode not in appearance_registry.PAGE_WIDTH_MODE_KEYS:
+        raise AppearanceConfigValidationError("حالت عرض صفحه‌ها نامعتبر است")
+    cleaned["page_width_mode"] = mode
+    if mode != "custom":
+        return
+    for key, label, (low, high) in (
+        ("page_max_width", "حداکثر عرض محتوا", appearance_registry.PAGE_MAX_WIDTH_RANGE),
+        ("page_gutter", "فاصلهٔ کنارهٔ صفحه", appearance_registry.PAGE_GUTTER_RANGE),
+    ):
+        raw = config.get(key)
+        if raw in (None, ""):
+            cleaned[key] = appearance_registry.PAGE_CUSTOM_DEFAULTS[key]
+            continue
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise AppearanceConfigValidationError(f"«{label}» باید یک عدد صحیح باشد") from None
+        if not low <= value <= high:
+            raise AppearanceConfigValidationError(f"«{label}» باید بین {low} و {high} پیکسل باشد")
+        cleaned[key] = value
 
 
 #: Phase 4 (Task 3C) — the Page Appearance tier's bounded, typed, sparse

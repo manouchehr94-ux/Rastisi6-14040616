@@ -30,6 +30,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from .. import appearance_registry
 from ..models import APPEARANCE_CONFIG_DEFAULTS
 from ..storefront_appearance.contracts import (
     InvalidStoreAppearanceContract,
@@ -67,7 +68,7 @@ from . import layout_service
 # change, single source of truth.
 #: V5 — ``heading_style`` is a sparse managed key too (written only when it differs from the historical heading); choosing the default
 #: again REMOVES it so the stored shape returns to exactly what it was before the merchant touched it.
-_SPARSE_RESETTABLE_KEYS = frozenset({"heading_style"})
+_SPARSE_RESETTABLE_KEYS = frozenset({"heading_style", *appearance_registry.PAGE_LAYOUT_KEYS})
 _MANAGED_APPEARANCE_KEYS = frozenset(APPEARANCE_CONFIG_DEFAULTS) | layout_service.PAGE_APPEARANCE_KEYS | _SPARSE_RESETTABLE_KEYS
 
 # Legacy-selector registry-reference prefixes, reused from the persistence
@@ -112,6 +113,11 @@ def _merge_appearance_config(
             merged[key] = validated_managed[key]
         elif key in _SPARSE_RESETTABLE_KEYS and key in patch:
             merged.pop(key, None)
+    # page width: choosing a mode other than «custom» also drops the custom numbers it no longer uses (the stored shape returns to what it was)
+    if "page_width_mode" in patch:
+        for key in appearance_registry.PAGE_LAYOUT_KEYS:
+            if key not in validated_managed:
+                merged.pop(key, None)
     return merged
 
 

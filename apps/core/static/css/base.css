@@ -37,8 +37,17 @@ img{max-width:100%}
    floor — it is never narrowed — and on wide monitors the container grows with the screen (84vw) up to a sane cap, instead of leaving
    hundreds of dead pixels on both sides of a 1200px column at 1920px. */
 :root{--sfb-page-width:max(var(--sfb-content-width,1240px),min(84vw,var(--sfb-page-width-cap,1720px)))}
+/* «چیدمان و عرض صفحات» — the Store's page-width choice (templates/base.html writes ``data-sfb-page-width`` only for a non-standard choice, so every
+   existing Store keeps the rule above untouched). ONE token feeds every container: pages, header, footer rows and listings all read ``--sfb-page-width``.
+   wide   : the container grows further with the screen (92vw, cap 1920px) — never narrower than the template's own content width;
+   full   : the container is the whole screen minus the page gutter; a section's own background width is a different setting (``data-width``),
+            and text / product grids stay inside the gutter, never on the monitor edge;
+   custom : the content column is exactly the seller's max width and the side gutter is added around it (both validated server-side); layout.css bounds ``.wrap`` by the viewport, so a phone never overflows. */
 html[data-sfb-density="compact"]{--sfb-gutter:12px}
 html[data-sfb-density="relaxed"]{--sfb-gutter:26px}
+html[data-sfb-page-width="wide"]{--sfb-page-width:max(var(--sfb-content-width,1240px),min(92vw,1920px))}
+html[data-sfb-page-width="full"]{--sfb-page-width:100%}
+html[data-sfb-page-width="custom"]{--sfb-gutter:var(--sfb-gutter-custom,24px);--sfb-page-width:calc(var(--sfb-page-width-custom,1320px) + 2 * var(--sfb-gutter-custom,24px))}
 @media(max-width:680px){:root{--sfb-gutter-live:min(var(--sfb-gutter),12px)}}
 .wrap{max-width:var(--sfb-page-width, 1240px);margin:0 auto;padding:0 var(--sfb-gutter-live)}
 .hidden{display:none!important}

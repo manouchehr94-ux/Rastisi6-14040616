@@ -68,6 +68,46 @@ SITE_CONTENT_WIDTH_CHOICES = (1100, 1200, 1320, 1500, 1800)
 #: V5 — style of every section heading (``.sec-head``), a SPARSE structural key (absent == ``default``, the historical heading).
 #: One CSS rule-set keyed on ``html[data-sfb-heading]`` serves every section that renders ``.sec-head``; no per-section markup.
 SITE_HEADING_STYLE_CHOICES = ("default", "centered", "centered_rule", "underline", "plain")
+#: «چیدمان و عرض صفحات» — how wide the storefront's page container is, for EVERY page (home, listing, product, cart, checkout, footer…).
+#: Store-global and SPARSE: absent == ``standard`` == exactly today's behaviour (the template's content width as a floor, growing with the
+#: screen up to a cap), so a Store that never touched it keeps its stored shape. ``custom`` carries its own max content width and side gutter.
+#: ONE vocabulary + ONE resolver (``resolve_page_layout``): the context processor, the Studio and the tests all read it, never a second copy.
+PAGE_WIDTH_MODES = (
+    ("standard", "استاندارد"),
+    ("wide", "عریض"),
+    ("full", "تمام‌عرض"),
+    ("custom", "سفارشی"),
+)
+PAGE_WIDTH_MODE_KEYS = tuple(key for key, _ in PAGE_WIDTH_MODES)
+PAGE_MAX_WIDTH_RANGE = (960, 2400)      # px — a custom content width outside this is refused (too narrow to lay out, or wider than any monitor)
+PAGE_GUTTER_RANGE = (8, 64)             # px — the side padding between the content and the screen edge
+PAGE_CUSTOM_DEFAULTS = {"page_max_width": 1320, "page_gutter": 24}
+PAGE_LAYOUT_KEYS = ("page_width_mode", "page_max_width", "page_gutter")
+
+
+def resolve_page_layout(config) -> dict:
+    """The page-width decision for a stored appearance config, normalised and safe: ``{"mode", "max_width", "gutter"}``.
+
+    Never raises: an unknown mode (hand-edited / future value) is ``standard``; ``custom`` without (or with out-of-range) numbers falls back to
+    the defaults, so a stale stored value can never break a page. ``max_width`` / ``gutter`` are ints only for ``custom`` (else ``None``) — the
+    template writes only these validated ints into the stylesheet, never merchant text."""
+    config = config if isinstance(config, dict) else {}
+    mode = config.get("page_width_mode")
+    if mode not in PAGE_WIDTH_MODE_KEYS or mode == "standard":
+        return {"mode": "standard", "max_width": None, "gutter": None}
+    if mode != "custom":
+        return {"mode": mode, "max_width": None, "gutter": None}
+
+    def _bounded(key, low_high):
+        try:
+            value = int(config.get(key))
+        except (TypeError, ValueError):
+            return PAGE_CUSTOM_DEFAULTS[key]
+        return value if low_high[0] <= value <= low_high[1] else PAGE_CUSTOM_DEFAULTS[key]
+
+    return {"mode": "custom", "max_width": _bounded("page_max_width", PAGE_MAX_WIDTH_RANGE), "gutter": _bounded("page_gutter", PAGE_GUTTER_RANGE)}
+
+
 SITE_GRID_DENSITY_CHOICES = (3, 4, 5, 6)
 SITE_CARD_SHADOW_CHOICES = ("none", "soft", "strong")
 SITE_CARD_HOVER_CHOICES = ("none", "lift", "zoom")

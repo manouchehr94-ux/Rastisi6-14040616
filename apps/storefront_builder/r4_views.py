@@ -522,6 +522,14 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "image_hover_choices": appearance_registry.IMAGE_HOVER_CHOICES,
         "site_heading_style_choices": appearance_registry.SITE_HEADING_STYLE_CHOICES,
         "site_content_width_choices": appearance_registry.SITE_CONTENT_WIDTH_CHOICES,
+        # «چیدمان و عرض صفحات»: vocabulary + bounds from the registry, current value from the ONE resolver (same one the storefront reads)
+        "page_width_modes": appearance_registry.PAGE_WIDTH_MODES,
+        "page_layout": {
+            **appearance_registry.resolve_page_layout(appearance),
+            "max_width_range": appearance_registry.PAGE_MAX_WIDTH_RANGE,
+            "gutter_range": appearance_registry.PAGE_GUTTER_RANGE,
+            "defaults": appearance_registry.PAGE_CUSTOM_DEFAULTS,
+        },
         "site_grid_density_choices": appearance_registry.SITE_GRID_DENSITY_CHOICES,
         "site_card_shadow_choices": appearance_registry.SITE_CARD_SHADOW_CHOICES,
         "site_card_hover_choices": appearance_registry.SITE_CARD_HOVER_CHOICES,

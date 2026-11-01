@@ -118,9 +118,10 @@ class VisionStudioTests(StorefrontBuilderViewsTestCase):
         soup = BeautifulSoup(html, "html.parser")
         categories = [button["data-vs-open-cat"] for button in soup.select('[data-vs-pane="design"] button[data-vs-open-cat]')]
         self.assertEqual(
-            categories[:8], ["colors", "typography", "buttons", "shape", "images", "header", "footer", "bottom_nav"]
+            categories[:9], ["colors", "typography", "buttons", "shape", "layout", "images", "header", "footer", "bottom_nav"]
         )
         titles = [card.select_one("strong").get_text(strip=True) for card in soup.select('[data-vs-pane="design"] .vs-dcard')]
+        self.assertIn("چیدمان و عرض صفحات", titles)            # the page-width category (کل فروشگاه · همهٔ صفحه‌ها)
         self.assertEqual(titles[:3], ["برند و رنگ‌ها", "نوع نوشته و فونت‌ها", "دکمه‌ها"])
         # one real Global Design panel (no second form, no duplicated ids) inside the large dialog
         self.assertEqual(len(soup.select("#r4GlobalDesign")), 1)
@@ -149,7 +150,7 @@ class VisionStudioTests(StorefrontBuilderViewsTestCase):
             self.assertNotIn(old, bar.get_text() + " ".join(str(v) for tag in bar.find_all(True) for v in tag.attrs.values()))
         # only the TEXT changed: the keys / ids / actions R4 binds to are exactly as before
         self.assertEqual((undo["id"], undo["data-rastisi-action"], redo["id"], redo["data-rastisi-action"]), ("r4UndoButton", "undo", "r4RedoButton", "redo"))
-        self.assertEqual([c for c in (b["data-vs-open-cat"] for b in soup.select('[data-vs-pane="design"] button[data-vs-open-cat]'))][5:7], ["header", "footer"])
+        self.assertEqual([c for c in (b["data-vs-open-cat"] for b in soup.select('[data-vs-pane="design"] button[data-vs-open-cat]'))][6:8], ["header", "footer"])
         self.assertEqual(vision_ux.REGION_TITLES, {"header": "سربرگ (هدر)", "footer": "پابرگ (فوتر)"})
 
     def test_no_wording_table_names_a_region_with_the_old_short_words(self):

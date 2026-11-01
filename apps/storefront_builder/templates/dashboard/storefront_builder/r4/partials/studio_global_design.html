@@ -134,7 +134,22 @@ after each successful global edit.
             {% endfor %}
           </select>
 
-          <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض محتوای سایت</label>
+          {% with pl=global_design.page_layout %}
+          <label class="r4-field-sublabel" for="r4GlobalPageWidthMode">عرض صفحه‌ها</label>
+          <select id="r4GlobalPageWidthMode" class="r4-control" data-r4-global-field="page_width_mode">
+            {% for key, label in global_design.page_width_modes %}
+            <option value="{{ key }}" {% if key == pl.mode %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="r4-page-custom" data-r4-page-custom{% if pl.mode != "custom" %} hidden{% endif %}>
+            <label class="r4-field-sublabel" for="r4GlobalPageMaxWidth">حداکثر عرض محتوا (پیکسل) — سفارشی</label>
+            <input type="number" id="r4GlobalPageMaxWidth" class="r4-control" inputmode="numeric" data-r4-global-field="page_max_width" min="{{ pl.max_width_range.0 }}" max="{{ pl.max_width_range.1 }}" step="10" value="{{ pl.max_width|default:pl.defaults.page_max_width }}">
+            <label class="r4-field-sublabel" for="r4GlobalPageGutter">فاصلهٔ کنارهٔ صفحه (پیکسل) — سفارشی</label>
+            <input type="number" id="r4GlobalPageGutter" class="r4-control" inputmode="numeric" data-r4-global-field="page_gutter" min="{{ pl.gutter_range.0 }}" max="{{ pl.gutter_range.1 }}" step="2" value="{{ pl.gutter|default:pl.defaults.page_gutter }}">
+          </div>
+          {% endwith %}
+
+          <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض پایهٔ قالب</label>
           <select id="r4GlobalContentWidth" class="r4-control" data-r4-global-field="content_width">
             {% for w in global_design.site_content_width_choices %}
             <option value="{{ w }}" {% if w == global_design.appearance.content_width %}selected{% endif %}>{{ w }}px</option>
