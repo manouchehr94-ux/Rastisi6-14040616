@@ -383,6 +383,7 @@ html.rs-lock { overflow: hidden; }
   .rs-svc { grid-template-columns: 36px minmax(0, 1fr); padding: 12px; gap: 9px; }
   .rs-svc__sym { width: 36px; height: 36px; font-size: 17px; }
   .rs-svc__actions { grid-column: 2; justify-self: start; }
+  .rs-svc__actions .au-btn { min-height: 44px; min-width: 96px; }
   .rs-group { padding: 12px; }
   .rs-drawer__head, .rs-drawer__body, .rs-drawer__foot { padding-inline: 16px; }
   .admin-subtabs { margin-inline: 16px; }
