@@ -115,7 +115,8 @@ from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
 from apps.stores.services import tracking_service
 from apps.dashboard.services import (
-    domain_settings_service, import_proposals, import_service, import_xlsx, search_presence_service, search_visibility_service,
+    channel_readiness_service, domain_settings_service, import_proposals, import_service, import_xlsx, search_presence_service,
+    search_visibility_service,
 )
 from apps.stores.services import enamad_verification_service
 from apps.dashboard.services.import_service import ImportServiceError
@@ -4347,6 +4348,7 @@ def _settings_context(
         "industry_installation": _industry_installation_context(store),
         "integration_rows": SimpleLazyObject(lambda: _integration_rows_with_effect(store, request)),
         "search_presence": SimpleLazyObject(lambda: _search_presence(store, request)),
+        "channel_readiness": SimpleLazyObject(lambda: channel_readiness_service.readiness(store)),
         "visibility_not_available": search_visibility_service.NOT_AVAILABLE,
         "tracking_consent_note": search_visibility_service.TRACKING_CONSENT_NOTE,
         "integration_overview": SimpleLazyObject(lambda: search_visibility_service.integration_overview(

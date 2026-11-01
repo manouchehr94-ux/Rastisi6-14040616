@@ -37,6 +37,17 @@
         {% if code == "torob" %}
         <p class="au-note" data-testid="torob-note">راستی‌سی فعلاً برای ترب فید یا API نمی‌سازد و چیزی به ترب نمی‌فرستد؛ ثبت‌نام و روش همکاری را از راهنمای رسمی ترب (دکمهٔ «ثبت فروشگاه در ترب») دنبال کنید.</p>
         {% endif %}
+        {% if code == "torob" %}
+        <div class="int-readiness" data-testid="torob-readiness">
+          <strong>آمادگی اطلاعات کالاها برای ترب</strong>
+          <p>{{ channel_readiness.summary }}</p>
+          {% if channel_readiness.rows %}<ul class="vis-list">
+            {% for r in channel_readiness.rows %}<li class="vis-item" data-testid="readiness-{{ r.key }}"><span class="int-chip int-chip--{% if r.blocking %}warn{% else %}info{% endif %}">{{ r.count|fa_number }}</span>
+              <span class="vis-item__body"><strong>{{ r.label }}</strong><span>{{ r.samples|join:"، " }}</span></span></li>{% endfor %}
+          </ul>{% endif %}
+          <p class="au-hint">این فقط بررسی داخلیِ داده‌های خودِ شماست؛ چیزی به ترب ارسال نمی‌شود. شرایط دقیق ترب را در راهنمای رسمی آن ببینید.</p>
+        </div>
+        {% endif %}
         {% if code == "enamad" %}
         <p class="au-note" data-testid="enamad-display">{{ row.enamad.display_text }}</p>
         <p class="au-hint" data-testid="enamad-limit">{{ row.enamad.limit_text }}</p>
