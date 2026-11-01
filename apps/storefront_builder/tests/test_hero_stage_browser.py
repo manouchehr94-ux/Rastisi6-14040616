@@ -347,11 +347,12 @@ class HeroStageBrowserTests(_parity.EngineGeometryParityBrowserTests):
             draft = svc.get_or_create_draft(self.store, user=self.user)
             header_before = draft.effective_header_config()["header_variant"]
             self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "dual")
-            page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-hero"][data-key="editorial_noir"]').click()
-            page.wait_for_timeout(2500)
+            # no «فقط هیرو» button either (the hero is chosen / edited from the Studio); the hero-only backend mutation is covered in test_template_parts_apply
+            self.assertEqual(page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-hero"]').count(), 0)
+            self.assertNotIn("فقط هیرو", page.locator("[data-rs-gallery-grid]").inner_text())
             draft = svc.get_or_create_draft(self.store, user=self.user)
-            self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "single")
-            self.assertEqual(draft.effective_header_config()["header_variant"], header_before, "the header survives a hero-only apply")
+            self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "dual")
+            self.assertEqual(draft.effective_header_config()["header_variant"], header_before)
             self.assertEqual(draft.template_provenance["template"]["key"], "dual_atelier")
             audit = self._stage_audit(page)
             self.assertEqual((audit["headers"], audit["header"]), (1, True), "one header, inside the stage")

@@ -185,3 +185,16 @@ class StudioGalleryMarkupTests(SimpleTestCase):
         from apps.storefront_builder.services import r4_mutation_service as svc_
 
         self.assertTrue(callable(getattr(svc_, "_apply_header_from_template", None)), "the header.apply_template backend stays available")
+
+
+    def test_there_is_no_hero_only_button_in_the_gallery_but_the_backend_and_the_studio_remain(self):
+        base = Path(__file__).resolve().parents[1] / "static" / "storefront_builder"
+        js = (base / "r4_studio.js").read_text(encoding="utf-8")
+        self.assertNotIn("فقط هیرو (چیدمانِ هیرو)", js)
+        self.assertNotIn("btn('apply-template-hero'", js)
+        self.assertNotIn("parts.hero", js)
+        self.assertIn("function applyTemplatePart(part, key)", js)      # the wiring to the mutation is kept
+        from apps.storefront_builder.services import r4_mutation_service as svc_
+
+        self.assertTrue(callable(getattr(svc_, "_apply_hero_from_template", None)), "the hero.apply_template backend stays available")
+        self.assertIn('"hero.apply_template"', (Path(svc_.__file__)).read_text(encoding="utf-8"))

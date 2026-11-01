@@ -619,15 +619,11 @@
     }).join('');
   }
 
-  // «فقط هیرو»: take the hero part of a Ready Template without re-applying the whole template (header.apply_template / hero.apply_template).
-  // Only the parts the template really has are offered; both are one Undo-able step and touch only the Draft.
-  function templatePartActions(t) {
-    var parts = t.parts || {};
-    var out = '';
-    // (no header-only button here: the gallery is for choosing / previewing a WHOLE template. The header is changed on its own from the
-    //  Studio canvas — click the header — through the Global Design header picker; the ``header.apply_template`` mutation stays in the API.)
-    if (parts.hero) out += btn('apply-template-hero', 'فقط هیرو (چیدمانِ هیرو)', 'check', 'part', 'data-key="' + esc(t.key) + '" title="چیدمانِ هیرو را مثلِ این قالب کن؛ متن‌ها، تصویرها و هدرِ فروشگاه شما تغییر نمی‌کنند" ' + (ui.busy ? 'disabled' : ''));
-    return out ? '<div class="tile-parts" aria-label="برداشتنِ یک بخش از قالب">' + out + '</div>' : '';
+  // The gallery is for choosing / previewing a WHOLE template: it offers no «only the header» and no «only the hero» button. The header is changed
+  // from the Studio canvas (click it → its Inspector); the hero is chosen / edited from the Studio too. The ``header.apply_template`` and
+  // ``hero.apply_template`` mutations stay in the API (and ``applyTemplatePart`` below stays wired to them) — only the gallery button is gone.
+  function templatePartActions() {
+    return '';
   }
 
   var TEMPLATE_PART_REFUSALS = {
