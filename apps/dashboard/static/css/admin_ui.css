@@ -321,3 +321,70 @@
   .int-summary__stats li { flex: 1 1 0; min-width: 0; }
   .int-sec__body { padding-inline: 12px; }
 }
+
+/* ── Integrations redesign (rs-*): per-service summary cards, groups, Drawer. Horizontal category buttons are the shared .admin-subtabs bar (same pattern as «مالی و پرداخت»). ── */
+.rs-group { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--card, #fff); min-width: 0; }
+.rs-group__title { margin: 0; font-size: 15px; line-height: 1.7; display: flex; align-items: center; gap: 8px; }
+.rs-group__n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; flex: none; }
+.rs-svc-list { display: grid; gap: 10px; }
+.rs-svc { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 13px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--card, #fff); min-width: 0; }
+.rs-svc[data-status="needs_customer"], .rs-svc[data-status="error"] { border-color: var(--amber-soft); }
+.rs-svc__sym { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--bg, #f1f1f5); font-size: 20px; }
+.rs-svc__main { min-width: 0; display: grid; gap: 4px; }
+.rs-svc__title { margin: 0; font-size: 14.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rs-svc__sentence, .rs-svc__next, .rs-svc__reason { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--muted); overflow-wrap: anywhere; }
+.rs-svc__next { color: var(--ink, inherit); }
+.rs-svc__actions { align-self: center; }
+.rs-axes { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.rs-axis { display: inline-flex; gap: 5px; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--bg, #f1f1f5); color: var(--muted); }
+.rs-axis--on { background: var(--green-soft); color: var(--green-ink); }
+.rs-axis__mark { font-weight: 800; }
+.rs-todo { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rs-todo li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 13px; line-height: 1.8; }
+.rs-todo li > span:nth-child(2) { flex: 1 1 220px; min-width: 0; }
+.rs-guidance { padding: 12px 14px; border: 1px solid var(--blue-soft); border-radius: 12px; background: color-mix(in srgb, var(--blue-soft) 45%, var(--card, #fff)); font-size: 13px; line-height: 1.9; }
+.rs-guidance h3 { margin: 0 0 4px; font-size: 13.5px; }
+.rs-guidance ul { margin: 0; padding-inline-start: 20px; display: grid; gap: 2px; }
+.rs-block__title { margin: 0 0 6px; font-size: 13.5px; }
+.rs-block { display: grid; gap: 8px; margin-bottom: 14px; }
+.rs-readiness { margin-top: 4px; }
+.rs-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.rs-stats li { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--bg, #f1f1f5); }
+.rs-stats b { font-size: 20px; line-height: 1.2; }
+.rs-stats span { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+.rs-steps { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; font-size: 13px; line-height: 1.9; }
+.rs-link { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; font-weight: 700; color: var(--primary); text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
+.rs-real-state { margin: 4px 0 0; font-size: 12.5px; line-height: 1.9; padding: 6px 10px; border-radius: 10px; background: var(--bg, #f1f1f5); color: var(--muted); }
+.rs-real-state--on { background: var(--green-soft); color: var(--green-ink); }
+.rs-safety { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg, #f1f1f5); font-size: 12.5px; }
+.rs-safety p { margin: 3px 0 0; color: var(--muted); }
+.rs-ops { display: flex; gap: 8px; flex-wrap: wrap; }
+.rs-ops form { margin: 0; }
+.rs-field-error { margin: 6px 0 0; font-size: 12px; color: var(--red-ink, #9b1c1c); line-height: 1.8; }
+.rs-field-error--top { padding: 8px 12px; border-radius: 10px; background: var(--red-soft, #fde8e8); }
+.au-field--error .au-input { border-color: var(--red-ink, #9b1c1c); }
+/* Drawer: a native <dialog>; on the inline-start edge (the right in RTL), full width on phones */
+dialog.rs-drawer { position: fixed; inset-block: 0; inset-inline-start: 0; inset-inline-end: auto; margin: 0; height: 100dvh; max-height: 100dvh; width: min(520px, 100vw); max-width: none; padding: 0; border: 0; background: var(--card, #fff); color: inherit; box-shadow: 0 0 60px rgba(15, 24, 50, .25); }
+dialog.rs-drawer::backdrop { background: rgba(16, 25, 43, .47); }
+dialog.rs-drawer:not([open]) { display: none; }
+dialog.rs-drawer[open] { display: flex; flex-direction: column; }
+.rs-drawer__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); }
+.rs-drawer__head h2 { margin: 2px 0 0; font-size: 17px; line-height: 1.6; }
+.rs-drawer__kicker { margin: 0; font-size: 11.5px; color: var(--muted); }
+.rs-drawer__x { min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 10px; background: var(--card, #fff); cursor: pointer; font-size: 15px; }
+.rs-drawer__body { padding: 16px 22px; overflow-y: auto; flex: 1; display: grid; gap: 12px; align-content: start; overscroll-behavior: contain; }
+.rs-drawer__foot { display: flex; gap: 9px; flex-wrap: wrap; padding: 12px 22px; border-top: 1px solid var(--border); background: var(--card, #fff); }
+.rs-drawer__foot .au-btn { min-height: 44px; }
+.rs-drawer :focus-visible, .rs-svc :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.rs-drawer .au-input--ltr, .rs-drawer bdi { direction: ltr; text-align: left; }
+html.rs-lock { overflow: hidden; }
+.int-page, .int-page * { min-width: 0; }
+@media (max-width: 640px) {
+  .rs-svc { grid-template-columns: 36px minmax(0, 1fr); padding: 12px; gap: 9px; }
+  .rs-svc__sym { width: 36px; height: 36px; font-size: 17px; }
+  .rs-svc__actions { grid-column: 2; justify-self: start; }
+  .rs-group { padding: 12px; }
+  .rs-drawer__head, .rs-drawer__body, .rs-drawer__foot { padding-inline: 16px; }
+  .admin-subtabs { margin-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { dialog.rs-drawer, .rs-svc { transition: none !important; animation: none !important; } }

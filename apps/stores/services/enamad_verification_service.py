@@ -329,16 +329,30 @@ def enamad_flow(store, credentials: dict, *, connected: bool) -> dict:
             parse_enamad_badge_identifiers(badge_id, badge_code)
         except EnamadBadgeError as exc:
             badge_error = str(exc)
-    return {
-        "verified_domain": verified_domain,
-        "stages": [
+    stages = [
             _stage("meta", "مرحلهٔ ۱ — احراز دسترسی فنی (متاتگ)",
                    "اینماد هنگام بررسی سایت شما یک متاتگ می‌دهد. آن را اینجا بگذارید تا روی صفحهٔ اصلی سایت قرار بگیرد. این مرحله فقط «مالکیت/دسترسی» را نشان می‌دهد، نه صدور نماد.",
                    bool(meta_raw), meta_error, "در بخش <head> صفحهٔ اصلیِ"),
             _stage("badge", "مرحلهٔ ۲ — نمادِ صادرشده (شناسه و کد تأیید)",
                    "فقط پس از اینکه اینماد نماد را صادر کرد، شناسه و کد تأییدی را که نشان می‌دهد وارد کنید. راستی‌سی خودش تصویر و پیوند امن را می‌سازد.",
                    bool(badge_id or badge_code), badge_error, "در بخش نمادهای اعتماد فوترِ همهٔ صفحه‌های"),
-        ],
+    ]
+    badge_stage = next(st for st in stages if st["key"] == "badge")
+    seal_reasons = {
+        "empty": "شناسه و کد نماد هنوز ذخیره نشده است؛ بنابراین هیچ نمادی نمایش داده نمی‌شود، حتی اگر گزینهٔ نمایش روشن باشد.",
+        "invalid": "شناسه یا کد نماد معتبر نیست؛ نمادی نمایش داده نمی‌شود.",
+        "paused": "استفاده از اطلاعات اینماد خاموش است؛ نمادی نمایش داده نمی‌شود.",
+        "hidden": "شما نمایش نماد در فوتر را خاموش کرده‌اید؛ شناسه و کد ذخیره می‌مانند.",
+        "waiting_domain": "دامنهٔ اختصاصیِ تأییدشده ندارید؛ نماد فقط روی دامنهٔ اختصاصیِ تأییدشده نمایش داده می‌شود (نه روی آدرس آزمایشی یا localhost).",
+        "ready": "نماد در فوتر دامنهٔ اختصاصیِ تأییدشدهٔ شما نمایش داده می‌شود. تأییدِ رسمیِ نماد را فقط پنل اینماد می‌دهد.",
+    }
+    return {
+        "verified_domain": verified_domain,
+        "stages": stages,
+        # the seller's CHOICE (checkbox) and the REAL display state are different things: the first can be on while the second is off
+        "badge_choice": not badge_hidden,
+        "badge_shown": badge_stage["state"] == "ready",
+        "badge_reason": seal_reasons.get(badge_stage["state"], ""),
         "limit_text": "راستی‌سی از اینماد استعلام نمی‌گیرد (سرویس رسمی برای این کار در اختیار ندارد)؛ پس ذخیره‌کردن شناسه هرگز به معنی «اینماد تأییدشده» نیست. وضعیت واقعیِ نماد را در پنل اینماد ببینید.",
         "display_text": ("نمایش فقط روی دامنهٔ اختصاصیِ تأییدشدهٔ همین فروشگاه انجام می‌شود." if verified_domain
                          else "فعلاً دامنهٔ اختصاصیِ تأییدشده‌ای ندارید؛ تا آن زمان نه متاتگ و نه نماد روی سایت قرار نمی‌گیرد."),

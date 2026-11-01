@@ -113,7 +113,7 @@ PROVIDERS: dict[str, IntegrationProvider] = {
         ),
         setup_guide="https://torob.com/sell/",
         fields=(IntegrationField(key="merchant_id", label="شناسه‌ی فروشنده در ترب"),),
-        validate=_require_non_empty("merchant_id", "شناسه‌ی فروشنده"),
+        validate=_require_pattern("merchant_id", "شناسه‌ی فروشنده", r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}$", "SHOP-77"),
     ),
     "google_analytics": IntegrationProvider(
         code="google_analytics",

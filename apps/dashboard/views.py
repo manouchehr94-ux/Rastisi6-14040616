@@ -4359,6 +4359,8 @@ def _settings_context(
         )),
         "integration_open": (integration_open := request.session.pop("integration_open", "")),
         "integration_open_group": search_visibility_service.group_of(integration_open),
+        "integration_view": search_visibility_service.normalize_view(request.GET.get("view")),
+        "integration_views": search_visibility_service.VIEWS,
         "active_page": "settings",
     }
 
@@ -4377,6 +4379,9 @@ def _integration_rows_with_effect(store, request):
     live = search_visibility_service.store_live(store, request)
     tracking_on = tracking_service.tracking_enabled()
     rows = integration_service.connections_context(store=store)
+    form_error = getattr(request, "_rs_integration_form_error", None)
+    if form_error is None:                                   # one-shot flash: the failed attempt is shown once, next to its fields
+        form_error = request._rs_integration_form_error = request.session.pop("integration_form_error", None) or {}
     for row in rows:
         provider, code = row["provider"], row["provider"].code
         row["group"] = "live" if code in search_visibility_service.LIVE_ON_PUBLIC_PAGES else "stored"
@@ -4396,6 +4401,12 @@ def _integration_rows_with_effect(store, request):
             ]
     for row in rows:
         row["guide"] = search_visibility_service.service_guide(row)
+        row["status"] = search_visibility_service.status_axes(row, store_live=live, tracking_enabled=tracking_on)
+        row["view"] = search_visibility_service.view_for_provider(row["provider"].code)
+        failed = form_error if form_error.get("code") == row["provider"].code else {}
+        # a rejected attempt: show what was typed and the message beside its field; the STORED value is untouched (the service raised before saving)
+        row["form_values"] = {**row["credentials"], **(failed.get("values") or {})}
+        row["field_error"] = {"field": failed.get("field", ""), "message": failed.get("message", "")} if failed else None
     return rows
 
 
@@ -4972,6 +4983,11 @@ def sms_outbox_retry(request, pk):
 # --------------------------------------------------------------- یکپارچه‌سازی‌ها
 
 
+def _integrations_redirect(provider_code: str):
+    """Back to the tab that holds this service (never to a different category)."""
+    return redirect(f"/admin-portal/settings/?section=integrations&view={search_visibility_service.view_for_provider(provider_code)}")
+
+
 @require_POST
 @staff_required
 @permission_required(SETTINGS_MANAGE)
@@ -4986,11 +5002,14 @@ def settings_integration_connect(request, provider_code):
         integration_service.connect(store=store, provider_code=provider_code, values=values, actor=request.user)
     except integration_service.IntegrationError as exc:
         messages.error(request, str(exc))
-        request.session["integration_open"] = provider_code      # keep the form open so the error is seen next to the fields
+        request.session["integration_open"] = provider_code      # the drawer reopens so the error is seen next to the field
+        request.session["integration_form_error"] = {
+            "code": provider_code, "field": exc.field, "message": str(exc),
+            "values": {f.key: values[f.key] for f in provider.fields if not f.is_secret},
+        }
     else:
-        request.session["integration_open"] = provider_code
-        messages.success(request, f"شناسهٔ {provider.display_name} ذخیره شد. ذخیره‌کردن شناسه به‌معنی فعال‌شدن ردیابی یا تأییدشدنِ اتصال نیست؛ وضعیت واقعی را در همین کارت ببینید.")
-    return redirect("/admin-portal/settings/?section=integrations")
+        messages.success(request, f"شناسهٔ {provider.display_name} ذخیره شد. این فقط ذخیرهٔ شناسه است؛ به‌معنی فعال‌شدن ردیابی، اتصال یا تأییدشدن توسط سرویس بیرونی نیست.")
+    return _integrations_redirect(provider_code)
 
 
 @require_POST
@@ -5003,9 +5022,8 @@ def settings_integration_disconnect(request, provider_code):
         return HttpResponse(status=404)
 
     integration_service.disconnect(store=store, provider_code=provider_code, actor=request.user)
-    request.session["integration_open"] = provider_code
     messages.success(request, f"استفاده از شناسهٔ {provider.display_name} خاموش شد؛ شناسه ذخیره می‌ماند.")
-    return redirect("/admin-portal/settings/?section=integrations")
+    return _integrations_redirect(provider_code)
 
 
 @require_POST
@@ -5018,12 +5036,12 @@ def settings_integration_test(request, provider_code):
         return HttpResponse(status=404)
 
     connection = integration_service.test_connection(store=store, provider_code=provider_code, actor=request.user)
-    request.session["integration_open"] = provider_code
     if connection.last_test_result == "success":
         messages.success(request, f"{provider.display_name}: {connection.last_test_message}")
     else:
         messages.error(request, f"{provider.display_name}: {connection.last_test_message}")
-    return redirect("/admin-portal/settings/?section=integrations")
+        request.session["integration_open"] = provider_code
+    return _integrations_redirect(provider_code)
 
 
 @require_POST
@@ -5049,7 +5067,7 @@ def settings_integration_toggle(request, provider_code):
             request.session["integration_open"] = provider_code
         else:
             messages.success(request, f"استفاده از شناسهٔ {provider.display_name} دوباره روشن شد.")
-    return redirect("/admin-portal/settings/?section=integrations")
+    return _integrations_redirect(provider_code)
 
 
 # ---------------------------------------------------------------- صفحات محتوایی

@@ -110,6 +110,7 @@ def _m(*names, prefix=(), get=None, get_not=None):
 
 
 #: ``?section=`` values of the settings route that are NOT «اطلاعات فروشگاه».
+_INTEGRATION_VIEWS = ("seo", "analytics", "torob", "enamad", "future")
 _OTHER_SETTINGS_SECTIONS = ("domain", "finance", "payment-config", "unpaid-orders", "delivery-payment", "sms", "integrations")
 
 SECTIONS: tuple = (
@@ -342,7 +343,28 @@ SECTIONS: tuple = (
                 keywords="پیامک sms اس ام اس اتصال پیامک پنل پیامکی ارسال آزمایشی ارتباطات"),
             Tab("integrations", "یکپارچه‌سازی‌ها", "settings", perms=("can_manage_settings",), query="?section=integrations",
                 matches=(_m("settings", get={"section": ("integrations",)}), _m(prefix="settings-integration")),
-                keywords="اینماد ترب گوگل آنالیتیکس تگ منیجر پیکسل یکپارچه‌سازی integrations"),
+                keywords="اینماد ترب گوگل آنالیتیکس تگ منیجر پیکسل یکپارچه‌سازی integrations",
+                children=(
+                    SubTab("integrations-overview", "نمای کلی", "settings", perms=("can_manage_settings",), query="?section=integrations",
+                           matches=(_m("settings", get={"section": ("integrations",)}, get_not={"view": _INTEGRATION_VIEWS}),
+                                    _m(prefix="settings-integration")),
+                           keywords="نمای کلی یکپارچه‌سازی‌ها خلاصه وضعیت اقدام لازم"),
+                    SubTab("integrations-seo", "جست‌وجو و سئو", "settings", perms=("can_manage_settings",), query="?section=integrations&view=seo",
+                           matches=(_m("settings", get={"section": ("integrations",), "view": ("seo",)}),),
+                           keywords="سئو جست‌وجو گوگل بینگ سایت‌مپ سرچ کنسول ایندکس ایندکس‌ناو seo"),
+                    SubTab("integrations-analytics", "آمار و تبلیغات", "settings", perms=("can_manage_settings",), query="?section=integrations&view=analytics",
+                           matches=(_m("settings", get={"section": ("integrations",), "view": ("analytics",)}),),
+                           keywords="آمار تبلیغات گوگل آنالیتیکس ga4 تگ منیجر gtm پیکسل متا اینستاگرام رضایت کوکی"),
+                    SubTab("integrations-torob", "ترب", "settings", perms=("can_manage_settings",), query="?section=integrations&view=torob",
+                           matches=(_m("settings", get={"section": ("integrations",), "view": ("torob",)}),),
+                           keywords="ترب torob مقایسه قیمت آمادگی کالاها"),
+                    SubTab("integrations-enamad", "اینماد", "settings", perms=("can_manage_settings",), query="?section=integrations&view=enamad",
+                           matches=(_m("settings", get={"section": ("integrations",), "view": ("enamad",)}),),
+                           keywords="اینماد enamad نماد اعتماد متاتگ"),
+                    SubTab("integrations-future", "امکانات آینده", "settings", perms=("can_manage_settings",), query="?section=integrations&view=future",
+                           matches=(_m("settings", get={"section": ("integrations",), "view": ("future",)}),),
+                           keywords="امکانات آینده مرچنت سنتر بینگ وبمستر فید"),
+                )),
             Tab("data-transfer", "ورود و خروج اطلاعات", "import-list", perms=("can_view_imports", "can_view_exports"),
                 matches=(_m(prefix=("import-", "export-")),), pages=("imports", "exports"),
                 keywords="ورود اطلاعات اکسل آپلود بارگذاری فایل ورود کالا موجودی خروج خروجی دانلود import export",

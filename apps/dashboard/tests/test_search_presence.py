@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 
 from django.test import RequestFactory, override_settings
 from django.urls import reverse
+
+from apps.dashboard.tests.integration_pages import all_views_html, view_html
 from django.utils import timezone
 
 from apps.dashboard.services import search_presence_service as sps, search_visibility_service as svs
@@ -120,7 +122,7 @@ class PresenceStateTests(PermissionEnforcementTestCase):
 class IntegrationsPageTests(PermissionEnforcementTestCase):
     def page(self):
         self._login(self.owner)
-        return self.client.get(reverse("dashboard:settings") + "?section=integrations").content.decode()
+        return all_views_html(self.client)
 
     def post(self, name, code, **data):
         self._login(self.owner)
@@ -191,7 +193,7 @@ class IntegrationsPageTests(PermissionEnforcementTestCase):
     def test_saved_valid_and_live_are_different_facts(self):
         self.post("connect", "google_analytics", measurement_id="G-ABC1234DEF")
         html = self.page()
-        panel = html.split('data-testid="integration-google_analytics"')[1].split('data-testid="integration-google_tag_manager"')[0]
+        panel = html.split('data-testid="drawer-google_analytics"')[1].split('data-testid="drawer-google_tag_manager"')[0]
         self.assertIn('data-testid="int-fact-saved" data-on="1"', panel)
         self.assertIn('data-testid="int-fact-validation" data-state="valid"', panel)
         self.assertIn('data-testid="int-fact-enabled" data-on="1"', panel)
@@ -209,11 +211,27 @@ class IntegrationsPageTests(PermissionEnforcementTestCase):
             self.post("connect", code, **{field: bad})
             self.assertFalse(StoreIntegrationConnection.objects.filter(store=self.store, provider_code=code).exists(), code)
 
-    def test_both_ga4_and_gtm_active_shows_the_duplicate_guidance_only_then(self):
+    def test_ga4_and_gtm_guidance_is_proportionate_and_never_a_red_alarm(self):
+        """QA-06: the supported GA4+GTM combination is guidance, not an error."""
+        self.assertNotIn('data-testid="tracking-guidance"', view_html(self.client, "analytics"))
         self.post("connect", "google_analytics", measurement_id="G-ABC1234DEF")
-        self.assertNotIn('data-testid="duplicate-tracking-warning"', self.page())
+        ga4 = view_html(self.client, "analytics")
+        self.assertIn('data-testid="tracking-guidance" data-state="ga4"', ga4)
+        self.assertIn("به GTM نیازی ندارید", ga4)
         self.post("connect", "google_tag_manager", container_id="GTM-ABC1234")
-        self.assertIn('data-testid="duplicate-tracking-warning"', self.page())
+        both = view_html(self.client, "analytics")
+        box = both.split('data-testid="tracking-guidance"')[1].split("</aside>")[0]
+        self.assertIn('data-state="both"', both.split('data-testid="tracking-guidance"')[1][:40])
+        self.assertIn("خطا نیست", box)
+        self.assertIn("GTM اولویت دارد", box)
+        self.assertIn("داخل کانتینر GTM", box)
+        self.assertIn("محتوای کانتینر GTM را نمی‌بیند", box)                  # RastiSi never claims it can inspect the container
+        self.assertNotIn("au-note--danger", box)
+        self.assertNotIn('data-testid="duplicate-tracking-warning"', both)
+        self.post("disconnect", "google_analytics")
+        gtm = view_html(self.client, "analytics")
+        self.assertIn('data-state="gtm"', gtm.split('data-testid="tracking-guidance"')[1][:40])
+        self.assertIn("تنها، Google Analytics را روشن نمی‌کند", gtm)
 
     # ---- eNamad ----------------------------------------------------------------------------------------------------------------
     def test_enamad_shows_two_stages_and_never_says_verified(self):
@@ -278,17 +296,19 @@ class ServiceGuideTests(PermissionEnforcementTestCase):
 
     def page(self):
         self._login(self.owner)
-        return self.client.get(reverse("dashboard:settings") + "?section=integrations").content.decode()
+        return all_views_html(self.client)
 
     def status_of(self, html, code):
         panel = html.split(f'data-testid="integration-{code}"')[1].split('data-testid="int-fact-saved"')[0]
         return panel.split('data-testid="int-guide-status">')[1].split("<")[0]
 
-    def test_every_service_shows_the_three_questions(self):
+    def test_every_service_shows_the_three_answers(self):
         html = self.page()
-        self.assertEqual(html.count('data-testid="int-guide"'), 5)
-        for question in ("راستی‌سی چه کاری انجام می‌دهد؟", "شما چه کاری باید انجام دهید؟", "وضعیت و قدم بعدی"):
-            self.assertEqual(html.count(question), 5)
+        self.assertEqual(html.count('data-testid="int-guide"'), 5)                                   # one drawer per service
+        self.assertEqual(html.count("شما چه کاری باید انجام دهید؟"), 5)
+        overview = view_html(self.client, "overview")
+        self.assertEqual(overview.count('data-testid="int-sentence"'), 5)                            # what RastiSi does: ONE sentence per card
+        self.assertEqual(overview.count('data-testid="int-next"'), 5)                                # the next action, on the card
 
     def test_nothing_saved_means_the_customer_has_to_act(self):
         html = self.page()

@@ -42,9 +42,57 @@ TRACKING_CONSENT_NOTE = (
     "و خودِ بازدیدکننده در بنر رضایتِ فروشگاه موافقت کرده باشد؛ تا آن زمان هیچ ابزار ردیابی‌ای بارگذاری نمی‌شود و شناسه فقط ذخیره می‌ماند."
 )
 DUPLICATE_TRACKING_NOTE = (
-    "هم GA4 و هم GTM فعال است. برای اینکه هر بازدید دوبار ثبت نشود، راستی‌سی فقط GTM را بارگذاری می‌کند و GA4 مستقیم را بارگذاری نمی‌کند؛ "
+    "هم GA4 و هم GTM روشن است؛ این یک وضعیت پشتیبانی‌شده است، نه خطا. برای اینکه هر بازدید دوبار ثبت نشود، راستی‌سی فقط GTM را بارگذاری می‌کند و GA4 مستقیم را بارگذاری نمی‌کند. "
     "اگر آمار GA4 می‌خواهید، تگ GA4 را داخل کانتینر GTM بسازید."
 )
+
+#: views (horizontal category buttons) of the page — one place for the keys, labels and which service lives where
+VIEWS = (
+    ("overview", "نمای کلی"), ("seo", "جست‌وجو و سئو"), ("analytics", "آمار و تبلیغات"),
+    ("torob", "ترب"), ("enamad", "اینماد"), ("future", "امکانات آینده"),
+)
+VIEW_KEYS = tuple(key for key, _ in VIEWS)
+_PROVIDER_VIEW = {"google_analytics": "analytics", "google_tag_manager": "analytics", "ad_pixel": "analytics", "torob": "torob", "enamad": "enamad"}
+
+
+def normalize_view(raw) -> str:
+    raw = (raw or "").strip().lower()
+    return raw if raw in VIEW_KEYS else "overview"
+
+
+def view_for_provider(provider_code: str) -> str:
+    """The view that holds this service — POST handlers send the seller back there, so a save never throws them to another tab."""
+    return _PROVIDER_VIEW.get(provider_code, "overview")
+
+
+def tracking_guidance(rows: list[dict]) -> dict | None:
+    """Proportionate, non-alarming guidance for GA4 / GTM (QA-06). Never claims RastiSi can read a GTM container; never turns a supported
+    combination into an error. ``None`` when neither is relevant (nothing saved)."""
+    by_code = {row["provider"].code: row for row in rows}
+    ga4, gtm = by_code.get("google_analytics"), by_code.get("google_tag_manager")
+    ga4_on, gtm_on = bool(ga4 and ga4["is_connected"]), bool(gtm and gtm["is_connected"])
+    ga4_saved, gtm_saved = bool(ga4 and ga4["has_saved_credentials"]), bool(gtm and gtm["has_saved_credentials"])
+    if not (ga4_saved or gtm_saved):
+        return None
+    if ga4_on and gtm_on:
+        state, title, points = "both", "GA4 و GTM هر دو روشن است — GTM اولویت دارد", [
+            "این حالت مجاز است و خطا نیست؛ برای جلوگیری از ثبت دوبارهٔ هر بازدید، فقط GTM بارگذاری می‌شود و GA4 مستقیم بارگذاری نمی‌شود.",
+            "اگر آمار GA4 می‌خواهید، تگ GA4 را داخل کانتینر GTM تنظیم کنید.",
+            "راستی‌سی محتوای کانتینر GTM را نمی‌بیند و نمی‌تواند درستی تگ‌های داخل آن را بررسی کند.",
+        ]
+    elif gtm_on:
+        state, title, points = "gtm", "از GTM استفاده می‌کنید", [
+            "ذخیره‌کردن شناسهٔ GTM تنها، Google Analytics را روشن نمی‌کند: تگ GA4 باید داخل کانتینر GTM ساخته شود.",
+            "راستی‌سی محتوای کانتینر GTM را نمی‌بیند و نمی‌تواند درستی تگ‌های داخل آن را تأیید کند.",
+        ]
+    elif ga4_on:
+        state, title, points = "ga4", "GA4 مستقیم", [
+            "اگر فقط آمار گوگل می‌خواهید، همین مسیر مستقیم کافی است و به GTM نیازی ندارید.",
+            "اگر بعداً GTM را روشن کنید، GTM اولویت می‌گیرد و GA4 باید داخل کانتینر ساخته شود.",
+        ]
+    else:
+        return None
+    return {"state": state, "title": title, "points": points}
 
 
 def provider_effect(code: str, *, connected: bool, store_live: bool, tracking_enabled: bool = True, has_saved: bool = False) -> dict:
@@ -140,6 +188,67 @@ def service_guide(row: dict) -> dict:
     return {"does": does, "you": you, "status": key, "label": label, "tone": tone, "next": nxt}
 
 
+def status_axes(row: dict, *, store_live: bool, tracking_enabled: bool) -> dict:
+    """Four separate answers for one service (QA-05) — never collapsed into a vague «روشن است؟ بله»:
+
+    1. ``saved``   — an identifier is stored for THIS store;
+    2. ``enabled`` — the seller allowed the store to USE it (``is_active``);
+    3. ``ready``   — the identifier is complete and format-valid, so nothing on the seller's side is missing;
+    4. ``live``    — right now something really happens (a tracker may load after consent / the seal is rendered). Torob never is: nothing is sent.
+
+    ``reason`` names the one thing that still stands between «ready» and «live». All of it is computed from backend facts."""
+    code = row["provider"].code
+    saved, enabled = bool(row["has_saved_credentials"]), bool(row["is_connected"])
+    valid = row["validation"]["state"] == "valid"
+    ready = saved and enabled and valid
+    live, reason = False, ""
+    if code in LIVE_ON_PUBLIC_PAGES:
+        live = row["effect"]["state"] == "live"
+        if not saved:
+            reason = "هنوز شناسه‌ای ذخیره نشده است."
+        elif not valid:
+            reason = "قالب شناسهٔ ذخیره‌شده معتبر نیست."
+        elif not enabled:
+            reason = "استفاده از شناسه در تنظیمات فروشگاه خاموش است."
+        elif not tracking_enabled:
+            reason = "منتظر فعال‌سازی ردیابی توسط مدیر پلتفرم."
+        elif not store_live:
+            reason = "منتظر انتشار فروشگاه روی آدرس عمومی (روی آدرس آزمایشی/محلی هیچ ردیابی بارگذاری نمی‌شود)."
+        else:
+            reason = "فقط پس از موافقت بازدیدکننده در بنر رضایت بارگذاری می‌شود."
+    elif code == "torob":
+        ready = False                                    # there is no operational integration (feed/API) to be «ready»: a saved Torob ID is only a stored value
+        reason = ("شناسه فقط ذخیره شده است؛ راستی‌سی فعلاً فید یا API برای ترب ندارد و چیزی به ترب ارسال نمی‌شود."
+                  if saved else "هنوز شناسه‌ای ذخیره نشده است.")
+    elif code == "enamad":
+        states = [stage["state"] for stage in (row.get("enamad") or {}).get("stages", [])]
+        live = "ready" in states
+        if not saved:
+            reason = "هنوز متاتگ یا شناسهٔ نماد ذخیره نشده است."
+        elif "invalid" in states:
+            reason = "یکی از اطلاعات ذخیره‌شده معتبر نیست."
+        elif not enabled:
+            reason = "استفاده از اطلاعات اینماد خاموش است."
+        elif "waiting_domain" in states:
+            ready = False
+            reason = "دامنهٔ اختصاصیِ تأییدشده ندارید؛ تا آن زمان چیزی روی سایت قرار نمی‌گیرد."
+        elif "hidden" in states and not live:
+            ready = False
+            reason = "نمایش نماد در فوتر را خودتان خاموش کرده‌اید."
+        elif live:
+            reason = "روی دامنهٔ اختصاصیِ شما نمایش داده می‌شود؛ تأییدِ رسمیِ نماد را فقط پنل اینماد می‌دهد."
+    axes = [
+        {"key": "saved", "short": "ذخیره‌شده", "label": "شناسه ذخیره شده؟", "on": saved},
+        {"key": "enabled", "short": "استفاده روشن", "label": "استفاده از آن در تنظیمات فروشگاه فعال شده است؟", "on": enabled},
+        {"key": "ready", "short": "اتصال عملیاتی" if code == "torob" else "آماده",
+         "label": "اتصال عملیاتی (فید/API) وجود دارد؟" if code == "torob" else "سرویس آماده‌ی کار است؟", "on": ready},
+        {"key": "live", "short": ("نمایش" if code == "enamad" else "ارسال" if code == "torob" else "ردیابی"), "label": ("همین حالا نمادی روی سایت نمایش داده می‌شود؟" if code == "enamad" else
+                                  "همین حالا داده‌ای به ترب فرستاده می‌شود؟" if code == "torob" else
+                                  "همین حالا ردیابی امکان‌پذیر است؟"), "on": live},
+    ]
+    return {"axes": axes, "reason": reason, "live": live}
+
+
 def group_of(provider_code: str) -> str:
     """Which page group (B stats / C sales / D trust) holds this provider — so the page opens the group that contains the service just touched."""
     if provider_code in LIVE_ON_PUBLIC_PAGES:
@@ -185,10 +294,14 @@ def integration_overview(presence: dict, integration_rows: list[dict]) -> dict:
         "ready": not action,
         "infra_active": counters["active"] + counters["ready"],
         "infra_waiting": counters["waiting"],
+        "all_rows": [row for row in integration_rows if row["provider"].code in _PROVIDER_VIEW],
+        # services that need the seller (nothing saved yet / saved value invalid / saved but switched off)
+        "attention": [row for row in integration_rows if row["guide"]["status"] in ("needs_customer", "error")],
         "sales_rows": _rows(SALES_TOOL_PROVIDERS),
         "trust_rows": _rows(TRUST_PROVIDERS),
         "analytics_rows": analytics,
         "duplicate_warning": duplicate_tracking_warning(analytics),
+        "tracking_guidance": tracking_guidance(analytics),
         "chips": {
             "visibility": visibility_chip,
             "stats": stats_chip,

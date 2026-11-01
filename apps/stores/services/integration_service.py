@@ -9,8 +9,16 @@ from apps.stores.integrations.registry import all_providers, get_provider
 from apps.stores.models import StoreIntegrationConnection
 
 
+#: hard ceiling for any stored value — enforced on the server whatever the browser did (the longest legitimate value is an eNamad meta tag)
+MAX_VALUE_LENGTH = 600
+
+
 class IntegrationError(Exception):
-    """خطای قابل‌نمایشِ اتصال/تست یکپارچه‌سازی."""
+    """خطای قابل‌نمایشِ اتصال/تست یکپارچه‌سازی. ``field`` (اختیاری) کلیدِ فیلدی است که خطا به آن مربوط است."""
+
+    def __init__(self, message="", field: str = ""):
+        super().__init__(message)
+        self.field = field
 
 
 class UnknownProviderError(IntegrationError):
@@ -22,6 +30,35 @@ def _require_provider(provider_code: str):
     if provider is None:
         raise UnknownProviderError(f"یکپارچه‌سازیِ ناشناخته: {provider_code!r}")
     return provider
+
+
+def _label_of(provider, key: str) -> str:
+    return next((f.label for f in provider.fields if f.key == key), key)
+
+
+def _error_field(provider, values: dict) -> str:
+    """The field a validation message belongs to, so the form can show it next to that field (never guessed for a multi-field provider: eNamad is resolved by what fails)."""
+    text_fields = [f.key for f in provider.fields if f.kind != "checkbox"]
+    if len(text_fields) == 1:
+        return text_fields[0]
+    if provider.code == "enamad":
+        from apps.stores.services import enamad_verification_service as ev
+
+        meta = str(values.get("verification_meta_tag") or "").strip()
+        if meta:
+            try:
+                ev.parse_enamad_verification_meta_tag(meta)
+            except ev.EnamadVerificationMetaError:
+                return "verification_meta_tag"
+        enamad_id, code = str(values.get("enamad_id") or "").strip(), str(values.get("enamad_auth_code") or "").strip()
+        if enamad_id or code:
+            try:
+                ev.parse_enamad_badge_identifiers(enamad_id, code)
+            except ev.EnamadBadgeError:
+                if not enamad_id or not enamad_id.isdigit():
+                    return "enamad_id"
+                return "enamad_auth_code"
+    return ""
 
 
 def get_or_create_connection(*, store, provider_code: str) -> StoreIntegrationConnection:
@@ -36,9 +73,12 @@ def connect(*, store, provider_code: str, values: dict, actor) -> StoreIntegrati
     """اعتبارنامه‌ها را (پس از اعتبارسنجیِ فرمتِ واقعیِ Provider) ذخیره و
     یکپارچه‌سازی را فعال می‌کند."""
     provider = _require_provider(provider_code)
+    for key, value in values.items():
+        if len(str(value or "")) > MAX_VALUE_LENGTH:
+            raise IntegrationError(f"مقدار واردشده برای «{_label_of(provider, key)}» بیش از حد طولانی است.", field=key)
     error = provider.validate(values)
     if error:
-        raise IntegrationError(error)
+        raise IntegrationError(error, field=_error_field(provider, values))
 
     connection = get_or_create_connection(store=store, provider_code=provider_code)
     was_connected = connection.is_active

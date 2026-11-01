@@ -6,6 +6,8 @@ from unittest import mock
 
 from django.urls import reverse
 
+from apps.dashboard.tests.integration_pages import all_views_html, view_html
+
 from apps.catalog.models import Category, Product, ProductImage, Vendor
 from apps.dashboard.services import channel_readiness_service as svc
 from apps.dashboard.tests.test_permission_enforcement import PermissionEnforcementTestCase
@@ -55,8 +57,7 @@ class ReadinessTests(PermissionEnforcementTestCase):
         self.mk(self.store, "page-bad", image=False, name="کالای بدون تصویر صفحه")
         self._login(self.owner)
         with mock.patch.object(socket.socket, "connect", side_effect=AssertionError("external connection")):
-            html = self.client.get(reverse("dashboard:settings") + "?section=integrations").content.decode()
-        torob = html.split('data-testid="integration-torob"')[1].split('data-testid="int-section-trust"')[0]
+            torob = view_html(self.client, "torob")
         self.assertIn('data-testid="torob-readiness"', torob)
         self.assertIn("کالای بدون تصویر صفحه", torob)
         self.assertIn("چیزی به ترب ارسال نمی‌شود", torob)
@@ -66,7 +67,7 @@ class ReadinessTests(PermissionEnforcementTestCase):
         self.assertEqual(status["state"], "unsupported")
         self.assertIn("ایران", status["text"])
         self._login(self.owner)
-        html = self.client.get(reverse("dashboard:settings") + "?section=integrations").content.decode()
+        html = all_views_html(self.client)
         future = html.split('data-testid="int-section-future"')[1]
         self.assertIn("پشتیبانی نمی‌شود", future)
         self.assertIn("Merchant Center", future)
