@@ -418,6 +418,36 @@
 .vs[data-vs-cat="colors"] #r4GlobalDesign #rsGlobalDetails .rs-more-body>:not(.r4-color-row){grid-column:1/-1}
 }
 
+/* ---- header / footer Inspector: the Global Design panel docked beside the canvas (no dimming, no big modal) ----
+   Same element and same form as the modal; only its placement changes. The preview stays visible and clickable, so a chosen model shows on the Draft at once. */
+.rs-studio.vs[data-vs-dock="region"]{--vs-panel-w:420px}
+.rs-studio.vs[data-vs-dock="region"] .vs-dlayer.context-panel{background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-start;align-items:stretch;padding:var(--vs-bar-h) 0 0}
+.rs-studio.vs[data-vs-dock="region"] .vs-design-modal{pointer-events:auto;width:var(--vs-panel-w);height:auto;border-radius:0;border-width:0 0 0 1px;box-shadow:-18px 0 50px rgba(0,0,0,.35)}
+.rs-studio.vs[data-vs-dock="region"] .vs-modal__scroll{padding:14px 16px 18px}
+.rs-studio.vs[data-vs-dock="region"] .vs-modal__head h2{font-size:16px}
+.rs-studio.vs[data-vs-dock="region"] .vs-modal__scopebar{padding:6px 14px;gap:6px;flex:0 0 auto}
+.rs-studio.vs[data-vs-dock="region"] .vs-modal__scopebar>*{font-size:11.5px}
+.vs .vs-rtabs{display:flex;flex:0 0 auto;min-height:48px;gap:2px;padding:8px 12px 0;border-bottom:1px solid var(--vs-line);background:#0d1628;overflow-x:auto;scrollbar-width:none}
+.vs .vs-rtabs[hidden]{display:none}
+.vs .vs-rtab{flex:0 0 auto;min-height:40px;padding:8px 14px;border:0;border-bottom:3px solid transparent;border-radius:8px 8px 0 0;background:transparent;color:#a9b6cb;font-weight:700;font-size:13.5px;cursor:pointer}
+.vs .vs-rtab:hover{color:#e4ebf7;background:rgba(255,255,255,.05)}
+.vs .vs-rtab[aria-selected="true"]{color:#fff;border-bottom-color:#a79df7;background:rgba(124,109,240,.14)}
+.vs .vs-rtab:focus-visible{outline:2px solid #a79df7;outline-offset:-2px}
+.vs #r4GlobalDesign .vs-rt-hide{display:none!important}
+.rs-studio.vs[data-vs-dock="region"] #r4GlobalDesign .r4-global-design-group>h4{display:none}   /* the dock's own title already names the region */
+/* the model cards fit the docked column: one compact card per row, a short thumbnail, wording clamped to two lines */
+.rs-studio.vs[data-vs-dock="region"] .vs-gal__grid{grid-template-columns:minmax(0,1fr);gap:12px}
+.rs-studio.vs[data-vs-dock="region"] .vs-gal__lead{font-size:12.5px}
+.rs-studio.vs[data-vs-dock="region"] .vs-gcard__media{min-height:90px;max-height:150px}
+.rs-studio.vs[data-vs-dock="region"] .vs-gcard__media>img{max-height:150px}
+.rs-studio.vs[data-vs-dock="region"] .vs-gcard__desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;line-height:1.7}
+@media (max-width:1100px){
+  /* narrow screens: the Inspector becomes a bottom sheet so the canvas stays visible above it */
+  .rs-studio.vs[data-vs-dock="region"]{--vs-panel-w:100vw}
+  .rs-studio.vs[data-vs-dock="region"] .vs-dlayer.context-panel{align-items:flex-end;justify-content:center;padding:0}
+  .rs-studio.vs[data-vs-dock="region"] .vs-design-modal{width:100vw;max-height:58dvh;border-width:1px 0 0;box-shadow:0 -18px 50px rgba(0,0,0,.45)}
+}
+
 /* the template gallery's "peek" docks beside the preview instead of dimming it */
 .rs-studio.vs[data-rs-drawer="template-preview"] .vs-dlayer.context-panel{background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-end;align-items:stretch;padding:var(--vs-bar-h) 0 0}
 .rs-studio.vs[data-rs-drawer="template-preview"] .vs-design-modal{pointer-events:auto;width:var(--vs-panel-w);height:auto;border-radius:0}

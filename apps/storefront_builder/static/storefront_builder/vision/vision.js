@@ -328,8 +328,8 @@
     shape: { title: 'شکل و تراکم' },
     images: { title: 'تصاویر و رسانه‌ها' },
     motion: { title: 'حرکت و افکت‌ها' },
-    header: { title: 'سربرگ (هدر)', region: 'rsGlobalHeader' },
-    footer: { title: 'پابرگ (فوتر)', region: 'rsGlobalFooter' },
+    header: { title: 'سربرگ (هدر)', region: 'rsGlobalHeader', dock: true },
+    footer: { title: 'پابرگ (فوتر)', region: 'rsGlobalFooter', dock: true },
     bottom_nav: { title: 'ناوبری موبایل', region: 'rsGlobalMobileNav' },
     theme: { title: 'تم مناسبتی', tab: 'theme' }
   };
@@ -358,9 +358,97 @@
   // the dialog role exists only while the dialog is open (a closed, hidden layer must not be a dialog to assistive tech, nor to scripts that look for the open one)
   function setDialogRole(open) {
     if (!designModal) return;
-    if (open) { designModal.setAttribute('role', 'dialog'); designModal.setAttribute('aria-modal', 'true'); }
+    if (open && isDocked()) { designModal.setAttribute('role', 'complementary'); designModal.removeAttribute('aria-modal'); }   // the docked Inspector is NOT modal: the canvas stays usable
+    else if (open) { designModal.setAttribute('role', 'dialog'); designModal.setAttribute('aria-modal', 'true'); }
     else { designModal.removeAttribute('role'); designModal.removeAttribute('aria-modal'); }
   }
+
+  // ---- the header / footer Inspector: the SAME Global Design panel, docked beside the canvas (no dimming, no big modal) ------------------
+  // A click on the header or footer in the canvas selects it and shows its Inspector in the side panel; the preview stays visible and
+  // interactive, so a model chosen in «مدل‌ها» is seen on the Draft immediately. Nothing is duplicated: the tabs below only SHOW parts of
+  // the real #rsGlobalHeader / #rsGlobalFooter form (its select, toggles, geometry, repeaters), whose own handlers issue header.update / footer.update.
+  var RTABS = [['models', 'مدل‌ها'], ['content', 'محتوا و نمایش'], ['design', 'طراحی'], ['advanced', 'پیشرفته']];
+  var regionTab = { header: 'models', footer: 'models' };
+  var dockedCat = null;
+  function isDocked() { return root.dataset.vsDock === 'region'; }
+  function setDock(on) {
+    if (on) root.dataset.vsDock = 'region'; else delete root.dataset.vsDock;
+    var bar = $('[data-vs-rtabs]');
+    if (bar) { bar.hidden = !on; if (!on) bar.textContent = ''; }
+  }
+  // tag every direct child of the region's form with the Inspector tab it belongs to (structure-driven: toggles → content, geometry → design, repeaters / per-device rows → advanced)
+  function tagRegion(cat) {
+    var info = CATS[cat];
+    var region = info && info.region && document.getElementById(info.region);
+    var group = region && region.querySelector('.r4-global-design-group');
+    var counts = {};
+    if (!group) return counts;
+    var state = 'models';
+    Array.prototype.forEach.call(group.children, function (node) {
+      var tab;
+      if (node.matches('.visually-hidden, h4')) tab = 'all';
+      else {
+        if (node.matches('label.r4-checkbox-row, .r4-announce-entry')) state = 'content';
+        else if (node.matches('h5')) state = /اضافی|دستگاه/.test(node.textContent) ? 'advanced' : 'design';
+        else if (node.matches('.r4-geometry-group')) state = 'design';
+        else if (node.matches('.r4-repeater, .r4-responsive-row')) state = 'advanced';
+        tab = state;
+        counts[tab] = (counts[tab] || 0) + 1;
+      }
+      node.dataset.vsRtab = tab;
+    });
+    return counts;
+  }
+  function paintRegionTabs(cat) {
+    var bar = $('[data-vs-rtabs]');
+    var info = CATS[cat];
+    var region = info && info.region && document.getElementById(info.region);
+    if (!bar || !region) return;
+    var counts = tagRegion(cat);
+    if (!counts[regionTab[cat]]) regionTab[cat] = 'models';
+    bar.textContent = '';
+    bar.setAttribute('aria-label', 'ویرایش ' + info.title);
+    RTABS.forEach(function (def) {
+      if (!counts[def[0]]) return;
+      var b = el('button', 'vs-rtab', def[1]);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.dataset.vsRtabBtn = def[0];
+      var on = regionTab[cat] === def[0];
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      bar.appendChild(b);
+    });
+    $all('[data-vs-rtab]', region).forEach(function (node) {
+      var tab = node.dataset.vsRtab;
+      node.classList.toggle('vs-rt-hide', tab !== 'all' && tab !== regionTab[cat]);
+    });
+    root.dataset.vsRtabActive = regionTab[cat];
+  }
+  function selectRegionTab(tab) {
+    if (!currentCat || !CATS[currentCat] || !CATS[currentCat].dock) return;
+    regionTab[currentCat] = tab;
+    paintRegionTabs(currentCat);
+    var scroller = $('.vs-modal__scroll', designModal);
+    if (scroller) scroller.scrollTop = 0;
+    keptScroll = 0;
+  }
+  document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest && evt.target.closest('[data-vs-rtab-btn]');
+    if (btn) selectRegionTab(btn.dataset.vsRtabBtn);
+  });
+  document.addEventListener('keydown', function (evt) {
+    var btn = evt.target.closest && evt.target.closest('[data-vs-rtab-btn]');
+    if (!btn || ['ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(evt.key) === -1) return;
+    var tabs = $all('[data-vs-rtab-btn]', btn.parentNode);
+    var i = tabs.indexOf(btn);
+    var rtl = getComputedStyle(btn).direction === 'rtl';
+    var step = evt.key === 'ArrowRight' ? (rtl ? -1 : 1) : evt.key === 'ArrowLeft' ? (rtl ? 1 : -1) : 0;
+    var next = evt.key === 'Home' ? 0 : evt.key === 'End' ? tabs.length - 1 : (i + step + tabs.length) % tabs.length;
+    evt.preventDefault();
+    tabs[next].focus();
+    selectRegionTab(tabs[next].dataset.vsRtabBtn);
+  });
 
   function fieldKeyOf(node) {
     var ctl = node.matches('[data-r4-global-field]') ? node : node.querySelector('[data-r4-global-field]');
@@ -412,6 +500,9 @@
   function clearCategory() {
     delete root.dataset.vsCat;
     currentCat = null;
+    setDock(false);
+    dockedCat = null;
+    $all('#r4GlobalDesign .vs-rt-hide').forEach(function (n) { n.classList.remove('vs-rt-hide'); });
     setDialogRole(false);
     $all('#r4GlobalDesign .vs-hide, #r4GlobalDesign .vs-flat, #r4GlobalDesign .vs-cat-target').forEach(function (el) {
       el.classList.remove('vs-hide', 'vs-flat', 'vs-cat-target');
@@ -426,11 +517,18 @@
     $all('.vs-hide, .vs-flat, .vs-cat-target', panel).forEach(function (el) { el.classList.remove('vs-hide', 'vs-flat', 'vs-cat-target'); });
     root.dataset.vsCat = cat;
     currentCat = cat;
+    setDock(!!info.dock);
+    $all('.vs-rt-hide', panel).forEach(function (n) { n.classList.remove('vs-rt-hide'); });
     var tools = $('[data-vs-palette-tools]');
     if (tools) tools.hidden = !info.palette;
     if (info.region) {
       var target = document.getElementById(info.region);
       if (target) { target.classList.add('vs-cat-target'); target.open = true; }
+      if (info.dock) {
+        paintRegionTabs(cat);
+        if (dockedCat !== cat) { var sc = $('.vs-modal__scroll', designModal); if (sc) sc.scrollTop = 0; keptScroll = 0; }   // a different region starts at its top
+        dockedCat = cat;
+      }
       return;
     }
     if (info.tab) return;
@@ -560,7 +658,7 @@
     var trigger = evt.target.closest('[data-rs-global-focus]');
     if (trigger) {
       var region = trigger.getAttribute('data-rs-global-focus');
-      later(function () { if (R4.isGlobalDesignOpen()) { refreshDesign(); applyCategory(region === 'footer' ? 'footer' : 'header'); setTitle(region === 'footer' ? 'footer' : 'header'); } }, 0);
+      later(function () { if (R4.isGlobalDesignOpen()) { refreshDesign(); applyCategory(region === 'footer' ? 'footer' : 'header'); setTitle(region === 'footer' ? 'footer' : 'header'); setDialogRole(true); } }, 0);
     }
     var close = evt.target.closest('[data-vs-design-head] [data-rastisi-action="panel-close"], .vs-modal__foot [data-rastisi-action="panel-close"]');
     if (close) guardClose(evt, closeDesignDialog);
@@ -613,7 +711,7 @@
 
   // Tab keeps focus inside the open design dialog
   document.addEventListener('keydown', function (evt) {
-    if (evt.key !== 'Tab' || !designModal || designLayer.hidden || !designLayer.classList.contains('panel-visible') || root.dataset.rsDrawer !== 'global') return;
+    if (evt.key !== 'Tab' || !designModal || designLayer.hidden || !designLayer.classList.contains('panel-visible') || root.dataset.rsDrawer !== 'global' || isDocked()) return;
     var focusable = $all('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, a[href], [tabindex="0"]', designModal)
       .filter(function (el) { return el.getClientRects().length > 0 && !el.closest('[hidden]') && !el.closest('.vs-hide') && !el.closest('.vs-filtered-out'); });
     if (!focusable.length) return;
