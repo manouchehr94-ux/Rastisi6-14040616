@@ -7,11 +7,12 @@
 
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from apps.billing.models import (
+    SubscriptionCreditNote,
     SubscriptionInvoice,
     SubscriptionPaymentAttempt,
     SubscriptionRefund,
@@ -56,6 +57,22 @@ def _sync_invoice_refund_status(invoice, *, now):
     invoice.save(update_fields=["status", "updated_at"])
 
 
+def _validate_existing_subscription_refund(
+    existing: SubscriptionRefund, *, invoice: SubscriptionInvoice,
+    amount: Decimal, reason: str, payment_attempt=None, credit_note=None,
+) -> SubscriptionRefund:
+    if existing.store_id != invoice.store_id or existing.invoice_id != invoice.pk:
+        raise RefundError("کلید یکتای بازپرداخت با این فاکتور مطابقت ندارد.")
+    if (
+        existing.amount != amount
+        or existing.reason != reason
+        or existing.credit_note_id != (credit_note.pk if credit_note is not None else None)
+        or (payment_attempt is not None and existing.payment_attempt_id != payment_attempt.pk)
+    ):
+        raise RefundError("مشخصات درخواست بازپرداخت با کلید قبلی مطابقت ندارد.")
+    return existing
+
+
 @transaction.atomic
 def request_refund(invoice, *, amount, reason="", requested_by=None, payment_attempt=None,
                    credit_note=None, idempotency_key="", now=None):
@@ -65,10 +82,24 @@ def request_refund(invoice, *, amount, reason="", requested_by=None, payment_att
     locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
     amount = Decimal(amount)
 
+    if payment_attempt is not None and not SubscriptionPaymentAttempt.objects.filter(
+        pk=payment_attempt.pk, invoice_id=locked.pk, store_id=locked.store_id,
+        status=SubscriptionPaymentAttempt.Status.SUCCEEDED,
+    ).exists():
+        raise RefundError("تلاش پرداخت انتخاب‌شده متعلق به این فاکتور یا موفق نیست.")
+    if credit_note is not None and not SubscriptionCreditNote.objects.filter(
+        pk=credit_note.pk, invoice_id=locked.pk, store_id=locked.store_id,
+        status=SubscriptionCreditNote.Status.ISSUED,
+    ).exists():
+        raise RefundError("سند اعتبار انتخاب‌شده متعلق به این فاکتور یا معتبر نیست.")
+
     if idempotency_key:
         existing = SubscriptionRefund.objects.filter(idempotency_key=idempotency_key).first()
         if existing is not None:
-            return existing
+            return _validate_existing_subscription_refund(
+                existing, invoice=locked, amount=amount, reason=reason,
+                payment_attempt=payment_attempt, credit_note=credit_note,
+            )
     else:
         import secrets
         idempotency_key = f"refund-{locked.pk}-{secrets.token_hex(8)}"
@@ -84,12 +115,22 @@ def request_refund(invoice, *, amount, reason="", requested_by=None, payment_att
         ).order_by("-completed_at").first()
 
     provider_code = payment_attempt.provider if payment_attempt else registry.active_provider_code()
-    refund = SubscriptionRefund.objects.create(
-        store=locked.store, invoice=locked, payment_attempt=payment_attempt, credit_note=credit_note,
-        provider=provider_code, status=SubscriptionRefund.Status.REQUESTED, amount=amount,
-        currency=locked.currency, reason=reason, requested_by=requested_by, requested_at=now,
-        idempotency_key=idempotency_key,
-    )
+    try:
+        with transaction.atomic():
+            refund = SubscriptionRefund.objects.create(
+                store=locked.store, invoice=locked, payment_attempt=payment_attempt, credit_note=credit_note,
+                provider=provider_code, status=SubscriptionRefund.Status.REQUESTED, amount=amount,
+                currency=locked.currency, reason=reason, requested_by=requested_by, requested_at=now,
+                idempotency_key=idempotency_key,
+            )
+    except IntegrityError:
+        existing = SubscriptionRefund.objects.filter(idempotency_key=idempotency_key).first()
+        if existing is None:
+            raise
+        return _validate_existing_subscription_refund(
+            existing, invoice=locked, amount=amount, reason=reason,
+            payment_attempt=payment_attempt, credit_note=credit_note,
+        )
 
     provider = registry.get_provider(provider_code)
     provider_payment_id = payment_attempt.provider_payment_id if payment_attempt else ""

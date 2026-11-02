@@ -159,6 +159,51 @@ class ExecuteOrderRefundTests(RefundServiceTestCase):
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(Refund.objects.filter(order=self.order).count(), 1)
 
+
+    def test_retry_key_rejects_other_store_and_order(self):
+        execute_order_refund(
+            self.order, store=self.store, actor=self.staff,
+            line_requests=[{"order_item_id": self.item.pk, "quantity": 1}], idempotency_key="p0-shared",
+        )
+        other_store = Store.objects.create(name="فروشگاه دیگر", slug="p0-other-store", status=Store.Status.ACTIVE)
+        other_vendor = Vendor.objects.create(store=other_store, name="فروشنده", slug="p0-other-vendor")
+        other_shipping = ShippingMethod.objects.create(store=other_store, name="ارسال", slug="p0-other-shipping", cost=Decimal("0"))
+        other_gateway = PaymentGateway.objects.create(store=other_store, name="پرداخت", slug="p0-other-gateway")
+        other_order = Order.objects.create(
+            code="P0-OTHER", store=other_store, customer=self.customer, vendor=other_vendor,
+            address={}, shipping_method=other_shipping, payment_gateway=other_gateway,
+            items_total=Decimal("100000"), grand_total=Decimal("100000"),
+            payment_status=Order.PaymentStatus.PAID,
+        )
+        other_item = OrderItem.objects.create(
+            order=other_order, product_name="کالا", quantity=1,
+            unit_price=Decimal("100000"), line_total=Decimal("100000"),
+        )
+        with self.assertRaises(RefundError):
+            execute_order_refund(
+                other_order, store=other_store, actor=self.staff,
+                line_requests=[{"order_item_id": other_item.pk, "quantity": 1}],
+                idempotency_key="p0-shared",
+            )
+        self.assertFalse(Refund.objects.filter(store=other_store).exists())
+
+    def test_retry_key_rejects_changed_request_fields(self):
+        original = {"order": self.order, "store": self.store, "actor": self.staff,
+                    "line_requests": [{"order_item_id": self.item.pk, "quantity": 1}],
+                    "idempotency_key": "p0-params"}
+        execute_order_refund(**original)
+        for change in (
+            {"line_requests": [{"order_item_id": self.item.pk, "quantity": 2}]},
+            {"shipping_amount": Decimal("50000")},
+            {"reason": "changed"},
+            {"merchant_note": "changed"},
+            {"restock": True},
+        ):
+            with self.subTest(change=change):
+                with self.assertRaises(RefundError):
+                    execute_order_refund(**{**original, **change})
+        self.assertEqual(Refund.objects.filter(order=self.order).count(), 1)
+
     def test_full_refund_marks_order_refunded(self):
         execute_order_refund(
             self.order, store=self.store, actor=self.staff,

@@ -40,7 +40,7 @@ def _paid_invoice(slug, *, price="400000"):
     invoice = invoice_service.open_invoice(invoice)
     attempt = attempt_service.create_attempt(invoice)
     confirmation_service.confirm_payment(
-        attempt=attempt, amount=invoice.amount_due, currency="IRT", provider_payment_id="pay-1",
+        attempt=attempt, amount=invoice.amount_due, currency="IRT", provider_payment_id=f"pay-{slug}",
     )
     invoice.refresh_from_db()
     return store, invoice
@@ -117,6 +117,51 @@ class RefundTests(TestCase):
         first = refund_service.request_refund(self.invoice, amount=Decimal("100000"), idempotency_key="same")
         second = refund_service.request_refund(self.invoice, amount=Decimal("100000"), idempotency_key="same")
         self.assertEqual(first.pk, second.pk)
+
+
+    def test_retry_key_rejects_other_invoice_and_modified_amount(self):
+        first = refund_service.request_refund(
+            self.invoice, amount=Decimal("100000"), idempotency_key="p0-bill-key",
+        )
+        with self.assertRaises(refund_service.RefundError):
+            refund_service.request_refund(
+                self.invoice, amount=Decimal("200000"), idempotency_key="p0-bill-key",
+            )
+        _other_store, other_invoice = _paid_invoice("p0-bill-other")
+        with self.assertRaises(refund_service.RefundError):
+            refund_service.request_refund(
+                other_invoice, amount=Decimal("100000"), idempotency_key="p0-bill-key",
+            )
+        self.assertEqual(SubscriptionRefund.objects.filter(invoice=other_invoice).count(), 0)
+        self.assertEqual(first.invoice_id, self.invoice.pk)
+
+    def test_foreign_payment_attempt_and_credit_note_rejected(self):
+        _other_store, other_invoice = _paid_invoice("p0-bill-related")
+        foreign_attempt = SubscriptionPaymentAttempt.objects.get(invoice=other_invoice)
+        foreign_credit = credit_note_service.issue_credit_note(other_invoice, amount=Decimal("50000"))
+        with self.assertRaises(refund_service.RefundError):
+            refund_service.request_refund(
+                self.invoice, amount=Decimal("50000"), payment_attempt=foreign_attempt,
+            )
+        with self.assertRaises(refund_service.RefundError):
+            refund_service.request_refund(
+                self.invoice, amount=Decimal("50000"), credit_note=foreign_credit,
+            )
+        self.assertFalse(SubscriptionRefund.objects.filter(invoice=self.invoice).exists())
+
+    def test_retry_key_rejects_changed_reason_or_credit_note(self):
+        refund_service.request_refund(
+            self.invoice, amount=Decimal("100000"), idempotency_key="p0-bill-meta",
+        )
+        with self.assertRaises(refund_service.RefundError):
+            refund_service.request_refund(
+                self.invoice, amount=Decimal("100000"), reason="changed", idempotency_key="p0-bill-meta",
+            )
+        credit = credit_note_service.issue_credit_note(self.invoice, amount=Decimal("50000"))
+        with self.assertRaises(refund_service.RefundError):
+            refund_service.request_refund(
+                self.invoice, amount=Decimal("100000"), credit_note=credit, idempotency_key="p0-bill-meta",
+            )
 
     def test_zero_amount_rejected(self):
         with self.assertRaises(refund_service.RefundError):

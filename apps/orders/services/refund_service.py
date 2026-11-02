@@ -11,7 +11,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.catalog.services.inventory_service import (
@@ -252,6 +252,38 @@ def plan_order_refund(order: Order, *, store, line_requests: list[dict], shippin
     )
 
 
+def _validate_existing_refund_request(
+    existing: Refund, *, order: Order, store, line_requests: list[dict],
+    shipping_amount: Decimal, reason: str, merchant_note: str,
+    refund_method: str, restock: bool,
+) -> Refund:
+    """An idempotency key can only be reused for the identical tenant/order/request."""
+    # Do not return or describe a refund belonging to another tenant.
+    if existing.store_id != store.pk or existing.order_id != order.pk:
+        raise RefundError("کلید یکتای درخواست استرداد با این سفارش مطابقت ندارد.")
+    if (
+        existing.reason != reason
+        or existing.merchant_note != merchant_note
+        or existing.refund_method != refund_method
+        or existing.restock != restock
+        or existing.shipping_refund_amount != Decimal(shipping_amount)
+    ):
+        raise RefundError("مشخصات درخواست استرداد با کلید قبلی مطابقت ندارد.")
+
+    try:
+        requested_lines = sorted(
+            (int(line["order_item_id"]), int(line["quantity"])) for line in line_requests
+        )
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise RefundError("اقلام درخواست استرداد نامعتبر است.") from exc
+    if any(qty <= 0 for _, qty in requested_lines):
+        raise RefundError("تعداد استرداد نامعتبر است.")
+    saved_lines = sorted((line.order_item_id, line.quantity) for line in existing.items.all())
+    if requested_lines != saved_lines:
+        raise RefundError("اقلام درخواست استرداد با کلید قبلی مطابقت ندارد.")
+    return existing
+
+
 @transaction.atomic
 def execute_order_refund(
     order: Order, *, store, actor, line_requests: list[dict], shipping_amount: Decimal = Decimal("0"),
@@ -262,10 +294,21 @@ def execute_order_refund(
 
     ``idempotency_key``: اگر استردادی با همین کلید از قبل ساخته شده، همان را
     برمی‌گرداند — بدون ساختنِ استردادِ تکراری."""
+    if order.store_id != store.pk:
+        raise RefundError("این سفارش متعلق به این فروشگاه نیست.")
+    # All refunds for this order must serialize before refundable_amount is read.
+    order = Order.objects.select_for_update().get(pk=order.pk)
+    if order.store_id != store.pk:
+        raise RefundError("این سفارش متعلق به این فروشگاه نیست.")
+
     if idempotency_key:
         existing = Refund.objects.filter(idempotency_key=idempotency_key).first()
         if existing is not None:
-            return existing
+            return _validate_existing_refund_request(
+                existing, order=order, store=store, line_requests=line_requests,
+                shipping_amount=shipping_amount, reason=reason, merchant_note=merchant_note,
+                refund_method=refund_method, restock=restock,
+            )
 
     if refund_method == Refund.Method.GATEWAY:
         raise RefundError(
@@ -275,13 +318,27 @@ def execute_order_refund(
 
     plan = plan_order_refund(order, store=store, line_requests=line_requests, shipping_amount=shipping_amount)
 
-    refund = Refund.objects.create(
-        store=store, order=order, requested_amount=plan.total_amount, approved_amount=plan.total_amount,
-        shipping_refund_amount=shipping_amount, shipping_tax_refund_amount=plan.shipping_tax_amount,
-        reason=reason, merchant_note=merchant_note,
-        status=Refund.Status.SUCCEEDED, refund_method=refund_method, restock=restock,
-        actor=actor, completed_at=timezone.now(), idempotency_key=idempotency_key,
-    )
+    try:
+        # Savepoint: a unique-key race must not poison the outer transaction.
+        with transaction.atomic():
+            refund = Refund.objects.create(
+                store=store, order=order, requested_amount=plan.total_amount, approved_amount=plan.total_amount,
+                shipping_refund_amount=shipping_amount, shipping_tax_refund_amount=plan.shipping_tax_amount,
+                reason=reason, merchant_note=merchant_note,
+                status=Refund.Status.SUCCEEDED, refund_method=refund_method, restock=restock,
+                actor=actor, completed_at=timezone.now(), idempotency_key=idempotency_key,
+            )
+    except IntegrityError:
+        # Only treat an integrity failure as a retry if that exact key now exists.
+        if idempotency_key:
+            existing = Refund.objects.filter(idempotency_key=idempotency_key).first()
+            if existing is not None:
+                return _validate_existing_refund_request(
+                    existing, order=order, store=store, line_requests=line_requests,
+                    shipping_amount=shipping_amount, reason=reason, merchant_note=merchant_note,
+                    refund_method=refund_method, restock=restock,
+                )
+        raise
     for line in plan.lines:
         refund_item = RefundItem.objects.create(
             refund=refund, order_item=line.order_item, quantity=line.quantity,
