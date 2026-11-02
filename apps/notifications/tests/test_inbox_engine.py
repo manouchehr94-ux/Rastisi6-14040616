@@ -236,6 +236,63 @@ class InboxServiceTests(_Base):
         self.assertFalse(inbox.mark(item, "snooze", snooze="nonsense"))
         self.assertFalse(inbox.mark(item, "explode"))
 
+    def test_snooze_lifecycle_preserves_read_state_updates_counter_and_prevents_duplicate_toast(self):
+        ev_unread = self.pub("order.canceled", title="اعلان خوانده‌نشده", dedupe_key="snz-u")
+        ev_read = self.pub("order.canceled", title="اعلان خوانده‌شده", dedupe_key="snz-r")
+        item_u = InboxItem.objects.get(event=ev_unread, user=self.owner)
+        item_r = InboxItem.objects.get(event=ev_read, user=self.owner)
+        t0 = item_u.created_at
+        inbox.mark(item_r, "read", now=t0)
+
+        # Initially at t0: unread item is eligible for toast
+        initial_summary = inbox.summary(self.owner, self.store, since_ms=0, now=t0)
+        self.assertEqual(initial_summary["unread"], 1)
+        self.assertEqual([t["id"] for t in initial_summary["toasts"]], [str(item_u.public_id)])
+
+        # At t0 + 1 min: snooze both items for 1 hour
+        t1 = t0 + timedelta(minutes=1)
+        self.assertTrue(inbox.mark(item_u, "snooze", now=t1, snooze="1h"))
+        self.assertTrue(inbox.mark(item_r, "snooze", now=t1, snooze="1h"))
+        self.assertFalse(InboxItem.objects.get(pk=item_u.pk).popup)
+        self.assertEqual(inbox.unread_count(self.owner, self.store, now=t1), 0)
+        self.assertEqual(inbox.filtered(self.owner, self.store, {}, now=t1).count(), 0)
+        self.assertEqual(inbox.filtered(self.owner, self.store, {"view": "snoozed"}, now=t1).count(), 2)
+        self.assertTrue(inbox.serialize(item_u, now=t1)["snoozed"])
+        self.assertEqual(inbox.unread_count(self.administrator, self.store, now=t1), 2)
+
+        # At t0 + 2 min (< 5 min window): unsnooze item_u and poll with since_ms=0 -> NO duplicate toast
+        t2 = t0 + timedelta(minutes=2)
+        self.assertTrue(inbox.mark(item_u, "unsnooze", now=t2))
+        sum_unsnoozed = inbox.summary(self.owner, self.store, since_ms=0, now=t2)
+        self.assertEqual(sum_unsnoozed["unread"], 1)
+        self.assertEqual([i["id"] for i in sum_unsnoozed["items"]], [str(item_u.public_id)])
+        self.assertEqual(sum_unsnoozed["toasts"], [])
+
+        # Re-snooze item_u at t2 for 1h; mark_all_read while snoozed must not touch snoozed items
+        self.assertTrue(inbox.mark(item_u, "snooze", now=t2, snooze="1h"))
+        inbox.mark_all_read(self.owner, self.store, now=t2)
+        item_u.refresh_from_db()
+        self.assertIsNone(item_u.read_at)
+
+        # After snooze expires (t2 + 61 min): automatically returns to active inbox; read state preserved
+        t_after = t2 + timedelta(minutes=61)
+        self.assertEqual(inbox.filtered(self.owner, self.store, {"view": "snoozed"}, now=t_after).count(), 0)
+        self.assertEqual(inbox.filtered(self.owner, self.store, {}, now=t_after).count(), 2)
+        self.assertEqual(inbox.unread_count(self.owner, self.store, now=t_after), 1)
+        self.assertFalse(inbox.serialize(item_u, now=t_after)["snoozed"])
+
+    def test_groupable_repeat_respects_active_snooze_until_it_expires(self):
+        now = timezone.now()
+        ev = self.pub("payment.failed", group_key="pay:snz", summary="تلاش ۱")
+        item = InboxItem.objects.get(event=ev, user=self.owner)
+        inbox.mark(item, "read", now=now)
+        inbox.mark(item, "snooze", now=now, snooze="1h")
+        self.pub("payment.failed", group_key="pay:snz", summary="تلاش ۲")
+        item.refresh_from_db()
+        self.assertIsNone(item.read_at)
+        self.assertEqual(inbox.unread_count(self.owner, self.store, now=now + timedelta(minutes=10)), 0)
+        self.assertEqual(inbox.unread_count(self.owner, self.store, now=now + timedelta(hours=2)), 1)
+
     def test_mark_all_read_only_touches_the_callers_visible_items(self):
         self.make(3)
         other_item_count = InboxItem.objects.filter(user=self.administrator, read_at__isnull=True).count()

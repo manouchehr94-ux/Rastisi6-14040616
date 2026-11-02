@@ -52,6 +52,7 @@ def serialize(item, now=None) -> dict:
         "tone": SEVERITY_TONES.get(ev.severity, "normal"), "severity_label": SEVERITY_LABELS.get(ev.severity, ""),
         "category": ev.category, "category_label": R.category_label(ev.category), "count": ev.occurrence_count,
         "read": item.read_at is not None, "pinned": item.pinned, "archived": item.archived_at is not None,
+        "snoozed": bool(item.snoozed_until and item.snoozed_until > now),
         "created_ms": int(item.created_at.timestamp() * 1000), "has_link": bool(ev.link_name),
         "popup": item.popup,
     }
@@ -119,11 +120,12 @@ def mark(item, action: str, *, now=None, snooze: str = "") -> bool:
         if delta is None:
             return False
         item.snoozed_until = now + delta
+        item.popup = False
     elif action == "unsnooze":
         item.snoozed_until = None
     else:
         return False
-    item.save(update_fields=["read_at", "archived_at", "pinned", "snoozed_until"])
+    item.save(update_fields=["read_at", "archived_at", "pinned", "snoozed_until", "popup"])
     return True
 
 

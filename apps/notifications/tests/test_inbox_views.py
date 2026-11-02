@@ -5,7 +5,7 @@ import json
 import socket
 from unittest import mock
 
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -29,6 +29,10 @@ class _V(PermissionEnforcementTestCase):
         guard.start()
         self.addCleanup(guard.stop)
         from django.conf import settings
+        # Isolate rate-limit attempts between tests without clearing an external Redis cache.
+        alias = getattr(settings, "RASTISI_RATE_LIMIT_CACHE_ALIAS", "ratelimit")
+        if settings.CACHES.get(alias, {}).get("BACKEND") == "django.core.cache.backends.locmem.LocMemCache":
+            caches[alias].clear()
         from apps.core.models import ShopSettings
         from apps.stores.models import StoreDomain
 
@@ -127,6 +131,33 @@ class ActionTests(_V):
             self.assertTrue(getattr(InboxItem.objects.get(pk=item.pk), field))
         bad = self.client.post(self.url("inbox-action", public_id=item.public_id, action="explode"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(bad.status_code, 400)
+
+    def test_snooze_and_unsnooze_actions_and_expired_badge_rendering(self):
+        from datetime import timedelta
+        ev = self.ev(dedupe_key="snz-view", title="اعلان تعویقی")
+        item = self.item(event=ev)
+        r = self.client.post(self.url("inbox-action", public_id=item.public_id, action="snooze"), {"snooze": "1h"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.json(), {"ok": True, "unread": 0})
+        # Hidden from active view, visible in snoozed view with unsnooze button
+        active_html = self.client.get(self.url("inbox-home")).content.decode()
+        self.assertNotIn("اعلان تعویقی", active_html)
+        snoozed_html = self.client.get(self.url("inbox-home") + "?view=snoozed").content.decode()
+        self.assertIn("اعلان تعویقی", snoozed_html)
+        self.assertIn('data-testid="row-unsnooze"', snoozed_html)
+        self.assertIn("⏰ تا", snoozed_html)
+
+        # When snooze time passes, item returns to active view automatically and stale snooze badge is NOT shown
+        InboxItem.objects.filter(pk=item.pk).update(snoozed_until=timezone.now() - timedelta(minutes=5))
+        returned_html = self.client.get(self.url("inbox-home")).content.decode()
+        self.assertIn("اعلان تعویقی", returned_html)
+        self.assertNotIn("⏰ تا", returned_html)
+        self.assertNotIn('data-testid="row-unsnooze"', returned_html)
+
+        # Manual unsnooze within 5 minutes clears snoozed_until and never re-triggers a toast
+        self.client.post(self.url("inbox-action", public_id=item.public_id, action="snooze"), {"snooze": "4h"})
+        self.client.post(self.url("inbox-action", public_id=item.public_id, action="unsnooze"))
+        self.assertIsNone(InboxItem.objects.get(pk=item.pk).snoozed_until)
+        self.assertEqual(self.client.get(self.url("inbox-summary") + "?since=0").json()["toasts"], [])
 
     def test_html_form_post_redirects_back_only_inside_the_inbox(self):
         item = self.item(event=self.ev(dedupe_key="a2"))

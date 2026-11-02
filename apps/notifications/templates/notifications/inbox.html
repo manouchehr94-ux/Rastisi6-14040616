@@ -40,7 +40,7 @@
       <div class="nt-row__main">
         <h3 class="nt-row__title"><a href="{% url site.ns|add:':inbox-detail' public_id=i.obj.public_id %}">{{ i.title }}{% if i.count > 1 %} (×{{ i.count|fa_number }}){% endif %}</a></h3>
         {% if i.summary %}<p class="nt-row__sum">{{ i.summary }}</p>{% endif %}
-        <div class="nt-row__meta"><span class="nt-chip nt-chip--{{ i.tone }}">{{ i.severity_label }}</span><span>{{ i.category_label }}</span><span>{{ i.obj.created_at|jalali_dt }}</span>{% if i.pinned %}<span>📌 سنجاق‌شده</span>{% endif %}{% if i.obj.snoozed_until %}<span>⏰ تا {{ i.obj.snoozed_until|jalali_dt }}</span>{% endif %}</div>
+        <div class="nt-row__meta"><span class="nt-chip nt-chip--{{ i.tone }}">{{ i.severity_label }}</span><span>{{ i.category_label }}</span><span>{{ i.obj.created_at|jalali_dt }}</span>{% if i.pinned %}<span>📌 سنجاق‌شده</span>{% endif %}{% if i.snoozed %}<span>⏰ تا {{ i.obj.snoozed_until|jalali_dt }}</span>{% endif %}</div>
       </div>
       <div class="nt-row__ops">
         {% if i.has_link %}<a class="nt-btn nt-btn--sm" href="{% url site.ns|add:':inbox-go' public_id=i.obj.public_id %}">رفتن به آن</a>{% endif %}
@@ -50,6 +50,9 @@
         {% if i.obj.archived_at %}
           <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='unarchive' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit">برگرداندن</button></form>
         {% else %}
+          {% if i.snoozed %}
+          <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='unsnooze' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit" data-testid="row-unsnooze">لغو تعویق</button></form>
+          {% endif %}
           <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='snooze' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><select name="snooze" aria-label="تعویق تا">{% for k, v in snoozes %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="nt-btn nt-btn--sm" type="submit">به‌تعویق</button></form>
           <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='archive' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit" data-testid="row-archive">بایگانی</button></form>
         {% endif %}
