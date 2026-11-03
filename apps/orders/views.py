@@ -407,11 +407,17 @@ def payment_initiate(request, code):
             "error": "هیچ درگاه پرداخت فعالی پیکربندی نشده است",
         })
 
-    # Generate idempotency key — uses a server-side nonce to avoid races.
-    # The gateway_payment_service checks this key BEFORE creating a new attempt,
-    # so concurrent requests with the same key return the existing attempt.
+    # Generate a DETERMINISTIC idempotency key derived from the payment
+    # operation identity: (store, order.code, gateway_config.pk, amount). A
+    # legitimate retry of the SAME operation (same store/order/gateway/amount)
+    # produces the SAME key, so the service dedupes it to the existing attempt
+    # instead of charging again. A different order/gateway/amount produces a
+    # different key, so unrelated operations never collide. The composite is
+    # hashed to stay within PaymentAttempt.idempotency_key max_length=64.
+    import hashlib
     import secrets as _secrets
-    idem_key = f"pay-{order.code}-{gateway_config.pk}-{_secrets.token_hex(8)}"
+    idem_seed = f"{store.pk}:{order.code}:{gateway_config.pk}:{order.grand_total}"
+    idem_key = f"pay-{hashlib.sha256(idem_seed.encode('utf-8')).hexdigest()[:48]}"
 
     # Initiate payment — attempt is created FIRST, then we build the callback URL
     # using the attempt's public_id. For online gateways the callback_url passed here

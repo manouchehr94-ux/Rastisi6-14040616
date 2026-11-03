@@ -25,6 +25,7 @@ State ownership:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from decimal import Decimal
 
@@ -146,11 +147,93 @@ def initiate_payment(
             )
         raise PaymentConfigError("درگاه پرداخت برای پرداخت واقعی آماده نیست.")
 
-    # Idempotency: check for existing attempt
-    if idempotency_key:
-        existing = PaymentAttempt.objects.filter(idempotency_key=idempotency_key).first()
-        if existing is not None:
-            return existing
+    # Idempotency + concurrency guard.
+    #
+    # The dedupe lookup is scoped by the FULL operation identity
+    # (store, order, gateway_config, amount) in ADDITION to the key — never by
+    # the key alone. This closes two holes:
+    #   * tenant/operation isolation: a reused key that was created for a
+    #     different store/order/gateway/amount is treated as a NON-match and is
+    #     never returned, so one tenant can never receive another tenant's (or
+    #     another order/gateway/amount's) attempt.
+    #   * single external charge: an existing matching attempt that is already
+    #     live/redirect-ready/succeeded (i.e. the gateway was already engaged)
+    #     is returned WITHOUT calling the gateway again.
+    #
+    # Concurrency is serialized with select_for_update on the Order row: two
+    # parallel requests for the SAME operation cannot both pass the check and
+    # both create an attempt / both charge. The first request creates the
+    # attempt (and makes the one external create_payment call) while holding
+    # the row lock; the second blocks, then finds the existing live attempt and
+    # returns it without charging again. The deterministic idempotency key
+    # (built by the view from the same identity) plus the existing partial
+    # unique(idempotency_key) constraint is the backstop even across separate
+    # DB sessions, so NO new broad constraint (which would break legitimate
+    # multi-attempt retry history) is introduced.
+    #
+    # Statuses that mean "the gateway was already engaged for this operation"
+    # and must therefore be reused rather than re-charged.
+    _reusable_statuses = (
+        PaymentAttempt.Status.CREATED,
+        PaymentAttempt.Status.REQUESTING,
+        PaymentAttempt.Status.REDIRECT_READY,
+        PaymentAttempt.Status.PENDING,
+        PaymentAttempt.Status.SUCCEEDED,
+        PaymentAttempt.Status.VERIFIED,
+        PaymentAttempt.Status.FINALIZED,
+    )
+
+    def _scoped_existing():
+        """Return a live attempt for THIS exact operation identity, or None.
+
+        Scoped by store (tenant isolation), order, gateway_config, and amount.
+        If an idempotency_key is supplied it must ALSO match — but a key that
+        belongs to a different identity is simply not found here, so a reused
+        foreign key can never surface a foreign attempt.
+        """
+        qs = PaymentAttempt.objects.filter(
+            store=store,
+            order=order,
+            gateway_config=gateway_config,
+            amount=order.grand_total,
+            status__in=_reusable_statuses,
+        )
+        if idempotency_key:
+            qs = qs.filter(idempotency_key=idempotency_key)
+        return qs.order_by("-created_at").first()
+
+    def _key_to_persist():
+        """Pick a safe idempotency key for a NEW attempt.
+
+        The caller's key is honored when it is free or already belongs to THIS
+        operation identity. But the DB enforces a global partial
+        unique(idempotency_key): if the supplied key was minted for a DIFFERENT
+        operation (a reused/foreign key), persisting it verbatim would raise an
+        IntegrityError. In that case we substitute a DETERMINISTIC key derived
+        from this operation's identity (store, order, gateway_config, amount) so
+        the new attempt is still idempotent for its own operation and never
+        collides with the foreign row.
+        """
+        if not idempotency_key:
+            return ""
+        clash = (
+            PaymentAttempt.objects.exclude(
+                store=store, order=order,
+                gateway_config=gateway_config, amount=order.grand_total,
+            )
+            .filter(idempotency_key=idempotency_key)
+            .exists()
+        )
+        if not clash:
+            return idempotency_key
+        seed = f"{store.pk}:{order.pk}:{gateway_config.pk}:{order.grand_total}"
+        return f"pay-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:48]}"
+
+    # Fast path outside the lock: if a matching live attempt already exists,
+    # reuse it without opening a write transaction.
+    existing = _scoped_existing()
+    if existing is not None:
+        return existing
 
     # Get adapter
     try:
@@ -167,19 +250,43 @@ def initiate_payment(
             "خطا در خواندن اعتبارنامه‌ی درگاه. لطفاً اعتبارنامه را دوباره وارد کنید."
         ) from exc
 
-    # Create attempt record
-    attempt = PaymentAttempt(
-        store=store,
-        order=order,
-        gateway_config=gateway_config,
-        amount=order.grand_total,
-        currency="TOMAN",
-        status=PaymentAttempt.Status.CREATED,
-        idempotency_key=idempotency_key or "",
-    )
-    if pre_public_id:
-        attempt.public_id = pre_public_id
-    attempt.save()
+    # Create attempt record under an order-row lock so concurrent
+    # same-operation requests serialize. The winner creates the attempt; a
+    # loser that was blocked here re-checks inside the lock, finds the live
+    # attempt the winner just created, and returns it without creating a second
+    # attempt or making a second external create_payment call. On databases
+    # without row-level locking (e.g. SQLite) select_for_update is a no-op, but
+    # the deterministic key + partial unique(idempotency_key) constraint still
+    # prevents a duplicate row from being committed.
+    with transaction.atomic():
+        order_locked = (
+            Order.objects.select_for_update()
+            .filter(pk=order.pk, store=store)
+            .first()
+        )
+        if order_locked is None:
+            # Order vanished or does not belong to this store — never create a
+            # cross-tenant attempt.
+            raise OrderNotPayableError("سفارش برای این فروشگاه یافت نشد")
+
+        # Re-check inside the lock: a concurrent winner may have just created a
+        # live attempt for this exact operation.
+        existing = _scoped_existing()
+        if existing is not None:
+            return existing
+
+        attempt = PaymentAttempt(
+            store=store,
+            order=order,
+            gateway_config=gateway_config,
+            amount=order.grand_total,
+            currency="TOMAN",
+            status=PaymentAttempt.Status.CREATED,
+            idempotency_key=_key_to_persist(),
+        )
+        if pre_public_id:
+            attempt.public_id = pre_public_id
+        attempt.save()
 
     # Offline gateways never go through the online redirect/verify flow. The
     # two offline methods have OPPOSITE bookkeeping, distinguished by the
