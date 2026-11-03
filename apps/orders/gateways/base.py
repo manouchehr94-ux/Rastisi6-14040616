@@ -21,7 +21,48 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import Enum
 from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# Capability + category declarations (M1 additive extension)
+# ---------------------------------------------------------------------------
+
+
+class PaymentOperation(str, Enum):
+    """Operations a gateway adapter may declare support for.
+
+    CREATE and VERIFY are the baseline operations every online adapter must
+    support (they map to the original abstract ``create_payment`` /
+    ``verify_payment`` contract). The remaining operations are optional and
+    capability-gated: an adapter declares them in ``capabilities`` ONLY when
+    the provider's official documentation specifies the operation. Declaring a
+    capability without a real implementation is a bug — the default
+    implementations below raise ``GatewayUnsupportedOperationError``.
+    """
+
+    CREATE = "create"      # Create a payment session (server-to-server)
+    VERIFY = "verify"      # Authoritative server-to-server verification
+    INQUIRE = "inquire"    # Query the current status of a payment
+    CANCEL = "cancel"      # Cancel/void a not-yet-settled payment
+    REFUND = "refund"      # Refund a settled payment (full/partial)
+    SETTLE = "settle"      # Explicitly settle/capture an authorized payment
+
+
+class GatewayCategory(str, Enum):
+    """Business category of a payment provider.
+
+    PSP         — bank-connected payment service provider (IPG).
+    FACILITATOR — payment facilitator / aggregator riding on top of PSPs.
+    BNPL        — buy-now-pay-later / installment provider.
+    OFFLINE     — no online money movement (e.g. cash on delivery).
+    """
+
+    PSP = "psp"
+    FACILITATOR = "facilitator"
+    BNPL = "bnpl"
+    OFFLINE = "offline"
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +88,59 @@ class PaymentVerificationResult:
     card_number: str = ""  # Masked card number (if provided by gateway)
     status_code: int = 0  # Gateway-specific status code
     message: str = ""  # Human-readable status message
+
+
+@dataclass(frozen=True)
+class PaymentInquiryResult:
+    """Result of an inquire_payment call (status query).
+
+    ``settled`` mirrors the provider's authoritative state. ``status`` is a
+    free-form provider status token (kept for evidence); callers must map it
+    through the adapter, never interpret raw provider tokens elsewhere.
+    """
+
+    paid: bool
+    settled: bool = False
+    ref_id: str = ""
+    status: str = ""
+    status_code: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PaymentRefundResult:
+    """Result of a refund_payment call.
+
+    ``amount`` is expressed in the same unit the adapter was asked to refund
+    (Toman at the service boundary). ``pending`` is True when the provider
+    accepted the refund but has not yet confirmed settlement of the reversal.
+    """
+
+    success: bool
+    refund_ref: str = ""
+    amount: Decimal | None = None
+    pending: bool = False
+    status_code: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PaymentCancelResult:
+    """Result of a cancel_payment call (void of a not-yet-settled payment)."""
+
+    success: bool
+    status_code: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PaymentSettleResult:
+    """Result of a settle_payment call (explicit capture/settlement)."""
+
+    success: bool
+    settle_ref: str = ""
+    status_code: int = 0
+    message: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +190,17 @@ class GatewayCredentialError(GatewayError):
     """Credentials are invalid, expired, or missing."""
 
 
+class GatewayUnsupportedOperationError(GatewayError):
+    """The adapter does not declare support for the requested operation.
+
+    Raised by the DEFAULT implementations of the optional capability-gated
+    methods (inquire/cancel/refund/settle). An unsupported financial operation
+    must NEVER be silently emulated — the caller gets an explicit error so it
+    can fall back to a manual/offline workflow instead of pretending money
+    moved. ``code`` carries the attempted :class:`PaymentOperation` value.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Abstract adapter
 # ---------------------------------------------------------------------------
@@ -132,6 +237,41 @@ class PaymentGatewayAdapter(ABC):
         Default: empty (no credentials needed, e.g., COD).
         """
         return []
+
+    # --- Capability + category declarations (additive, non-abstract) --------
+
+    @property
+    def capabilities(self) -> frozenset[PaymentOperation]:
+        """The set of operations this adapter actually supports.
+
+        An adapter MUST only list an operation here if it has a real,
+        documentation-backed implementation. The default is the baseline for
+        an online gateway (CREATE + VERIFY). Offline adapters override this to
+        an empty set. Capability declarations drive readiness derivation and
+        which optional methods the orchestrator is allowed to call.
+        """
+        return frozenset({PaymentOperation.CREATE, PaymentOperation.VERIFY})
+
+    @property
+    def category(self) -> GatewayCategory:
+        """Business category of this provider (PSP/FACILITATOR/BNPL/OFFLINE)."""
+        return GatewayCategory.FACILITATOR
+
+    @property
+    def documentation_blocked(self) -> bool:
+        """True when the provider's official current contract is unverifiable.
+
+        A documentation-blocked adapter must not be selectable at real
+        (non-sandbox) checkout. Default False; providers whose official docs
+        are unreachable/incomplete override this to True so readiness
+        derivation can surface DOCUMENTATION_BLOCKED. Keeps the checkout code
+        free of provider conditionals.
+        """
+        return False
+
+    def supports(self, operation: PaymentOperation) -> bool:
+        """Convenience check: does this adapter declare ``operation``?"""
+        return operation in self.capabilities
 
     @abstractmethod
     def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
@@ -227,3 +367,109 @@ class PaymentGatewayAdapter(ABC):
             GatewayResponseError: Malformed verification response.
             GatewayVerificationError: Verification explicitly failed.
         """
+
+    # -----------------------------------------------------------------------
+    # Optional capability-gated operations (M1 additive extension)
+    #
+    # These are NOT @abstractmethod on purpose: existing adapters (zibal, cod)
+    # must keep instantiating without change. The default implementations
+    # raise GatewayUnsupportedOperationError so an undeclared operation can
+    # never be silently emulated. An adapter enables one of these by (a)
+    # listing the matching PaymentOperation in ``capabilities`` AND
+    # (b) overriding the method with a real, documentation-backed body.
+    # -----------------------------------------------------------------------
+
+    def _unsupported(self, operation: PaymentOperation) -> GatewayUnsupportedOperationError:
+        return GatewayUnsupportedOperationError(
+            f"درگاه «{self.display_name}» از عملیات «{operation.value}» پشتیبانی نمی‌کند.",
+            code=operation.value,
+            details={"gateway": self.code, "operation": operation.value},
+        )
+
+    def inquire_payment(
+        self,
+        *,
+        track_id: str,
+        expected_amount: Decimal,
+        currency: str,
+        credentials: dict[str, str],
+        sandbox: bool = False,
+    ) -> PaymentInquiryResult:
+        """Query the current status of a payment (optional capability).
+
+        Default: raise GatewayUnsupportedOperationError. Override only when the
+        provider documents a status-inquiry endpoint and INQUIRE is declared in
+        ``capabilities``.
+        """
+        raise self._unsupported(PaymentOperation.INQUIRE)
+
+    def cancel_payment(
+        self,
+        *,
+        track_id: str,
+        credentials: dict[str, str],
+        sandbox: bool = False,
+    ) -> PaymentCancelResult:
+        """Cancel/void a not-yet-settled payment (optional capability).
+
+        Default: raise GatewayUnsupportedOperationError. Override only when the
+        provider documents a cancel/void endpoint and CANCEL is declared.
+        """
+        raise self._unsupported(PaymentOperation.CANCEL)
+
+    def refund_payment(
+        self,
+        *,
+        track_id: str,
+        amount: Decimal,
+        currency: str,
+        credentials: dict[str, str],
+        reason: str = "",
+        sandbox: bool = False,
+    ) -> PaymentRefundResult:
+        """Refund a settled payment, full or partial (optional capability).
+
+        Default: raise GatewayUnsupportedOperationError. Override only when the
+        provider documents a refund endpoint and REFUND is declared. A refund
+        must never be faked — if unsupported, the caller falls back to the
+        manual (out-of-band) refund workflow.
+        """
+        raise self._unsupported(PaymentOperation.REFUND)
+
+    def settle_payment(
+        self,
+        *,
+        track_id: str,
+        amount: Decimal,
+        currency: str,
+        credentials: dict[str, str],
+        sandbox: bool = False,
+    ) -> PaymentSettleResult:
+        """Explicitly settle/capture an authorized payment (optional capability).
+
+        Default: raise GatewayUnsupportedOperationError. Override only when the
+        provider documents a separate settle/capture step and SETTLE is
+        declared.
+        """
+        raise self._unsupported(PaymentOperation.SETTLE)
+
+    def check_bnpl_eligibility(
+        self,
+        *,
+        amount: Decimal,
+        currency: str,
+        credentials: dict[str, str],
+        customer: dict[str, Any] | None = None,
+        sandbox: bool = False,
+    ) -> dict[str, Any]:
+        """BNPL eligibility hook (optional, BNPL category only).
+
+        Default: raise GatewayUnsupportedOperationError. BNPL adapters override
+        this to query installment eligibility. Non-BNPL adapters never
+        implement it.
+        """
+        raise GatewayUnsupportedOperationError(
+            f"درگاه «{self.display_name}» از اعتبارسنجی اقساطی (BNPL) پشتیبانی نمی‌کند.",
+            code="bnpl_eligibility",
+            details={"gateway": self.code},
+        )

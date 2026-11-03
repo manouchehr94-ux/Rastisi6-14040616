@@ -23,8 +23,10 @@ from decimal import Decimal
 from typing import Any
 
 from .base import (
+    GatewayCategory,
     PaymentCreationResult,
     PaymentGatewayAdapter,
+    PaymentOperation,
     PaymentVerificationResult,
 )
 
@@ -49,6 +51,18 @@ class CodAdapter(PaymentGatewayAdapter):
     @property
     def required_credentials(self) -> list[str]:
         return []
+
+    @property
+    def category(self) -> GatewayCategory:
+        # Cash on delivery: no online money movement at all.
+        return GatewayCategory.OFFLINE
+
+    @property
+    def capabilities(self) -> frozenset[PaymentOperation]:
+        # COD performs no online operations. An empty capability set makes it
+        # explicit that CREATE/VERIFY here are offline bookkeeping, not
+        # server-to-server gateway calls.
+        return frozenset()
 
     def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
         """COD requires no credentials — always valid."""
