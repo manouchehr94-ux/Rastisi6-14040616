@@ -149,6 +149,20 @@ class _MockBnplAdapter(PaymentGatewayAdapter):
         return PaymentSettleResult(success=True, settle_ref="MOCK-SETTLE", status_code=100, message="settled")
 
 
+class _MockBnplSettleFailsAdapter(_MockBnplAdapter):
+    """A BNPL adapter whose verify succeeds but whose SETTLE step FAILS.
+
+    Proves the orchestrator's SETTLE gate: the order must NOT be marked paid
+    when settle does not succeed, even though verify reported success.
+    """
+
+    settle_calls = 0
+
+    def settle_payment(self, *, track_id, amount, currency, credentials, sandbox=False):
+        type(self).settle_calls += 1
+        return PaymentSettleResult(success=False, settle_ref="", status_code=0, message="settle declined")
+
+
 class Feat005TestBase(TestCase):
     def setUp(self):
         reset_fernet()
@@ -306,6 +320,39 @@ class OrchestratorEndToEndTests(Feat005TestBase):
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
         # The capability-gated settle step must have been invoked.
         self.assertEqual(_MockBnplAdapter.settle_calls, 1)
+
+    def test_bnpl_not_marked_paid_when_settle_fails(self):
+        """If the DISTINCT settle step fails, the order is NOT marked paid even
+        though verify succeeded — the SETTLE gate holds the line."""
+        _MockBnplSettleFailsAdapter.settle_calls = 0
+        config = PaymentGatewayConfig.objects.create(
+            store=self.store, gateway_code="snappay", is_active=True, is_sandbox=False,
+        )
+        config.set_credentials({"client_id": "cid", "client_secret": "csecret"})
+        config.save()
+        mock = _MockBnplSettleFailsAdapter()
+        from apps.orders.services.gateway_payment_service import PaymentVerificationFailed
+
+        with patch("apps.orders.services.gateway_payment_service.get_adapter", return_value=mock), \
+             patch("apps.orders.gateways.get_adapter", return_value=mock):
+            attempt = initiate_payment(
+                order=self.order, gateway_config=config,
+                callback_url="https://shop/cb", store=self.store,
+            )
+            with self.assertRaises(PaymentVerificationFailed):
+                process_callback_and_verify(
+                    attempt_public_id=attempt.public_id,
+                    callback_data={"status": "1"},
+                    store=self.store,
+                )
+        attempt.refresh_from_db()
+        self.order.refresh_from_db()
+        # settle was attempted (gate engaged) but failed ...
+        self.assertEqual(_MockBnplSettleFailsAdapter.settle_calls, 1)
+        # ... so the attempt is FAILED and the order is NOT paid.
+        self.assertEqual(attempt.status, PaymentAttempt.Status.FAILED)
+        self.assertNotEqual(self.order.payment_status, Order.PaymentStatus.PAID)
+        self.assertFalse(Transaction.objects.filter(order=self.order, status="ok").exists())
 
     def test_amount_tampering_in_callback_does_not_change_finalized_amount(self):
         config = self._ready_zarinpal_config()
