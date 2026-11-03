@@ -133,6 +133,24 @@ class ZarinpalAdapter(PaymentGatewayAdapter):
         return ["merchant_id"]
 
     @property
+    def credential_labels(self) -> dict[str, str]:
+        return {"merchant_id": "کد پذیرنده (Merchant ID — ۳۶ کاراکتر)"}
+
+    @property
+    def onboarding_help(self) -> str:
+        return (
+            "کد پذیرنده‌ی ۳۶ کاراکتری را از پنل زرین‌پال دریافت و وارد کنید. "
+            "قرارداد REST v4 مطابق مستندات رسمی پیاده‌سازی شده است؛ پیش از فعال‌سازیِ "
+            "واقعی، درگاه را با یک تراکنش آزمایشیِ مجاز بررسی کنید."
+        )
+
+    @property
+    def supports_sandbox(self) -> bool:
+        # The landing doc read in this environment did NOT document a dedicated
+        # sandbox host, so no unverified sandbox base is offered in the admin UI.
+        return False
+
+    @property
     def category(self) -> GatewayCategory:
         # Zarinpal is a payment facilitator/aggregator riding on Shaparak/Shetab.
         return GatewayCategory.FACILITATOR

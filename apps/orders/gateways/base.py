@@ -273,6 +273,40 @@ class PaymentGatewayAdapter(ABC):
         """Convenience check: does this adapter declare ``operation``?"""
         return operation in self.capabilities
 
+    # --- Admin-UI presentation metadata (additive, non-abstract) ------------
+
+    @property
+    def supports_sandbox(self) -> bool:
+        """Whether a genuine sandbox/test mode exists for this provider.
+
+        Drives whether the admin finance UI offers a sandbox toggle. Default:
+        online adapters that are not documentation-blocked may expose sandbox.
+        Offline adapters and documentation-blocked skeletons have no real
+        sandbox, so the toggle is hidden for them. Adapters with no verified
+        sandbox host override this to ``False``.
+        """
+        return self.is_online and not self.documentation_blocked
+
+    @property
+    def credential_labels(self) -> dict[str, str]:
+        """Optional Persian labels for credential fields.
+
+        Maps a ``required_credentials`` key to a human-readable Persian label
+        for the admin form. Missing keys fall back to the raw key name. Keeps
+        provider-specific field wording inside the adapter (no view
+        conditionals).
+        """
+        return {}
+
+    @property
+    def onboarding_help(self) -> str:
+        """Persian merchant onboarding help text shown in the admin finance UI.
+
+        Explains, per provider, where to obtain credentials and any readiness
+        caveats. Default empty (the UI falls back to a generic note).
+        """
+        return ""
+
     @abstractmethod
     def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
         """Validate that credentials are sufficient for this gateway.

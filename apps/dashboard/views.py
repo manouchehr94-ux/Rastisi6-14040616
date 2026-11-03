@@ -6003,6 +6003,18 @@ def settings_gateway_config_save(request, gateway_code):
             credential_errors.append("خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید.")
             is_active = False
 
+    # Readiness enforcement (single source of truth, no per-gateway conditionals):
+    # a DOCUMENTATION_BLOCKED / NEEDS_CREDENTIALS / NOT_CONFIGURED / UNAVAILABLE /
+    # ERROR provider must NOT be activatable for real (non-sandbox) checkout. The
+    # check runs against the config *as it will be saved* (credentials + sandbox
+    # already applied above).
+    if is_active:
+        config.is_active = True  # evaluate readiness as if active
+        activation_error = settings_admin_service.gateway_activation_error(config)
+        if activation_error:
+            credential_errors.append(activation_error)
+            is_active = False
+
     config.is_active = is_active
     config.save()
 
@@ -6052,16 +6064,17 @@ def settings_gateway_config_toggle(request, gateway_code):
         config.save(update_fields=["is_active", "updated_at"])
         toast_msg = f"{adapter.display_name} غیرفعال شد"
     else:
-        # Activate — only if configured
-        if adapter.required_credentials:
-            errors = adapter.validate_credentials(config.get_credentials())
-            if errors:
-                response = HttpResponse(status=204)
-                response["HX-Trigger"] = json.dumps({
-                    "toast": {"message": "پیکربندی ناقص — ابتدا اعتبارنامه را وارد کنید", "type": "err"},
-                })
-                return response
-        config.is_active = True
+        # Activate — only if ready for real checkout (readiness is the single
+        # source of truth; blocks DOCUMENTATION_BLOCKED / incomplete providers).
+        config.is_active = True  # evaluate readiness as if active
+        activation_error = settings_admin_service.gateway_activation_error(config)
+        if activation_error:
+            config.is_active = False
+            response = HttpResponse(status=204)
+            response["HX-Trigger"] = json.dumps({
+                "toast": {"message": activation_error, "type": "err"},
+            })
+            return response
         config.save(update_fields=["is_active", "updated_at"])
         toast_msg = f"{adapter.display_name} فعال شد"
 

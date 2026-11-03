@@ -93,6 +93,17 @@ class ZibalAdapter(PaymentGatewayAdapter):
         return ["merchant"]
 
     @property
+    def credential_labels(self) -> dict[str, str]:
+        return {"merchant": "شناسه‌ی مرچنت (Merchant ID)"}
+
+    @property
+    def onboarding_help(self) -> str:
+        return (
+            "شناسه‌ی مرچنت را از پنل زیبال دریافت و وارد کنید. حالت آزمایشی (Sandbox) "
+            "با مرچنت آزمایشی زیبال و بدون پرداخت واقعی کار می‌کند."
+        )
+
+    @property
     def category(self) -> GatewayCategory:
         # Zibal is a payment facilitator/aggregator riding on top of PSPs.
         return GatewayCategory.FACILITATOR

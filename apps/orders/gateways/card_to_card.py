@@ -69,6 +69,22 @@ class CardToCardAdapter(PaymentGatewayAdapter):
         return ["card_number", "cardholder_name"]
 
     @property
+    def credential_labels(self) -> dict[str, str]:
+        return {
+            "card_number": "شماره‌ی کارت مقصد (۱۶ رقم)",
+            "cardholder_name": "نام صاحب کارت",
+            "iban": "شماره‌ی شبا (اختیاری)",
+            "bank_name": "نام بانک (اختیاری)",
+        }
+
+    @property
+    def onboarding_help(self) -> str:
+        return (
+            "شماره‌ی کارت مقصد و نام صاحب کارت را وارد کنید. این روش آفلاین است؛ "
+            "پرداخت مشتری به‌صورت خودکار تأیید نمی‌شود و نیازمند تأیید دستی فروشنده است."
+        )
+
+    @property
     def category(self) -> GatewayCategory:
         # Manual card-to-card moves money out of band — no online settlement.
         return GatewayCategory.OFFLINE

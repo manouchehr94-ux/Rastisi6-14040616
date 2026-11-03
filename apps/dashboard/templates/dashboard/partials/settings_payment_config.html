@@ -3,7 +3,7 @@
 <div class="card" style="margin-bottom:18px">
   <div class="card-head">
     <h3>🔐 پیکربندی درگاه‌های پرداخت</h3>
-    <span class="hint">تنظیم اعتبارنامه، فعال‌سازی و حالت آزمایشی</span>
+    <span class="hint">تنظیم اعتبارنامه، فعال‌سازی، دسته و وضعیت آمادگی درگاه‌ها</span>
   </div>
   <div class="card-body">
     {% for gw in gateway_configs %}
@@ -12,28 +12,29 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;gap:10px;align-items:center">
           <div style="width:38px;height:38px;border-radius:10px;background:var(--card);display:grid;place-items:center;font-size:18px">
-            {% if gw.code == "zibal" %}💳{% elif gw.code == "cod" %}🚪{% else %}💰{% endif %}
+            {% if gw.category == "psp" %}🏦{% elif gw.category == "bnpl" %}📆{% elif gw.category == "offline" %}🚪{% else %}💳{% endif %}
           </div>
           <div>
             <b style="font-size:13.5px">{{ gw.label }}</b>
+            <!-- نشان دسته‌ی کسب‌وکاری -->
+            <span style="font-size:10px;background:var(--card);color:var(--muted);padding:2px 8px;border-radius:99px;margin-right:6px;border:1px solid var(--border)">{{ gw.category_label }}</span>
             {% if gw.is_active %}
-            <span style="font-size:10.5px;background:#10b981;color:#fff;padding:2px 8px;border-radius:99px;margin-right:8px">فعال</span>
-            {% elif gw.is_configured %}
-            <span style="font-size:10.5px;background:var(--muted);color:#fff;padding:2px 8px;border-radius:99px;margin-right:8px">غیرفعال</span>
+            <span style="font-size:10.5px;background:#10b981;color:#fff;padding:2px 8px;border-radius:99px;margin-right:6px">فعال</span>
             {% else %}
-            <span style="font-size:10.5px;background:#f59e0b;color:#fff;padding:2px 8px;border-radius:99px;margin-right:8px">ناقص</span>
+            <span style="font-size:10.5px;background:var(--muted);color:#fff;padding:2px 8px;border-radius:99px;margin-right:6px">غیرفعال</span>
             {% endif %}
+            <!-- نشان وضعیت آمادگی -->
+            <span data-readiness="{{ gw.readiness_status }}"
+                  style="font-size:10px;padding:2px 8px;border-radius:99px;margin-right:6px;color:#fff;background:{% if gw.readiness_badge == 'ok' %}#10b981{% elif gw.readiness_badge == 'warn' %}#f59e0b{% elif gw.readiness_badge == 'err' %}#ef4444{% else %}#9ca3af{% endif %}">{{ gw.readiness_label }}</span>
           </div>
         </div>
         <!-- دکمه فعال/غیرفعال سریع -->
-        {% if gw.is_configured or gw.is_active %}
         <button type="button" class="btn btn-sm {% if gw.is_active %}btn-danger{% else %}btn-success{% endif %}"
                 hx-post="{% url 'dashboard:settings-gateway-config-toggle' gw.code %}"
                 hx-swap="none"
                 style="font-size:11.5px;padding:5px 12px">
           {% if gw.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}
         </button>
-        {% endif %}
       </div>
 
       <!-- فرم پیکربندی -->
@@ -59,8 +60,8 @@
           </div>
         </div>
 
-        {% if gw.is_online %}
-        <!-- حالت آزمایشی -->
+        {% if gw.supports_sandbox %}
+        <!-- حالت آزمایشی (فقط درگاه‌هایی که واقعاً پشتیبانی می‌کنند) -->
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
           <input type="checkbox" name="is_sandbox" {% if gw.is_sandbox %}checked{% endif %}>
           <span>حالت آزمایشی (Sandbox)</span>
@@ -68,12 +69,12 @@
         {% endif %}
 
         <!-- فیلدهای اعتبارنامه -->
-        {% for cred_field in gw.required_credentials %}
+        {% for cred in gw.credential_fields %}
         <div>
           <label style="font-size:11.5px;color:var(--muted);display:block;margin-bottom:4px">
-            {% if cred_field == "merchant" %}شناسه مرچنت (Merchant ID){% else %}{{ cred_field }}{% endif %}
+            {{ cred.label }}
           </label>
-          <input type="password" name="credential_{{ cred_field }}"
+          <input type="password" name="credential_{{ cred.name }}"
                  placeholder="{% if gw.is_configured %}••••••• (مقدار موجود حفظ می‌شود){% else %}وارد کنید{% endif %}"
                  autocomplete="off"
                  style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12.5px">
@@ -83,10 +84,16 @@
         </div>
         {% endfor %}
 
+        {% if gw.documentation_blocked %}
+        <div style="font-size:11px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;line-height:1.8">
+          قرارداد رسمی این درگاه هنوز تأیید نشده است؛ تا زمان تأیید، برای پرداخت واقعی قابل فعال‌سازی و انتخاب در تسویه‌حساب نیست.
+        </div>
+        {% endif %}
+
         <!-- فعال‌سازی -->
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin-top:4px">
           <input type="checkbox" name="is_active" {% if gw.is_active %}checked{% endif %}
-                 {% if not gw.is_configured and gw.required_credentials %}disabled title="ابتدا اعتبارنامه را وارد کنید"{% endif %}>
+                 {% if gw.documentation_blocked %}disabled title="این درگاه قابل فعال‌سازی برای پرداخت واقعی نیست"{% endif %}>
           <span>فعال (نمایش در صفحه تسویه‌حساب)</span>
         </label>
 
@@ -96,6 +103,12 @@
           </button>
         </div>
       </form>
+
+      {% if gw.onboarding_help %}
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.9;border-top:1px dashed var(--border);padding-top:8px">
+        <b>راهنما:</b> {{ gw.onboarding_help }}
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
 
@@ -107,10 +120,10 @@
 
 <!-- راهنما -->
 <div class="card">
-  <div class="card-head"><h3>📖 راهنما</h3></div>
+  <div class="card-head"><h3>📖 راهنمای عمومی</h3></div>
   <div class="card-body" style="font-size:12px;line-height:2;color:var(--muted)">
-    <p><b>زیبال:</b> شناسه مرچنت را از پنل زیبال دریافت و وارد کنید. حالت آزمایشی بدون پرداخت واقعی عمل می‌کند.</p>
-    <p><b>پرداخت در محل:</b> نیازی به اعتبارنامه ندارد — فقط فعال کنید.</p>
+    <p><b>دسته‌ها:</b> درگاه بانکی (PSP)، واسط پرداخت، پرداخت اقساطی (BNPL) و آفلاین.</p>
+    <p><b>وضعیت آمادگی:</b> فقط درگاه «متصل و آماده» در تسویه‌حساب واقعی به مشتری نمایش داده می‌شود؛ «آماده‌ی آزمایش» تنها در حالت Sandbox.</p>
     <p><b>امنیت:</b> اعتبارنامه‌ها رمزنگاری‌شده ذخیره می‌شوند و هرگز به‌صورت کامل نمایش داده نمی‌شوند.</p>
   </div>
 </div>

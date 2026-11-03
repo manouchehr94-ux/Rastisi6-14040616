@@ -53,6 +53,10 @@ class CodAdapter(PaymentGatewayAdapter):
         return []
 
     @property
+    def onboarding_help(self) -> str:
+        return "پرداخت در محل نیازی به اعتبارنامه ندارد — فقط فعال کنید. مبلغ هنگام تحویل دریافت می‌شود."
+
+    @property
     def category(self) -> GatewayCategory:
         # Cash on delivery: no online money movement at all.
         return GatewayCategory.OFFLINE
