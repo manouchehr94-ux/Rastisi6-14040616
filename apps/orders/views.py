@@ -461,13 +461,20 @@ def payment_initiate(request, code):
             "error": str(exc),
         })
 
-    # For online gateways, redirect to gateway payment page
+    # For online gateways, redirect to gateway payment page.
+    # Prefer the authoritative payment-page URL that create_payment returned
+    # and the service persisted on the attempt (pasargad/snappay/torobpay).
+    # Fall back to adapter.build_redirect_url only when no URL was persisted,
+    # so adapters that derive the URL from the track_id (zibal/zarinpal) keep
+    # working. No URL is ever hardcoded or fabricated here.
     if gateway_config.is_online:
-        adapter = get_adapter(gateway_config.gateway_code)
-        redirect_url = adapter.build_redirect_url(
-            attempt.gateway_track_id,
-            sandbox=gateway_config.is_sandbox,
-        )
+        redirect_url = (attempt.gateway_redirect_url or "").strip()
+        if not redirect_url:
+            adapter = get_adapter(gateway_config.gateway_code)
+            redirect_url = adapter.build_redirect_url(
+                attempt.gateway_track_id,
+                sandbox=gateway_config.is_sandbox,
+            )
         return redirect(redirect_url)
 
     # COD — go straight to result

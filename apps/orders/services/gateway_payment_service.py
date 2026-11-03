@@ -214,10 +214,24 @@ def initiate_payment(
         logger.warning("Payment initiation failed: order=%s error=%s", order.code, exc)
         raise PaymentInitiationError(str(exc)) from exc
 
-    # Store track_id and mark ready for redirect
+    # Store track_id, persist the authoritative payment-page URL, and mark
+    # ready for redirect. The URL is kept in a field distinct from the
+    # tracking id so the view never redirects the customer to a bare token.
+    # Prefer result.gateway_url; fall back to extra['paymentPageUrl']/['url']
+    # only when gateway_url is empty. Adapters that DERIVE the redirect URL
+    # from the track_id (zibal/zarinpal) legitimately return no URL here and
+    # leave the field blank, so the view falls back to build_redirect_url.
     attempt.gateway_track_id = result.track_id
+    redirect_url = (result.gateway_url or "").strip()
+    if not redirect_url and result.extra:
+        redirect_url = str(
+            result.extra.get("paymentPageUrl") or result.extra.get("url") or ""
+        ).strip()
+    attempt.gateway_redirect_url = redirect_url
     attempt.status = PaymentAttempt.Status.REDIRECT_READY
-    attempt.save(update_fields=["gateway_track_id", "status", "updated_at"])
+    attempt.save(
+        update_fields=["gateway_track_id", "gateway_redirect_url", "status", "updated_at"]
+    )
 
     logger.info(
         "Payment initiated: order=%s attempt=%s trackId=%s",

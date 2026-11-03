@@ -970,6 +970,17 @@ class PaymentAttempt(TimeStampedModel):
         blank=True,
         default="",
     )
+    gateway_redirect_url = models.TextField(
+        "نشانی صفحه‌ی پرداخت درگاه",
+        blank=True,
+        default="",
+        help_text=(
+            "نشانی معتبرِ صفحه‌ی پرداخت که درگاه در پاسخِ create بازمی‌گرداند. "
+            "این نشانی با شناسه‌ی پیگیری (gateway_track_id) یکی نیست؛ برای درگاه‌هایی "
+            "که نشانی را مستقیماً برمی‌گردانند (مثل پاسارگاد/اسنپ‌پی/توروب‌پی) ذخیره می‌شود "
+            "و درگاه‌هایی که نشانی را از trackId می‌سازند (زیبال/زرین‌پال) این فیلد را خالی می‌گذارند."
+        ),
+    )
     idempotency_key = models.CharField(
         "کلید یکتایی",
         max_length=64,
