@@ -25,19 +25,22 @@ State ownership:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.orders.encryption import CredentialEncryptionError
 from apps.orders.gateways import get_adapter
 from apps.orders.gateways.base import (
     GatewayAmountMismatchError,
+    GatewayCategory,
     GatewayConnectionError,
     GatewayError,
     GatewayResponseError,
+    PaymentOperation,
 )
 from apps.orders.models import Order, PaymentAttempt, PaymentGatewayConfig, PaymentReconciliation, Transaction
 
@@ -74,6 +77,73 @@ class PaymentVerificationFailed(PaymentServiceError):
 
 class PaymentAmountMismatch(PaymentVerificationFailed):
     """Gateway confirmed a payment for a different amount: evidence kept, order NOT marked paid."""
+
+
+# ---------------------------------------------------------------------------
+# Itemized (BNPL) cart snapshot
+# ---------------------------------------------------------------------------
+
+
+def build_order_cart_snapshot(order: Order) -> tuple[list[dict], dict]:
+    """Build an authoritative, immutable per-line cart snapshot for itemized
+    (BNPL) providers plus the order-level totals needed to reconcile it.
+
+    Amounts are kept in TOMAN here; the adapter performs the single
+    Toman -> Rial x10 conversion. Every value is read from the order's own
+    historical snapshot fields (OrderItem + Order money fields), never
+    recomputed, so later catalog/price changes can never alter it.
+
+    Returns a ``(cart_items, cart_totals)`` tuple where:
+      * ``cart_items`` is one dict per :class:`OrderItem` with ``id``
+        (product id or sku), ``name`` (product_name), ``count`` (quantity),
+        ``unit_amount`` (unit_price), ``line_amount`` (line_total, gross),
+        ``discount_allocation`` and ``total_tax``.
+      * ``cart_totals`` carries the order-level TOMAN scalars. All Order money
+        fields have 0 decimal places (integer TOMAN), so the following identity
+        is EXACT with no rounding residual::
+
+            grand_total = items_total + gift_wrap_total + shipping_cost
+                          + tax_added - coupon_discount
+
+        where ``tax_added = (0 if prices_include_tax else order.tax)
+        + order.shipping_tax`` (line tax is already inside the line amounts when
+        prices are tax-inclusive). ``sum(line_amount)`` equals ``items_total``.
+    """
+    cart_items: list[dict] = []
+    for item in order.items.all().order_by("pk"):
+        # id = real product identifier (product id) or the sku snapshot; never
+        # fabricated. Falls back to the sku when the product row was later
+        # SET_NULL, and finally to the order code so the id is always present.
+        identifier = (
+            str(item.product_id) if item.product_id
+            else (item.sku or f"{order.code}-{item.pk}")
+        )
+        cart_items.append(
+            {
+                "id": identifier,
+                "name": item.product_name,
+                "count": int(item.quantity),
+                "unit_amount": int(item.unit_price),
+                "line_amount": int(item.line_total),
+                "discount_allocation": int(item.discount_allocation or 0),
+                "total_tax": int(item.total_tax or 0),
+            }
+        )
+
+    # Line tax is already folded into the line amounts when prices are
+    # tax-inclusive, so it must NOT be added again at the cart level.
+    tax_added = (0 if order.prices_include_tax else int(order.tax)) + int(order.shipping_tax)
+    cart_totals = {
+        "grand_total": int(order.grand_total),
+        "items_total": int(order.items_total),
+        "shipping": int(order.shipping_cost),
+        "shipping_tax": int(order.shipping_tax),
+        "tax": tax_added,
+        "gift_wrap": int(order.gift_wrap_total),
+        "gift_wrap_discount": int(order.gift_wrap_discount),
+        "discount": int(order.coupon_discount),
+    }
+    return cart_items, cart_totals
 
 
 # ---------------------------------------------------------------------------
@@ -129,11 +199,122 @@ def initiate_payment(
     if not gateway_config.is_configured:
         raise PaymentConfigError("پیکربندی درگاه ناقص است")
 
-    # Idempotency: check for existing attempt
-    if idempotency_key:
-        existing = PaymentAttempt.objects.filter(idempotency_key=idempotency_key).first()
-        if existing is not None:
-            return existing
+    # Guard: readiness. A DOCUMENTATION_BLOCKED / not-ready provider must never
+    # be routed to a real payment (single source of truth = readiness_status;
+    # no per-gateway conditionals). Offline (COD/card-to-card) is CONNECTED once
+    # configured, so this does not disturb offline methods.
+    R = PaymentGatewayConfig.ReadinessStatus
+    readiness = gateway_config.readiness_status
+    ready = readiness == R.CONNECTED or (
+        readiness == R.READY_FOR_TEST and gateway_config.is_sandbox
+    )
+    if not ready:
+        if readiness == R.DOCUMENTATION_BLOCKED:
+            raise PaymentConfigError(
+                "قرارداد رسمی این درگاه تأیید نشده و برای پرداخت واقعی در دسترس نیست."
+            )
+        raise PaymentConfigError("درگاه پرداخت برای پرداخت واقعی آماده نیست.")
+
+    # Idempotency + concurrency guard.
+    #
+    # The dedupe lookup is scoped by the FULL operation identity
+    # (store, order, gateway_config, amount) in ADDITION to the key — never by
+    # the key alone. This closes two holes:
+    #   * tenant/operation isolation: a reused key that was created for a
+    #     different store/order/gateway/amount is treated as a NON-match and is
+    #     never returned, so one tenant can never receive another tenant's (or
+    #     another order/gateway/amount's) attempt.
+    #   * single external charge: an existing matching attempt that is already
+    #     live/redirect-ready/succeeded (i.e. the gateway was already engaged)
+    #     is returned WITHOUT calling the gateway again.
+    #
+    # Concurrency is serialized with select_for_update on the Order row: two
+    # parallel requests for the SAME operation cannot both pass the check and
+    # both create an attempt / both charge. The first request creates the
+    # attempt (and makes the one external create_payment call) while holding
+    # the row lock; the second blocks, then finds the existing live attempt and
+    # returns it without charging again. The deterministic idempotency key
+    # (built by the view from the same identity) plus the existing partial
+    # unique(idempotency_key) constraint is the backstop even across separate
+    # DB sessions, so NO new broad constraint (which would break legitimate
+    # multi-attempt retry history) is introduced.
+    #
+    # Statuses that mean "the gateway was already engaged for this operation"
+    # and must therefore be reused rather than re-charged.
+    _reusable_statuses = (
+        PaymentAttempt.Status.CREATED,
+        PaymentAttempt.Status.REQUESTING,
+        PaymentAttempt.Status.REDIRECT_READY,
+        PaymentAttempt.Status.PENDING,
+        PaymentAttempt.Status.SUCCEEDED,
+        PaymentAttempt.Status.VERIFIED,
+        PaymentAttempt.Status.FINALIZED,
+    )
+
+    def _scoped_existing():
+        """Return a live attempt for THIS exact operation identity, or None.
+
+        Scoped by store (tenant isolation), order, gateway_config, and amount.
+        If an idempotency_key is supplied it must ALSO match — but a key that
+        belongs to a different identity is simply not found here, so a reused
+        foreign key can never surface a foreign attempt.
+        """
+        qs = PaymentAttempt.objects.filter(
+            store=store,
+            order=order,
+            gateway_config=gateway_config,
+            amount=order.grand_total,
+            status__in=_reusable_statuses,
+        )
+        if idempotency_key:
+            qs = qs.filter(idempotency_key=idempotency_key)
+        return qs.order_by("-created_at").first()
+
+    def _key_to_persist():
+        """Pick a safe idempotency key for a NEW attempt.
+
+        The caller's key is honored only when NO row holds it yet. The DB
+        enforces a GLOBAL partial unique(idempotency_key), so persisting a key
+        that any existing attempt already carries would raise an IntegrityError.
+        Two distinct situations reach this point (a live, reusable attempt for
+        this identity was already returned by ``_scoped_existing`` before we get
+        here, so it is never one of these):
+
+          * foreign reuse: the supplied key was minted for a DIFFERENT
+            operation (another store/order/gateway/amount), or
+          * legitimate retry: a PRIOR attempt for THIS SAME operation is already
+            final (FAILED/CANCELED/EXPIRED) and still carries the key, so it is
+            not reusable but the key is taken.
+
+        In BOTH cases the verbatim key is unusable. We substitute a
+        DETERMINISTIC key derived from this operation's identity; to let a retry
+        after a failed attempt (whose dead row may already hold the base
+        deterministic key) proceed, the key is disambiguated by the count of
+        existing attempts for this identity. The result is stable for a given
+        retry round and never collides with an existing row.
+        """
+        if not idempotency_key:
+            return ""
+        taken = (
+            PaymentAttempt.objects.filter(idempotency_key=idempotency_key).exists()
+        )
+        if not taken:
+            return idempotency_key
+        attempts_so_far = PaymentAttempt.objects.filter(
+            store=store, order=order,
+            gateway_config=gateway_config, amount=order.grand_total,
+        ).count()
+        seed = (
+            f"{store.pk}:{order.pk}:{gateway_config.pk}:"
+            f"{order.grand_total}:{attempts_so_far}"
+        )
+        return f"pay-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:48]}"
+
+    # Fast path outside the lock: if a matching live attempt already exists,
+    # reuse it without opening a write transaction.
+    existing = _scoped_existing()
+    if existing is not None:
+        return existing
 
     # Get adapter
     try:
@@ -150,28 +331,103 @@ def initiate_payment(
             "خطا در خواندن اعتبارنامه‌ی درگاه. لطفاً اعتبارنامه را دوباره وارد کنید."
         ) from exc
 
-    # Create attempt record
-    attempt = PaymentAttempt(
-        store=store,
-        order=order,
-        gateway_config=gateway_config,
-        amount=order.grand_total,
-        currency="TOMAN",
-        status=PaymentAttempt.Status.CREATED,
-        idempotency_key=idempotency_key or "",
-    )
-    if pre_public_id:
-        attempt.public_id = pre_public_id
-    attempt.save()
+    # Create attempt record under an order-row lock so concurrent
+    # same-operation requests serialize. The winner creates the attempt; a
+    # loser that was blocked here re-checks inside the lock, finds the live
+    # attempt the winner just created, and returns it without creating a second
+    # attempt or making a second external create_payment call. On databases
+    # without row-level locking (e.g. SQLite) select_for_update is a no-op, but
+    # the deterministic key + partial unique(idempotency_key) constraint still
+    # prevents a duplicate row from being committed.
+    with transaction.atomic():
+        order_locked = (
+            Order.objects.select_for_update()
+            .filter(pk=order.pk, store=store)
+            .first()
+        )
+        if order_locked is None:
+            # Order vanished or does not belong to this store — never create a
+            # cross-tenant attempt.
+            raise OrderNotPayableError("سفارش برای این فروشگاه یافت نشد")
 
-    # For offline gateways (COD), mark as succeeded immediately
+        # Re-check inside the lock: a concurrent winner may have just created a
+        # live attempt for this exact operation.
+        existing = _scoped_existing()
+        if existing is not None:
+            return existing
+
+        attempt = PaymentAttempt(
+            store=store,
+            order=order,
+            gateway_config=gateway_config,
+            amount=order.grand_total,
+            currency="TOMAN",
+            status=PaymentAttempt.Status.CREATED,
+            idempotency_key=_key_to_persist(),
+        )
+        if pre_public_id:
+            attempt.public_id = pre_public_id
+        try:
+            # ``save`` runs in its own savepoint so a unique-key collision does
+            # not poison the surrounding atomic block (the row lock is still
+            # held, so _scoped_existing re-queries cleanly below).
+            with transaction.atomic():
+                attempt.save()
+        except IntegrityError:
+            # Backend-agnostic safety net for the idempotency-key race.
+            #
+            # On Postgres the select_for_update row lock already serializes
+            # same-operation requests, so the loser re-queries and reuses the
+            # winner's attempt before ever reaching this insert. On SQLite (and
+            # any backend without real row-level locking) select_for_update is a
+            # no-op, so two racing requests can both compute the SAME
+            # deterministic fallback key and both try to insert it; the second
+            # insert hits the partial unique(idempotency_key) constraint. Rather
+            # than let that surface as an uncaught 500, we re-query the now
+            # committed live attempt and reuse it — no second external
+            # create_payment call is ever made. The partial unique constraint
+            # guarantees at most one row is committed either way.
+            existing = _scoped_existing()
+            if existing is not None:
+                return existing
+            # The collision was with a row that is NOT a live attempt for this
+            # exact identity (e.g. a dead prior attempt still holding the base
+            # deterministic key). Mint a fresh disambiguated key and insert
+            # again; _key_to_persist counts existing attempts, so the committed
+            # racer shifts the count and yields a new, non-colliding key.
+            attempt.idempotency_key = _key_to_persist()
+            attempt.save()
+
+    # Offline gateways never go through the online redirect/verify flow. The
+    # two offline methods have OPPOSITE bookkeeping, distinguished by the
+    # adapter's explicit ``auto_collects_offline`` signal (not a code string):
+    #
+    # * COD (auto_collects_offline=True): selecting it is a firm pay-on-
+    #   delivery commitment, so record the attempt SUCCEEDED at selection with
+    #   a cod- track id and a verified_at timestamp. The order itself is NOT
+    #   marked paid — it stays pending until delivery confirmation.
+    # * Card-to-card (auto_collects_offline=False): the customer transfers
+    #   money out of band and nothing proves it arrived at selection time. The
+    #   attempt stays PENDING (no verified_at, no cod- track id, order not
+    #   paid) until an authorized merchant confirms the transfer.
     if not adapter.is_online:
-        attempt.status = PaymentAttempt.Status.SUCCEEDED
-        attempt.gateway_track_id = f"cod-{order.code}"
-        attempt.verified_at = timezone.now()
-        attempt.save(update_fields=["status", "gateway_track_id", "verified_at", "updated_at"])
-        # COD does NOT mark order as paid — it stays pending until delivery
-        logger.info("COD payment recorded: order=%s attempt=%s", order.code, attempt.public_id)
+        if adapter.auto_collects_offline:
+            attempt.status = PaymentAttempt.Status.SUCCEEDED
+            attempt.gateway_track_id = f"cod-{order.code}"
+            attempt.verified_at = timezone.now()
+            attempt.save(update_fields=["status", "gateway_track_id", "verified_at", "updated_at"])
+            # COD does NOT mark order as paid — it stays pending until delivery
+            logger.info("COD payment recorded: order=%s attempt=%s", order.code, attempt.public_id)
+            return attempt
+        # Non-auto-collecting offline method (card-to-card): leave PENDING for
+        # manual merchant confirmation. No verified_at, order not marked paid.
+        attempt.status = PaymentAttempt.Status.PENDING
+        attempt.gateway_track_id = f"card2card-{order.code}"
+        attempt.save(update_fields=["status", "gateway_track_id", "updated_at"])
+        logger.info(
+            "Card-to-card payment selected (pending merchant confirmation): order=%s attempt=%s",
+            order.code, attempt.public_id,
+        )
         return attempt
 
     # Online gateway: request payment
@@ -179,16 +435,28 @@ def initiate_payment(
     attempt.initiated_at = timezone.now()
     attempt.save(update_fields=["status", "initiated_at", "updated_at"])
 
+    # Forward authoritative per-line order-item snapshots to itemized (BNPL)
+    # providers so their cartList reflects the real basket and reconciles
+    # exactly to the order amount. Non-itemized adapters (PSPs) never receive
+    # the keyword, so their signatures/tests are untouched. The adapter still
+    # performs the single Toman -> Rial x10 conversion.
+    create_kwargs = dict(
+        amount=order.grand_total,
+        currency="TOMAN",
+        callback_url=callback_url,
+        credentials=credentials,
+        order_code=order.code,
+        description=f"پرداخت سفارش {order.code}",
+        sandbox=gateway_config.is_sandbox,
+    )
+    if adapter.category == GatewayCategory.BNPL:
+        cart_items, cart_totals = build_order_cart_snapshot(order)
+        if cart_items:
+            create_kwargs["cart_items"] = cart_items
+            create_kwargs["cart_totals"] = cart_totals
+
     try:
-        result = adapter.create_payment(
-            amount=order.grand_total,
-            currency="TOMAN",
-            callback_url=callback_url,
-            credentials=credentials,
-            order_code=order.code,
-            description=f"پرداخت سفارش {order.code}",
-            sandbox=gateway_config.is_sandbox,
-        )
+        result = adapter.create_payment(**create_kwargs)
     except GatewayError as exc:
         attempt.status = PaymentAttempt.Status.FAILED
         attempt.failure_code = getattr(exc, "code", "gateway_error")
@@ -197,10 +465,24 @@ def initiate_payment(
         logger.warning("Payment initiation failed: order=%s error=%s", order.code, exc)
         raise PaymentInitiationError(str(exc)) from exc
 
-    # Store track_id and mark ready for redirect
+    # Store track_id, persist the authoritative payment-page URL, and mark
+    # ready for redirect. The URL is kept in a field distinct from the
+    # tracking id so the view never redirects the customer to a bare token.
+    # Prefer result.gateway_url; fall back to extra['paymentPageUrl']/['url']
+    # only when gateway_url is empty. Adapters that DERIVE the redirect URL
+    # from the track_id (zibal/zarinpal) legitimately return no URL here and
+    # leave the field blank, so the view falls back to build_redirect_url.
     attempt.gateway_track_id = result.track_id
+    redirect_url = (result.gateway_url or "").strip()
+    if not redirect_url and result.extra:
+        redirect_url = str(
+            result.extra.get("paymentPageUrl") or result.extra.get("url") or ""
+        ).strip()
+    attempt.gateway_redirect_url = redirect_url
     attempt.status = PaymentAttempt.Status.REDIRECT_READY
-    attempt.save(update_fields=["gateway_track_id", "status", "updated_at"])
+    attempt.save(
+        update_fields=["gateway_track_id", "gateway_redirect_url", "status", "updated_at"]
+    )
 
     logger.info(
         "Payment initiated: order=%s attempt=%s trackId=%s",
@@ -468,5 +750,36 @@ def process_callback_and_verify(
     if not result.success:
         logger.info("Verification returned failure: attempt=%s final=%s", attempt.public_id, was_final)
         fail(f"status_{result.status_code}", result.message or "تأیید پرداخت ناموفق", result.message or "تأیید پرداخت توسط درگاه ناموفق بود")
+
+    # Capability-gated BNPL settle/capture (no provider conditionals): a provider
+    # whose documented lifecycle separates verify from settle declares the SETTLE
+    # capability. For such providers the money is NOT fully captured until settle
+    # succeeds, so we invoke the adapter's settle step BEFORE the order is treated
+    # as paid. Providers without SETTLE (ordinary PSPs, Zibal, Zarinpal) skip this
+    # entirely. A provider that declares SETTLE but whose settle is unsupported
+    # (documentation-blocked) never reaches here because readiness keeps it
+    # non-selectable/non-routable.
+    if adapter.supports(PaymentOperation.SETTLE):
+        try:
+            settle = adapter.settle_payment(
+                track_id=attempt.gateway_track_id,
+                amount=attempt.amount,
+                currency=attempt.currency,
+                credentials=credentials,
+                sandbox=gateway_config.is_sandbox,
+            )
+        except GatewayError as exc:
+            logger.warning("BNPL settle failed: attempt=%s error=%s", attempt.public_id, exc)
+            fail(
+                getattr(exc, "code", "settle_error"),
+                str(exc),
+                "تسویه‌ی نهاییِ پرداخت اقساطی ناموفق بود؛ سفارش پرداخت‌شده تلقی نمی‌شود.",
+            )
+        if not getattr(settle, "success", False):
+            fail(
+                "settle_failed",
+                settle.message or "تسویه‌ی نهایی ناموفق",
+                "تسویه‌ی نهاییِ پرداخت اقساطی ناموفق بود؛ سفارش پرداخت‌شده تلقی نمی‌شود.",
+            )
 
     return _apply_verified_payment(attempt.pk, result, store)

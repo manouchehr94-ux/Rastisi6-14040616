@@ -3720,7 +3720,7 @@ def order_detail(request, code):
     context["active_page"] = "orders"
     context["can_manage_refunds"] = membership_has_permission(request.store_membership, REFUND_MANAGE)
     context["can_manage_returns"] = membership_has_permission(request.store_membership, RETURN_MANAGE)
-    from apps.orders.services import cod_payment_service
+    from apps.orders.services import card_to_card_payment_service, cod_payment_service
     from apps.stores.authorization import ORDER_CONFIRM_COD_PAYMENT
     import secrets as _secrets
 
@@ -3732,6 +3732,14 @@ def order_detail(request, code):
     context["cod_methods"] = cod_payment_service.METHODS and [
         (m, dict(order.transactions.model.Method.choices)[m]) for m in cod_payment_service.METHODS
     ]
+    # کارت به کارت همان مجوز و اسکوپِ COD را به کار می‌برد؛ اما علاوه بر تأیید یک
+    # مسیرِ «رد» هم دارد. فرم فقط وقتی نشان داده می‌شود که سفارش واقعاً کارت به کارت،
+    # در‌انتظار و لغو‌نشده باشد (can_confirm).
+    context["can_confirm_card_to_card"] = (
+        membership_has_permission(request.store_membership, ORDER_CONFIRM_COD_PAYMENT)
+        and card_to_card_payment_service.can_confirm(order)
+    )
+    context["card_to_card_token"] = _secrets.token_hex(16)
     context["payment_transactions"] = order.transactions.filter(status="ok").select_related("confirmed_by")
     return render(request, "dashboard/order_detail.html", context)
 
@@ -6003,6 +6011,18 @@ def settings_gateway_config_save(request, gateway_code):
             credential_errors.append("خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید.")
             is_active = False
 
+    # Readiness enforcement (single source of truth, no per-gateway conditionals):
+    # a DOCUMENTATION_BLOCKED / NEEDS_CREDENTIALS / NOT_CONFIGURED / UNAVAILABLE /
+    # ERROR provider must NOT be activatable for real (non-sandbox) checkout. The
+    # check runs against the config *as it will be saved* (credentials + sandbox
+    # already applied above).
+    if is_active:
+        config.is_active = True  # evaluate readiness as if active
+        activation_error = settings_admin_service.gateway_activation_error(config)
+        if activation_error:
+            credential_errors.append(activation_error)
+            is_active = False
+
     config.is_active = is_active
     config.save()
 
@@ -6052,16 +6072,17 @@ def settings_gateway_config_toggle(request, gateway_code):
         config.save(update_fields=["is_active", "updated_at"])
         toast_msg = f"{adapter.display_name} غیرفعال شد"
     else:
-        # Activate — only if configured
-        if adapter.required_credentials:
-            errors = adapter.validate_credentials(config.get_credentials())
-            if errors:
-                response = HttpResponse(status=204)
-                response["HX-Trigger"] = json.dumps({
-                    "toast": {"message": "پیکربندی ناقص — ابتدا اعتبارنامه را وارد کنید", "type": "err"},
-                })
-                return response
-        config.is_active = True
+        # Activate — only if ready for real checkout (readiness is the single
+        # source of truth; blocks DOCUMENTATION_BLOCKED / incomplete providers).
+        config.is_active = True  # evaluate readiness as if active
+        activation_error = settings_admin_service.gateway_activation_error(config)
+        if activation_error:
+            config.is_active = False
+            response = HttpResponse(status=204)
+            response["HX-Trigger"] = json.dumps({
+                "toast": {"message": activation_error, "type": "err"},
+            })
+            return response
         config.save(update_fields=["is_active", "updated_at"])
         toast_msg = f"{adapter.display_name} فعال شد"
 

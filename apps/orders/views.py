@@ -7,6 +7,7 @@ from django.contrib.auth import login as auth_login
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.cart.models import CartItem
@@ -385,12 +386,17 @@ def payment_initiate(request, code):
             is_active=True,
         ).first()
 
-    # If no matching config, try any active online config for this store
+    # If no matching config, try any active online config for this store that is
+    # genuinely selectable at real checkout (readiness-aware; never picks a
+    # documentation-blocked / not-ready provider as a fallback).
     if gateway_config is None:
-        gateway_config = PaymentGatewayConfig.objects.filter(
+        candidates = PaymentGatewayConfig.objects.filter(
             store=store,
             is_active=True,
-        ).exclude(gateway_code="cod").first()
+        ).exclude(gateway_code="cod")
+        gateway_config = next(
+            (c for c in candidates if c.is_selectable_at_checkout), None
+        )
 
     # Still nothing — fall back to simulation if enabled
     if gateway_config is None:
@@ -401,11 +407,17 @@ def payment_initiate(request, code):
             "error": "هیچ درگاه پرداخت فعالی پیکربندی نشده است",
         })
 
-    # Generate idempotency key — uses a server-side nonce to avoid races.
-    # The gateway_payment_service checks this key BEFORE creating a new attempt,
-    # so concurrent requests with the same key return the existing attempt.
+    # Generate a DETERMINISTIC idempotency key derived from the payment
+    # operation identity: (store, order.code, gateway_config.pk, amount). A
+    # legitimate retry of the SAME operation (same store/order/gateway/amount)
+    # produces the SAME key, so the service dedupes it to the existing attempt
+    # instead of charging again. A different order/gateway/amount produces a
+    # different key, so unrelated operations never collide. The composite is
+    # hashed to stay within PaymentAttempt.idempotency_key max_length=64.
+    import hashlib
     import secrets as _secrets
-    idem_key = f"pay-{order.code}-{gateway_config.pk}-{_secrets.token_hex(8)}"
+    idem_seed = f"{store.pk}:{order.code}:{gateway_config.pk}:{order.grand_total}"
+    idem_key = f"pay-{hashlib.sha256(idem_seed.encode('utf-8')).hexdigest()[:48]}"
 
     # Initiate payment — attempt is created FIRST, then we build the callback URL
     # using the attempt's public_id. For online gateways the callback_url passed here
@@ -456,38 +468,49 @@ def payment_initiate(request, code):
             "error": str(exc),
         })
 
-    # For online gateways, redirect to gateway payment page
+    # For online gateways, redirect to gateway payment page.
+    # Prefer the authoritative payment-page URL that create_payment returned
+    # and the service persisted on the attempt (pasargad/snappay/torobpay).
+    # Fall back to adapter.build_redirect_url only when no URL was persisted,
+    # so adapters that derive the URL from the track_id (zibal/zarinpal) keep
+    # working. No URL is ever hardcoded or fabricated here.
     if gateway_config.is_online:
-        adapter = get_adapter(gateway_config.gateway_code)
-        redirect_url = adapter.build_redirect_url(
-            attempt.gateway_track_id,
-            sandbox=gateway_config.is_sandbox,
-        )
+        redirect_url = (attempt.gateway_redirect_url or "").strip()
+        if not redirect_url:
+            adapter = get_adapter(gateway_config.gateway_code)
+            redirect_url = adapter.build_redirect_url(
+                attempt.gateway_track_id,
+                sandbox=gateway_config.is_sandbox,
+            )
         return redirect(redirect_url)
 
     # COD — go straight to result
     return redirect("orders:payment-result", code=order.code)
 
 
+@csrf_exempt
 def gateway_callback(request, attempt_id):
     """Public callback endpoint for payment gateways.
 
     This view:
     - Does NOT require authentication (gateway redirects the customer here)
-    - Accepts GET only (Zibal redirects with query params)
-    - Processes the callback server-to-server verification
-    - Redirects to payment result page
+    - Accepts GET and POST. Classic PSPs (Zibal/Zarinpal) redirect back with
+      GET query params; BNPL providers (SnappPay/TorobPay) POST their callback
+      to the returnURL with a form/body carrying {transactionId, state, amount}.
+    - Processes the callback with server-to-server verification
+    - Redirects to the payment result page
 
     Security:
-    - Never trusts callback params alone for payment confirmation
-    - Always verifies server-to-server with gateway
-    - Idempotent — duplicate callbacks are safe
-    - Does not expose sensitive information in the result page
+    - ``@csrf_exempt`` is applied ONLY to this public callback. It is safe
+      because callback fields are NEVER trusted to confirm a payment: the
+      authoritative server-to-server ``verify_payment`` (and capability-gated
+      ``settle_payment`` for BNPL) inside ``process_callback_and_verify`` is the
+      sole authority that finalizes an order. A forged-success POST cannot
+      finalize anything. No other view relaxes CSRF.
+    - Tenant + attempt resolution stays scoped to (public_id, store).
+    - Idempotent — duplicate callbacks are safe.
+    - Does not expose sensitive information in the result page.
     """
-    if request.method != "GET":
-        from django.http import HttpResponseNotAllowed
-        return HttpResponseNotAllowed(["GET"])
-
     from apps.orders.models import PaymentAttempt
     from apps.orders.services.gateway_payment_service import (
         PaymentAmountMismatch,
@@ -508,8 +531,10 @@ def gateway_callback(request, attempt_id):
 
     order = attempt.order
 
-    # Collect callback data from query params
-    callback_data = dict(request.GET.items())
+    # Merge GET and POST params so GET-based providers and POST-based BNPL
+    # providers both work. These are passed through only as callback_data and
+    # are never trusted to confirm payment.
+    callback_data = {**request.GET.dict(), **request.POST.dict()}
 
     try:
         attempt = process_callback_and_verify(

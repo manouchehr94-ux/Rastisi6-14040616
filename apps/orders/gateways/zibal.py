@@ -30,6 +30,7 @@ from typing import Any
 import requests
 
 from .base import (
+    GatewayCategory,
     GatewayConnectionError,
     GatewayCredentialError,
     GatewayPaymentError,
@@ -38,6 +39,7 @@ from .base import (
     GatewayVerificationError,
     PaymentCreationResult,
     PaymentGatewayAdapter,
+    PaymentOperation,
     PaymentVerificationResult,
 )
 
@@ -89,6 +91,30 @@ class ZibalAdapter(PaymentGatewayAdapter):
     @property
     def required_credentials(self) -> list[str]:
         return ["merchant"]
+
+    @property
+    def credential_labels(self) -> dict[str, str]:
+        return {"merchant": "شناسه‌ی مرچنت (Merchant ID)"}
+
+    @property
+    def onboarding_help(self) -> str:
+        return (
+            "شناسه‌ی مرچنت را از پنل زیبال دریافت و وارد کنید. حالت آزمایشی (Sandbox) "
+            "با مرچنت آزمایشی زیبال و بدون پرداخت واقعی کار می‌کند."
+        )
+
+    @property
+    def category(self) -> GatewayCategory:
+        # Zibal is a payment facilitator/aggregator riding on top of PSPs.
+        return GatewayCategory.FACILITATOR
+
+    @property
+    def capabilities(self) -> frozenset[PaymentOperation]:
+        # Only the operations this adapter actually implements against the
+        # documented /v1/request and /v1/verify endpoints. Inquiry, cancel,
+        # refund and settlement are NOT implemented here, so they are not
+        # declared — the ABC defaults will raise on any attempt to use them.
+        return frozenset({PaymentOperation.CREATE, PaymentOperation.VERIFY})
 
     def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
         """Validate Zibal credentials (merchant ID required)."""
