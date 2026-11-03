@@ -625,6 +625,22 @@ class PaymentGatewayConfig(TimeStampedModel):
         ZIBAL = "zibal", "زیبال"
         COD = "cod", "پرداخت در محل"
 
+    class ReadinessStatus(models.TextChoices):
+        """Derived operational readiness of a gateway configuration.
+
+        These are DERIVED (see :attr:`readiness_status`) from verified
+        conditions, not stored as the source of truth. They exist as a
+        TextChoices to avoid magic strings across admin/checkout code.
+        """
+
+        NOT_CONFIGURED = "not_configured", "پیکربندی‌نشده"
+        NEEDS_CREDENTIALS = "needs_credentials", "نیازمند اعتبارنامه"
+        READY_FOR_TEST = "ready_for_test", "آماده‌ی آزمایش (Sandbox)"
+        CONNECTED = "connected", "متصل و آماده"
+        DOCUMENTATION_BLOCKED = "documentation_blocked", "مسدود به‌دلیل مستندات"
+        UNAVAILABLE = "unavailable", "در دسترس نیست"
+        ERROR = "error", "خطا"
+
     store = models.ForeignKey(
         "stores.Store",
         verbose_name="فروشگاه",
@@ -748,6 +764,73 @@ class PaymentGatewayConfig(TimeStampedModel):
         except KeyError:
             return False
 
+    @property
+    def readiness_status(self) -> "PaymentGatewayConfig.ReadinessStatus":
+        """Derive the operational readiness state from verified conditions.
+
+        The derivation is intentionally ordered so that a *registered adapter
+        alone* never resolves to CONNECTED — real credentials (or the offline
+        contract) are required first. Precedence:
+
+        1. UNAVAILABLE  — no adapter registered for this code (unknown gateway).
+        2. DOCUMENTATION_BLOCKED — adapter exists but its official contract is
+           unverifiable; must NOT be selectable at real (non-sandbox) checkout.
+        3. NOT_CONFIGURED — online adapter with no credentials stored at all.
+        4. NEEDS_CREDENTIALS — some but not all required credentials present,
+           or validation still fails.
+        5. READY_FOR_TEST — fully configured AND running in sandbox mode.
+        6. CONNECTED — fully configured for real (non-sandbox) operation.
+
+        ERROR is reserved for unexpected failures while deriving state.
+        Offline adapters (COD) need no credentials, so they short-circuit to
+        READY_FOR_TEST (sandbox) / CONNECTED once an adapter is present.
+        """
+        R = self.ReadinessStatus
+        from .gateways import get_adapter
+
+        try:
+            try:
+                adapter = get_adapter(self.gateway_code)
+            except KeyError:
+                return R.UNAVAILABLE
+
+            if getattr(adapter, "documentation_blocked", False):
+                return R.DOCUMENTATION_BLOCKED
+
+            required = adapter.required_credentials
+            if required:
+                creds = self.get_credentials()
+                present = [key for key in required if creds.get(key)]
+                if not present:
+                    return R.NOT_CONFIGURED
+                if len(present) < len(required) or not self.can_activate:
+                    return R.NEEDS_CREDENTIALS
+
+            # Fully configured (or an offline adapter that needs no credentials).
+            if self.is_sandbox:
+                return R.READY_FOR_TEST
+            return R.CONNECTED
+        except Exception:  # pragma: no cover - defensive derivation guard
+            return R.ERROR
+
+    @property
+    def is_selectable_at_checkout(self) -> bool:
+        """Whether this config may be offered at a REAL (non-sandbox) checkout.
+
+        A DOCUMENTATION_BLOCKED or otherwise not-ready provider is never
+        selectable at real checkout. Sandbox-only readiness (READY_FOR_TEST)
+        is selectable only while the config itself is in sandbox mode.
+        """
+        if not self.is_active:
+            return False
+        status = self.readiness_status
+        R = self.ReadinessStatus
+        if status == R.CONNECTED:
+            return True
+        if status == R.READY_FOR_TEST and self.is_sandbox:
+            return True
+        return False
+
 
 class PaymentAttempt(TimeStampedModel):
     """A single payment attempt for an order.
@@ -756,13 +839,25 @@ class PaymentAttempt(TimeStampedModel):
     Each attempt is an independent, immutable record of what was sent to
     the gateway and what came back.
 
-    State machine:
+    State machine (existing core, unchanged):
         CREATED → REQUESTING → REDIRECT_READY → PENDING → SUCCEEDED
                                                         → FAILED
                                                         → CANCELED
                                                         → EXPIRED
 
     Once in SUCCEEDED, FAILED, CANCELED, or EXPIRED, the attempt is final.
+
+    M1 additive extension — new OPTIONAL status members used by later
+    provider/refund features. They are added WITHOUT renaming or removing any
+    existing member, and WITHOUT changing FINAL_STATUSES semantics for the
+    original terminal states:
+
+        VERIFIED            — gateway verification confirmed (pre-finalize).
+        FINALIZED           — order-side finalization applied (additional final).
+        UNKNOWN             — ambiguous verify result awaiting reconciliation.
+        REFUND_PENDING      — a refund has been requested but not confirmed.
+        REFUNDED            — full refund confirmed (additional final).
+        PARTIALLY_REFUNDED  — partial refund confirmed (additional final).
     """
 
     class Status(models.TextChoices):
@@ -774,12 +869,30 @@ class PaymentAttempt(TimeStampedModel):
         FAILED = "failed", "ناموفق"
         CANCELED = "canceled", "لغوشده"
         EXPIRED = "expired", "منقضی‌شده"
+        # --- M1 additive members (optional; no existing member changed) ---
+        VERIFIED = "verified", "تأییدشده"
+        FINALIZED = "finalized", "نهایی‌شده"
+        UNKNOWN = "unknown", "نامشخص"
+        REFUND_PENDING = "refund_pending", "در انتظار استرداد"
+        REFUNDED = "refunded", "مستردشده"
+        PARTIALLY_REFUNDED = "partially_refunded", "استرداد جزئی"
 
+    #: Original terminal states — semantics preserved exactly for backward
+    #: compatibility (existing tests assert on this set unchanged).
     FINAL_STATUSES = frozenset({
         Status.SUCCEEDED,
         Status.FAILED,
         Status.CANCELED,
         Status.EXPIRED,
+    })
+
+    #: Additional terminal states introduced by the M1 extension. Kept as a
+    #: SEPARATE set so FINAL_STATUSES semantics (and anything asserting on it)
+    #: stay unchanged. Use ``is_final`` for the full terminal check.
+    EXTENDED_FINAL_STATUSES = frozenset({
+        Status.FINALIZED,
+        Status.REFUNDED,
+        Status.PARTIALLY_REFUNDED,
     })
 
     # --- Relationships ---
@@ -826,7 +939,7 @@ class PaymentAttempt(TimeStampedModel):
     # --- Status ---
     status = models.CharField(
         "وضعیت",
-        max_length=15,
+        max_length=20,
         choices=Status.choices,
         default=Status.CREATED,
     )
@@ -917,12 +1030,103 @@ class PaymentAttempt(TimeStampedModel):
 
     @property
     def is_final(self) -> bool:
-        """Whether this attempt has reached a terminal state."""
-        return self.status in self.FINAL_STATUSES
+        """Whether this attempt has reached a terminal state.
+
+        Covers the original FINAL_STATUSES plus the additive
+        EXTENDED_FINAL_STATUSES (finalized/refunded/partially_refunded). The
+        original set is unchanged; this property simply recognizes the new
+        terminal states too.
+        """
+        return self.status in self.FINAL_STATUSES or self.status in self.EXTENDED_FINAL_STATUSES
 
     @property
     def is_successful(self) -> bool:
         return self.status == self.Status.SUCCEEDED
+
+
+class PaymentTransactionEvent(TimeStampedModel):
+    """Append-only audit trail of payment lifecycle events (M1 additive).
+
+    Each row records ONE event in a payment's life (status transition,
+    verification, inquiry result, refund request/confirmation, cancel, …).
+    The model is deliberately append-only: it is written, never updated or
+    deleted, so it can serve as evidence for later provider/refund features
+    and reconciliation.
+
+    Scoping: every event is scoped by BOTH ``store`` and ``order`` (and, when
+    available, the originating ``attempt``) to preserve tenant isolation. The
+    ``amount`` is stored in the attempt/order currency unit (Toman) and is
+    nullable because not every event carries an amount (e.g. a status change).
+
+    ``payload`` holds safe, non-sensitive gateway evidence only — never
+    credentials, full card numbers, or customer PII.
+    """
+
+    class EventType(models.TextChoices):
+        STATUS_CHANGE = "status_change", "تغییر وضعیت"
+        CREATED = "created", "ایجاد تلاش"
+        REDIRECTED = "redirected", "هدایت به درگاه"
+        CALLBACK = "callback", "بازگشت از درگاه"
+        VERIFIED = "verified", "تأیید پرداخت"
+        VERIFY_FAILED = "verify_failed", "ناموفق در تأیید"
+        VERIFY_AMBIGUOUS = "verify_ambiguous", "تأیید نامشخص"
+        FINALIZED = "finalized", "نهایی‌سازی سفارش"
+        INQUIRY = "inquiry", "استعلام وضعیت"
+        CANCEL_REQUESTED = "cancel_requested", "درخواست لغو"
+        CANCELED = "canceled", "لغوشده"
+        REFUND_REQUESTED = "refund_requested", "درخواست استرداد"
+        REFUND_PENDING = "refund_pending", "استرداد در انتظار"
+        REFUNDED = "refunded", "استرداد انجام شد"
+        PARTIALLY_REFUNDED = "partially_refunded", "استرداد جزئی"
+        SETTLED = "settled", "تسویه‌شده"
+        NOTE = "note", "یادداشت"
+
+    store = models.ForeignKey(
+        "stores.Store",
+        verbose_name="فروشگاه",
+        on_delete=models.PROTECT,
+        related_name="payment_transaction_events",
+    )
+    order = models.ForeignKey(
+        Order,
+        verbose_name="سفارش",
+        on_delete=models.PROTECT,
+        related_name="payment_transaction_events",
+    )
+    attempt = models.ForeignKey(
+        "PaymentAttempt",
+        verbose_name="تلاش پرداخت",
+        on_delete=models.PROTECT,
+        related_name="transaction_events",
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(
+        "نوع رویداد",
+        max_length=20,
+        choices=EventType.choices,
+    )
+    from_status = models.CharField("وضعیت قبلی", max_length=20, blank=True, default="")
+    to_status = models.CharField("وضعیت جدید", max_length=20, blank=True, default="")
+    amount = models.DecimalField(
+        "مبلغ (تومان)", max_digits=14, decimal_places=0, null=True, blank=True,
+    )
+    currency = models.CharField("واحد پول", max_length=10, blank=True, default="TOMAN")
+    gateway_ref_id = models.CharField("شماره ارجاع درگاه", max_length=100, blank=True, default="")
+    message = models.CharField("پیام (امن)", max_length=300, blank=True, default="")
+    payload = models.JSONField("شواهد امن درگاه", default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "رویداد تراکنش پرداخت"
+        verbose_name_plural = "رویدادهای تراکنش پرداخت"
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["store", "order", "created_at"], name="idx_pte_store_order_date"),
+            models.Index(fields=["attempt", "created_at"], name="idx_pte_attempt_date"),
+        ]
+
+    def __str__(self):
+        return f"PaymentTransactionEvent {self.get_event_type_display()} — order={self.order_id}"
 
 
 class PaymentReconciliation(TimeStampedModel):
