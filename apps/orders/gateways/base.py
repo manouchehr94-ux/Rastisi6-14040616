@@ -357,6 +357,8 @@ class PaymentGatewayAdapter(ABC):
         order_code: str,
         description: str = "",
         sandbox: bool = False,
+        cart_items: list[dict] | None = None,
+        cart_totals: dict | None = None,
     ) -> PaymentCreationResult:
         """Create a payment session with the gateway.
 
@@ -368,6 +370,28 @@ class PaymentGatewayAdapter(ABC):
             order_code: Order identifier for the gateway's records.
             description: Optional payment description.
             sandbox: Whether to use sandbox/test mode.
+            cart_items: Optional authoritative per-line order snapshot used by
+                itemized providers (BNPL: SnappPay/TorobPay) to build a real
+                cartList that reconciles EXACTLY to the order amount. Each entry
+                is an immutable dict in TOMAN with keys:
+                ``id`` (product id or sku), ``name`` (product_name),
+                ``count`` (quantity), ``unit_amount`` (unit_price),
+                ``line_amount`` (unit_price * quantity),
+                ``discount_allocation`` and ``total_tax``; plus, as the first
+                allowed convention, order-level totals are forwarded via the
+                ``cart_totals`` companion argument.
+                Defaults to None so non-itemized adapters (PSPs, offline) and
+                every existing call site/test keep working unchanged. A
+                non-itemized adapter simply ignores it (or never receives it).
+            cart_totals: Optional order-level TOMAN scalars that accompany
+                ``cart_items`` for itemized providers. Keys: ``grand_total``
+                (int, must equal the order amount), ``shipping`` (shipping_cost),
+                ``shipping_tax``, ``tax`` (line tax added to the grand total,
+                already 0 when prices are tax-inclusive), ``gift_wrap`` and
+                ``discount`` (total coupon discount). The adapter allocates
+                these to the documented cartList-level fields so that the built
+                cartList reconciles EXACTLY to the Rial grand total. Defaults to
+                None.
 
         Returns:
             PaymentCreationResult with track_id and optional redirect URL.

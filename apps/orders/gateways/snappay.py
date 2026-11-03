@@ -386,33 +386,119 @@ class SnappPayAdapter(PaymentGatewayAdapter):
 
     # -- create ------------------------------------------------------------
 
-    @staticmethod
-    def _build_cart_list(order_code: str, amount_rial: int) -> list[dict]:
-        """Build a minimal valid single-cart cartList from order_code + amount.
+    def _build_cart_list(
+        self,
+        order_code: str,
+        amount_rial: int,
+        *,
+        cart_items: list[dict] | None = None,
+        cart_totals: dict | None = None,
+    ) -> list[dict]:
+        """Build the SnappPay cartList (amounts in RIAL).
 
-        The RastiSi service boundary passes only amount + order_code at create,
-        so a single synthetic cart with one cartItem is built here. Richer
-        per-line itemization (real product names/ids/categories) is a documented
-        follow-up once the checkout boundary forwards the full basket.
+        When ``cart_items``/``cart_totals`` are forwarded by the service
+        boundary (BNPL path), build a cart with REAL per-line cartItems (real
+        product id/sku, product_name, quantity, unit amounts) and allocate the
+        order-level shipping/tax/discount to the documented cartList-level
+        fields (``shippingAmount``, ``taxAmount``) and the documented top-level
+        ``discountAmount``. Only the documented SnappPay cartItem shape
+        (id/name/count/amount/category/commissionType) is used — no invented
+        fields. The built cart's totalAmount reconciles EXACTLY to the Rial
+        grand total; a divergence raises :class:`GatewayAmountMismatchError`
+        rather than sending a mismatched cart.
+
+        When nothing is forwarded (fallback), keep the historical single
+        synthetic cart so non-itemized call sites keep working.
         """
+        if not cart_items or not cart_totals:
+            return [
+                {
+                    "cartId": str(order_code),
+                    "totalAmount": amount_rial,
+                    "shippingAmount": 0,
+                    "taxAmount": 0,
+                    "cartItems": [
+                        {
+                            "id": str(order_code),
+                            "name": f"سفارش {order_code}",
+                            "count": 1,
+                            "amount": amount_rial,
+                            "category": "general",
+                            "commissionType": 0,
+                        }
+                    ],
+                }
+            ]
+
+        # Per-line amounts are NET of the line's authoritative coupon discount
+        # allocation (``discount_allocation``). The documented SnappPay cart
+        # shape has no cart-level discount field, so applying the real per-line
+        # allocation keeps totalAmount == the net payable using only documented
+        # fields and no fabricated amounts.
+        cart_item_payload = [
+            {
+                "id": str(line["id"]),
+                "name": str(line["name"]),
+                "count": int(line["count"]),
+                "amount": (int(line["line_amount"]) - int(line.get("discount_allocation", 0)))
+                * TOMAN_TO_RIAL,
+                "category": "general",
+                "commissionType": 0,
+            }
+            for line in cart_items
+        ]
+        # Gift wrap is a real documented charge with no dedicated SnappPay
+        # field, so it rides as its own cartItem (real data, not fabricated),
+        # net of any coupon discount that applied to gift wrapping.
+        gift_wrap_net = int(cart_totals.get("gift_wrap", 0)) - int(
+            cart_totals.get("gift_wrap_discount", 0)
+        )
+        gift_wrap_rial = gift_wrap_net * TOMAN_TO_RIAL
+        if gift_wrap_rial:
+            cart_item_payload.append(
+                {
+                    "id": f"{order_code}-giftwrap",
+                    "name": "کادوپیچی",
+                    "count": 1,
+                    "amount": gift_wrap_rial,
+                    "category": "general",
+                    "commissionType": 0,
+                }
+            )
+
+        shipping_rial = int(cart_totals.get("shipping", 0)) * TOMAN_TO_RIAL
+        tax_rial = int(cart_totals.get("tax", 0)) * TOMAN_TO_RIAL
+
+        lines_rial = sum(ci["amount"] for ci in cart_item_payload)
+        total_rial = lines_rial + shipping_rial + tax_rial
+        self._assert_built_cart(total_rial, expected_rial=amount_rial, order_code=order_code)
+
         return [
             {
                 "cartId": str(order_code),
-                "totalAmount": amount_rial,
-                "shippingAmount": 0,
-                "taxAmount": 0,
-                "cartItems": [
-                    {
-                        "id": str(order_code),
-                        "name": f"سفارش {order_code}",
-                        "count": 1,
-                        "amount": amount_rial,
-                        "category": "general",
-                        "commissionType": 0,
-                    }
-                ],
+                "totalAmount": total_rial,
+                "shippingAmount": shipping_rial,
+                "taxAmount": tax_rial,
+                "cartItems": cart_item_payload,
             }
         ]
+
+    def _assert_built_cart(self, built_rial: int, *, expected_rial: int, order_code: str) -> None:
+        """Refuse to send a cartList whose total diverges from the order amount."""
+        if built_rial != expected_rial:
+            logger.error(
+                "SnappPay built cart mismatch: order=%s built=%d expected=%d",
+                order_code, built_rial, expected_rial,
+            )
+            raise GatewayAmountMismatchError(
+                "مبلغِ سبدِ ساخته‌شده با مبلغِ سفارش مطابقت ندارد.",
+                code="cart_build_mismatch",
+                details={
+                    "expected_rial": expected_rial,
+                    "built_rial": built_rial,
+                    "evidence": {"expected_rial": expected_rial, "built_rial": built_rial},
+                },
+            )
 
     def create_payment(
         self,
@@ -424,6 +510,8 @@ class SnappPayAdapter(PaymentGatewayAdapter):
         order_code: str,
         description: str = "",
         sandbox: bool = False,
+        cart_items: list[dict] | None = None,
+        cart_totals: dict | None = None,
     ) -> PaymentCreationResult:
         """Get a SnappPay payment token (POST /payment/v1/token)."""
         # Toman -> Rial conversion happens exactly once here.
@@ -432,6 +520,9 @@ class SnappPayAdapter(PaymentGatewayAdapter):
         mobile = str((credentials.get("mobile") or "") or "")
 
         token = self._get_token(credentials)
+        # The coupon discount is applied per cartItem (net amounts), so the
+        # top-level discountAmount stays 0 and ``amount`` remains the net
+        # payable — the single documented source of truth for the charge.
         payload = {
             "amount": amount_rial,
             "discountAmount": 0,
@@ -440,7 +531,9 @@ class SnappPayAdapter(PaymentGatewayAdapter):
             "paymentMethodTypeDto": "INSTALLMENT",
             "returnURL": callback_url,
             "transactionId": transaction_id,
-            "cartList": self._build_cart_list(order_code, amount_rial),
+            "cartList": self._build_cart_list(
+                order_code, amount_rial, cart_items=cart_items, cart_totals=cart_totals
+            ),
         }
 
         logger.info(

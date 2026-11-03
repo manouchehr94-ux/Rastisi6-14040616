@@ -428,36 +428,123 @@ class TorobPayAdapter(PaymentGatewayAdapter):
 
     # -- create ------------------------------------------------------------
 
-    @staticmethod
-    def _build_cart_list(order_code: str, amount_rial: int) -> list[dict]:
-        """Build a minimal valid single-cart cartList from order_code + amount.
+    def _build_cart_list(
+        self,
+        order_code: str,
+        amount_rial: int,
+        *,
+        cart_items: list[dict] | None = None,
+        cart_totals: dict | None = None,
+    ) -> list[dict]:
+        """Build the TorobPay cartList (amounts in RIAL).
 
-        The RastiSi service boundary passes only amount + order_code at create,
-        so a single synthetic cart with one cartItem is built here (the plugin's
-        cartList item shape). Richer per-line itemization is a documented
-        follow-up once the checkout boundary forwards the full basket.
+        When ``cart_items``/``cart_totals`` are forwarded by the service
+        boundary (BNPL path), build a cart with REAL per-line cartItems (real
+        product id/sku, product_name, quantity, unit amounts) and allocate the
+        order-level shipping/tax to the documented cartList-level fields
+        (``shippingAmount``, ``taxAmount``). Only the documented TorobPay
+        cartItem shape (id/name/count/amount/category/product_id/page_url) and
+        cart-level flags (isShipmentIncluded/isTaxIncluded) are used — no
+        invented fields. The coupon discount is applied per-line (net amounts),
+        so the built totalAmount reconciles EXACTLY to the Rial grand total; a
+        divergence raises :class:`GatewayAmountMismatchError` rather than
+        sending a mismatched cart.
+
+        When nothing is forwarded (fallback), keep the historical single
+        synthetic cart so non-itemized call sites keep working.
         """
+        if not cart_items or not cart_totals:
+            return [
+                {
+                    "cartId": str(order_code),
+                    "totalAmount": amount_rial,
+                    "taxAmount": 0,
+                    "shippingAmount": 0,
+                    "isShipmentIncluded": True,
+                    "isTaxIncluded": True,
+                    "cartItems": [
+                        {
+                            "id": str(order_code),
+                            "name": f"سفارش {order_code}",
+                            "count": 1,
+                            "amount": amount_rial,
+                            "category": "general",
+                            "product_id": str(order_code),
+                            "page_url": "",
+                        }
+                    ],
+                }
+            ]
+
+        # Per-line amounts are NET of the line's authoritative coupon discount
+        # allocation; the documented TorobPay cart shape has no cart-level
+        # discount field, so applying the real per-line allocation keeps
+        # totalAmount == the net payable using only documented fields.
+        cart_item_payload = [
+            {
+                "id": str(line["id"]),
+                "name": str(line["name"]),
+                "count": int(line["count"]),
+                "amount": (int(line["line_amount"]) - int(line.get("discount_allocation", 0)))
+                * TOMAN_TO_RIAL,
+                "category": "general",
+                "product_id": str(line["id"]),
+                "page_url": "",
+            }
+            for line in cart_items
+        ]
+        gift_wrap_net = int(cart_totals.get("gift_wrap", 0)) - int(
+            cart_totals.get("gift_wrap_discount", 0)
+        )
+        gift_wrap_rial = gift_wrap_net * TOMAN_TO_RIAL
+        if gift_wrap_rial:
+            cart_item_payload.append(
+                {
+                    "id": f"{order_code}-giftwrap",
+                    "name": "کادوپیچی",
+                    "count": 1,
+                    "amount": gift_wrap_rial,
+                    "category": "general",
+                    "product_id": f"{order_code}-giftwrap",
+                    "page_url": "",
+                }
+            )
+
+        shipping_rial = int(cart_totals.get("shipping", 0)) * TOMAN_TO_RIAL
+        tax_rial = int(cart_totals.get("tax", 0)) * TOMAN_TO_RIAL
+
+        lines_rial = sum(ci["amount"] for ci in cart_item_payload)
+        total_rial = lines_rial + shipping_rial + tax_rial
+        self._assert_built_cart(total_rial, expected_rial=amount_rial, order_code=order_code)
+
         return [
             {
                 "cartId": str(order_code),
-                "totalAmount": amount_rial,
-                "taxAmount": 0,
-                "shippingAmount": 0,
-                "isShipmentIncluded": True,
-                "isTaxIncluded": True,
-                "cartItems": [
-                    {
-                        "id": str(order_code),
-                        "name": f"سفارش {order_code}",
-                        "count": 1,
-                        "amount": amount_rial,
-                        "category": "general",
-                        "product_id": str(order_code),
-                        "page_url": "",
-                    }
-                ],
+                "totalAmount": total_rial,
+                "taxAmount": tax_rial,
+                "shippingAmount": shipping_rial,
+                "isShipmentIncluded": shipping_rial > 0,
+                "isTaxIncluded": tax_rial > 0,
+                "cartItems": cart_item_payload,
             }
         ]
+
+    def _assert_built_cart(self, built_rial: int, *, expected_rial: int, order_code: str) -> None:
+        """Refuse to send a cartList whose total diverges from the order amount."""
+        if built_rial != expected_rial:
+            logger.error(
+                "TorobPay built cart mismatch: order=%s built=%d expected=%d",
+                order_code, built_rial, expected_rial,
+            )
+            raise GatewayAmountMismatchError(
+                "مبلغِ سبدِ ساخته‌شده با مبلغِ سفارش مطابقت ندارد.",
+                code="cart_build_mismatch",
+                details={
+                    "expected_rial": expected_rial,
+                    "built_rial": built_rial,
+                    "evidence": {"expected_rial": expected_rial, "built_rial": built_rial},
+                },
+            )
 
     def create_payment(
         self,
@@ -469,6 +556,8 @@ class TorobPayAdapter(PaymentGatewayAdapter):
         order_code: str,
         description: str = "",
         sandbox: bool = False,
+        cart_items: list[dict] | None = None,
+        cart_totals: dict | None = None,
     ) -> PaymentCreationResult:
         """Get a TorobPay payment token (POST /payment/v1/token)."""
         amount_rial = int(amount) * TOMAN_TO_RIAL
@@ -481,7 +570,9 @@ class TorobPayAdapter(PaymentGatewayAdapter):
             "returnURL": callback_url,
             "transactionId": transaction_id,
             "discountAmount": 0,
-            "cartList": self._build_cart_list(order_code, amount_rial),
+            "cartList": self._build_cart_list(
+                order_code, amount_rial, cart_items=cart_items, cart_totals=cart_totals
+            ),
         }
 
         logger.info(

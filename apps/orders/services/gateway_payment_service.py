@@ -36,6 +36,7 @@ from apps.orders.encryption import CredentialEncryptionError
 from apps.orders.gateways import get_adapter
 from apps.orders.gateways.base import (
     GatewayAmountMismatchError,
+    GatewayCategory,
     GatewayConnectionError,
     GatewayError,
     GatewayResponseError,
@@ -76,6 +77,73 @@ class PaymentVerificationFailed(PaymentServiceError):
 
 class PaymentAmountMismatch(PaymentVerificationFailed):
     """Gateway confirmed a payment for a different amount: evidence kept, order NOT marked paid."""
+
+
+# ---------------------------------------------------------------------------
+# Itemized (BNPL) cart snapshot
+# ---------------------------------------------------------------------------
+
+
+def build_order_cart_snapshot(order: Order) -> tuple[list[dict], dict]:
+    """Build an authoritative, immutable per-line cart snapshot for itemized
+    (BNPL) providers plus the order-level totals needed to reconcile it.
+
+    Amounts are kept in TOMAN here; the adapter performs the single
+    Toman -> Rial x10 conversion. Every value is read from the order's own
+    historical snapshot fields (OrderItem + Order money fields), never
+    recomputed, so later catalog/price changes can never alter it.
+
+    Returns a ``(cart_items, cart_totals)`` tuple where:
+      * ``cart_items`` is one dict per :class:`OrderItem` with ``id``
+        (product id or sku), ``name`` (product_name), ``count`` (quantity),
+        ``unit_amount`` (unit_price), ``line_amount`` (line_total, gross),
+        ``discount_allocation`` and ``total_tax``.
+      * ``cart_totals`` carries the order-level TOMAN scalars. All Order money
+        fields have 0 decimal places (integer TOMAN), so the following identity
+        is EXACT with no rounding residual::
+
+            grand_total = items_total + gift_wrap_total + shipping_cost
+                          + tax_added - coupon_discount
+
+        where ``tax_added = (0 if prices_include_tax else order.tax)
+        + order.shipping_tax`` (line tax is already inside the line amounts when
+        prices are tax-inclusive). ``sum(line_amount)`` equals ``items_total``.
+    """
+    cart_items: list[dict] = []
+    for item in order.items.all().order_by("pk"):
+        # id = real product identifier (product id) or the sku snapshot; never
+        # fabricated. Falls back to the sku when the product row was later
+        # SET_NULL, and finally to the order code so the id is always present.
+        identifier = (
+            str(item.product_id) if item.product_id
+            else (item.sku or f"{order.code}-{item.pk}")
+        )
+        cart_items.append(
+            {
+                "id": identifier,
+                "name": item.product_name,
+                "count": int(item.quantity),
+                "unit_amount": int(item.unit_price),
+                "line_amount": int(item.line_total),
+                "discount_allocation": int(item.discount_allocation or 0),
+                "total_tax": int(item.total_tax or 0),
+            }
+        )
+
+    # Line tax is already folded into the line amounts when prices are
+    # tax-inclusive, so it must NOT be added again at the cart level.
+    tax_added = (0 if order.prices_include_tax else int(order.tax)) + int(order.shipping_tax)
+    cart_totals = {
+        "grand_total": int(order.grand_total),
+        "items_total": int(order.items_total),
+        "shipping": int(order.shipping_cost),
+        "shipping_tax": int(order.shipping_tax),
+        "tax": tax_added,
+        "gift_wrap": int(order.gift_wrap_total),
+        "gift_wrap_discount": int(order.gift_wrap_discount),
+        "discount": int(order.coupon_discount),
+    }
+    return cart_items, cart_totals
 
 
 # ---------------------------------------------------------------------------
@@ -325,16 +393,28 @@ def initiate_payment(
     attempt.initiated_at = timezone.now()
     attempt.save(update_fields=["status", "initiated_at", "updated_at"])
 
+    # Forward authoritative per-line order-item snapshots to itemized (BNPL)
+    # providers so their cartList reflects the real basket and reconciles
+    # exactly to the order amount. Non-itemized adapters (PSPs) never receive
+    # the keyword, so their signatures/tests are untouched. The adapter still
+    # performs the single Toman -> Rial x10 conversion.
+    create_kwargs = dict(
+        amount=order.grand_total,
+        currency="TOMAN",
+        callback_url=callback_url,
+        credentials=credentials,
+        order_code=order.code,
+        description=f"پرداخت سفارش {order.code}",
+        sandbox=gateway_config.is_sandbox,
+    )
+    if adapter.category == GatewayCategory.BNPL:
+        cart_items, cart_totals = build_order_cart_snapshot(order)
+        if cart_items:
+            create_kwargs["cart_items"] = cart_items
+            create_kwargs["cart_totals"] = cart_totals
+
     try:
-        result = adapter.create_payment(
-            amount=order.grand_total,
-            currency="TOMAN",
-            callback_url=callback_url,
-            credentials=credentials,
-            order_code=order.code,
-            description=f"پرداخت سفارش {order.code}",
-            sandbox=gateway_config.is_sandbox,
-        )
+        result = adapter.create_payment(**create_kwargs)
     except GatewayError as exc:
         attempt.status = PaymentAttempt.Status.FAILED
         attempt.failure_code = getattr(exc, "code", "gateway_error")
