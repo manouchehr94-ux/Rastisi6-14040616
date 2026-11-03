@@ -51,28 +51,63 @@ The 8 remaining online providers (6 PSPs + 2 BNPL) were re-checked via
   COMMUNITY / NON-authoritative evidence only; not used to assert any official
   contract.
 
-Conclusion: no authoritative CURRENT technical contract for any of the 8
-providers was obtainable in this environment. Per the mission rules, FEAT-004
-therefore implements each as an adapter SKELETON — `validate_credentials` +
-category + capability declaration + `documentation_blocked = True`, declaring NO
-capabilities and raising `GatewayUnsupportedOperationError` from every
-money-moving method — rather than inventing endpoints, signatures, auth, error
-codes, or refund/installment behavior. Every skeleton is registered in
-`apps/orders/gateways/registry.py` and present in
-`PaymentGatewayConfig.GatewayCode`, but the `readiness_status` derivation keeps
-each at `DOCUMENTATION_BLOCKED`, so none is selectable at real (non-sandbox)
-checkout. None is labeled `SANDBOX_VERIFIED` / `LIVE_VERIFIED`.
+Conclusion (FIRST pass): no authoritative CURRENT technical contract for any of
+the 8 providers was obtainable in this environment, so each was implemented as a
+`DOCUMENTATION_BLOCKED` skeleton.
 
-Per-provider FEAT-004 status (all **DOCUMENTATION_BLOCKED skeleton,
-contract-tested for the honest subset**): Pasargad, Saman, Parsian, Mellat,
-Sadad, Tejarat (PSP); SnappPay, TorobPay (BNPL). Adapter modules:
-`apps/orders/gateways/{pasargad,saman,parsian,mellat,sadad,tejarat,snappay,torobpay}.py`;
-contract tests: `apps/orders/tests/test_{...}_adapter.py`.
+> **CORRECTION — superseded by the SECOND investigation (see the next section).**
+> The blanket sentence above ("no authoritative CURRENT technical contract for
+> any of the 8 providers was obtainable") was the FIRST-pass conclusion. It is
+> now **false for three providers**: a reachable, publisher-level contract was
+> obtained on 2026-11-03 for **Pasargad/Dorsa**, **SnappPay**, and **TorobPay**,
+> and each now has a REAL, contract-tested adapter (`documentation_blocked =
+> False`). The statement remains accurate ONLY for the five remaining PSPs
+> (Saman, Parsian, Mellat, Sadad, Tejarat). This block is kept rather than
+> deleted so the record of the correction is explicit.
 
-Base-commit reality check (verified in `apps/orders/gateways/registry.py`): the
-storefront registry currently registers ONLY `zibal` and `cod`. There is no
-`zarinpal` adapter and no manual card-to-card adapter yet; those are future
-mission work and are documented here as NOT pre-existing on this base commit.
+Base-commit reality check (verified in `apps/orders/gateways/registry.py` on the
+base commit `7d311556`): the storefront registry registered ONLY `zibal` and
+`cod` on base. There was no `zarinpal` adapter and no manual card-to-card adapter
+on base; those were ADDED by this branch and are NOT pre-existing on the base
+commit.
+
+### SECOND investigation (2026-11-03) — reachability re-attempt and reclassification
+
+This round re-attempted every official/publisher source and recorded the honest
+outcome. **Three contracts became reachable and are now implemented; five PSP
+official docs remain unreachable.**
+
+Reachable, publisher-level contracts obtained on 2026-11-03 (now implemented):
+
+- **Pasargad / Dorsa IPG** — publisher `pep-ipg` (Pasargad e-Payment):
+  - `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/api-reference.md`
+  - `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/usage-guides.md`
+  - `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/error-codes.md`
+  - Recorded as the Dorsa IPG REST contract (username/password + Bearer token,
+    NOT RSA). Implemented in `apps/orders/gateways/pasargad.py`.
+- **SnappPay** — `https://academy.snapppay.ir/self-cms` (REST API v2.1, BNPL
+  lifecycle: OAuth token → eligibility → payment token → verify → settle →
+  cancel/status). Implemented in `apps/orders/gateways/snappay.py`.
+- **TorobPay** — provider-published WooCommerce plugin source
+  `https://plugins.svn.wordpress.org/torobpay-for-woocommerce/trunk/class-torobpay-api.php`
+  (same Snapp-ecosystem BNPL endpoint PATHS; OAuth password grant). Implemented
+  NATIVELY in Django in `apps/orders/gateways/torobpay.py` with NO WordPress /
+  PHP dependency added.
+
+Still unreachable on 2026-11-03 (kept `DOCUMENTATION_BLOCKED`, `documentation_blocked = True`):
+
+| Provider | URL attempted (this round) | Outcome | Specific missing contract detail |
+|----------|----------------------------|---------|----------------------------------|
+| Saman (SEP) | `https://www.sep.ir/` | Reachable, **marketing-only** (services described in prose) | No token/redirect/verify endpoint URLs, no request/response schema, no currency unit, no error codes, no sandbox |
+| Saman (SEP) | `https://sep.shaparak.ir/` | Timeout (historical) | same as above |
+| Parsian (PEC) | `https://pec.ir/` | **Timeout** | SOAP/REST endpoints, pin/auth, confirm/reverse flow, currency unit, error codes, sandbox |
+| Mellat | `https://www.behpardakht.com/` | **Timeout** | `bpPayRequest`-style endpoints, terminalId/username/password auth, verify/settle/reverse flow, currency unit, error codes, sandbox |
+| Sadad (Bank Melli) | `https://sadadpsp.ir/` | **Timeout** | key/merchant signing, request/verify endpoints, currency unit, error codes, sandbox |
+| Tejarat (display label) | `https://irankish.com/` | **Connection reset (ECONNRESET)** | technical PSP mapping unconfirmed (IranKish NOT assumed); endpoints, auth, signing, currency unit, error codes, sandbox all unverified |
+
+None of the five invented endpoints/signatures/error-codes were introduced. Each
+of the five keeps `documentation_blocked = True` and derives
+`DOCUMENTATION_BLOCKED`, so none is selectable at real checkout.
 
 ---
 
@@ -82,9 +117,9 @@ mission work and are documented here as NOT pre-existing on this base commit.
 |---|--------------------|----------------------|--------|-----------------------------|
 | 1 | Zarinpal           | Facilitator (IPG aggregator) | VERIFIED (REST v4 contract; adapter implemented, FEAT-003) | Yes (landing + connectToGateway + currency + errorList) |
 | 2 | Zibal              | Facilitator / aggregator | VERIFIED (implemented adapter) | Yes |
-| 3 | TorobPay           | BNPL (Torob)         | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No (only community/WP plugin evidence) |
-| 4 | SnappPay           | BNPL (Snapp!)        | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
-| 5 | Pasargad           | PSP — Bank Pasargad (PEP / Pasargad e-Payment) | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No (only community libs) |
+| 3 | TorobPay           | BNPL (Torob)         | IMPLEMENTED_AND_CONTRACT_TESTED + NEEDS_CREDENTIALS (real adapter) | Yes — provider-published WooCommerce plugin source (2026-11-03) |
+| 4 | SnappPay           | BNPL (Snapp!)        | IMPLEMENTED_AND_CONTRACT_TESTED + NEEDS_CREDENTIALS (real adapter) | Yes — academy.snapppay.ir/self-cms REST v2.1 (2026-11-03) |
+| 5 | Pasargad           | PSP — Bank Pasargad (PEP / Dorsa IPG) | IMPLEMENTED_AND_CONTRACT_TESTED + NEEDS_CREDENTIALS (real adapter) | Yes — pep-ipg Dorsa IPG docs (2026-11-03) |
 | 6 | Saman              | PSP — Saman / Sep    | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | Landing only (marketing, no contract) |
 | 7 | Parsian            | PSP — Parsian / Pec  | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
 | 8 | Mellat             | PSP — Behpardakht Mellat | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
@@ -180,59 +215,140 @@ mission work and are documented here as NOT pre-existing on this base commit.
   (no documented inquiry endpoint reachable); Zibal's existing create/verify
   behavior and tests are left unchanged.
 
-## 3. TorobPay — DOCUMENTATION_BLOCKED (skeleton implemented, FEAT-004)
+## 3. TorobPay — IMPLEMENTED_AND_CONTRACT_TESTED + NEEDS_CREDENTIALS (real adapter, FEAT-003)
 
-- **Type:** BNPL (buy-now-pay-later) tied to the Torob price-comparison platform.
-- **Gap:** no official current API documentation was reachable from this
-  environment. The only readily available integration evidence is a **WordPress
-  plugin / community** integration, which is **non-authoritative** and must not
-  be used to assert an official contract. Technical PSP routing, endpoints,
-  auth, currency unit, error codes, sandbox, and eligibility/settlement rules
-  are **not verified**. Must not be selectable at real checkout until the
-  official BNPL contract is obtained.
-- **FEAT-004 adapter:** `apps/orders/gateways/torobpay.py` — category BNPL,
-  `documentation_blocked = True`, declares NO capabilities, raises
-  `GatewayUnsupportedOperationError` from create/verify/settle/cancel and from
-  `check_bnpl_eligibility` (installment offers are never fabricated). Required
-  credential FIELD NAMES only: `client_id`, `client_secret`. No WordPress
-  dependency added.
+- **Type:** BNPL (buy-now-pay-later) under the Snapp! / Torob ecosystem.
+- **Contract source + date (2026-11-03):** provider-published WooCommerce plugin
+  source `https://plugins.svn.wordpress.org/torobpay-for-woocommerce/trunk/class-torobpay-api.php`.
+  This is the provider's own published client; it was read to extract endpoint
+  PATHS, auth scheme, and currency unit. No WordPress / PHP dependency is added;
+  the adapter is implemented natively in Django.
+- **Verified contract (implemented in `apps/orders/gateways/torobpay.py`):**
+  - Base host `https://cpg.torobpay.com` (plugin `get_api_base_url` default).
+  - OAuth: `POST api/online/v1/oauth/token` with `grant_type=password`,
+    `scope=online-merchant`, username/password, `Authorization: Basic
+    base64(client_id:client_secret)`; bearer TTL from `expires_in` (default
+    3300s); on HTTP 401 the token is dropped and re-auth is attempted exactly
+    once.
+  - `check_bnpl_eligibility` → `GET api/online/offer/v1/eligible?amount=<IRR>`;
+    returns the provider payload verbatim (installment terms never fabricated).
+  - `create_payment` → `POST api/online/payment/v1/token` with `{amount (IRR),
+    paymentMethodTypeDto:'INSTALLMENT', returnURL, transactionId, cartList[],
+    discountAmount}`; response carries `paymentPageUrl` + payment token.
+  - `verify_payment` → `POST api/online/payment/v1/verify {paymentToken}`.
+  - `settle_payment` → `POST api/online/payment/v1/settle {paymentToken}` — a
+    DISTINCT finalize step, capability-gated in the orchestrator before the order
+    is marked paid.
+  - `cancel_payment` → `POST api/online/payment/v1/cancel {paymentToken}`.
+  - `inquire_payment` → `GET api/online/payment/v1/status` (SETTLE/CANCEL/VERIFY/
+    PENDING/REVERT mapping).
+  - **Currency:** amounts are IRR (Rial); Toman→Rial (×10) is isolated once at
+    the adapter boundary; amount mismatch raises `GatewayAmountMismatchError`
+    with evidence.
+- **Capabilities declared:** `CREATE, VERIFY, SETTLE, CANCEL, INQUIRE`.
+  `update`/`revert` intentionally NOT declared (revert not required; update is a
+  multi-item follow-up).
+- **Merchant credential requirements:** `client_id`, `client_secret`,
+  `client_username`, `client_password` (Basic header + password-grant).
+- **Contract test status:** `apps/orders/tests/test_torobpay_adapter.py`
+  (deterministic mocked HTTP): OAuth + 401 re-auth, eligibility, create/verify/
+  settle/cancel/status, amount mismatch, capabilities set, category BNPL,
+  `documentation_blocked False`.
+- **Sandbox / production readiness:** NOT sandbox- or live-verified here. The
+  merchant must supply credentials and have the server IP whitelisted and the
+  `returnURL` match the whitelisted base; `is_active` defaults `False`. Readiness
+  derives `NOT_CONFIGURED` with no creds (→ `NEEDS_CREDENTIALS` when partial).
 
-## 4. SnappPay — DOCUMENTATION_BLOCKED (skeleton implemented, FEAT-004)
+## 4. SnappPay — IMPLEMENTED_AND_CONTRACT_TESTED + NEEDS_CREDENTIALS (real adapter, FEAT-003)
 
 - **Type:** BNPL operated under the Snapp! ecosystem.
-- **Gap:** no official current API documentation reachable from this
-  environment. Endpoints, OAuth/token auth, eligibility API, installment terms,
-  currency unit, error codes, and sandbox are **not verified**. Not selectable
-  at real checkout until the official contract is obtained.
-- **FEAT-004 adapter:** `apps/orders/gateways/snappay.py` — category BNPL,
-  `documentation_blocked = True`, declares NO capabilities, raises
-  `GatewayUnsupportedOperationError` from create/verify/settle/cancel and from
-  `check_bnpl_eligibility` (installment offers never fabricated). Required
-  credential FIELD NAMES only: `client_id`, `client_secret`.
+- **Contract source + date (2026-11-03):** `https://academy.snapppay.ir/self-cms`
+  (REST API v2.1, BNPL lifecycle).
+- **Verified contract (implemented in `apps/orders/gateways/snappay.py`):**
+  - Base host `https://api.snapppay.ir` (overridable; SnappPay provisions the
+    stage/production host per-merchant).
+  - OAuth: `POST /api/online/v1/oauth/token` (JWT, 3600s expiry, not cached
+    beyond expiry; `Authorization: Basic base64(client_id:client_secret)`).
+  - `check_bnpl_eligibility` → `GET /api/online/offer/v1/eligible?amount=<IRR>`;
+    returns the provider payload verbatim (never computes installments
+    client-side, per the doc).
+  - `create_payment` → `POST /api/online/payment/v1/token` with `{amount (IRR),
+    discountAmount, externalSourceAmount, mobile, returnURL, transactionId,
+    cartList[]}`; response carries `paymentPageUrl` + payment token.
+  - `verify_payment` → `POST /api/online/payment/v1/verify` with the documented
+    30s read budget and a status fallback (`GET /api/online/payment/v1/status`;
+    PENDING → re-verify; VERIFY/SETTLE → accept; else fail).
+  - `settle_payment` → `POST /api/online/payment/v1/settle` — DISTINCT finalize,
+    capability-gated in the orchestrator.
+  - `cancel_payment` → `POST /api/online/payment/v1/cancel`;
+    `inquire_payment` → `GET /api/online/payment/v1/status`.
+  - **Currency:** IRR (Rial); Toman→Rial (×10) isolated once; amount mismatch
+    raises `GatewayAmountMismatchError` with evidence.
+- **Capabilities declared:** `CREATE, VERIFY, SETTLE, CANCEL, INQUIRE`.
+  `update`/`revert` intentionally NOT declared.
+- **Merchant credential requirements:** `client_id`, `client_secret`.
+- **Contract test status:** `apps/orders/tests/test_snappay_adapter.py`
+  (deterministic mocked HTTP) covering OAuth + 401 re-auth, eligibility, create/
+  verify/settle/cancel/status, amount mismatch, capabilities, category BNPL,
+  `documentation_blocked False`.
+- **Sandbox / production readiness:** NOT sandbox- or live-verified here
+  (SnappPay grants stage access first, production after a demo). Needs merchant
+  credentials + IP whitelisting; `is_active` defaults `False`; readiness derives
+  `NOT_CONFIGURED`/`NEEDS_CREDENTIALS` until configured.
 
-## 5. Pasargad — DOCUMENTATION_BLOCKED
+## 5. Pasargad — IMPLEMENTED_AND_CONTRACT_TESTED + NEEDS_CREDENTIALS (real Dorsa IPG adapter, FEAT-002)
 
-- **Type:** PSP — Bank Pasargad electronic payment (commonly "PEP" / Pasargad
-  e-Payment).
-- **Gap:** official current docs not reachable here. Available evidence is
-  **community libraries** (e.g. Dorsa/Pasargad helpers), which are
-  **non-authoritative**. RSA signing scheme, endpoint URLs, token/sign/verify
-  flow, currency unit, error codes, and sandbox are **not verified**.
-- **FEAT-004 adapter:** `apps/orders/gateways/pasargad.py` — category PSP,
-  `documentation_blocked = True`, declares NO capabilities, raises
-  `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
-  credential FIELD NAMES only: `merchant_code`, `terminal_code`, `private_key`
-  (names, not an assertion of the unverified signing contract). Token
-  acquisition vs purchase vs inquiry vs VERIFY-vs-CONFIRM vs reverse must be
-  modeled as distinct capabilities once the official contract is read.
+- **Type:** PSP — Bank Pasargad electronic payment (PEP), Dorsa IPG.
+- **Contract source + date (2026-11-03, publisher `pep-ipg`):**
+  - `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/api-reference.md`
+  - `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/usage-guides.md`
+  - `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/error-codes.md`
+  - Recorded as the Dorsa IPG REST contract. The REAL contract uses
+    username/password + Bearer token, NOT RSA signing; the earlier RSA
+    assumption is corrected.
+- **Verified contract (implemented in `apps/orders/gateways/pasargad.py`):**
+  - Base host `https://pep.shaparak.ir/dorsa1`.
+  - `getToken` → `POST /token/getToken {username, password}` → Bearer (10-min);
+    on 401 re-authenticate; adapter is stateless (fresh token per call).
+  - `create_payment` → `POST /api/payment/purchase` with `{amount (Rial),
+    invoice (=order_code), invoiceDate (Jalali), serviceCode,
+    serviceType:'PURCHASE', callbackApi, terminalNumber}`; success →
+    `data.{urlId, url}`.
+  - `build_redirect_url` → `data.url` (`pep.shaparak.ir/dorsa1/{urlId}`;
+    merchant-domain `Referer` required by the provider, noted in docstring).
+  - `verify_payment` → `POST /api/payment/payment-inquiry {invoiceId}` to read
+    authoritative status+amount, then `POST /api/payment/verify-transactions
+    {invoice, urlId}` to finalize (auto-reverts if not called within the
+    deadline). Inquiry status 0/13029/13034 → paid; 13033/13025/2/other → not
+    paid.
+  - `inquire_payment` → payment-inquiry; `cancel_payment` → `POST
+    /api/payment/reverse-transactions {invoice, urlId}`.
+  - **Currency:** IRR (Rial); Toman→Rial (×10) isolated once; amount mismatch
+    raises `GatewayAmountMismatchError` with evidence.
+  - Self-contained Gregorian→Jalali helper added (no new pip dependency).
+- **Capabilities declared:** `CREATE, VERIFY, INQUIRE, CANCEL`. `REFUND`/`SETTLE`
+  intentionally NOT declared (no documented refund-after-settlement endpoint
+  beyond reverse-within-deadline). VERIFY (not CONFIRM) is the finalize step.
+- **Merchant credential requirements:** `username`, `password`, `terminalNumber`,
+  `serviceCode` (default 8, configurable). RSA private key NOT required.
+- **Contract test status:** `apps/orders/tests/test_pasargad_adapter.py`
+  (deterministic mocked HTTP) covering token + 401 re-auth, create, verify
+  happy-path, amount mismatch, unsuccessful/reversed inquiry, inquire/cancel,
+  capabilities, category PSP, `documentation_blocked False`.
+- **Sandbox / production readiness:** NOT sandbox- or live-verified here. Needs
+  merchant credentials + terminal + IP whitelisting; `is_active` defaults
+  `False`; readiness derives `NOT_CONFIGURED`/`NEEDS_CREDENTIALS` until
+  configured.
 
 ## 6. Saman — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Saman Electronic Payment (Sep).
-- **Gap:** the `https://www.sep.ir/` landing page is reachable but
-  marketing-only (no technical contract). Token request, redirect,
-  verify/reverse endpoints, currency unit, error codes, and sandbox **not
-  verified**. Legacy examples are not assumed to match current terminals.
+- **Gap (re-confirmed 2026-11-03):** the `https://www.sep.ir/` landing page is
+  reachable but **marketing-only** — it lists products ("درگاه پرداخت اینترنتی
+  سپ", "کارت‌خوان سپ", app 724) in prose and exposes NO technical contract (no
+  token/redirect/verify endpoint URLs, no request/response schema, no currency
+  unit, no error codes, no sandbox). `https://sep.shaparak.ir/` timed out.
+  Legacy examples are not assumed to match current terminals.
 - **FEAT-004 adapter:** `apps/orders/gateways/saman.py` — category PSP,
   `documentation_blocked = True`, declares NO capabilities, raises
   `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
@@ -241,9 +357,10 @@ mission work and are documented here as NOT pre-existing on this base commit.
 ## 7. Parsian — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Parsian e-Commerce (Pec), SOAP-style historically.
-- **Gap:** official current docs not reachable here (`https://pec.ir/` timed
-  out). Pin/auth, SOAP/REST endpoints, confirm/reverse flow, currency unit,
-  error codes, and sandbox **not verified**.
+- **Gap (re-confirmed 2026-11-03):** official current docs not reachable here
+  (`https://pec.ir/` timed out again this round). Pin/auth, SOAP/REST endpoints,
+  confirm/reverse flow, currency unit, error codes, and sandbox **not
+  verified**.
 - **FEAT-004 adapter:** `apps/orders/gateways/parsian.py` — category PSP,
   `documentation_blocked = True`, declares NO capabilities, raises
   `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
@@ -254,8 +371,8 @@ mission work and are documented here as NOT pre-existing on this base commit.
 ## 8. Mellat — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Behpardakht Mellat.
-- **Gap:** official current docs not reachable here
-  (`https://www.behpardakht.com/` timed out). `bpPayRequest`-style endpoints,
+- **Gap (re-confirmed 2026-11-03):** official current docs not reachable here
+  (`https://www.behpardakht.com/` timed out again this round). `bpPayRequest`-style endpoints,
   terminalId/username/password auth, verify/settle/reverse flow, currency unit,
   error codes, and sandbox **not verified**.
 - **FEAT-004 adapter:** `apps/orders/gateways/mellat.py` — category PSP,
@@ -268,9 +385,10 @@ mission work and are documented here as NOT pre-existing on this base commit.
 ## 9. Sadad — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Sadad Informatics (Bank Melli Iran).
-- **Gap:** official current docs not reachable here (`https://sadadpsp.ir/`
-  timed out). Key/merchant signing, request/verify endpoints, currency unit,
-  error codes, and sandbox **not verified**.
+- **Gap (re-confirmed 2026-11-03):** official current docs not reachable here
+  (`https://sadadpsp.ir/` timed out again this round). Key/merchant signing,
+  request/verify endpoints, currency unit, error codes, and sandbox **not
+  verified**.
 - **FEAT-004 adapter:** `apps/orders/gateways/sadad.py` — category PSP,
   `documentation_blocked = True`, declares NO capabilities, raises
   `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required

@@ -23,12 +23,28 @@ claim is made anywhere in this document.
 
 ## Honest summary
 
+> **CORRECTION of the earlier blanket claim.** An earlier version of this matrix
+> (and `PROVIDER_RESEARCH_MATRIX.md`) stated that "no authoritative current
+> contract for any of the 8 providers was obtainable" and that Pasargad,
+> SnappPay, and TorobPay were `DOCUMENTATION_BLOCKED` skeletons. That was the
+> FIRST-pass conclusion. On **2026-11-03** a reachable publisher-level contract
+> was obtained for **Pasargad/Dorsa**, **SnappPay**, and **TorobPay**, and each
+> now has a REAL, contract-tested adapter. The three are reclassified below to
+> `IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS`. The claim remains true
+> only for the five remaining PSPs. This correction is stated explicitly rather
+> than silently edited away.
+
 - `zibal`, `zarinpal`, `cod`, `card_to_card` → **`IMPLEMENTED_AND_CONTRACT_TESTED`**.
   None is `SANDBOX_VERIFIED` or `LIVE_VERIFIED` (no authorized sandbox/live
   evidence is available in this environment).
-- `pasargad`, `saman`, `parsian`, `mellat`, `sadad`, `tejarat` (PSP) and
-  `snappay`, `torobpay` (BNPL) → **`DOCUMENTATION_BLOCKED`** (registered
-  skeletons; never selectable at real checkout).
+- `pasargad` (PSP) and `snappay`, `torobpay` (BNPL) →
+  **`IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS`** (real adapters
+  against reachable publisher contracts, verified 2026-11-03; mocked contract
+  tests; no merchant credentials; `is_active` defaults `False`; not selectable
+  at real checkout until configured + activated).
+- `saman`, `parsian`, `mellat`, `sadad`, `tejarat` (PSP) →
+  **`DOCUMENTATION_BLOCKED`** (registered skeletons; official current contract
+  still unreachable 2026-11-03; never selectable at real checkout).
 
 | # | Code | Category | Status | Adapter file | Contract tests | Sandbox | Production readiness |
 |---|------|----------|--------|--------------|----------------|---------|----------------------|
@@ -36,14 +52,14 @@ claim is made anywhere in this document.
 | 2 | `zarinpal` | Facilitator | `IMPLEMENTED_AND_CONTRACT_TESTED` | `apps/orders/gateways/zarinpal.py` | `test_zarinpal_adapter.py`, `test_payment_currency.py` | No verified sandbox host in docs read here | Needs authorized sandbox/live verification |
 | 3 | `cod` | Offline | `IMPLEMENTED_AND_CONTRACT_TESTED` | `apps/orders/gateways/cod.py` | `test_cod_confirmation.py` | N/A (offline) | Operational (offline, manual confirm) |
 | 4 | `card_to_card` | Offline | `IMPLEMENTED_AND_CONTRACT_TESTED` | `apps/orders/gateways/card_to_card.py` | `test_card_to_card.py` | N/A (offline) | Operational (offline, manual approval) |
-| 5 | `pasargad` | PSP | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/pasargad.py` | `test_pasargad_adapter.py` | Not verified | Blocked |
+| 5 | `pasargad` | PSP (Dorsa IPG) | `IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS` | `apps/orders/gateways/pasargad.py` | `test_pasargad_adapter.py` | Not verified (no creds) | Needs merchant credentials + IP whitelisting |
 | 6 | `saman` | PSP | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/saman.py` | `test_saman_adapter.py` | Not verified | Blocked |
 | 7 | `parsian` | PSP | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/parsian.py` | `test_parsian_adapter.py` | Not verified | Blocked |
 | 8 | `mellat` | PSP | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/mellat.py` | `test_mellat_adapter.py` | Not verified | Blocked |
 | 9 | `sadad` | PSP | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/sadad.py` | `test_sadad_adapter.py` | Not verified | Blocked |
 | 10 | `tejarat` | PSP (label) | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/tejarat.py` | `test_tejarat_adapter.py` | Not verified | Blocked |
-| 11 | `snappay` | BNPL | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/snappay.py` | `test_snappay_adapter.py` | Not verified | Blocked |
-| 12 | `torobpay` | BNPL | `DOCUMENTATION_BLOCKED` | `apps/orders/gateways/torobpay.py` | `test_torobpay_adapter.py` | Not verified | Blocked |
+| 11 | `snappay` | BNPL | `IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS` | `apps/orders/gateways/snappay.py` | `test_snappay_adapter.py` | Not verified (no creds) | Needs merchant credentials + IP whitelisting |
+| 12 | `torobpay` | BNPL | `IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS` | `apps/orders/gateways/torobpay.py` | `test_torobpay_adapter.py` | Not verified (no creds) | Needs merchant credentials + IP whitelisting |
 
 ---
 
@@ -136,56 +152,90 @@ claim is made anywhere in this document.
 - **Known limitations:** no server-to-server verification (by design).
 - **Next action:** none required.
 
-## 5–10. PSP skeletons — `DOCUMENTATION_BLOCKED`
+## 5. Pasargad (Dorsa IPG) — `IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS`
 
-`pasargad`, `saman`, `parsian`, `mellat`, `sadad`, `tejarat`.
+- **Contract source + date (2026-11-03, publisher `pep-ipg`):**
+  `https://raw.githubusercontent.com/pep-ipg/Dorsa-IPG-pasargad/main/docs/api-reference.md`,
+  `.../usage-guides.md`, `.../error-codes.md`.
+- **API:** Dorsa IPG REST, base `https://pep.shaparak.ir/dorsa1`.
+- **Adapter file:** `apps/orders/gateways/pasargad.py` (`documentation_blocked = False`).
+- **Implemented capabilities:** `CREATE, VERIFY, INQUIRE, CANCEL`. getToken
+  (Bearer, 10-min, 401→re-auth), purchase, payment-inquiry, verify-transactions
+  (finalize), reverse-transactions (cancel). Toman→Rial (×10) isolated once;
+  amount-mismatch raises `GatewayAmountMismatchError` with evidence.
+- **NOT declared:** `REFUND`, `SETTLE` (no documented refund-after-settlement
+  endpoint beyond reverse-within-deadline). VERIFY (not CONFIRM) is the finalize.
+- **Merchant credential requirements:** `username`, `password`, `terminalNumber`,
+  `serviceCode` (default 8). RSA key NOT required (earlier RSA assumption
+  corrected).
+- **Contract test status:** `apps/orders/tests/test_pasargad_adapter.py` (mocked
+  HTTP): token/create/verify/inquiry/cancel, amount mismatch, capabilities set,
+  readiness.
+- **Sandbox / production readiness:** NOT sandbox/live verified here. Needs
+  merchant credentials + terminal + server-IP whitelisting; `is_active` defaults
+  `False`; readiness derives `NOT_CONFIGURED`/`NEEDS_CREDENTIALS` until
+  configured. Not selectable at real checkout until configured + activated.
+- **Next action:** obtain merchant credentials + sandbox access and run an
+  authorized sandbox transaction before production activation.
+
+## 6–10. Remaining PSP skeletons — `DOCUMENTATION_BLOCKED`
+
+`saman`, `parsian`, `mellat`, `sadad`, `tejarat`.
 
 - **Documentation source + date:** no authoritative CURRENT technical contract
-  was reachable on 2026-11-03 (`behpardakht.com`, `pec.ir`, `sadadpsp.ir`,
-  `irankish.com` timed out / reset; `sep.ir` was marketing-only; Pasargad only
-  had community libraries). See `PROVIDER_RESEARCH_MATRIX.md` §§5–10.
+  was reachable on 2026-11-03 (`pec.ir`, `behpardakht.com`, `sadadpsp.ir` timed
+  out; `irankish.com` connection reset; `sep.ir` reachable but marketing-only).
+  See `PROVIDER_RESEARCH_MATRIX.md` §§6–10 and the SECOND-investigation table.
 - **API version:** not verified.
-- **Adapter files:** `apps/orders/gateways/{pasargad,saman,parsian,mellat,sadad,tejarat}.py`.
+- **Adapter files:** `apps/orders/gateways/{saman,parsian,mellat,sadad,tejarat}.py`.
 - **Implemented capabilities:** none — each declares NO capabilities and raises
   `GatewayUnsupportedOperationError` from every money-moving method;
   `documentation_blocked = True`.
-- **Unsupported capabilities:** all (CREATE/VERIFY/SETTLE/REFUND/INQUIRE/CANCEL).
 - **Merchant credential requirements:** field NAMES only (not an assertion of
   the unverified contract), e.g. `mellat`: `terminal_id`, `username`,
   `password`; `sadad`: `merchant_id`, `terminal_id`, `key`; `tejarat`:
-  `terminal_id` placeholder (display label only — technical PSP unconfirmed).
+  `terminal_id` placeholder (display label only — technical PSP unconfirmed,
+  IranKish NOT assumed).
 - **Contract test status:** `apps/orders/tests/test_{...}_adapter.py` assert the
   skeleton is registered, `documentation_blocked`, declares no capabilities, and
   raises on every operation.
 - **Sandbox / production readiness:** blocked; never selectable at real checkout
   (readiness derives to `DOCUMENTATION_BLOCKED`).
-- **Known limitations:** entire contract unverified.
 - **Next action:** obtain each provider's official current contract, then
   implement and contract-test real adapters; for Mellat, SETTLE must be a
   DISTINCT capability (never conflated with verify); for Tejarat, confirm the
   real technical PSP before building.
 
-## 11–12. BNPL skeletons — `DOCUMENTATION_BLOCKED`
+## 11–12. BNPL adapters — `IMPLEMENTED_AND_CONTRACT_TESTED` + `NEEDS_CREDENTIALS`
 
 `snappay`, `torobpay`.
 
-- **Documentation source + date:** no official current API documentation was
-  reachable on 2026-11-03 (SnappPay academy shell empty; TorobPay only a
-  WordPress/community plugin — non-authoritative). See
+- **Contract source + date (2026-11-03):** SnappPay REST API v2.1 from
+  `https://academy.snapppay.ir/self-cms`; TorobPay from the provider-published
+  WooCommerce plugin source
+  `https://plugins.svn.wordpress.org/torobpay-for-woocommerce/trunk/class-torobpay-api.php`
+  (implemented natively in Django; NO WordPress/PHP dependency). See
   `PROVIDER_RESEARCH_MATRIX.md` §§3–4.
-- **API version:** not verified.
-- **Adapter files:** `apps/orders/gateways/{snappay,torobpay}.py`.
-- **Implemented capabilities:** none — `documentation_blocked = True`, no
-  capabilities declared, and `check_bnpl_eligibility` raises
-  `GatewayUnsupportedOperationError` (installment offers never fabricated).
-- **Unsupported capabilities:** all, including BNPL eligibility and SETTLE.
-- **Merchant credential requirements:** field NAMES only: `client_id`,
-  `client_secret`.
-- **Contract test status:** `apps/orders/tests/test_{snappay,torobpay}_adapter.py`.
-- **Sandbox / production readiness:** blocked; never selectable at real checkout.
-- **Known limitations:** entire contract (OAuth, eligibility, installment
-  terms, settle) unverified. BNPL settle is a DISTINCT capability-gated step in
-  the orchestrator; a real BNPL adapter must declare and implement `SETTLE`
-  before it can be routed.
-- **Next action:** obtain official BNPL contracts, then implement OAuth +
-  eligibility + create/verify/settle and contract-test before enabling.
+- **Adapter files:** `apps/orders/gateways/{snappay,torobpay}.py`
+  (`documentation_blocked = False`).
+- **Implemented capabilities:** `CREATE, VERIFY, SETTLE, CANCEL, INQUIRE` plus
+  `check_bnpl_eligibility` (returns the provider payload verbatim; installment
+  offers never fabricated). BNPL `SETTLE` is a DISTINCT capability-gated finalize
+  step — the orchestrator invokes settle BEFORE the order is marked paid and does
+  NOT mark it paid if settle fails. Toman→Rial (×10) isolated once; amount
+  mismatch raises `GatewayAmountMismatchError` with evidence.
+- **NOT declared:** `update`/`revert` (revert not required; update is a
+  multi-item follow-up).
+- **Merchant credential requirements:** SnappPay `client_id`, `client_secret`;
+  TorobPay `client_id`, `client_secret`, `client_username`, `client_password`.
+- **Contract test status:** `apps/orders/tests/test_{snappay,torobpay}_adapter.py`
+  (mocked HTTP) + `test_feat005_provider_integration.py` (settle-gate: order not
+  marked paid when settle fails).
+- **Sandbox / production readiness:** NOT sandbox/live verified here. Needs
+  merchant credentials + server-IP whitelisting + whitelisted `returnURL`;
+  `is_active` defaults `False`; readiness derives
+  `NOT_CONFIGURED`/`NEEDS_CREDENTIALS` until configured. Not selectable at real
+  checkout until configured + activated.
+- **Next action:** obtain merchant stage credentials and run an authorized
+  sandbox BNPL lifecycle (eligibility → token → verify → settle) before
+  production activation.
