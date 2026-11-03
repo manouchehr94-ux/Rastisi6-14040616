@@ -110,13 +110,29 @@ with a real implementation.
 
 ### 2.5 Current adapter declarations
 
-| Adapter | `category`   | `capabilities`   | `documentation_blocked` |
-|---------|--------------|------------------|-------------------------|
-| zibal   | FACILITATOR  | `{CREATE,VERIFY}`| False                   |
-| cod     | OFFLINE      | `{}` (empty)     | False                   |
+| Adapter        | `category`   | `capabilities`   | `documentation_blocked` |
+|----------------|--------------|------------------|-------------------------|
+| zibal          | FACILITATOR  | `{CREATE,VERIFY}`| False                   |
+| cod            | OFFLINE      | `{}` (empty)     | False                   |
+| zarinpal       | FACILITATOR  | `{CREATE,VERIFY}`| False                   |
+| card_to_card   | OFFLINE      | `{}` (empty)     | False                   |
 
-zibal does **not** declare INQUIRE/CANCEL/REFUND/SETTLE because this adapter
-implements only the documented `/v1/request` and `/v1/verify` endpoints.
+zibal and zarinpal do **not** declare INQUIRE/CANCEL/REFUND/SETTLE because each
+adapter implements only its documented create/verify endpoints (zibal:
+`/v1/request` + `/v1/verify`; zarinpal: `/pg/v4/payment/request.json` +
+`/pg/v4/payment/verify.json`). `card_to_card` is an OFFLINE method (FEAT-003):
+no external calls, no redirect, and `verify_payment` returns `success=False` by
+design so a customer receipt never auto-verifies — manual merchant approval is
+required, mirroring COD. Its destination card number and IBAN are stored via the
+encrypted credentials mechanism and never logged.
+
+Zarinpal currency safety: RastiSi stores order amounts in Toman; the Zarinpal
+adapter converts Toman → Rial (×10) once at its boundary and pins
+`currency = "IRR"` on create so `amount` is unambiguously Rial (verify amount is
+documented in Rial). `documentation_blocked=False` reflects that the REST v4
+contract is officially documented; it does NOT assert any sandbox/live test
+evidence, and no new production activation is implied (`is_active` defaults
+False).
 
 ---
 

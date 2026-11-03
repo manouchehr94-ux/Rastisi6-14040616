@@ -39,7 +39,7 @@ mission work and are documented here as NOT pre-existing on this base commit.
 
 | # | Display / provider | Technical PSP / type | Status | Official doc reachable here |
 |---|--------------------|----------------------|--------|-----------------------------|
-| 1 | Zarinpal           | Facilitator (IPG aggregator) | PARTIAL (landing verified; endpoint detail pages not machine-readable) | Yes (landing) |
+| 1 | Zarinpal           | Facilitator (IPG aggregator) | VERIFIED (REST v4 contract; adapter implemented, FEAT-003) | Yes (landing + connectToGateway + currency + errorList) |
 | 2 | Zibal              | Facilitator / aggregator | VERIFIED (implemented adapter) | Yes |
 | 3 | TorobPay           | BNPL (Torob)         | DOCUMENTATION_BLOCKED | No (only community/WP plugin evidence) |
 | 4 | SnappPay           | BNPL (Snapp!)        | DOCUMENTATION_BLOCKED | No |
@@ -52,37 +52,59 @@ mission work and are documented here as NOT pre-existing on this base commit.
 
 ---
 
-## 1. Zarinpal — PARTIAL
+## 1. Zarinpal — VERIFIED (REST v4, implemented in FEAT-003)
 
 - **Type:** Payment facilitator / aggregator (routes card payments over the
   Shaparak/Shetab network). Acts as an IPG for merchants ("پذیرنده").
-- **Official doc:** `https://www.zarinpal.com/docs/paymentGateway/`
-  (landing page reachable and read on 2026-11-03).
-- **Verified from the landing page (concepts only):**
-  - `merchant_id`: unique 36-character merchant code issued per gateway.
-  - `Authority`: a unique UUID-form reference (36 chars, RFC form, starts with
-    `A`) returned per purchase request.
-  - `ref_id`: unique transaction id returned after a **successful** payment,
-    used for financial tracking.
-  - `Code`: numeric transaction-status indicator returned by the web service.
-  - `callback_url`: return URL the buyer is redirected to after payment.
-  - Optional `mobile` and `email` buyer parameters; `description`.
-  - **IP constraint:** merchant must register the main server IP with Zarinpal.
-  - Transport: HTTPS/SSL; the merchant and Zarinpal never receive the buyer's
-    card/PIN/balance (entered only on the gateway).
-- **Gaps (why PARTIAL, not fully verified):** the request/verify endpoint detail
-  pages (`.../paymentRequest.html`, `.../guide/`, the REST v4 reference) returned
-  no machine-readable content from this environment, so the exact endpoint URLs,
-  JSON request/response schemas, the full `Code` error-code list, the
-  amount/currency unit (IRR vs IRT) expected by the request call, sandbox base
-  URL, and any idempotency/signing details were **not** verifiable here and are
-  deliberately NOT recorded. Resolve before implementing a Zarinpal adapter.
-- **create / redirect / callback / verify:** conceptually documented (purchase
-  request → redirect to Zarinpal → callback with Authority → verify) but exact
-  contract pending the gaps above.
-- **inquire / cancel / refund / settle:** not verified from the reachable page.
-- **Pre-existence:** NO Zarinpal adapter exists in the storefront registry on
-  this base commit.
+- **Official docs read and verified on 2026-11-03:**
+  - `https://www.zarinpal.com/docs/paymentGateway/` (landing — concepts).
+  - `https://www.zarinpal.com/docs/paymentGateway/connectToGateway` (request /
+    redirect / callback / verify flow and field tables).
+  - `https://www.zarinpal.com/docs/paymentGateway/moreFeatures/currency`
+    (currency selection).
+  - `https://www.zarinpal.com/docs/paymentGateway/errorList` (status/error codes).
+- **Verified contract (implemented in `apps/orders/gateways/zarinpal.py`):**
+  - `merchant_id`: unique 36-character merchant code (validated for length).
+  - `Authority`: unique UUID-form reference (36 chars, RFC form, starts with
+    `A`) returned per purchase request; used as the adapter `track_id`.
+  - `ref_id`: unique transaction id returned after a **successful** payment.
+  - **create_payment** → `POST https://payment.zarinpal.com/pg/v4/payment/request.json`
+    with `{merchant_id, amount (Integer), currency, callback_url, description,
+    metadata.order_id}`. Response (on success) carries `data.code == 100` and
+    `data.authority`.
+  - **build_redirect_url** → `https://payment.zarinpal.com/pg/StartPay/{Authority}`.
+  - **Callback**: Zarinpal appends a `Status` querystring of `OK`/`NOK`; verify
+    is only meaningful when `Status == OK`.
+  - **verify_payment** → `POST .../pg/v4/payment/verify.json` with
+    `{merchant_id, amount (Integer, RIAL), authority}`. Response: `data.code`,
+    `ref_id` (Integer), `card_pan` (masked), `card_hash`, `fee_type`, `fee`.
+  - **Codes:** `100` success (occurs exactly once per transaction); a later
+    verify of the SAME transaction returns `101` = already verified (also a
+    successful, idempotent state). `-50` = verify amount mismatch; `-51` =
+    unsuccessful payment; `-54` = invalid authority (full list in errorList).
+  - **Currency (financial safety):** the official currency page documents a
+    `currency` field of `IRR` (Rial) or `IRT` (Toman); the verify page
+    specifies the verify `amount` is **in Rial**. RastiSi stores order amounts
+    in **Toman** (`Order.grand_total` is `DecimalField(decimal_places=0)`,
+    labeled تومان). The adapter converts Toman → Rial (×10) exactly once at the
+    adapter boundary and **explicitly sends `currency = "IRR"`** on create, so
+    `amount` is unambiguously Rial and there is no double conversion anywhere.
+  - Timeouts: explicit `(connect=10, read=30)` seconds. Credentials never
+    logged. Amount-mismatch on a confirmed payment raises
+    `GatewayAmountMismatchError` with reconciliation evidence.
+- **Capabilities declared:** `CREATE`, `VERIFY` only (category FACILITATOR).
+- **inquire / cancel / refund / settle:** the error list references a
+  PaymentReverse family (`-60..-63`), but the reachable pages do not expose an
+  endpoint-level reverse/refund/inquiry request contract, so those operations
+  are **not** implemented or declared and remain not-yet-verified at the API
+  level.
+- **documentation_blocked:** `False` — the REST v4 contract is officially
+  documented. **No sandbox/live test evidence exists in this environment**, so
+  the integration is NOT marked `SANDBOX_VERIFIED` / `LIVE_VERIFIED` /
+  production-ready; `is_active` still defaults to `False` and no new production
+  activation is implied.
+- **Pre-existence:** NO Zarinpal adapter existed in the storefront registry on
+  the base commit; this is a NEW implementation (FEAT-003), not a preserved one.
 
 ## 2. Zibal — VERIFIED (implemented)
 
@@ -109,9 +131,13 @@ mission work and are documented here as NOT pre-existing on this base commit.
 - **Capabilities declared:** `CREATE`, `VERIFY` only (category FACILITATOR).
 - **inquire / cancel / refund / settle:** the Zibal product site lists refund
   ("استرداد وجه") and inquiry web-services as platform features, but the IPG
-  landing page read here does not expose their endpoint-level request/response
+  landing page `https://help.zibal.ir/ipg/` (re-read on 2026-11-03 during
+  FEAT-003) still does not expose their endpoint-level request/response
   contract, so these are **not** implemented or declared by the adapter and are
-  recorded as not-yet-verified at the API level.
+  recorded as not-yet-verified at the API level. The optional backward-compatible
+  Zibal `inquire_payment` enhancement is therefore **NOT** added in FEAT-003
+  (no documented inquiry endpoint reachable); Zibal's existing create/verify
+  behavior and tests are left unchanged.
 
 ## 3. TorobPay — DOCUMENTATION_BLOCKED
 
