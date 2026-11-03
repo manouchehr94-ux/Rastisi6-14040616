@@ -624,6 +624,8 @@ class PaymentGatewayConfig(TimeStampedModel):
     class GatewayCode(models.TextChoices):
         ZIBAL = "zibal", "زیبال"
         COD = "cod", "پرداخت در محل"
+        ZARINPAL = "zarinpal", "زرین‌پال"
+        CARD_TO_CARD = "card_to_card", "کارت به کارت"
 
     class ReadinessStatus(models.TextChoices):
         """Derived operational readiness of a gateway configuration.
