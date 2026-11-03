@@ -29,6 +29,7 @@ import io
 from decimal import Decimal
 
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.db.migrations.loader import MigrationLoader
 from django.test import TestCase
 
@@ -149,6 +150,84 @@ class LegacyConfigBackwardCompatTests(TestCase):
             reloaded.readiness_status,
             PaymentGatewayConfig.ReadinessStatus.CONNECTED,
         )
+
+    def test_pre_upgrade_zibal_and_cod_configs_survive_additive_choice_extension(self):
+        """§2 discrepancy regression: a pre-existing merchant's zibal AND cod
+        PaymentGatewayConfig rows must survive the additive gateway_code choice
+        extension (0006 -> 0021 -> 0022) with NOTHING dropped, renamed,
+        duplicated, or disconnected.
+
+        Asserts for BOTH legacy codes, after reload:
+          * gateway_code is byte-identical to what was saved (not renamed);
+          * encrypted credentials still decrypt to the original payload;
+          * readiness_status still derives to CONNECTED (not disconnected);
+          * exactly one row exists per (store, gateway_code) — nothing was
+            duplicated — and the uniq_gateway_config_per_store UniqueConstraint
+            still rejects a duplicate insert for the same store.
+        """
+        # A pre-existing merchant configured zibal (online) + cod (offline),
+        # exactly as could have existed on base commit 7d311556 when only these
+        # two codes were valid.
+        zibal = PaymentGatewayConfig(
+            store=self.store, gateway_code="zibal", is_active=True
+        )
+        zibal.set_credentials({"merchant": "pre-existing-zibal-merchant"})
+        zibal.save()
+        cod = PaymentGatewayConfig(
+            store=self.store, gateway_code="cod", is_active=True
+        )
+        cod.save()
+
+        # Reload from the DB (simulates loading after the additive migrations).
+        reloaded_zibal = PaymentGatewayConfig.objects.get(
+            store=self.store, gateway_code="zibal"
+        )
+        reloaded_cod = PaymentGatewayConfig.objects.get(
+            store=self.store, gateway_code="cod"
+        )
+
+        # gateway_code intact (not dropped / renamed).
+        self.assertEqual(reloaded_zibal.gateway_code, "zibal")
+        self.assertEqual(reloaded_cod.gateway_code, "cod")
+
+        # Credentials intact and still decryptable.
+        self.assertEqual(
+            reloaded_zibal.get_credentials()["merchant"],
+            "pre-existing-zibal-merchant",
+        )
+        self.assertEqual(reloaded_cod.get_credentials(), {})
+
+        # Readiness intact (not disconnected) — both derive to CONNECTED.
+        self.assertEqual(
+            reloaded_zibal.readiness_status,
+            PaymentGatewayConfig.ReadinessStatus.CONNECTED,
+        )
+        self.assertEqual(
+            reloaded_cod.readiness_status,
+            PaymentGatewayConfig.ReadinessStatus.CONNECTED,
+        )
+
+        # Nothing duplicated: exactly one row per (store, gateway_code).
+        self.assertEqual(
+            PaymentGatewayConfig.objects.filter(
+                store=self.store, gateway_code="zibal"
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            PaymentGatewayConfig.objects.filter(
+                store=self.store, gateway_code="cod"
+            ).count(),
+            1,
+        )
+
+        # The uniq_gateway_config_per_store UniqueConstraint is still enforced:
+        # a second zibal config for the same store must be rejected.
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                PaymentGatewayConfig.objects.create(
+                    store=self.store, gateway_code="zibal", is_active=True
+                )
 
     def test_legacy_config_is_unaffected_by_new_gateway_codes(self):
         # Adding new codes must not change the behavior of a legacy zibal row.
