@@ -126,6 +126,25 @@
   </div>
 </div>
 {% endif %}
+{% if can_confirm_card_to_card %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-head"><h3>💳 تأیید انتقالِ کارت به کارت</h3></div>
+  <div class="card-body">
+    <p style="font-size:12.5px;color:var(--muted)">فقط پس از مشاهده‌ی واقعیِ واریز در حسابِ خود تأیید کنید. مبلغ باید دقیقاً برابرِ مبلغِ کلِ سفارش باشد. تأیید قابلِ بازگشت نیست؛ اصلاح فقط با «ثبت استرداد» انجام می‌شود. وضعیتِ سفارش تغییر نمی‌کند و پیامکی ارسال نمی‌شود (رسیدِ پرداخت به ایمیلِ مشتری می‌رود). اگر واریزی انجام نشده، رسید را رد کنید تا سفارش در انتظارِ پرداخت بماند.</p>
+    <form method="post" action="{% url 'dashboard:order-card-to-card-payment' order.code %}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      {% csrf_token %}<input type="hidden" name="token" value="{{ card_to_card_token }}">
+      <label>مبلغِ دریافتی (تومان)<br><input class="inp" name="amount" value="{{ order.grand_total|floatformat:0 }}" dir="ltr" required style="width:150px"></label>
+      <label>شماره‌ی رسید/پیگیری (اختیاری)<br><input class="inp" name="reference" maxlength="60" dir="ltr" style="width:180px"></label>
+      <button class="btn btn-primary" onclick="return confirm('دریافتِ کاملِ وجه را تأیید می‌کنید؟ این کار قابلِ بازگشت نیست.')">تأییدِ انتقال</button>
+    </form>
+    <form method="post" action="{% url 'dashboard:order-card-to-card-reject' order.code %}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+      {% csrf_token %}<input type="hidden" name="token" value="{{ card_to_card_token }}">
+      <label>علتِ رد (اختیاری)<br><input class="inp" name="reason" maxlength="300" style="width:280px"></label>
+      <button class="btn" onclick="return confirm('رسیدِ کارت به کارت را رد می‌کنید؟ سفارش در انتظارِ پرداخت باقی می‌ماند.')">ردِ رسید</button>
+    </form>
+  </div>
+</div>
+{% endif %}
 {% for tx in payment_transactions %}{% if tx.method != 'gateway' %}
 <p style="font-size:12.5px;margin-bottom:12px">✅ {{ tx.get_method_display }} — تأییدشده توسط {{ tx.confirmed_by|default:"—" }}{% if tx.confirmed_at %} در {{ tx.confirmed_at|jalali_dt }}{% endif %}{% if tx.ref_id %} — رسید: <span dir="ltr">{{ tx.ref_id }}</span>{% endif %} ({{ tx.code }})</p>
 {% endif %}{% endfor %}

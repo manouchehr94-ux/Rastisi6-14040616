@@ -10,6 +10,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from apps.core.models import AuditLogEntry
 from apps.orders.models import (
@@ -183,6 +184,159 @@ class RejectionTests(CardToCardBase):
         self.confirm(order)
         with self.assertRaises(c2c.CardToCardConfirmationError):
             c2c.reject_transfer(order.pk, store=self.store, actor=self.actor)
+
+
+class CardToCardDashboardTests(CardToCardBase):
+    """B3 reachability: تأیید/ردِ کارت به کارت از طریقِ view/URL/داشبورد در دسترس است.
+
+    عیناً الگویِ ``CodDashboardTests`` را بازتاب می‌دهد: ماتریسِ مجوز، دیده‌شدنِ فرم،
+    تأییدِ PENDING→PAID، ردِ PENDING (بدونِ پول)، idempotency، اسکوپِ Store، و GET رد."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.dashboard.tests.test_coupon_views import HOST
+
+        self.host = HOST
+        self.store.admin_subdomain = HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        self.order = self.c2c_order()
+        self.initiate(self.order)  # تلاشِ PENDING برای مسیرِ رد
+        self.counter = 0
+
+    def client_for(self, role):
+        from django.test import Client
+        from apps.stores.models import StoreMembership
+
+        client = Client(HTTP_HOST=self.host)
+        if role == StoreMembership.Role.OWNER:
+            client.force_login(self.owner)
+            return client
+        self.counter += 1
+        user = get_user_model().objects.create_user(
+            username=f"0912779{self.counter:04d}", password="pass12345", is_staff=True
+        )
+        StoreMembership.objects.create(
+            store=self.store, user=user, role=role, status="active",
+            accepted_at=timezone.now(),
+        )
+        client.force_login(user)
+        return client
+
+    def confirm_post(self, client, order=None, **data):
+        from django.urls import reverse
+
+        order = order or self.order
+        payload = {"amount": str(int(order.grand_total)), "reference": "R-C2C-9", "token": "t-c2c-1"}
+        payload.update(data)
+        return client.post(reverse("dashboard:order-card-to-card-payment", args=[order.code]), payload)
+
+    def reject_post(self, client, order=None, **data):
+        from django.urls import reverse
+
+        order = order or self.order
+        payload = {"reason": "رسید نامعتبر", "token": "t-c2c-2"}
+        payload.update(data)
+        return client.post(reverse("dashboard:order-card-to-card-reject", args=[order.code]), payload)
+
+    def pay_status(self, order):
+        order.refresh_from_db()
+        return order.payment_status
+
+    def test_permission_matrix(self):
+        from apps.stores.models import StoreMembership
+
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            Role = StoreMembership.Role
+            for role in (Role.ANALYST, Role.CATALOG_MANAGER, Role.CONTENT_EDITOR):
+                order = self.c2c_order()
+                self.initiate(order)
+                self.assertEqual(self.confirm_post(self.client_for(role), order=order).status_code, 403, role)
+                self.assertEqual(self.reject_post(self.client_for(role), order=order).status_code, 403, role)
+                self.assertEqual(self.pay_status(order), Order.PaymentStatus.PENDING, role)
+            for role in (Role.ORDER_MANAGER, Role.ADMINISTRATOR, Role.OWNER):
+                order = self.c2c_order()
+                self.initiate(order)
+                with self.captureOnCommitCallbacks(execute=True):
+                    resp = self.confirm_post(self.client_for(role), order=order)
+                self.assertEqual(resp.status_code, 302, role)
+                self.assertEqual(self.pay_status(order), Order.PaymentStatus.PAID, role)
+                self.assertEqual(self.tx_ok(order), 1, role)
+
+    def test_confirm_flow_and_form_visibility(self):
+        from django.urls import reverse
+        from apps.stores.models import StoreMembership
+
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            owner = self.client_for(StoreMembership.Role.OWNER)
+            url = reverse("dashboard:order-detail", args=[self.order.code])
+            self.assertContains(owner.get(url), "تأیید انتقالِ کارت به کارت")
+            analyst = self.client_for(StoreMembership.Role.ANALYST)
+            self.assertNotContains(analyst.get(url), "تأیید انتقالِ کارت به کارت")
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.confirm_post(owner)
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(self.pay_status(self.order), Order.PaymentStatus.PAID)
+            self.assertEqual(self.tx_ok(self.order), 1)
+            page = owner.get(url)
+            # فرمِ تأیید پنهان شد (سفارش دیگر در‌انتظار نیست). توجه: کارت به کارت از
+            # متدِ GATEWAY استفاده می‌کند تا نیازی به مهاجرت نباشد، پس تراکنشِ آن در
+            # بلوکِ رسیدهایِ آفلاین (method != 'gateway') نمایش داده نمی‌شود؛ خودِ
+            # پرداخت‌شدنِ سفارش در بالا بررسی شده است.
+            self.assertNotContains(page, 'name="amount"')
+            # تأییدِ تکراری: اطلاع، بدونِ اثر
+            before_tx = self.tx_ok(self.order)
+            with self.captureOnCommitCallbacks(execute=True):
+                self.confirm_post(owner, token="t-c2c-9")
+            self.assertEqual(self.tx_ok(self.order), before_tx)
+
+    def test_reject_flow_leaves_order_pending_without_money(self):
+        from apps.stores.models import StoreMembership
+
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            owner = self.client_for(StoreMembership.Role.OWNER)
+            resp = self.reject_post(owner)
+            self.assertEqual(resp.status_code, 302)
+            self.assertEqual(self.pay_status(self.order), Order.PaymentStatus.PENDING)
+            self.assertEqual(self.tx_ok(self.order), 0)
+            self.assertEqual(
+                PaymentAttempt.objects.filter(
+                    order=self.order, status=PaymentAttempt.Status.CANCELED
+                ).count(),
+                1,
+            )
+
+    def test_wrong_amount_and_online_orders_rejected_in_view(self):
+        from django.urls import reverse
+        from apps.stores.models import StoreMembership
+
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            owner = self.client_for(StoreMembership.Role.OWNER)
+            self.confirm_post(owner, amount="1")
+            self.assertEqual(self.pay_status(self.order), Order.PaymentStatus.PENDING)
+            online = self.new_order()
+            self.confirm_post(owner, order=online)
+            online.refresh_from_db()
+            self.assertEqual(online.payment_status, Order.PaymentStatus.PENDING)
+            self.assertNotContains(
+                owner.get(reverse("dashboard:order-detail", args=[online.code])),
+                "تأیید انتقالِ کارت به کارت",
+            )
+
+    def test_other_store_order_is_404_and_get_not_allowed(self):
+        from django.urls import reverse
+        from apps.stores.models import Store, StoreMembership
+
+        with self.settings(ALLOWED_HOSTS=[self.host, "testserver"]):
+            owner = self.client_for(StoreMembership.Role.OWNER)
+            Order.objects.filter(pk=self.order.pk).update(
+                store=Store.objects.create(name="o", slug="c2c-o2", status=Store.Status.ACTIVE)
+            )
+            self.assertEqual(self.confirm_post(owner).status_code, 404)
+            self.assertEqual(self.reject_post(owner).status_code, 404)
+            self.assertEqual(
+                owner.get(reverse("dashboard:order-card-to-card-payment", args=[self.order.code])).status_code,
+                405,
+            )
 
 
 class CodRegressionTests(SafetyBase):

@@ -145,6 +145,19 @@ def reject_transfer(
         order=order, status=PaymentAttempt.Status.PENDING
     )
     for attempt in pending:
+        # Card-to-card never sets ``verified_at`` or a gateway ref id on the
+        # PENDING attempt (unlike COD/online, it is only ever verified by the
+        # merchant confirm path, which routes through ``apply_payment_success``
+        # on a SEPARATE transition). Rejection therefore only has to move the
+        # attempt to CANCELED and record the failure — there is no stale
+        # verified/track state to clear. The assertion below makes that
+        # invariant explicit so a future change that starts stamping
+        # ``verified_at`` at selection would fail loudly here instead of
+        # silently leaving a canceled-yet-"verified" row that could mislead
+        # later reconciliation.
+        assert attempt.verified_at is None, (
+            "card-to-card PENDING attempt unexpectedly carries verified_at"
+        )
         attempt.status = PaymentAttempt.Status.CANCELED
         attempt.failure_code = "card_to_card_rejected"
         attempt.failure_message = (reason or "رسیدِ کارت به کارت توسطِ فروشنده رد شد.")[:300]

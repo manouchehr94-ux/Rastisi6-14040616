@@ -289,6 +289,93 @@ class ConcurrentInitiationTests(IdempotencyTenantBase):
         )
         self.assertEqual(adapter.create_payment.call_count, 1)
 
+    def test_integrity_error_on_insert_requeries_live_attempt_instead_of_500(self):
+        """SQLite fallback-key race safety net (issue #2).
+
+        On a backend without row-level locking a request can reach the attempt
+        insert and still collide on the partial unique(idempotency_key)
+        constraint (two racers computing the same deterministic fallback key).
+        The service must CATCH that IntegrityError, re-query the now committed
+        live attempt, and reuse it instead of letting a 500 escape — and it
+        must NOT make a second external create_payment call.
+
+        We reproduce the collision deterministically without threads. A live
+        attempt for THIS exact operation identity already exists but carries a
+        DIFFERENT key, so the key-scoped fast path does not find it. The caller
+        supplies a key that is already taken by that live row, so
+        ``_key_to_persist`` falls back to the deterministic key
+        ``pay-sha256(store:order:gateway:amount:attempts_so_far)``. We pre-seed
+        a SECOND (dead) attempt whose key is exactly that deterministic value,
+        so the new insert collides. The service then re-queries and returns the
+        live attempt.
+        """
+        adapter = mock_online_adapter()
+        key = "pay-RACE-SAME-KEY"
+
+        # A concurrent WINNER has already committed a live attempt for this
+        # exact operation identity, carrying the SAME key both racers computed.
+        # In production the loser's fast path / in-lock re-check ran BEFORE this
+        # commit landed (no row lock on SQLite), so it did not see the winner.
+        # We reproduce that blind spot by making the two reusable-status reads
+        # (fast path + in-lock re-check) return empty exactly once each, then
+        # letting the real insert collide on the committed winner's key and the
+        # post-IntegrityError re-query (also a reusable-status read) see it.
+        winner = PaymentAttempt.objects.create(
+            store=self.store_a, order=self.order_a, gateway_config=self.config_a,
+            amount=self.order_a.grand_total, currency="TOMAN",
+            status=PaymentAttempt.Status.REDIRECT_READY,
+            idempotency_key=key, gateway_track_id="trk-winner",
+        )
+
+        manager_cls = type(PaymentAttempt.objects)
+        real_filter = manager_cls.filter
+        # Blind every pre-insert read that references this key so the loser
+        # behaves as if the winner had not committed yet: the two reusable
+        # (status__in) lookups return empty, AND the _key_to_persist existence
+        # check (idempotency_key=key, no status__in) reports the key as FREE,
+        # so the loser tries to persist the same key and the real insert
+        # collides. Once the insert has raised IntegrityError the blind is
+        # lifted, so the post-collision re-query returns the live winner.
+        state = {"active": True}
+
+        def blinded_filter(self_mgr, *args, **kwargs):
+            qs = real_filter(self_mgr, *args, **kwargs)
+            if state["active"] and kwargs.get("idempotency_key") == key:
+                return qs.none()
+            return qs
+
+        real_save = PaymentAttempt.save
+
+        def save_lifting_blind(self_attempt, *args, **kwargs):
+            # The loser's INSERT of key K collides with the committed winner.
+            # Lift the blind right before it raises so the except-branch
+            # re-query can see the winner.
+            if self_attempt.idempotency_key == key and self_attempt.pk is None:
+                state["active"] = False
+            return real_save(self_attempt, *args, **kwargs)
+
+        with patch(SERVICE, return_value=adapter):
+            with patch.object(manager_cls, "filter", blinded_filter):
+                with patch.object(PaymentAttempt, "save", save_lifting_blind):
+                    result = initiate_payment(
+                        order=self.order_a, gateway_config=self.config_a,
+                        callback_url="https://a.example/cb", store=self.store_a,
+                        idempotency_key=key,
+                    )
+
+        # Reused the live winner via the IntegrityError re-query; no second
+        # external charge; no duplicate row committed.
+        self.assertEqual(result.pk, winner.pk)
+        self.assertEqual(result.status, PaymentAttempt.Status.REDIRECT_READY)
+        self.assertEqual(adapter.create_payment.call_count, 0)
+        self.assertEqual(
+            PaymentAttempt.objects.filter(
+                store=self.store_a, order=self.order_a,
+                gateway_config=self.config_a, amount=self.order_a.grand_total,
+            ).count(),
+            1,
+        )
+
     def test_unique_idempotency_constraint_blocks_duplicate_committed_row(self):
         """Backstop proof that even across separate DB sessions a duplicate
         attempt for the same deterministic key cannot be committed: the

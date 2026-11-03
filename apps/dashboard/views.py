@@ -3720,7 +3720,7 @@ def order_detail(request, code):
     context["active_page"] = "orders"
     context["can_manage_refunds"] = membership_has_permission(request.store_membership, REFUND_MANAGE)
     context["can_manage_returns"] = membership_has_permission(request.store_membership, RETURN_MANAGE)
-    from apps.orders.services import cod_payment_service
+    from apps.orders.services import card_to_card_payment_service, cod_payment_service
     from apps.stores.authorization import ORDER_CONFIRM_COD_PAYMENT
     import secrets as _secrets
 
@@ -3732,6 +3732,14 @@ def order_detail(request, code):
     context["cod_methods"] = cod_payment_service.METHODS and [
         (m, dict(order.transactions.model.Method.choices)[m]) for m in cod_payment_service.METHODS
     ]
+    # کارت به کارت همان مجوز و اسکوپِ COD را به کار می‌برد؛ اما علاوه بر تأیید یک
+    # مسیرِ «رد» هم دارد. فرم فقط وقتی نشان داده می‌شود که سفارش واقعاً کارت به کارت،
+    # در‌انتظار و لغو‌نشده باشد (can_confirm).
+    context["can_confirm_card_to_card"] = (
+        membership_has_permission(request.store_membership, ORDER_CONFIRM_COD_PAYMENT)
+        and card_to_card_payment_service.can_confirm(order)
+    )
+    context["card_to_card_token"] = _secrets.token_hex(16)
     context["payment_transactions"] = order.transactions.filter(status="ok").select_related("confirmed_by")
     return render(request, "dashboard/order_detail.html", context)
 

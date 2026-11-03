@@ -14,6 +14,66 @@ provider HTTP is exercised with deterministic mocks.
 
 ---
 
+## 0. Corrective round 2 follow-up (v2, 2026-11-04)
+
+The semantic review of corrective round 2 returned NEEDS_CHANGES with four
+issues. Their resolution on this branch:
+
+1. **Card-to-card merchant confirmation is now reachable end-to-end (was the
+   blocking issue).** The round-2 `card_to_card_payment_service` (confirm /
+   reject / can_confirm) previously had no production caller, so a card-to-card
+   order could sit PENDING forever. It now has the full merchant surface,
+   mirroring COD exactly:
+   - View: `apps/dashboard/card_to_card_views.py::order_confirm_card_to_card_payment`
+     and `order_reject_card_to_card_payment` (POST-only, `staff_required`,
+     gated on `ORDER_VIEW` + `ORDER_CONFIRM_COD_PAYMENT`, store-scoped via
+     `get_object_or_404(Order, code=..., store=request.store)`).
+   - URLs: `orders/<code>/card-to-card-payment/`
+     (`dashboard:order-card-to-card-payment`) and
+     `orders/<code>/card-to-card-reject/` (`dashboard:order-card-to-card-reject`).
+   - Dashboard context + template: the order-detail view adds
+     `can_confirm_card_to_card` and `card_to_card_token`, and
+     `order_detail.html` renders a confirm form plus a reject form, shown only
+     when the order is a PENDING, non-canceled card-to-card order.
+   - Authorization/tenant parity: card-to-card reuses the SAME permission COD
+     uses (`order.confirm_cod_payment`, granted to Owner / Administrator /
+     Order Manager) and the SAME store scoping, so no new permission or schema
+     change was needed. Reusing the existing "confirm offline payment"
+     permission is the faithful mirror of the COD pattern the review asked for.
+   - Tests: `apps/orders/tests/test_card_to_card_confirmation.py::CardToCardDashboardTests`
+     adds HTTP-level (`self.client.post`) coverage — permission matrix
+     (Analyst/Catalog/Content get 403; Order Manager/Administrator/Owner confirm
+     PENDING -> PAID), form visibility, reject leaves the order PENDING with no
+     money, idempotent duplicate confirm, wrong-amount/online-order rejection,
+     foreign-store 404, and GET-not-allowed (405).
+
+2. **SQLite idempotency fallback no longer surfaces an uncaught IntegrityError
+   (500).** `initiate_payment` now wraps the attempt insert in a savepoint and
+   catches `IntegrityError`: it re-queries `_scoped_existing()` and returns the
+   now-committed live attempt (no second external `create_payment` call); only
+   if the collision was with a non-live row does it mint a fresh disambiguated
+   key and insert again. This makes the create path safe on any backend
+   (Postgres already serialized the race via the row lock; SQLite now degrades
+   gracefully instead of 500ing). Test:
+   `test_idempotency_tenant.ConcurrentInitiationTests.test_integrity_error_on_insert_requeries_live_attempt_instead_of_500`
+   reproduces the loser's colliding insert deterministically (no threads) and
+   asserts the winner is reused with zero extra charges and no duplicate row.
+
+3. **Postgres concurrency guarantee remains an honestly-reported gap, not a
+   pass.** The 16 `@skipUnless(connection.vendor == "postgresql")` row-lock
+   contention tests still skip here (no Postgres binaries; see §9 and §10).
+   This is documented as UNVERIFIED, not claimed as verified. No code change.
+
+4. **`reject_transfer` confirmed to leave no stale verified state.**
+   Card-to-card never stamps `verified_at` on the PENDING attempt (only the
+   merchant confirm path verifies, via `apply_payment_success` on a separate
+   transition), so rejection only moves the attempt to CANCELED and records the
+   failure. An explicit `assert attempt.verified_at is None` now documents and
+   guards that invariant so a future change cannot silently leave a
+   canceled-yet-"verified" row that would mislead reconciliation.
+
+---
+
 ## 1. Original mission requirements vs actual delivered functionality
 
 | Mission requirement | Delivered | Status |
@@ -399,7 +459,10 @@ network was used. Date 2026-11-03, Django 5.2, SQLite.
   branch distinguishes `auto_collects_offline`), `apps/orders/gateways/card_to_card.py`,
   `apps/orders/services/card_to_card_payment_service.py` (merchant confirm/reject
   mirroring the COD confirmation pattern), `apps/orders/gateways/cod.py`
-  (`auto_collects_offline=True`).
+  (`auto_collects_offline=True`). v2 (2026-11-04) wired the merchant surface:
+  `apps/dashboard/card_to_card_views.py`, two dashboard URLs, and the
+  `can_confirm_card_to_card` context + confirm/reject forms in
+  `order_detail.html` (see §0.1).
 - **Fix.** Card-to-card stays `PENDING` at selection (no `verified_at`, order not
   paid, `card2card-` track id). An authorized merchant confirms the transfer
   exactly once via a conditional UPDATE from PENDING, writing a Transaction with
@@ -529,9 +592,11 @@ after defect D-2.)
 **Second-round integration regression (B1-B5), grouped to finish under the
 per-command timeout. Date 2026-11-03.**
 
-- **Group (a), all new integration modules** (57 tests):
+- **Group (a), all new integration modules** (63 tests; v2 2026-11-04 added 6:
+  5 HTTP-level card-to-card merchant-surface tests and 1 idempotency
+  IntegrityError re-query test):
   `python manage.py test apps.orders.tests.test_payment_redirect_integration apps.orders.tests.test_callback_integration apps.orders.tests.test_card_to_card_confirmation apps.orders.tests.test_idempotency_tenant apps.orders.tests.test_bnpl_cart_reconciliation apps.orders.tests.test_payment_integration_extra --verbosity 1`
-  -> **Ran 57 tests, OK. 0 failures, 0 errors, 0 skipped.**
+  -> **Ran 63 tests, OK. 0 failures, 0 errors, 0 skipped.**
 - **Group (b), service + safety + security + currency + discrepancy**
   (86 tests):
   `python manage.py test apps.orders.tests.test_gateway_payment_service apps.orders.tests.test_payment_safety apps.orders.tests.test_payment_security apps.orders.tests.test_payment_currency apps.orders.tests.test_payment_discrepancy --verbosity 1`
@@ -547,8 +612,10 @@ per-command timeout. Date 2026-11-03.**
   -> **Ran 16 tests, OK (skipped=16).** All 16 skipped with reason
   `نیازمندِ PostgreSQL`; reported UNVERIFIED, never as passed (see §10).
 
-Second-round totals: **320 passed, 0 failed, 16 skipped (Postgres-gated,
-unverified).** No group timed out; a timeout is never reported as a pass.
+Second-round totals: **326 passed, 0 failed, 16 skipped (Postgres-gated,
+unverified)** (v2 2026-11-04: +6 over the original 320 from the card-to-card
+merchant-surface and idempotency IntegrityError tests). No group timed out; a
+timeout is never reported as a pass.
 `python manage.py check` → `System check identified no issues (0 silenced).`;
 `python manage.py makemigrations --check --dry-run` → `No changes detected`.
 

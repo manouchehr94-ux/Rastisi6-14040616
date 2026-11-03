@@ -29,7 +29,7 @@ import hashlib
 import logging
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.orders.encryption import CredentialEncryptionError
@@ -367,7 +367,36 @@ def initiate_payment(
         )
         if pre_public_id:
             attempt.public_id = pre_public_id
-        attempt.save()
+        try:
+            # ``save`` runs in its own savepoint so a unique-key collision does
+            # not poison the surrounding atomic block (the row lock is still
+            # held, so _scoped_existing re-queries cleanly below).
+            with transaction.atomic():
+                attempt.save()
+        except IntegrityError:
+            # Backend-agnostic safety net for the idempotency-key race.
+            #
+            # On Postgres the select_for_update row lock already serializes
+            # same-operation requests, so the loser re-queries and reuses the
+            # winner's attempt before ever reaching this insert. On SQLite (and
+            # any backend without real row-level locking) select_for_update is a
+            # no-op, so two racing requests can both compute the SAME
+            # deterministic fallback key and both try to insert it; the second
+            # insert hits the partial unique(idempotency_key) constraint. Rather
+            # than let that surface as an uncaught 500, we re-query the now
+            # committed live attempt and reuse it — no second external
+            # create_payment call is ever made. The partial unique constraint
+            # guarantees at most one row is committed either way.
+            existing = _scoped_existing()
+            if existing is not None:
+                return existing
+            # The collision was with a row that is NOT a live attempt for this
+            # exact identity (e.g. a dead prior attempt still holding the base
+            # deterministic key). Mint a fresh disambiguated key and insert
+            # again; _key_to_persist counts existing attempts, so the committed
+            # racer shifts the count and yields a new, non-colliding key.
+            attempt.idempotency_key = _key_to_persist()
+            attempt.save()
 
     # Offline gateways never go through the online redirect/verify flow. The
     # two offline methods have OPPOSITE bookkeeping, distinguished by the
