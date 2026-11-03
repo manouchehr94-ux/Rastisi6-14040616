@@ -7,6 +7,7 @@ from django.contrib.auth import login as auth_login
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.cart.models import CartItem
@@ -481,25 +482,29 @@ def payment_initiate(request, code):
     return redirect("orders:payment-result", code=order.code)
 
 
+@csrf_exempt
 def gateway_callback(request, attempt_id):
     """Public callback endpoint for payment gateways.
 
     This view:
     - Does NOT require authentication (gateway redirects the customer here)
-    - Accepts GET only (Zibal redirects with query params)
-    - Processes the callback server-to-server verification
-    - Redirects to payment result page
+    - Accepts GET and POST. Classic PSPs (Zibal/Zarinpal) redirect back with
+      GET query params; BNPL providers (SnappPay/TorobPay) POST their callback
+      to the returnURL with a form/body carrying {transactionId, state, amount}.
+    - Processes the callback with server-to-server verification
+    - Redirects to the payment result page
 
     Security:
-    - Never trusts callback params alone for payment confirmation
-    - Always verifies server-to-server with gateway
-    - Idempotent — duplicate callbacks are safe
-    - Does not expose sensitive information in the result page
+    - ``@csrf_exempt`` is applied ONLY to this public callback. It is safe
+      because callback fields are NEVER trusted to confirm a payment: the
+      authoritative server-to-server ``verify_payment`` (and capability-gated
+      ``settle_payment`` for BNPL) inside ``process_callback_and_verify`` is the
+      sole authority that finalizes an order. A forged-success POST cannot
+      finalize anything. No other view relaxes CSRF.
+    - Tenant + attempt resolution stays scoped to (public_id, store).
+    - Idempotent — duplicate callbacks are safe.
+    - Does not expose sensitive information in the result page.
     """
-    if request.method != "GET":
-        from django.http import HttpResponseNotAllowed
-        return HttpResponseNotAllowed(["GET"])
-
     from apps.orders.models import PaymentAttempt
     from apps.orders.services.gateway_payment_service import (
         PaymentAmountMismatch,
@@ -520,8 +525,10 @@ def gateway_callback(request, attempt_id):
 
     order = attempt.order
 
-    # Collect callback data from query params
-    callback_data = dict(request.GET.items())
+    # Merge GET and POST params so GET-based providers and POST-based BNPL
+    # providers both work. These are passed through only as callback_data and
+    # are never trusted to confirm payment.
+    callback_data = {**request.GET.dict(), **request.POST.dict()}
 
     try:
         attempt = process_callback_and_verify(
