@@ -385,12 +385,17 @@ def payment_initiate(request, code):
             is_active=True,
         ).first()
 
-    # If no matching config, try any active online config for this store
+    # If no matching config, try any active online config for this store that is
+    # genuinely selectable at real checkout (readiness-aware; never picks a
+    # documentation-blocked / not-ready provider as a fallback).
     if gateway_config is None:
-        gateway_config = PaymentGatewayConfig.objects.filter(
+        candidates = PaymentGatewayConfig.objects.filter(
             store=store,
             is_active=True,
-        ).exclude(gateway_code="cod").first()
+        ).exclude(gateway_code="cod")
+        gateway_config = next(
+            (c for c in candidates if c.is_selectable_at_checkout), None
+        )
 
     # Still nothing — fall back to simulation if enabled
     if gateway_config is None:

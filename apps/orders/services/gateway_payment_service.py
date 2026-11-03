@@ -38,6 +38,7 @@ from apps.orders.gateways.base import (
     GatewayConnectionError,
     GatewayError,
     GatewayResponseError,
+    PaymentOperation,
 )
 from apps.orders.models import Order, PaymentAttempt, PaymentGatewayConfig, PaymentReconciliation, Transaction
 
@@ -128,6 +129,22 @@ def initiate_payment(
         raise PaymentConfigError("درگاه پرداخت غیرفعال است")
     if not gateway_config.is_configured:
         raise PaymentConfigError("پیکربندی درگاه ناقص است")
+
+    # Guard: readiness. A DOCUMENTATION_BLOCKED / not-ready provider must never
+    # be routed to a real payment (single source of truth = readiness_status;
+    # no per-gateway conditionals). Offline (COD/card-to-card) is CONNECTED once
+    # configured, so this does not disturb offline methods.
+    R = PaymentGatewayConfig.ReadinessStatus
+    readiness = gateway_config.readiness_status
+    ready = readiness == R.CONNECTED or (
+        readiness == R.READY_FOR_TEST and gateway_config.is_sandbox
+    )
+    if not ready:
+        if readiness == R.DOCUMENTATION_BLOCKED:
+            raise PaymentConfigError(
+                "قرارداد رسمی این درگاه تأیید نشده و برای پرداخت واقعی در دسترس نیست."
+            )
+        raise PaymentConfigError("درگاه پرداخت برای پرداخت واقعی آماده نیست.")
 
     # Idempotency: check for existing attempt
     if idempotency_key:
@@ -468,5 +485,36 @@ def process_callback_and_verify(
     if not result.success:
         logger.info("Verification returned failure: attempt=%s final=%s", attempt.public_id, was_final)
         fail(f"status_{result.status_code}", result.message or "تأیید پرداخت ناموفق", result.message or "تأیید پرداخت توسط درگاه ناموفق بود")
+
+    # Capability-gated BNPL settle/capture (no provider conditionals): a provider
+    # whose documented lifecycle separates verify from settle declares the SETTLE
+    # capability. For such providers the money is NOT fully captured until settle
+    # succeeds, so we invoke the adapter's settle step BEFORE the order is treated
+    # as paid. Providers without SETTLE (ordinary PSPs, Zibal, Zarinpal) skip this
+    # entirely. A provider that declares SETTLE but whose settle is unsupported
+    # (documentation-blocked) never reaches here because readiness keeps it
+    # non-selectable/non-routable.
+    if adapter.supports(PaymentOperation.SETTLE):
+        try:
+            settle = adapter.settle_payment(
+                track_id=attempt.gateway_track_id,
+                amount=attempt.amount,
+                currency=attempt.currency,
+                credentials=credentials,
+                sandbox=gateway_config.is_sandbox,
+            )
+        except GatewayError as exc:
+            logger.warning("BNPL settle failed: attempt=%s error=%s", attempt.public_id, exc)
+            fail(
+                getattr(exc, "code", "settle_error"),
+                str(exc),
+                "تسویه‌ی نهاییِ پرداخت اقساطی ناموفق بود؛ سفارش پرداخت‌شده تلقی نمی‌شود.",
+            )
+        if not getattr(settle, "success", False):
+            fail(
+                "settle_failed",
+                settle.message or "تسویه‌ی نهایی ناموفق",
+                "تسویه‌ی نهاییِ پرداخت اقساطی ناموفق بود؛ سفارش پرداخت‌شده تلقی نمی‌شود.",
+            )
 
     return _apply_verified_payment(attempt.pk, result, store)
