@@ -181,14 +181,36 @@ def initiate_payment(
         attempt.public_id = pre_public_id
     attempt.save()
 
-    # For offline gateways (COD), mark as succeeded immediately
+    # Offline gateways never go through the online redirect/verify flow. The
+    # two offline methods have OPPOSITE bookkeeping, distinguished by the
+    # adapter's explicit ``auto_collects_offline`` signal (not a code string):
+    #
+    # * COD (auto_collects_offline=True): selecting it is a firm pay-on-
+    #   delivery commitment, so record the attempt SUCCEEDED at selection with
+    #   a cod- track id and a verified_at timestamp. The order itself is NOT
+    #   marked paid — it stays pending until delivery confirmation.
+    # * Card-to-card (auto_collects_offline=False): the customer transfers
+    #   money out of band and nothing proves it arrived at selection time. The
+    #   attempt stays PENDING (no verified_at, no cod- track id, order not
+    #   paid) until an authorized merchant confirms the transfer.
     if not adapter.is_online:
-        attempt.status = PaymentAttempt.Status.SUCCEEDED
-        attempt.gateway_track_id = f"cod-{order.code}"
-        attempt.verified_at = timezone.now()
-        attempt.save(update_fields=["status", "gateway_track_id", "verified_at", "updated_at"])
-        # COD does NOT mark order as paid — it stays pending until delivery
-        logger.info("COD payment recorded: order=%s attempt=%s", order.code, attempt.public_id)
+        if adapter.auto_collects_offline:
+            attempt.status = PaymentAttempt.Status.SUCCEEDED
+            attempt.gateway_track_id = f"cod-{order.code}"
+            attempt.verified_at = timezone.now()
+            attempt.save(update_fields=["status", "gateway_track_id", "verified_at", "updated_at"])
+            # COD does NOT mark order as paid — it stays pending until delivery
+            logger.info("COD payment recorded: order=%s attempt=%s", order.code, attempt.public_id)
+            return attempt
+        # Non-auto-collecting offline method (card-to-card): leave PENDING for
+        # manual merchant confirmation. No verified_at, order not marked paid.
+        attempt.status = PaymentAttempt.Status.PENDING
+        attempt.gateway_track_id = f"card2card-{order.code}"
+        attempt.save(update_fields=["status", "gateway_track_id", "updated_at"])
+        logger.info(
+            "Card-to-card payment selected (pending merchant confirmation): order=%s attempt=%s",
+            order.code, attempt.public_id,
+        )
         return attempt
 
     # Online gateway: request payment

@@ -230,6 +230,33 @@ class PaymentGatewayAdapter(ABC):
         """True for online payment gateways, False for offline (COD)."""
 
     @property
+    def auto_collects_offline(self) -> bool:
+        """For an offline method (``is_online`` False), whether selecting the
+        method at checkout already constitutes collected money.
+
+        The two offline methods look identical on ``is_online`` and
+        ``capabilities`` (both empty), yet they have OPPOSITE bookkeeping:
+
+        * Cash on Delivery collects the money physically when the courier
+          hands over the goods. Selecting COD is a firm commitment to pay on
+          delivery, so the attempt is recorded SUCCEEDED at selection time
+          (the order still stays PENDING until delivery confirmation).
+        * Manual card-to-card moves money fully out of band. A customer who
+          picks card-to-card (or even uploads a receipt) has NOT proven any
+          money arrived; only an authorized merchant confirming the transfer
+          does. So the attempt must stay PENDING at selection.
+
+        This explicit, documentation-backed flag lets the orchestrator branch
+        on an adapter capability instead of string-matching a gateway code.
+        The name reads as a predicate on the attempt row: does picking this
+        offline method auto-record collected money? Default True preserves the
+        historical COD behavior for any offline adapter that does not override
+        it; card-to-card overrides it to False. It is meaningless (and ignored)
+        for online adapters, which never take the offline branch.
+        """
+        return True
+
+    @property
     def required_credentials(self) -> list[str]:
         """List of credential field names required for this gateway.
 

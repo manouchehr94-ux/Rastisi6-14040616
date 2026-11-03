@@ -78,6 +78,14 @@ class CardToCardAdapter(PaymentGatewayAdapter):
         }
 
     @property
+    def auto_collects_offline(self) -> bool:
+        # Manual card-to-card moves money out of band. Selecting the method (or
+        # uploading a receipt) proves nothing — only an authorized merchant
+        # confirming the transfer does. The attempt must stay PENDING until
+        # that manual confirmation.
+        return False
+
+    @property
     def onboarding_help(self) -> str:
         return (
             "شماره‌ی کارت مقصد و نام صاحب کارت را وارد کنید. این روش آفلاین است؛ "

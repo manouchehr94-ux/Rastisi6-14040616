@@ -53,6 +53,13 @@ class CodAdapter(PaymentGatewayAdapter):
         return []
 
     @property
+    def auto_collects_offline(self) -> bool:
+        # COD is collected on delivery: selecting it is a firm pay-on-delivery
+        # commitment, so the attempt is recorded SUCCEEDED at selection time
+        # (the order still stays PENDING until delivery confirmation).
+        return True
+
+    @property
     def onboarding_help(self) -> str:
         return "پرداخت در محل نیازی به اعتبارنامه ندارد — فقط فعال کنید. مبلغ هنگام تحویل دریافت می‌شود."
 
