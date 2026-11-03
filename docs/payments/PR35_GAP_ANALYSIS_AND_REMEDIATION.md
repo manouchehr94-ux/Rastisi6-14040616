@@ -332,6 +332,161 @@ timeouts; strict JSON parsing; credentials never logged; `is_active` default
 
 ---
 
+## 7A. Integration blockers B1-B5: root cause, fix, tests, evidence
+
+A second review round drove the engine end-to-end (real Django views, the
+orchestration service, persistence, the provider adapters, and order state
+transitions) rather than only through per-adapter unit tests. That pass surfaced
+five concrete integration blockers (B1-B5). Each is recorded below with its root
+cause, the exact files changed, the fix, the tests added, the exact test command,
+and the real pass/fail/skip counts. All provider HTTP is mocked; no external
+network was used. Date 2026-11-03, Django 5.2, SQLite.
+
+### B1: the authoritative gateway redirect URL was lost end-to-end
+
+- **Root cause.** `create_payment` returned an authoritative payment-page URL
+  (`PaymentCreationResult.gateway_url`), but the service persisted only
+  `result.track_id`. The view then rebuilt a redirect from the bare track id, so
+  providers that mint a distinct payment-page URL (Pasargad, SnappPay, TorobPay)
+  could redirect the customer to a bare token instead of the real page.
+- **Files changed.** `apps/orders/models.py` (new additive field
+  `PaymentAttempt.gateway_redirect_url`), `apps/orders/migrations/0023_paymentattempt_gateway_redirect_url.py`
+  (additive), `apps/orders/services/gateway_payment_service.py` (persist
+  `gateway_url`, falling back to `extra['paymentPageUrl']`/`['url']`),
+  `apps/orders/views.py` (`payment_initiate` prefers the persisted URL, falls
+  back to `build_redirect_url` only when blank).
+- **Fix.** The service now stores the authoritative URL in a field distinct from
+  the tracking id. The view redirects to the persisted URL, and only derives from
+  the track id (Zibal/Zarinpal) when no URL was returned. No URL is ever
+  hardcoded or fabricated in production code.
+- **Tests added.** `apps/orders/tests/test_payment_redirect_integration.py`:
+  Pasargad/SnappPay/TorobPay redirect to the persisted `gateway_url`,
+  Zibal/Zarinpal fall back to the derived URL with a blank persisted field, and
+  two guards assert the production view and service contain no hardcoded
+  `http(s)` URL.
+- **Command + counts.** See the Group (a) command in §9. The redirect module
+  contributes 9 tests, all passing.
+
+### B2: gateway callback view rejected BNPL POST callbacks (HTTP 405)
+
+- **Root cause.** `gateway_callback` was GET-only and returned
+  `HttpResponseNotAllowed` for POST, reading only `request.GET`. BNPL providers
+  (SnappPay/TorobPay) POST their callback body `{transactionId, state, amount}`
+  to the returnURL, so their callbacks were rejected.
+- **Files changed.** `apps/orders/views.py` (`gateway_callback` accepts GET and
+  POST, merges GET+POST params as `callback_data`, narrow `@csrf_exempt` on this
+  one public endpoint only).
+- **Fix.** The callback accepts both verbs and merges params. The narrow
+  `@csrf_exempt` is safe because callback fields are never trusted to confirm a
+  payment: the server-to-server `verify_payment` (and capability-gated
+  `settle_payment`) is the sole authority. A forged-success POST finalizes
+  nothing.
+- **Tests added.** `apps/orders/tests/test_callback_integration.py`: GET
+  provider still finalizes, BNPL POST is not 405 and finalizes via verify+settle,
+  a forged-success POST (verify mocked to fail, and verify raising) does NOT
+  finalize, a duplicate POST is idempotent (one OK Transaction), and a
+  cross-tenant callback returns 404 and leaves the foreign attempt untouched.
+- **Command + counts.** See the Group (a) command in §9. The callback module
+  contributes 9 tests, all passing (including the duplicate-callback and
+  cross-tenant-rejection cases the reviewer asked to confirm are present).
+
+### B3: card-to-card was treated as paid at selection
+
+- **Root cause.** The offline card-to-card method risked being recorded as
+  settled at selection, like COD, even though a customer bank transfer is not
+  proven to have arrived.
+- **Files changed.** `apps/orders/services/gateway_payment_service.py` (offline
+  branch distinguishes `auto_collects_offline`), `apps/orders/gateways/card_to_card.py`,
+  `apps/orders/services/card_to_card_payment_service.py` (merchant confirm/reject
+  mirroring the COD confirmation pattern), `apps/orders/gateways/cod.py`
+  (`auto_collects_offline=True`).
+- **Fix.** Card-to-card stays `PENDING` at selection (no `verified_at`, order not
+  paid, `card2card-` track id). An authorized merchant confirms the transfer
+  exactly once via a conditional UPDATE from PENDING, writing a Transaction with
+  `confirmed_by`, `advance_to_processing=False`, `send_sms=False`. COD keeps its
+  SUCCEEDED-at-selection behavior (regression-guarded).
+- **Tests added.** `apps/orders/tests/test_card_to_card_confirmation.py`:
+  pending-at-selection, merchant confirmation pays once, rejection leaves the
+  order pending without money, duplicate confirmation is idempotent, wrong amount
+  rejected, canceled/non-card-to-card rejected, no SMS, and a COD
+  non-regression case.
+- **Command + counts.** See the Group (a) command in §9. The confirmation module
+  contributes 16 tests, all passing.
+
+### B4: idempotency was keyed globally, not by tenant + operation
+
+- **Root cause.** The dedupe lookup matched by idempotency key alone, so a reused
+  key could surface a foreign tenant's/operation's attempt, and a legitimate
+  retry of a FAILED attempt could not proceed because the dead attempt still held
+  the deterministic key (a verbatim re-persist collided on the global partial
+  `unique(idempotency_key)` constraint).
+- **Files changed.** `apps/orders/services/gateway_payment_service.py`
+  (`initiate_payment`: dedupe scoped by store+order+gateway_config+amount with the
+  key as an additional filter; order-row `select_for_update` plus in-lock
+  re-check; `_key_to_persist` mints a distinct deterministic key whenever the
+  supplied key is already held by any row (foreign reuse OR a prior final
+  attempt), disambiguated by the per-identity attempt count so a retry after a
+  FAILED attempt is never blocked).
+- **Fix.** Tenant/operation isolation (a reused foreign key never returns a
+  foreign attempt), single external charge on a legitimate same-operation retry,
+  and retryability after a FAILED attempt (a fresh live attempt is created with a
+  distinct deterministic key). Concurrency is serialized by the order-row lock
+  plus the in-lock re-check; the partial unique constraint is the cross-session
+  backstop.
+- **Tests added.** `apps/orders/tests/test_idempotency_tenant.py` (reused key
+  across tenants, amount-scoped non-reuse, single-charge retry, redirect-ready
+  reuse, simulated-concurrent reuse, unique-constraint backstop) plus the retry
+  cases in `apps/orders/tests/test_payment_integration_extra.py` (service-level
+  retry after FAILED create, retry-then-callback finalizes once, and the
+  end-to-end view retry).
+- **Command + counts.** See the Group (a) command in §9. The idempotency module
+  contributes 8 tests and the extra module contributes 3 retry tests, all
+  passing.
+
+### B5: BNPL cartList carried a single synthetic item
+
+- **Root cause.** SnappPay and TorobPay built ONE synthetic cart item (count 1,
+  amount = full total, shipping/tax 0), so real multi-item BNPL baskets were not
+  represented and would not reconcile line-by-line.
+- **Files changed.** `apps/orders/services/gateway_payment_service.py`
+  (`build_order_cart_snapshot` forwards per-line OrderItem snapshots + order-level
+  totals in TOMAN), `apps/orders/gateways/snappay.py` and
+  `apps/orders/gateways/torobpay.py` (`_build_cart_list` builds real cartItems and
+  allocates shipping/tax/discount to the documented cartList fields).
+- **Fix.** The orchestrator forwards authoritative, immutable per-line snapshots
+  for BNPL providers; the adapter still performs the single Toman -> Rial x10
+  conversion. The built cartList reconciles EXACTLY to `int(grand_total) * 10`
+  Rial for multi-item, discounted, and shipping+tax orders; a tampered line
+  raises `GatewayAmountMismatchError` rather than sending a bad cart.
+- **Tests added.** `apps/orders/tests/test_bnpl_cart_reconciliation.py`:
+  per-line forwarding, real cartItem shape, exact Rial reconciliation across
+  multi-item/discount/shipping+tax orders, and tamper detection.
+- **Command + counts.** See the Group (a) command in §9. The reconciliation
+  module contributes its tests, all passing.
+
+### B1-B5: extra cross-blocker integration tests (this round)
+
+`apps/orders/tests/test_payment_integration_extra.py` adds the two scenarios the
+reviewer called out that were not yet directly proven end-to-end:
+
+- **Payment retry** (3 tests): a FAILED attempt is retryable; the retry initiates
+  a fresh live attempt (service and view), and a retry-then-callback finalizes the
+  order exactly once with a single OK Transaction.
+- **Failed BNPL settlement** (4 tests): for SnappPay/TorobPay, when
+  `verify_payment` succeeds but `settle_payment` fails (returns failure OR raises)
+  the order stays PENDING, the attempt is not SUCCEEDED, and no OK Transaction is
+  written. A control test proves the SAME flow DOES finalize when settle succeeds,
+  isolating the settle failure as the sole cause of non-finalization.
+
+Duplicate callback and cross-tenant callback rejection are proven in
+`test_callback_integration.py` and are not duplicated here.
+
+**Exact command + counts.**
+`python manage.py test apps.orders.tests.test_payment_integration_extra --verbosity 1`
+→ **Ran 7 tests, OK. 0 failures, 0 errors, 0 skipped.**
+
+---
+
 ## 8. Outstanding external dependencies
 
 - **Pasargad, SnappPay, TorobPay — merchant credentials + IP whitelisting.** Each
@@ -370,6 +525,32 @@ after defect D-2.)
 **Group B** (223 tests) —
 `python manage.py test apps.orders.tests.test_pasargad_adapter apps.orders.tests.test_snappay_adapter apps.orders.tests.test_torobpay_adapter apps.orders.tests.test_saman_adapter apps.orders.tests.test_parsian_adapter apps.orders.tests.test_mellat_adapter apps.orders.tests.test_sadad_adapter apps.orders.tests.test_tejarat_adapter apps.orders.tests.test_zarinpal_adapter apps.orders.tests.test_card_to_card apps.orders.tests.test_checkout_readiness apps.orders.tests.test_payment_currency apps.orders.tests.test_payment_security apps.orders.tests.test_payment_migration_compat apps.orders.tests.test_feat005_provider_integration --verbosity 1`
 → **Ran 223 tests, OK. 0 failures, 0 errors, 0 skipped.**
+
+**Second-round integration regression (B1-B5), grouped to finish under the
+per-command timeout. Date 2026-11-03.**
+
+- **Group (a), all new integration modules** (57 tests):
+  `python manage.py test apps.orders.tests.test_payment_redirect_integration apps.orders.tests.test_callback_integration apps.orders.tests.test_card_to_card_confirmation apps.orders.tests.test_idempotency_tenant apps.orders.tests.test_bnpl_cart_reconciliation apps.orders.tests.test_payment_integration_extra --verbosity 1`
+  -> **Ran 57 tests, OK. 0 failures, 0 errors, 0 skipped.**
+- **Group (b), service + safety + security + currency + discrepancy**
+  (86 tests):
+  `python manage.py test apps.orders.tests.test_gateway_payment_service apps.orders.tests.test_payment_safety apps.orders.tests.test_payment_security apps.orders.tests.test_payment_currency apps.orders.tests.test_payment_discrepancy --verbosity 1`
+  -> **Ran 86 tests, OK. 0 failures, 0 errors, 0 skipped.**
+- **Group (c), card-to-card + COD confirmation** (32 tests):
+  `python manage.py test apps.orders.tests.test_card_to_card apps.orders.tests.test_cod_confirmation --verbosity 1`
+  -> **Ran 32 tests, OK. 0 failures, 0 errors, 0 skipped.**
+- **Group (d), provider adapters** (145 tests):
+  `python manage.py test apps.orders.tests.test_snappay_adapter apps.orders.tests.test_torobpay_adapter apps.orders.tests.test_pasargad_adapter apps.orders.tests.test_zarinpal_adapter apps.orders.tests.test_mellat_adapter apps.orders.tests.test_saman_adapter apps.orders.tests.test_sadad_adapter apps.orders.tests.test_parsian_adapter apps.orders.tests.test_tejarat_adapter --verbosity 1`
+  -> **Ran 145 tests, OK. 0 failures, 0 errors, 0 skipped.**
+- **Group (e), concurrency** (16 tests):
+  `python manage.py test apps.orders.tests.test_payment_concurrency apps.orders.tests.test_coupon_concurrency --verbosity 2`
+  -> **Ran 16 tests, OK (skipped=16).** All 16 skipped with reason
+  `نیازمندِ PostgreSQL`; reported UNVERIFIED, never as passed (see §10).
+
+Second-round totals: **320 passed, 0 failed, 16 skipped (Postgres-gated,
+unverified).** No group timed out; a timeout is never reported as a pass.
+`python manage.py check` → `System check identified no issues (0 silenced).`;
+`python manage.py makemigrations --check --dry-run` → `No changes detected`.
 
 **Group C — concurrency** (16 tests, all skipped) —
 `python manage.py test apps.orders.tests.test_payment_concurrency apps.orders.tests.test_coupon_concurrency --verbosity 2`
@@ -473,8 +654,14 @@ New commit subjects on `feature/kiro-payment-engine-20261103` above `83b2053d`
 1. `test(payments): regression proving pre-existing zibal/cod configs survive additive gateway_code extension` (`0379623b`, FEAT-001)
 2. `feat(payments): real Pasargad/Dorsa IPG REST adapter + contract tests` (`ab56c263`, FEAT-002)
 3. `feat(payments): real SnappPay + TorobPay BNPL REST adapters + contract tests` (`e1a6562f`, FEAT-003)
-4. `fix(payments): refresh stale readiness test for reclassified providers` (FEAT-004 — this round)
-5. `docs(payments): PR35 gap analysis + updated matrices + QA evidence` (FEAT-004 — this round)
+4. `fix(payments): refresh stale readiness test for reclassified providers` (FEAT-004)
+5. `docs(payments): PR35 gap analysis + updated matrices + QA evidence` (FEAT-004, base of the B1-B5 round)
+6. `fix(payments): persist authoritative gateway redirect URL end-to-end (B1)` (`c9e49ef5`)
+7. `fix(payments): accept POST gateway callbacks with narrow csrf_exempt (B2)` (`4fc3f5f5`)
+8. `fix(payments): keep card-to-card PENDING until merchant confirmation (B3)` (`407b01d7`)
+9. `fix(payments): scope idempotency by tenant+operation and guard concurrency (B4)` (`3042a380`)
+10. `fix(payments): forward real order-item cart snapshots to BNPL adapters (B5)` (`8d92f33a`)
+11. `test+docs: extra payment integration tests and updated PR35 reports (B1-B5)` (FEAT-007, this round; also hardens the B4 retry-after-FAILED key path)
 
 **Final head SHA: `<PLACEHOLDER — orchestrator fills this after the last commit>`.**
 

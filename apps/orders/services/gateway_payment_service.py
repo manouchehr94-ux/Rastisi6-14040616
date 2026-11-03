@@ -273,28 +273,41 @@ def initiate_payment(
     def _key_to_persist():
         """Pick a safe idempotency key for a NEW attempt.
 
-        The caller's key is honored when it is free or already belongs to THIS
-        operation identity. But the DB enforces a global partial
-        unique(idempotency_key): if the supplied key was minted for a DIFFERENT
-        operation (a reused/foreign key), persisting it verbatim would raise an
-        IntegrityError. In that case we substitute a DETERMINISTIC key derived
-        from this operation's identity (store, order, gateway_config, amount) so
-        the new attempt is still idempotent for its own operation and never
-        collides with the foreign row.
+        The caller's key is honored only when NO row holds it yet. The DB
+        enforces a GLOBAL partial unique(idempotency_key), so persisting a key
+        that any existing attempt already carries would raise an IntegrityError.
+        Two distinct situations reach this point (a live, reusable attempt for
+        this identity was already returned by ``_scoped_existing`` before we get
+        here, so it is never one of these):
+
+          * foreign reuse: the supplied key was minted for a DIFFERENT
+            operation (another store/order/gateway/amount), or
+          * legitimate retry: a PRIOR attempt for THIS SAME operation is already
+            final (FAILED/CANCELED/EXPIRED) and still carries the key, so it is
+            not reusable but the key is taken.
+
+        In BOTH cases the verbatim key is unusable. We substitute a
+        DETERMINISTIC key derived from this operation's identity; to let a retry
+        after a failed attempt (whose dead row may already hold the base
+        deterministic key) proceed, the key is disambiguated by the count of
+        existing attempts for this identity. The result is stable for a given
+        retry round and never collides with an existing row.
         """
         if not idempotency_key:
             return ""
-        clash = (
-            PaymentAttempt.objects.exclude(
-                store=store, order=order,
-                gateway_config=gateway_config, amount=order.grand_total,
-            )
-            .filter(idempotency_key=idempotency_key)
-            .exists()
+        taken = (
+            PaymentAttempt.objects.filter(idempotency_key=idempotency_key).exists()
         )
-        if not clash:
+        if not taken:
             return idempotency_key
-        seed = f"{store.pk}:{order.pk}:{gateway_config.pk}:{order.grand_total}"
+        attempts_so_far = PaymentAttempt.objects.filter(
+            store=store, order=order,
+            gateway_config=gateway_config, amount=order.grand_total,
+        ).count()
+        seed = (
+            f"{store.pk}:{order.pk}:{gateway_config.pk}:"
+            f"{order.grand_total}:{attempts_so_far}"
+        )
         return f"pay-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:48]}"
 
     # Fast path outside the lock: if a matching live attempt already exists,
