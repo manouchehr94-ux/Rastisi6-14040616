@@ -245,9 +245,10 @@ class GatewayConfigAllProvidersAdminTests(TestCase):
         self.assertEqual(rows["mellat"]["readiness_status"], "documentation_blocked")
         self.assertEqual(rows["mellat"]["category"], "psp")
         self.assertEqual(rows["mellat"]["readiness_badge"], "err")
-        # BNPL skeleton
+        # BNPL real adapter (implemented + contract-tested; no creds yet ->
+        # derives not_configured, NOT documentation_blocked).
         self.assertEqual(rows["snappay"]["category"], "bnpl")
-        self.assertEqual(rows["snappay"]["readiness_status"], "documentation_blocked")
+        self.assertEqual(rows["snappay"]["readiness_status"], "not_configured")
         # Offline
         self.assertEqual(rows["cod"]["category"], "offline")
         # Ready online adapter (no config yet -> not configured)
