@@ -626,6 +626,16 @@ class PaymentGatewayConfig(TimeStampedModel):
         COD = "cod", "پرداخت در محل"
         ZARINPAL = "zarinpal", "زرین‌پال"
         CARD_TO_CARD = "card_to_card", "کارت به کارت"
+        # M4 PSPs (documentation-blocked skeletons until each contract is verified)
+        PASARGAD = "pasargad", "بانک پاسارگاد"
+        SAMAN = "saman", "بانک سامان (سپ)"
+        PARSIAN = "parsian", "بانک پارسیان"
+        MELLAT = "mellat", "بانک ملت (به‌پرداخت)"
+        SADAD = "sadad", "بانک ملی (سداد)"
+        TEJARAT = "tejarat", "بانک تجارت"
+        # M5 BNPL (documentation-blocked skeletons)
+        SNAPPAY = "snappay", "اسنپ‌پی"
+        TOROBPAY = "torobpay", "تربپی"
 
     class ReadinessStatus(models.TextChoices):
         """Derived operational readiness of a gateway configuration.

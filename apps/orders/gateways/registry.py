@@ -37,12 +37,69 @@ def _load_card_to_card():
     return CardToCardAdapter()
 
 
+# --- M4+M5 online providers (PSPs + BNPL) -----------------------------------
+# These adapters are documentation-blocked skeletons until each provider's
+# official current contract is verified (see docs/payments/PROVIDER_RESEARCH_MATRIX.md).
+# They register so the codes are known, but readiness derivation keeps them
+# NOT selectable at real (non-sandbox) checkout.
+
+
+def _load_pasargad():
+    from .pasargad import PasargadAdapter
+    return PasargadAdapter()
+
+
+def _load_saman():
+    from .saman import SamanAdapter
+    return SamanAdapter()
+
+
+def _load_parsian():
+    from .parsian import ParsianAdapter
+    return ParsianAdapter()
+
+
+def _load_mellat():
+    from .mellat import MellatAdapter
+    return MellatAdapter()
+
+
+def _load_sadad():
+    from .sadad import SadadAdapter
+    return SadadAdapter()
+
+
+def _load_tejarat():
+    from .tejarat import TejaratAdapter
+    return TejaratAdapter()
+
+
+def _load_snappay():
+    from .snappay import SnappPayAdapter
+    return SnappPayAdapter()
+
+
+def _load_torobpay():
+    from .torobpay import TorobPayAdapter
+    return TorobPayAdapter()
+
+
 # Registry: gateway_code → loader function
 _ADAPTER_LOADERS: dict[str, callable] = {
     "zibal": _load_zibal,
     "cod": _load_cod,
     "zarinpal": _load_zarinpal,
     "card_to_card": _load_card_to_card,
+    # M4 PSPs
+    "pasargad": _load_pasargad,
+    "saman": _load_saman,
+    "parsian": _load_parsian,
+    "mellat": _load_mellat,
+    "sadad": _load_sadad,
+    "tejarat": _load_tejarat,
+    # M5 BNPL
+    "snappay": _load_snappay,
+    "torobpay": _load_torobpay,
 }
 
 # Cached adapter instances (stateless, safe to reuse)
@@ -54,6 +111,16 @@ GATEWAY_CHOICES = [
     ("cod", "پرداخت در محل"),
     ("zarinpal", "زرین‌پال"),
     ("card_to_card", "کارت به کارت"),
+    # M4 PSPs
+    ("pasargad", "بانک پاسارگاد"),
+    ("saman", "بانک سامان (سپ)"),
+    ("parsian", "بانک پارسیان"),
+    ("mellat", "بانک ملت (به‌پرداخت)"),
+    ("sadad", "بانک ملی (سداد)"),
+    ("tejarat", "بانک تجارت"),
+    # M5 BNPL
+    ("snappay", "اسنپ‌پی"),
+    ("torobpay", "تربپی"),
 ]
 
 

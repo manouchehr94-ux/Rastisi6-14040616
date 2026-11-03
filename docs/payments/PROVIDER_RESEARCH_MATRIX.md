@@ -28,6 +28,47 @@ reachable from here.
 
 Verification date for all entries below: **2026-11-03**.
 
+### FEAT-004 research pass (2026-11-03) — re-verification result
+
+The 8 remaining online providers (6 PSPs + 2 BNPL) were re-checked via
+`web_fetch` against their mission entry-point URLs. Result of this pass:
+
+- `https://www.sep.ir/` (Saman/SEP) — **reachable, but marketing-only**. The
+  landing page describes the SEP internet-payment product in prose and exposes
+  NO technical contract (no token/redirect/verify endpoint URLs, no
+  request/response schemas, no currency unit, no error codes, no sandbox).
+- `https://www.behpardakht.com/` (Mellat) — **unreachable** (request timeout).
+- `https://pec.ir/` (Parsian) — **unreachable** (request timeout).
+- `https://sadadpsp.ir/` (Sadad) — **unreachable** (request timeout).
+- `https://irankish.com/` (Tejarat investigation) — **unreachable**
+  (connection reset). The Tejarat↔PSP mapping remains unconfirmed; IranKish is
+  NOT assumed.
+- `https://academy.snapppay.ir/self-cms/` (SnappPay) — reachable only as an
+  empty/listing shell; NO API contract (endpoints/OAuth/eligibility/installment
+  terms/error codes/sandbox) exposed.
+- `https://github.com/pep-ipg/Dorsa-IPG-pasargad` (Pasargad) and
+  `https://wordpress.org/plugins/torobpay-for-woocommerce/` (TorobPay) — remain
+  COMMUNITY / NON-authoritative evidence only; not used to assert any official
+  contract.
+
+Conclusion: no authoritative CURRENT technical contract for any of the 8
+providers was obtainable in this environment. Per the mission rules, FEAT-004
+therefore implements each as an adapter SKELETON — `validate_credentials` +
+category + capability declaration + `documentation_blocked = True`, declaring NO
+capabilities and raising `GatewayUnsupportedOperationError` from every
+money-moving method — rather than inventing endpoints, signatures, auth, error
+codes, or refund/installment behavior. Every skeleton is registered in
+`apps/orders/gateways/registry.py` and present in
+`PaymentGatewayConfig.GatewayCode`, but the `readiness_status` derivation keeps
+each at `DOCUMENTATION_BLOCKED`, so none is selectable at real (non-sandbox)
+checkout. None is labeled `SANDBOX_VERIFIED` / `LIVE_VERIFIED`.
+
+Per-provider FEAT-004 status (all **DOCUMENTATION_BLOCKED skeleton,
+contract-tested for the honest subset**): Pasargad, Saman, Parsian, Mellat,
+Sadad, Tejarat (PSP); SnappPay, TorobPay (BNPL). Adapter modules:
+`apps/orders/gateways/{pasargad,saman,parsian,mellat,sadad,tejarat,snappay,torobpay}.py`;
+contract tests: `apps/orders/tests/test_{...}_adapter.py`.
+
 Base-commit reality check (verified in `apps/orders/gateways/registry.py`): the
 storefront registry currently registers ONLY `zibal` and `cod`. There is no
 `zarinpal` adapter and no manual card-to-card adapter yet; those are future
@@ -41,14 +82,14 @@ mission work and are documented here as NOT pre-existing on this base commit.
 |---|--------------------|----------------------|--------|-----------------------------|
 | 1 | Zarinpal           | Facilitator (IPG aggregator) | VERIFIED (REST v4 contract; adapter implemented, FEAT-003) | Yes (landing + connectToGateway + currency + errorList) |
 | 2 | Zibal              | Facilitator / aggregator | VERIFIED (implemented adapter) | Yes |
-| 3 | TorobPay           | BNPL (Torob)         | DOCUMENTATION_BLOCKED | No (only community/WP plugin evidence) |
-| 4 | SnappPay           | BNPL (Snapp!)        | DOCUMENTATION_BLOCKED | No |
-| 5 | Pasargad           | PSP — Bank Pasargad (PEP / Pasargad e-Payment) | DOCUMENTATION_BLOCKED | No (only community libs) |
-| 6 | Saman              | PSP — Saman / Sep    | DOCUMENTATION_BLOCKED | No |
-| 7 | Parsian            | PSP — Parsian / Pec  | DOCUMENTATION_BLOCKED | No |
-| 8 | Mellat             | PSP — Behpardakht Mellat | DOCUMENTATION_BLOCKED | No |
-| 9 | Sadad              | PSP — Sadad (Bank Melli) | DOCUMENTATION_BLOCKED | No |
-| 10| Tejarat (display)  | SEE §Tejarat — technical PSP to be confirmed (IranKish not assumed) | DOCUMENTATION_BLOCKED | No |
+| 3 | TorobPay           | BNPL (Torob)         | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No (only community/WP plugin evidence) |
+| 4 | SnappPay           | BNPL (Snapp!)        | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
+| 5 | Pasargad           | PSP — Bank Pasargad (PEP / Pasargad e-Payment) | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No (only community libs) |
+| 6 | Saman              | PSP — Saman / Sep    | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | Landing only (marketing, no contract) |
+| 7 | Parsian            | PSP — Parsian / Pec  | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
+| 8 | Mellat             | PSP — Behpardakht Mellat | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
+| 9 | Sadad              | PSP — Sadad (Bank Melli) | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
+| 10| Tejarat (display)  | SEE §Tejarat — technical PSP to be confirmed (IranKish not assumed) | DOCUMENTATION_BLOCKED (skeleton impl. FEAT-004) | No |
 
 ---
 
@@ -139,7 +180,7 @@ mission work and are documented here as NOT pre-existing on this base commit.
   (no documented inquiry endpoint reachable); Zibal's existing create/verify
   behavior and tests are left unchanged.
 
-## 3. TorobPay — DOCUMENTATION_BLOCKED
+## 3. TorobPay — DOCUMENTATION_BLOCKED (skeleton implemented, FEAT-004)
 
 - **Type:** BNPL (buy-now-pay-later) tied to the Torob price-comparison platform.
 - **Gap:** no official current API documentation was reachable from this
@@ -149,14 +190,25 @@ mission work and are documented here as NOT pre-existing on this base commit.
   auth, currency unit, error codes, sandbox, and eligibility/settlement rules
   are **not verified**. Must not be selectable at real checkout until the
   official BNPL contract is obtained.
+- **FEAT-004 adapter:** `apps/orders/gateways/torobpay.py` — category BNPL,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/verify/settle/cancel and from
+  `check_bnpl_eligibility` (installment offers are never fabricated). Required
+  credential FIELD NAMES only: `client_id`, `client_secret`. No WordPress
+  dependency added.
 
-## 4. SnappPay — DOCUMENTATION_BLOCKED
+## 4. SnappPay — DOCUMENTATION_BLOCKED (skeleton implemented, FEAT-004)
 
 - **Type:** BNPL operated under the Snapp! ecosystem.
 - **Gap:** no official current API documentation reachable from this
   environment. Endpoints, OAuth/token auth, eligibility API, installment terms,
   currency unit, error codes, and sandbox are **not verified**. Not selectable
   at real checkout until the official contract is obtained.
+- **FEAT-004 adapter:** `apps/orders/gateways/snappay.py` — category BNPL,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/verify/settle/cancel and from
+  `check_bnpl_eligibility` (installment offers never fabricated). Required
+  credential FIELD NAMES only: `client_id`, `client_secret`.
 
 ## 5. Pasargad — DOCUMENTATION_BLOCKED
 
@@ -166,34 +218,65 @@ mission work and are documented here as NOT pre-existing on this base commit.
   **community libraries** (e.g. Dorsa/Pasargad helpers), which are
   **non-authoritative**. RSA signing scheme, endpoint URLs, token/sign/verify
   flow, currency unit, error codes, and sandbox are **not verified**.
+- **FEAT-004 adapter:** `apps/orders/gateways/pasargad.py` — category PSP,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
+  credential FIELD NAMES only: `merchant_code`, `terminal_code`, `private_key`
+  (names, not an assertion of the unverified signing contract). Token
+  acquisition vs purchase vs inquiry vs VERIFY-vs-CONFIRM vs reverse must be
+  modeled as distinct capabilities once the official contract is read.
 
 ## 6. Saman — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Saman Electronic Payment (Sep).
-- **Gap:** official current docs not reachable here. Token request, redirect,
+- **Gap:** the `https://www.sep.ir/` landing page is reachable but
+  marketing-only (no technical contract). Token request, redirect,
   verify/reverse endpoints, currency unit, error codes, and sandbox **not
-  verified**.
+  verified**. Legacy examples are not assumed to match current terminals.
+- **FEAT-004 adapter:** `apps/orders/gateways/saman.py` — category PSP,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
+  credential FIELD NAME only: `terminal_id`.
 
 ## 7. Parsian — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Parsian e-Commerce (Pec), SOAP-style historically.
-- **Gap:** official current docs not reachable here. Pin/auth, SOAP/REST
-  endpoints, confirm/reverse flow, currency unit, error codes, and sandbox
-  **not verified**.
+- **Gap:** official current docs not reachable here (`https://pec.ir/` timed
+  out). Pin/auth, SOAP/REST endpoints, confirm/reverse flow, currency unit,
+  error codes, and sandbox **not verified**.
+- **FEAT-004 adapter:** `apps/orders/gateways/parsian.py` — category PSP,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
+  credential FIELD NAME only: `login_account`. When the WSDL/contract becomes
+  reachable, implement a maintainable tested SOAP/REST client and verify token
+  create/confirm/reverse before declaring any capability.
 
 ## 8. Mellat — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Behpardakht Mellat.
-- **Gap:** official current docs not reachable here. `bpPayRequest`-style
-  endpoints, terminalId/username/password auth, verify/settle/reverse flow,
-  currency unit, error codes, and sandbox **not verified**.
+- **Gap:** official current docs not reachable here
+  (`https://www.behpardakht.com/` timed out). `bpPayRequest`-style endpoints,
+  terminalId/username/password auth, verify/settle/reverse flow, currency unit,
+  error codes, and sandbox **not verified**.
+- **FEAT-004 adapter:** `apps/orders/gateways/mellat.py` — category PSP,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/verify/settle. Required
+  credential FIELD NAMES only: `terminal_id`, `username`, `password`. SETTLE
+  (finalization) must be a DISTINCT capability, never conflated with verify,
+  once the official contract is read.
 
 ## 9. Sadad — DOCUMENTATION_BLOCKED
 
 - **Type:** PSP — Sadad Informatics (Bank Melli Iran).
-- **Gap:** official current docs not reachable here. Key/merchant signing,
-  request/verify endpoints, currency unit, error codes, and sandbox **not
-  verified**.
+- **Gap:** official current docs not reachable here (`https://sadadpsp.ir/`
+  timed out). Key/merchant signing, request/verify endpoints, currency unit,
+  error codes, and sandbox **not verified**.
+- **FEAT-004 adapter:** `apps/orders/gateways/sadad.py` — category PSP,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/build_redirect/verify. Required
+  credential FIELD NAMES only: `merchant_id`, `terminal_id`, `key`. Request
+  signing/encryption must be implemented strictly per the documented CURRENT
+  crypto once read — never guessed.
 
 ## 10. Tejarat — DOCUMENTATION_BLOCKED (special handling)
 
@@ -209,6 +292,14 @@ mission work and are documented here as NOT pre-existing on this base commit.
   codes, signing, and sandbox are **not verified**. Keep the storefront display
   label ("Tejarat") strictly separate from the technical provider identity in
   any future implementation. Not selectable at real checkout until confirmed.
+  (`https://irankish.com/` was unreachable — connection reset — during the
+  FEAT-004 pass, so the Tejarat↔PSP mapping remains unconfirmed.)
+- **FEAT-004 adapter:** `apps/orders/gateways/tejarat.py` — category PSP,
+  `documentation_blocked = True`, declares NO capabilities, raises
+  `GatewayUnsupportedOperationError` from create/build_redirect/verify.
+  `display_name` ("بانک تجارت") is the storefront LABEL only and asserts no
+  technical PSP identity; `required_credentials` is a generic `terminal_id`
+  placeholder until the real processor and its credential set are confirmed.
 
 ---
 
