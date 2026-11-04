@@ -44,6 +44,9 @@
         {% elif order.status == "canceled" %}
         <h2>این سفارش لغو شده است</h2>
         <p>سفارشِ لغوشده قابل پرداخت نیست. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.</p>
+        {% elif pending %}
+        <h2>پرداخت در حال آمادهسازی است</h2>
+        <p>درخواست پرداخت شما در حال ثبت در درگاه است. لطفاً چند لحظه صبر کنید و دوباره تلاش کنید.</p>
         {% else %}
         <h2>پرداخت ناموفق بود</h2>
         <p>تراکنش تأیید نشد. هیچ مبلغی از حساب شما کسر نشده است.</p>
@@ -68,7 +71,7 @@
           <a class="btn btn-primary" href="{% url 'customers:account-order-detail' order.code %}">پیگیری سفارش</a>
           <a class="btn btn-ghost" href="{% url 'catalog:product-list' %}">بازگشت به فروشگاه</a>
           {% else %}
-          <a class="btn btn-primary" href="{% url 'orders:checkout-step1' %}">تلاش دوباره</a>
+          {% if pending %}<a class="btn btn-primary" href="{% url 'orders:payment-initiate' order.code %}">تلاش دوباره</a>{% else %}<a class="btn btn-primary" href="{% url 'orders:checkout-step1' %}">تلاش دوباره</a>{% endif %}
           <a class="btn btn-ghost" href="{% url 'catalog:product-list' %}">بازگشت به فروشگاه</a>
           {% endif %}
         </div>

@@ -360,7 +360,9 @@ def payment_initiate(request, code):
         PaymentAlreadyPaidError,
         PaymentConfigError,
         PaymentInitiationError,
+        PaymentInitiationInProgress,
         initiate_payment,
+        is_attempt_in_flight,
     )
     from apps.orders.gateways import get_adapter
 
@@ -461,6 +463,15 @@ def payment_initiate(request, code):
         return redirect("orders:payment-result", code=order.code)
     except OrderNotPayableError as exc:
         return render_domain_page(request, "orders/payment_result.html", {"order": order, "error": str(exc)})
+    except PaymentInitiationInProgress as exc:
+        # Another request is still preparing this exact payment: never
+        # redirect (no URL yet) and never call the gateway a second time.
+        resp = render_domain_page(request, "orders/payment_result.html", {
+            "order": order, "error": str(exc), "pending": True,
+        })
+        resp.status_code = 409
+        resp["Retry-After"] = "2"
+        return resp
     except (PaymentConfigError, PaymentInitiationError) as exc:
         logger.warning("Payment initiation failed for order %s: %s", order.code, exc)
         return render_domain_page(request, "orders/payment_result.html", {
@@ -475,13 +486,36 @@ def payment_initiate(request, code):
     # so adapters that derive the URL from the track_id (zibal/zarinpal) keep
     # working. No URL is ever hardcoded or fabricated here.
     if gateway_config.is_online:
+        def _pending_page():
+            resp = render_domain_page(request, "orders/payment_result.html", {
+                "order": order,
+                "error": "پرداخت در حال آمادهسازی است؛ چند لحظه بعد دوباره تلاش کنید.",
+                "pending": True,
+            })
+            resp.status_code = 409
+            resp["Retry-After"] = "2"
+            return resp
+
+        # Defensive guard: an attempt that is still in flight (or has no URL
+        # and no track id) must never produce a redirect.
+        if is_attempt_in_flight(attempt):
+            return _pending_page()
+        if attempt.status in (
+            PaymentAttempt.Status.SUCCEEDED,
+            PaymentAttempt.Status.VERIFIED,
+            PaymentAttempt.Status.FINALIZED,
+        ):
+            return redirect("orders:payment-result", code=order.code)
         redirect_url = (attempt.gateway_redirect_url or "").strip()
         if not redirect_url:
             adapter = get_adapter(gateway_config.gateway_code)
-            redirect_url = adapter.build_redirect_url(
+            redirect_url = (adapter.build_redirect_url(
                 attempt.gateway_track_id,
                 sandbox=gateway_config.is_sandbox,
-            )
+            ) or "").strip()
+        if not redirect_url or not redirect_url.lower().startswith(("https://", "http://")):
+            logger.error("Refusing empty/malformed payment redirect: order=%s attempt=%s", order.code, attempt.public_id)
+            return _pending_page()
         return redirect(redirect_url)
 
     # COD — go straight to result

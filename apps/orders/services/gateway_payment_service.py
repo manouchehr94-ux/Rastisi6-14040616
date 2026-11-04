@@ -27,8 +27,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
+from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -69,6 +72,15 @@ class PaymentConfigError(PaymentServiceError):
 
 class PaymentInitiationError(PaymentServiceError):
     """Failed to initiate payment with gateway."""
+
+
+class PaymentInitiationInProgress(PaymentServiceError):
+    """Another request is currently preparing the payment for this exact operation.
+
+    Raised instead of returning a CREATED/REQUESTING attempt that has no
+    payment URL yet. The caller must show a "being prepared, retry shortly"
+    outcome; it must NOT redirect and must NOT call the gateway again.
+    """
 
 
 class PaymentVerificationFailed(PaymentServiceError):
@@ -144,6 +156,77 @@ def build_order_cart_snapshot(order: Order) -> tuple[list[dict], dict]:
         "discount": int(order.coupon_discount),
     }
     return cart_items, cart_totals
+
+
+# ---------------------------------------------------------------------------
+# In-flight (CREATED/REQUESTING) attempt handling
+# ---------------------------------------------------------------------------
+
+#: A concurrent caller that meets an in-flight attempt polls this many times,
+#: this many seconds apart (bounded, ~0.6s total) BEFORE giving up with
+#: PaymentInitiationInProgress. Never inside a transaction / row lock.
+INFLIGHT_POLL_TRIES = 3
+INFLIGHT_POLL_INTERVAL = 0.2
+#: Default staleness window. Adapter HTTP timeouts are (connect=10, read=30),
+#: so anything older than this was abandoned (crashed worker / lost request).
+DEFAULT_INFLIGHT_STALE_SECONDS = 180
+
+_IN_FLIGHT_STATUSES = (
+    PaymentAttempt.Status.CREATED,
+    PaymentAttempt.Status.REQUESTING,
+)
+_READY_STATUSES = (
+    PaymentAttempt.Status.REDIRECT_READY,
+    PaymentAttempt.Status.PENDING,
+)
+
+
+def is_attempt_in_flight(attempt: PaymentAttempt) -> bool:
+    """True when the attempt cannot (yet) be used to send the customer anywhere.
+
+    CREATED/REQUESTING are in flight by definition. A REDIRECT_READY/PENDING
+    attempt that carries neither a persisted redirect URL nor a track id is
+    treated the same way: it must never be returned as redirect-ready.
+    """
+    if attempt.status in _IN_FLIGHT_STATUSES:
+        return True
+    if attempt.status in _READY_STATUSES:
+        return not ((attempt.gateway_redirect_url or "").strip() or (attempt.gateway_track_id or "").strip())
+    return False
+
+
+def _inflight_stale_after() -> timedelta:
+    return timedelta(seconds=int(getattr(settings, "PAYMENT_INFLIGHT_STALE_SECONDS", DEFAULT_INFLIGHT_STALE_SECONDS)))
+
+
+def _expire_if_stale(attempt: PaymentAttempt) -> bool:
+    """Conditionally retire an abandoned in-flight attempt. Returns True if retired.
+
+    The provider create call is NOT idempotent, so we never re-call it for the
+    same attempt. The abandoned attempt is moved to EXPIRED with a distinctive
+    failure_code (flag for operators / reconciliation); the customer was never
+    given a payment URL for it, so a fresh attempt cannot double-charge. A late
+    gateway callback for it is still verified by process_callback_and_verify.
+    """
+    cutoff = timezone.now() - _inflight_stale_after()
+    if attempt.updated_at is None or attempt.updated_at > cutoff:
+        return False
+    updated = PaymentAttempt.objects.filter(
+        pk=attempt.pk,
+        status=attempt.status,
+        updated_at__lte=cutoff,
+    ).update(
+        status=PaymentAttempt.Status.EXPIRED,
+        failure_code="initiation_stale",
+        failure_message="درخواست پرداخت در درگاه بیش از حد مجاز بیپاسخ ماند",
+        updated_at=timezone.now(),
+    )
+    if updated:
+        logger.error(
+            "Stale in-flight payment attempt expired: order_id=%s attempt=%s status=%s",
+            attempt.order_id, attempt.public_id, attempt.status,
+        )
+    return bool(updated)
 
 
 # ---------------------------------------------------------------------------
@@ -252,23 +335,56 @@ def initiate_payment(
     )
 
     def _scoped_existing():
-        """Return a live attempt for THIS exact operation identity, or None.
+        """Return the latest reusable attempt for THIS exact operation, or None.
 
-        Scoped by store (tenant isolation), order, gateway_config, and amount.
-        If an idempotency_key is supplied it must ALSO match — but a key that
-        belongs to a different identity is simply not found here, so a reused
-        foreign key can never surface a foreign attempt.
+        Reuse is keyed on the operation identity (store, order, gateway_config,
+        amount), NOT on the verbatim idempotency-key string: a retry after a
+        failed attempt persists a DIFFERENT (disambiguated) key, so a key-based
+        lookup would miss that live attempt and create a duplicate. The key is
+        only a DB uniqueness backstop and audit value. Tenant isolation is kept
+        because store/order/gateway/amount are all in the filter, so a foreign
+        key or foreign attempt can never match.
+
+        Terminal failures (FAILED/CANCELED/EXPIRED) are not in
+        ``_reusable_statuses``, so a legitimate retry still creates a new
+        attempt. SUCCEEDED/VERIFIED/FINALIZED are returned (never re-charged);
+        an order that is actually PAID is rejected earlier with
+        PaymentAlreadyPaidError.
         """
-        qs = PaymentAttempt.objects.filter(
-            store=store,
-            order=order,
-            gateway_config=gateway_config,
-            amount=order.grand_total,
-            status__in=_reusable_statuses,
+        return (
+            PaymentAttempt.objects.filter(
+                store=store,
+                order=order,
+                gateway_config=gateway_config,
+                amount=order.grand_total,
+                status__in=_reusable_statuses,
+            )
+            .order_by("-created_at", "-pk")
+            .first()
         )
-        if idempotency_key:
-            qs = qs.filter(idempotency_key=idempotency_key)
-        return qs.order_by("-created_at").first()
+
+    def _usable_existing(*, wait: bool):
+        """Existing attempt that is safe to hand back, else None (create new).
+
+        * ready / succeeded attempt  -> returned.
+        * in-flight (no URL yet)     -> optionally polled a bounded number of
+          times (outside any lock); if it becomes ready it is returned, if it
+          is abandoned (stale) it is retired and None is returned, otherwise
+          PaymentInitiationInProgress is raised. create_payment is never
+          called for an in-flight attempt.
+        """
+        tries = INFLIGHT_POLL_TRIES if wait else 0
+        for i in range(tries + 1):
+            existing = _scoped_existing()
+            if existing is None:
+                return None
+            if not is_attempt_in_flight(existing):
+                return existing
+            if _expire_if_stale(existing):
+                continue  # retired: look again (maybe an older reusable one)
+            if i < tries:
+                time.sleep(INFLIGHT_POLL_INTERVAL)
+        raise PaymentInitiationInProgress("پرداخت در حال آمادهسازی است؛ چند لحظه بعد دوباره تلاش کنید")
 
     def _key_to_persist():
         """Pick a safe idempotency key for a NEW attempt.
@@ -312,7 +428,7 @@ def initiate_payment(
 
     # Fast path outside the lock: if a matching live attempt already exists,
     # reuse it without opening a write transaction.
-    existing = _scoped_existing()
+    existing = _usable_existing(wait=True)
     if existing is not None:
         return existing
 
@@ -351,8 +467,9 @@ def initiate_payment(
             raise OrderNotPayableError("سفارش برای این فروشگاه یافت نشد")
 
         # Re-check inside the lock: a concurrent winner may have just created a
-        # live attempt for this exact operation.
-        existing = _scoped_existing()
+        # live attempt for this exact operation. No waiting here: we hold the
+        # order row lock and must never sleep / do network I/O under it.
+        existing = _usable_existing(wait=False)
         if existing is not None:
             return existing
 
@@ -387,7 +504,7 @@ def initiate_payment(
             # committed live attempt and reuse it — no second external
             # create_payment call is ever made. The partial unique constraint
             # guarantees at most one row is committed either way.
-            existing = _scoped_existing()
+            existing = _usable_existing(wait=False)
             if existing is not None:
                 return existing
             # The collision was with a row that is NOT a live attempt for this
@@ -464,6 +581,13 @@ def initiate_payment(
         attempt.save(update_fields=["status", "failure_code", "failure_message", "updated_at"])
         logger.warning("Payment initiation failed: order=%s error=%s", order.code, exc)
         raise PaymentInitiationError(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - never leave the attempt in REQUESTING
+        attempt.status = PaymentAttempt.Status.FAILED
+        attempt.failure_code = "unexpected_error"
+        attempt.failure_message = f"{type(exc).__name__}"[:300]
+        attempt.save(update_fields=["status", "failure_code", "failure_message", "updated_at"])
+        logger.exception("Payment initiation crashed: order=%s", order.code)
+        raise PaymentInitiationError("خطای غیرمنتظره در ارتباط با درگاه") from exc
 
     # Store track_id, persist the authoritative payment-page URL, and mark
     # ready for redirect. The URL is kept in a field distinct from the
@@ -479,6 +603,14 @@ def initiate_payment(
             result.extra.get("paymentPageUrl") or result.extra.get("url") or ""
         ).strip()
     attempt.gateway_redirect_url = redirect_url
+    if not ((attempt.gateway_track_id or "").strip() or redirect_url):
+        attempt.status = PaymentAttempt.Status.FAILED
+        attempt.failure_code = "empty_gateway_response"
+        attempt.failure_message = "درگاه شناسه یا نشانیِ پرداخت برنگرداند"
+        attempt.save(update_fields=[
+            "gateway_track_id", "gateway_redirect_url", "status", "failure_code", "failure_message", "updated_at",
+        ])
+        raise PaymentInitiationError("درگاه شناسه یا نشانیِ پرداخت برنگرداند")
     attempt.status = PaymentAttempt.Status.REDIRECT_READY
     attempt.save(
         update_fields=["gateway_track_id", "gateway_redirect_url", "status", "updated_at"]
