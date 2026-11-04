@@ -26,7 +26,10 @@ from apps.orders.services.order_service import change_order_status
 
 logger = logging.getLogger(__name__)
 
-OPEN_ATTEMPT_STATUSES = [s for s in PaymentAttempt.Status.values if s not in PaymentAttempt.FINAL_STATUSES]
+OPEN_ATTEMPT_STATUSES = [
+    s for s in PaymentAttempt.Status.values
+    if s not in PaymentAttempt.FINAL_STATUSES and s not in PaymentAttempt.EXTENDED_FINAL_STATUSES
+]
 
 
 def _online_config_codes(store) -> set:
@@ -59,6 +62,8 @@ def _skip_reason(order: Order, shop, now, online_codes) -> str:
     attempts = list(order.payment_attempts.all())
     if any(a.status == PaymentAttempt.Status.SUCCEEDED for a in attempts):
         return "confirmed_payment"
+    if any(a.status == PaymentAttempt.Status.UNKNOWN for a in attempts):
+        return "unresolved_settlement"  # verified at the provider, settlement unproven: money may have moved — never auto-cancel
     if any(a.status in OPEN_ATTEMPT_STATUSES and a.updated_at > now - grace for a in attempts):
         return "payment_in_flight"
     if order.payment_reconciliations.filter(status="open").exists():

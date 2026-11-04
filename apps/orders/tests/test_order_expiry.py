@@ -184,6 +184,14 @@ class EligibilityTests(ExpiryBase):
         self.assertEqual(self.status(confirmed), Order.Status.PENDING)
         self.assertEqual(stats["skipped"].get("confirmed_payment"), 1)
 
+    def test_an_unresolved_settlement_is_never_auto_canceled_even_long_after_the_grace_period(self):
+        """UNKNOWN = verified at the provider, settlement unproven: money may have moved. No reconciliation row needed to protect it."""
+        order = self.old_order()
+        attempt = self.attempt(order, status=PaymentAttempt.Status.UNKNOWN)
+        PaymentAttempt.objects.filter(pk=attempt.pk).update(updated_at=timezone.now() - timedelta(days=3))
+        self.assert_untouched(order, "unresolved_settlement")
+        self.assertEqual(PaymentAttempt.objects.get(pk=attempt.pk).status, PaymentAttempt.Status.UNKNOWN)
+
     def test_grace_boundary(self):
         order = self.old_order()
         attempt = self.attempt(order, status=PaymentAttempt.Status.REDIRECT_READY)

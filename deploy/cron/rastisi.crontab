@@ -26,3 +26,7 @@ JOB=/srv/rastisi/deploy/cron/run_job.sh
 30   3 * * *  $JOB segments      refresh_customer_segments
 # health (exit 1 WARNING / 2 CRITICAL → alert) — every 15 minutes
 */15 * * * *  $JOB health        check_background_jobs
+
+# BNPL payments whose provider settlement outcome is UNKNOWN (verified, settlement unproven): ask the provider's authoritative status. Never settles again,
+# never fabricates a result; attempts the provider cannot decide stay UNKNOWN for the administrative reconciliation page. Safe to overlap. Not installed by the repository.
+*/10 * * * *  $JOB payments_recon reconcile_unknown_payments --min-age-minutes 2 --limit 100

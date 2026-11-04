@@ -1,3 +1,5 @@
+> **OUTDATED (2026-11-04):** this document describes the payment-engine work before its integration into the main development line (canonical card-transfer workflow, settlement-uncertainty handling, reconciled migrations). The current record is `docs/payments/INTEGRATION_UNIFIED_20261104.md`.
+
 # Regression Results — Payment Engine Mission (FEAT-006 close-out)
 
 All commands were run inside the isolated worktree
