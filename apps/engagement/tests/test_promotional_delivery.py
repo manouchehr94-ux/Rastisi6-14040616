@@ -27,8 +27,11 @@ class PromotionalDeliveryIndependenceTests(OccasionBase):
         return c, campaign, run
 
     def promo_mails(self, c):
+        from apps.notifications.mail.fake import FakeTransport
+
         code = Coupon.objects.get(customer=c).code
-        return [m for m in mail.outbox if code in m.body]  # setup orders also send transactional mail — only count the reward message
+        # setup orders also send transactional mail — only count the reward message
+        return [m for m in FakeTransport.sent if code in m["message"].text_body]
 
     def rows(self):
         return {r.channel: r for r in NotificationOutbox.objects.filter(event_key="occasion.birthday")}

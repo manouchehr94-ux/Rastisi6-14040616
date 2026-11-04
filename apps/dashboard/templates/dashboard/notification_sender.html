@@ -1,0 +1,68 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}هویتِ فرستنده‌ی ایمیل | پنل مدیریت{% endblock %}
+{% block page_title %}هویتِ فرستنده‌ی ایمیل{% endblock %}
+{% block page_sub %}ایمیل‌هایِ فروشگاه فقط از دامنه‌ی اختصاصیِ خودِ شما ارسال می‌شوند؛ نیازی به SMTP یا حساب ایمیلِ جداگانه نیست{% endblock %}
+{% block content %}
+{% include "dashboard/partials/notification_tabs.html" with tab="sender" %}
+
+<div class="card" style="margin-bottom:14px"><div class="card-body" id="sender-status" data-status="{{ diag.status }}">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <b>وضعیت:</b>
+    {% if diag.status == 'active' %}<span class="badge b-green">فعال</span>
+    {% elif diag.status == 'pending' %}<span class="badge b-amber">در انتظارِ تأیید</span>
+    {% elif diag.status == 'error' %}<span class="badge b-red">خطا</span>
+    {% else %}<span class="badge b-amber">غیرفعال</span>{% endif %}
+    {% if diag.from_address %}{% if diag.status == 'active' %}<span dir="ltr" id="sender-address" style="font-family:monospace">{{ diag.from_address }}</span>{% else %}<span id="sender-address-planned" style="color:var(--muted)">نشانیِ برنامه‌ریزی‌شده (هنوز فعال نیست): <span dir="ltr" style="font-family:monospace">{{ diag.from_address }}</span></span>{% endif %}{% endif %}
+  </div>
+
+  {% if diag.status == 'active' %}
+    <p style="margin-top:10px">ایمیل‌هایِ این فروشگاه از <b dir="ltr">{{ diag.from_address }}</b> ارسال می‌شوند. این وضعیت پس از تأییدِ واقعیِ ارائه‌دهنده ثبت شده است.</p>
+  {% else %}
+    <dl style="margin-top:10px;display:grid;grid-template-columns:max-content 1fr;gap:6px 14px">
+      <dt><b>علتِ فنی</b></dt><dd id="sender-reason">{{ diag.reason_text|default:"—" }}</dd>
+      <dt><b>اقدامِ لازم</b></dt><dd id="sender-action">{{ diag.corrective_action|default:"—" }}</dd>
+      <dt><b>مسئولِ رفع</b></dt><dd id="sender-responsible">{{ diag.responsible_party }}</dd>
+      <dt><b>راستی‌سی خودش می‌تواند رفع کند؟</b></dt><dd id="sender-platform-fix">{% if diag.platform_can_fix %}بله — به‌صورت خودکار پیگیری می‌شود{% else %}خیر{% endif %}</dd>
+      <dt><b>دخالتِ مالکِ دامنه الزامی است؟</b></dt><dd id="sender-owner-action">{% if diag.owner_action_required %}بله{% else %}خیر{% endif %}</dd>
+    </dl>
+    <p style="margin-top:8px;color:var(--muted)">تا فعال‌شدنِ فرستنده، فقط <b>ایمیل</b> متوقف است؛ پیامک و سفارش‌ها بدونِ تغییر کار می‌کنند و ایمیل‌هایِ صف‌شده تا ۲۴ ساعت نگه‌داری و پس از فعال‌شدن ارسال می‌شوند.</p>
+  {% endif %}
+
+  <p style="margin-top:8px;font-size:12.5px;color:var(--muted)" id="sender-last-checked">آخرین بررسی: {% if diag.last_checked_at %}{{ diag.last_checked_at|jalali_dt }}{% else %}هنوز انجام نشده{% endif %}</p>
+
+  <form method="post" action="{% url 'dashboard:notification-sender-retry' %}" style="margin-top:10px">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">بررسیِ دوباره</button>
+  </form>
+</div></div>
+
+{% if diag.dns_records and diag.status != 'active' %}
+<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>رکوردهایِ DNS که باید اضافه شود</h3></div><div class="card-body">
+  {% if diag.dns_auto_requested %}<p class="badge b-amber" style="white-space:normal" id="dns-auto-note">درخواستِ ثبتِ خودکارِ این رکوردها از طریقِ دسترسیِ مجازِ DNS ارسال شد؛ <b>تا تأییدِ ارائه‌دهنده‌ی ایمیل، موفق فرض نمی‌شود.</b></p>
+  {% else %}<p>این رکوردها را دقیقاً همان‌طور که نوشته شده در بخشِ DNS دامنه‌ی خود (نزد ثبت‌کننده‌ی دامنه) اضافه کنید.</p>{% endif %}
+  <div class="table-wrap"><table id="dns-records">
+    <thead><tr><th>نوع</th><th>نام (Host)</th><th>مقدار (Value)</th><th>کاربرد</th><th>مشاهده‌ی DNS</th></tr></thead>
+    <tbody>
+    {% for r in diag.dns_records %}
+      <tr><td dir="ltr">{{ r.type }}</td><td dir="ltr" style="word-break:break-all"><code>{{ r.name }}</code></td><td dir="ltr" style="word-break:break-all"><code>{{ r.value }}</code></td><td>{{ r.purpose }}</td><td>{% if r.published is True %}دیده شد{% elif r.published is False %}دیده نشد{% else %}نامشخص{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div></div>
+{% endif %}
+
+<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>دو تأییدِ جدا: وب‌سایت و ایمیل</h3></div><div class="card-body" id="two-verifications">
+  <p style="font-size:12.5px;color:var(--muted)">تأییدِ دامنه‌ی وب‌سایت (TXT، اتصال، SSL) با تأییدِ فرستنده‌ی ایمیل (DKIM نزد ارائه‌دهنده) مستقل است؛ هیچ‌کدام دیگری را تأیید نمی‌کند.</p>
+  <dl style="display:grid;grid-template-columns:max-content 1fr;gap:6px 14px">
+    <dt><b>دامنه</b></dt><dd dir="ltr">{{ diag.website_domain|default:"—" }}</dd>
+    <dt><b>وب‌سایت: مالکیت</b></dt><dd id="site-verification">{{ diag.website_status|default:"—" }}</dd>
+    <dt><b>وب‌سایت: اتصال / SSL</b></dt><dd>{{ diag.website_routing|default:"—" }} / {{ diag.website_tls|default:"—" }}</dd>
+    <dt><b>ایمیل: فرستنده</b></dt><dd id="email-verification">{% if diag.status == 'active' %}تأییدشده توسطِ ارائه‌دهنده{% else %}تأییدنشده{% endif %}</dd>
+  </dl>
+</div></div>
+
+{% if domains %}
+<p style="font-size:12.5px;color:var(--muted)">دامنه‌هایِ اختصاصیِ این فروشگاه: {% for d in domains %}<span dir="ltr">{{ d.hostname }}</span>{% if not forloop.last %}، {% endif %}{% endfor %}</p>
+{% endif %}
+{% endblock %}

@@ -69,6 +69,7 @@ def request_custom_domain(*, store: Store, hostname: str, actor) -> StoreDomain:
         store=store, actor=actor, action_code="store.custom_domain_requested",
         object_type="StoreDomain", object_id=domain.pk, object_label=normalized,
     )
+    transaction.on_commit(lambda: _try_provision_email_sender(domain, actor=actor))
     return domain
 
 
@@ -131,7 +132,22 @@ def check_dns_verification(*, domain: StoreDomain, actor) -> bool:
         store=locked.store, actor=actor, action_code="store.custom_domain_verified",
         object_type="StoreDomain", object_id=locked.pk, object_label=locked.hostname,
     )
+    _try_provision_email_sender(locked, actor=actor)
     return True
+
+
+def _try_provision_email_sender(domain: StoreDomain, *, actor) -> None:
+    """Kick off automatic email-sender-identity provisioning for this domain (Section: mandatory
+    custom-domain email policy). Deferred import avoids a hard dependency cycle at module load time;
+    failures here must never break domain verification itself."""
+    try:
+        from apps.notifications.mail.provisioning_service import on_domain_verified
+
+        on_domain_verified(domain, actor=actor)
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("email sender provisioning hook failed after domain verification")
 
 
 @dataclass(frozen=True)
@@ -406,4 +422,5 @@ def activate_custom_domain(*, store: Store, domain: StoreDomain, actor) -> Store
         before={"old_primary": old_primary.hostname if old_primary else None},
         after={"hostname": locked_domain.hostname},
     )
+    _try_provision_email_sender(locked_domain, actor=actor)
     return locked_domain

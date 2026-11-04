@@ -102,9 +102,9 @@ def _consented(customer, channel: str) -> bool:
 
 
 def _create(*, store, event, channel, recipient, subject, body, customer, order, dedupe, is_promotional,
-            status=S.PENDING, skip_reason="", is_test=False, metadata=None):
+            status=S.PENDING, skip_reason="", is_test=False, metadata=None, html_body=""):
     data = dict(
-        channel=channel, store=store, subject=subject, body=body, event_key=event.key, customer=customer,
+        channel=channel, store=store, subject=subject, body=body, html_body=html_body, event_key=event.key, customer=customer,
         order=order, is_promotional=is_promotional, is_security=(event.category == ev.SECURITY),
         dedupe_key=dedupe, status=status, skip_reason=skip_reason, is_test=is_test, metadata=metadata or {},
         recipient_phone=recipient if channel == ev.SMS else "",
@@ -158,8 +158,12 @@ def dispatch_event(
             recipients = [_customer_recipient(customer, channel)]
 
         subject, missing_s = template_service.render_text(tpl["subject"], context)
+        subject = " ".join(subject.replace("\r", " ").replace("\n", " ").split())  # no header injection via variables
         body, missing_b = template_service.render_text(tpl["body"], context)
-        missing = sorted(set(missing_s + missing_b))
+        html_body, missing_h = "", []
+        if channel == ev.EMAIL and tpl.get("body_html") and not (override.get("body")):
+            html_body, missing_h = template_service.render_html(event_key, tpl["body_html"], context)
+        missing = sorted(set(missing_s + missing_b + missing_h))
 
         for raw in recipients:
             recipient, bad = _clean_recipient(channel, raw)
@@ -169,7 +173,7 @@ def dispatch_event(
             common = dict(
                 store=store, event=event, channel=channel, recipient=recipient or (raw or "")[:120],
                 subject=subject, body=body, customer=customer, order=order, dedupe=dedupe,
-                is_promotional=promotional, is_test=is_test, metadata=metadata,
+                is_promotional=promotional, is_test=is_test, metadata=metadata, html_body=html_body,
             )
             if bad:
                 row, new = _create(**common, status=S.SKIPPED, skip_reason=bad)

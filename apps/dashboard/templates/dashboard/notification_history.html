@@ -4,6 +4,7 @@
 {% block page_title %}تاریخچه‌ی اعلان‌ها{% endblock %}
 {% block page_sub %}همه‌ی پیامک‌ها و ایمیل‌هایِ صف‌شده و ارسال‌شده با وضعیت و خطا{% endblock %}
 {% block content %}
+{% include "dashboard/partials/notification_tabs.html" with tab="history" %}
 <form method="get" class="card" style="display:flex;gap:10px;padding:12px 18px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-end" role="search">
   <label>مشتری/گیرنده<br><input class="inp" name="q" value="{{ filters.q }}" style="width:170px" placeholder="نام، موبایل، ایمیل"></label>
   <label>سفارش<br><input class="inp" name="order" value="{{ filters.order }}" style="width:110px" dir="ltr"></label>

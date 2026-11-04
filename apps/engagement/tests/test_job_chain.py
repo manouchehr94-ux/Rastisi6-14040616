@@ -78,7 +78,9 @@ class JobChainTests(EngagementBase):
 
     def promo_mails(self):
         codes = list(Coupon.objects.filter(code__regex=r"^(SCH|BDY)-").values_list("code", flat=True))
-        return [m for m in mail.outbox if any(c in m.body for c in codes)]
+        from apps.notifications.mail.fake import FakeTransport
+
+        return [m for m in FakeTransport.sent if any(c in m["message"].text_body for c in codes)]
 
     def test_full_chain_issues_notifies_once_and_is_idempotent_on_restart(self):
         self.cmd("run_engagement_jobs", "--no-deliver")
@@ -107,7 +109,10 @@ class JobChainTests(EngagementBase):
             self.cmd("process_notification_outbox")
         row.refresh_from_db()
         self.assertEqual(row.status, "sent")
-        self.assertEqual(len([m for m in mail.outbox if row.recipient_email in m.to and row.subject == m.subject]), 1)
+        from apps.notifications.mail.fake import FakeTransport
+
+        self.assertEqual(len([m for m in FakeTransport.sent
+                              if m["message"].to_address == row.recipient_email and m["message"].subject == row.subject]), 1)
 
     def test_provider_outage_is_isolated_visible_in_health_and_recovers(self):
         self.cmd("run_engagement_jobs", "--no-deliver")

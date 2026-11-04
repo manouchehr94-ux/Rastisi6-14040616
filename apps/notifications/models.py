@@ -11,6 +11,10 @@ from django.db import models
 
 from apps.core.models import TimeStampedModel
 
+from apps.notifications.models_email import (  # noqa: E402,F401 — registered with the app; see module docstring
+    EmailProviderEvent, EmailSenderIdentity, EmailSuppression, NotificationTemplateRevision, PlatformNotificationTemplate,
+)
+
 
 class NotificationOutbox(TimeStampedModel):
     class Channel(models.TextChoices):
@@ -66,6 +70,13 @@ class NotificationOutbox(TimeStampedModel):
     claimed_at = models.DateTimeField("زمانِ برداشتِ کارگر", null=True, blank=True)
     skip_reason = models.CharField("دلیلِ ارسال‌نشدن", max_length=120, blank=True, default="")
     is_test = models.BooleanField("ارسالِ آزمایشی", default=False)
+    html_body = models.TextField("متنِ HTML (ایمیل)", blank=True, default="")
+    sender_address = models.CharField("نشانیِ فرستنده‌ی ایمیل", max_length=254, blank=True, default="")
+    delivery_state = models.CharField(
+        "وضعیتِ تحویلِ گزارش‌شده توسطِ ارائه‌دهنده", max_length=12, blank=True, default="", db_index=True,
+        choices=[("delivered", "تحویل‌شده"), ("bounced", "برگشتی"), ("complained", "شکایت")],
+    )
+    held_since = models.DateTimeField("آغازِ نگه‌داشتن (فرستنده/سقف نرخ)", null=True, blank=True)
     sms_log = models.OneToOneField(
         "sms.SmsLog", verbose_name="گزارشِ پیامکِ قدیمی", on_delete=models.SET_NULL,
         null=True, blank=True, related_name="notification_mirror",
@@ -109,6 +120,8 @@ class NotificationTemplate(TimeStampedModel):
     is_enabled = models.BooleanField("فعال", default=True)
     subject = models.CharField("موضوعِ ایمیل", max_length=200, blank=True, default="")
     body = models.TextField("متن")
+    body_html = models.TextField("متنِ HTML (ایمیل)", blank=True, default="")
+    version = models.PositiveIntegerField("نسخه", default=1)
     extra_recipients = models.TextField(
         "گیرندگانِ اضافی (کارکنان)", blank=True, default="",
         help_text="برایِ رویدادهایِ کارکنان: هر خط یک ایمیل/شماره موبایل.",

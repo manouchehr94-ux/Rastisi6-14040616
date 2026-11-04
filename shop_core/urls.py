@@ -47,6 +47,8 @@ urlpatterns = [
     path("billing/", include("apps.billing.urls")),
     # SmsRasti Android gateway poll/ack endpoints (public, device-token-authenticated, no CSRF).
     path("sms/", include("apps.sms.urls")),
+    # Amazon SES delivery/bounce/complaint events via SNS (public, SNS-signature-verified, no CSRF).
+    path("notifications/", include("apps.notifications.urls")),
 ]
 
 if settings.DEBUG:

@@ -28,3 +28,9 @@ dnspython>=2.6,<3
 # no django-redis. Used for the anonymous-auth throttle counters; see
 # docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md section 6.
 redis>=8.1,<9
+
+# Amazon SES (sesv2) — only required when RASTISI_EMAIL_PROVIDER=ses (production email sending).
+# Local development/tests use RASTISI_EMAIL_PROVIDER=fake (apps.notifications.mail.fake) and never import
+# boto3; importing apps.notifications.mail.ses without it installed raises a clear, caught error instead
+# of crashing at process startup. See apps/notifications/mail/ses.py.
+boto3>=1.34,<2
