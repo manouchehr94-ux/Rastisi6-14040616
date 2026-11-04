@@ -12,7 +12,7 @@
   Real Amazon SES testing is a separate, explicitly confirmed script: Invoke-RastiSiLiveSesSmoke.ps1.
 
 .PARAMETER RepoPath   Your local RastiSi clone (default: the clone this script lives in).
-.PARAMETER Branch     Branch to test (default: kiro/notifications-email-engine-20261104).
+.PARAMETER Branch     Branch to test (default: kiro/notifications-integrated-20261104 = financial + notifications combined).
 .PARAMETER Ref        Exact Git ref/commit to check out instead of origin/<Branch> (advanced).
 .PARAMETER NoFetch    Do not run `git fetch` (use what is already in the clone).
 .PARAMETER QaRoot     Where QA runs live (default: %LOCALAPPDATA%\RastiSiQA).
@@ -29,7 +29,7 @@
 [CmdletBinding()]
 param(
     [string]$RepoPath = '',
-    [string]$Branch = 'kiro/notifications-email-engine-20261104',
+    [string]$Branch = 'kiro/notifications-integrated-20261104',
     [string]$Ref = '',
     [switch]$NoFetch,
     [string]$QaRoot = '',

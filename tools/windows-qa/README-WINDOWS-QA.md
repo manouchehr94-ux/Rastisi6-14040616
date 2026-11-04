@@ -1,4 +1,9 @@
-# RastiSi — Windows QA guide (Notifications / SMS / Email)
+# RastiSi — Windows QA guide (combined integration: financial + Notifications / SMS / Email)
+
+> This branch (`kiro/notifications-integrated-20261104`, PR #38) is the **combined** review integration: Claude's payment/finance
+> engine (card-to-card, gateways, subscriptions, Inbox) **plus** the notifications/SMS/email engine. QA here exercises the two
+> together with **fake** e-mail/SMS providers and **no live payment activity**. On the finance side this is offline QA only — no
+> payment gateway is contacted; COD (cash-on-delivery) is used for checkout. Live gateway/SES/DNS verification is explicitly out of scope.
 
 You do **not** edit any file and you do **not** resolve any Git conflict. Everything runs in a **separate Git worktree with its own
 database** under `%LOCALAPPDATA%\RastiSiQA\`. Your normal checkout, your branches, Claude's and Kiro's worktrees are never touched.
@@ -21,8 +26,8 @@ and no DNS record is read or written.
 ## 1. Start (copy-paste, PowerShell, from your RastiSi clone folder)
 ```powershell
 cd C:\path\to\Rastisi6-14040616
-git fetch origin kiro/notifications-email-engine-20261104
-git worktree add --detach "$env:LOCALAPPDATA\RastiSiQA\launcher" origin/kiro/notifications-email-engine-20261104
+git fetch origin kiro/notifications-integrated-20261104
+git worktree add --detach "$env:LOCALAPPDATA\RastiSiQA\launcher" origin/kiro/notifications-integrated-20261104
 powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\RastiSiQA\launcher\tools\windows-qa\Start-RastiSiQA.ps1" -RepoPath (Get-Location).Path -OpenBrowser
 ```
 (The 2nd line only *adds* a folder; it does not change the branch you are on. If you already have the branch checked out, you can run
