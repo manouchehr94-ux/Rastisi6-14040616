@@ -11,7 +11,7 @@ Scope: migration-free. `RASTISI_STOREFRONT_TRACKING_ENABLED` stays **OFF** by de
 | `view_item` / ViewContent | `catalog.views.product_detail` (shared by classic + builder shell) | a public, visible product page renders (404/other-store/preview: never) | random per render |
 | `add_to_cart` / AddToCart | `cart.views.cart_add` | only after `add_item_to_cart` succeeded; quantity just added, `unit_price` of the cart item (server-resolved). Errors (bad qty, stock, 404) carry no event | random per success |
 | `begin_checkout` / InitiateCheckout | `orders.views.checkout_step1` (full-page entry only) | non-empty cart of this store | `bc-<store>-<cart>-<k>`, `k` = number of this cart's cycles already closed by an order (`tracking_events.checkout_cycle`, below). `once` ⇒ the browser dedupes THAT identity (no time window decides anything) |
-| `purchase` / Purchase | **not emitted** (builder `build_purchase` exists, unit-tested, unwired; a test fails if anything calls it) | — | — |
+| `purchase` / Purchase | `orders.views.payment_result` (customer's OWN result page only) via `tracking_events.queue_purchase` | verified ONLINE gateway payment (PAID + `Transaction(gateway, ok)`) verified ≤ 30 min ago, tracking active, consent verified server-side (cookie + GPC, same rules as `consent.js`), and this request wins the unique print-claim | `purchase:<order.code>` (also `transaction_id` / Meta `eventID`) |
 
 All money: Toman → ISO `IRR` through `apps.core.currency` (×10); any other source currency is refused. No PII keys; items are validated again in the browser (names, id charset, integer prices/quantities, `currency === 'IRR'`) and unknown keys are dropped.
 
@@ -28,18 +28,18 @@ The platform already records which cart an order came from: `create_order_from_c
 The first implementation used *the customer's order count in the store*: it was `0` forever for unauthenticated carts (a reused cart row collided with the previous cycle) and it moved whenever any other order of the customer appeared (duplicate event inside one checkout). Both are reproduced in `test_tracking_checkout_cycle.LegacyIdentityDefectTests`. The old report's *HTTP* guest scenario does not collide in practice (a guest who orders is logged in, so the count grew); the unauthenticated-cart collision is reachable only at service level — the second defect is reachable over HTTP.
 Remaining limitations (not hidden): (1) logging in mid-checkout merges the guest cart into the customer cart (different row) → one extra `begin_checkout` for that visitor; (2) emptying the cart and refilling it before ordering keeps the same cycle (no new intent is inferable without a write); (3) the browser's 24 h key is only expiry of old keys — the key is the identity, so a new cycle is never suppressed, but a >24 h-old open checkout reloaded after expiry can re-fire once.
 
-## Purchase — architecture decision (supersedes the earlier `TrackingEmission` proposal)
-**Status: BLOCKED. Nothing is wired; `build_purchase` is unit-tested but a test fails if anything calls it.** The earlier proposal (a unique row created inside `apply_payment_success`) only proved that *a business event exists* — it did not prove consent, delivery or acknowledgement. The concerns are therefore separated:
+## Purchase — IMPLEMENTED for verified online payments (browser channel); COD / card-transfer / server-side channels remain out of scope
+Implemented 2026-11-04 together with the payment-engine integration (migration `core.0024_tracking_emission`). The concerns are separated:
 
-| Concern | Decision | Persistence needed? |
+| Concern | Decision | Persistence |
 |---|---|---|
-| A. Authoritative payment transition | `apply_payment_success` (conditional UPDATE, once). **Untouched** — no financial state-machine change. | existing |
-| B. Immutable purchase identity | `event_id = "purchase:<order.code>"` (also GA4 `transaction_id`, Meta `eventID`). `Order.code` is unique ⇒ deterministic, reproducible, no table. | no |
-| C. Eligibility | PAID **and** a `Transaction(method=gateway, status=ok)` **and** the request is the customer's own `payment_result` page **and** the verified payment is recent (proposed ≤ 30 min, so a late reconciliation/admin confirmation days later never prints a stale Purchase) **and** not refunded/canceled. All derivable from existing rows. | no |
-| D. Consent | Evaluated **at delivery**, per browser: the first-party `rs_consent` cookie (policy `v`, `a`, `m`) and `Sec-GPC` are sent with the request, so the server can verify them at render with the same rules as `consent.js`; the browser re-checks. Consent is a property of the visitor, not of the order — never stored on the order for browser delivery. | no |
-| E. Delivery channel | P1: **browser** (`consent.js` → GTM dataLayer / direct GA4 / Meta Pixel). Server-side (GA4 Measurement Protocol / Meta CAPI): **not authorized** (new provider contract). | — |
-| F. Dispatch claim / dedup | Server **print claim** — a unique row created at the moment the event is printed to a consenting browser. | **yes (1 table)** |
-| G. Failure / retry | None in P1 (no acknowledgement exists in a browser). See semantics. | — |
+| A. Authoritative payment transition | `apply_payment_success` (conditional UPDATE, once). **Untouched** | existing |
+| B. Immutable purchase identity | `event_id = "purchase:<order.code>"` (also GA4 `transaction_id`, Meta `eventID`) — deterministic | no |
+| C. Eligibility | PAID **and** `Transaction(method=gateway, status=ok)` created ≤ `RASTISI_PURCHASE_WINDOW_MINUTES` (30) ago **and** the request is the customer's own `payment_result` page; a late reconciliation / admin confirmation days later never prints a stale Purchase | no |
+| D. Consent | evaluated **at delivery** from the first-party `rs_consent` cookie (current policy version) + `Sec-GPC`, with the SAME `needs` rules as `consent.js` (`consent.would_dispatch`); the browser re-checks. Never stored | no |
+| E. Delivery channel | **browser** only (`consent.js` → GTM dataLayer / direct GA4 / Meta Pixel). No Measurement Protocol / CAPI | — |
+| F. Dispatch claim / dedup | `TrackingEmission` unique `(order, event_name, channel)`: the ONE request that creates the row prints the event. A request without consent creates **no** row | **1 table** |
+| G. Failure / retry | none (no browser acknowledgement exists) — see guarantees | — |
 
 ### Guarantees (honest)
 * **Authoritative event:** exactly once (A).
@@ -49,13 +49,13 @@ Remaining limitations (not hidden): (1) logging in mid-checkout merges the guest
 * **Provider:** GA4 de-duplicates purchases by `transaction_id`, Meta by `eventID` (documented provider behaviour — **not verified here**, no live calls). RastiSi never claims global exactly-once, never learns whether GA4/Meta/GTM accepted the event.
 * Not an acknowledgement of: consent given (only verified at render), browser receipt, tag-manager dispatch, provider acceptance.
 
-### Why not browser-only / no table (rejected fallbacks)
+### Why a table (rejected fallbacks)
 Printing on every eligible render, relying on `localStorage` + provider dedupe, re-fires on every refresh, history revisit, second device and cleared storage; `AuditLog` is append-only evidence with no unique constraint (not a race-safe marker); an ack endpoint is forgeable and cannot prove provider delivery. Rejected: they fail the dedupe/consent guarantees.
 
 ### One table is sufficient for P1 — a delivery table is not justified yet
 Evidence: one channel (browser) whose per-provider outcome is unobservable, so per-provider delivery rows would store nothing verifiable. A separate business-event vs delivery split becomes necessary only with a server channel (real acks, retries, crash recovery) — then add `TrackingDelivery` additively (separate approval).
 
-### Minimal schema proposal (NOT created — needs owner approval; no migration exists)
+### Schema (created: `core.0024_tracking_emission`; additive, reversible)
 ```python
 class TrackingEmission(models.Model):              # apps/core
     store = models.ForeignKey("stores.Store", on_delete=models.CASCADE, related_name="tracking_emissions")
@@ -72,7 +72,7 @@ class TrackingEmission(models.Model):              # apps/core
 * **Concurrency:** the unique constraint serialises racing renders (PostgreSQL test: N threads → exactly one row/print). **Crash:** crash after commit, before the response ⇒ event lost (at-most-once); crash before commit ⇒ nothing claimed.
 * **Multi-store:** `store` must equal `order.store` (asserted in the service; all reads filter by `store`); the page already enforces own-order + host-store (`_get_own_order`).
 * **Retention:** rows are tiny; `CASCADE` with the order; optional prune after 400 days. **No PII, no consent record, no IP** stored.
-* **COD / card-to-card:** they become PAID in the admin panel with no customer browser. No visitor event is simulated. A future *server-side* channel would need (1) an approved provider contract, (2) a **consent snapshot** captured while the browser is present — the `rs_consent` cookie value (`v`,`a`,`m`), `Sec-GPC`, timestamp — stored at order placement (`checkout_pay` POST) and default-deny when absent, (3) a `TrackingDelivery` table (state/attempts/next_attempt/last_error, unique per emission+channel) with a worker and retry, (4) hashed-identifier policy and a legal review of post-order consent withdrawal. All out of scope and unauthorized.
+* **COD / card-to-card (still NOT reported):** they become PAID in the admin panel with no customer browser. No visitor event is simulated. A future *server-side* channel would need (1) an approved provider contract, (2) a **consent snapshot** captured while the browser is present — the `rs_consent` cookie value (`v`,`a`,`m`), `Sec-GPC`, timestamp — stored at order placement (`checkout_pay` POST) and default-deny when absent, (3) a `TrackingDelivery` table (state/attempts/next_attempt/last_error, unique per emission+channel) with a worker and retry, (4) hashed-identifier policy and a legal review of post-order consent withdrawal. All out of scope and unauthorized.
 
 ## Tests
 `apps/core/tests/test_tracking_events.py` (builders, wiring, isolation, no purchase, JS contract), `apps/core/tests/test_tracking_checkout_cycle.py` (checkout identity, legacy defects), `apps/core/tests/test_preview_tracking_isolation.py`, browser: `node apps/core/tests/browser/tracking_dispatch_qa.js` (Chromium, mocked providers, 23 checks).

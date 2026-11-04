@@ -134,6 +134,25 @@ const page_html = (cfg, events) => `<!doctype html><html lang="fa" dir="rtl"><he
     ok('a new checkout cycle (new identity) within 24 h is NOT suppressed', (await count(t3)) === 1);
     await ctx.close();
   }
+  // 8d. purchase: validated, order identity required, dispatched once to GTM + Meta (eventID), direct GA4 only without GTM, never replayed
+  { const pur = (id, extra = {}) => ev('purchase', `purchase:${id}`, { transaction_id: id, shipping: 450000, tax: 0, coupon: 'WELCOME', once: true, ...extra });
+    const a = await open({ ids: ALL, events: [pur('ORD-1')], cookie: { a: 1, m: 1 } });
+    const d = (await dl(a.page)).filter(e => !Array.isArray(e) && e.event === 'purchase');
+    ok('purchase: GTM dataLayer gets ecommerce.transaction_id / value / items once', d.length === 1 && d[0].ecommerce.transaction_id === 'ORD-1' && d[0].ecommerce.value === 2500000 && d[0].event_id === 'purchase:ORD-1');
+    const t = (await fbq(a.page)).filter(x => x[1] === 'Purchase');
+    ok('purchase: Meta standard Purchase with eventID, IRR value and contents', t.length === 1 && t[0][3].eventID === 'purchase:ORD-1' && t[0][2].currency === 'IRR' && t[0][2].value === 2500000 && t[0][2].contents[0].id === 'SKU-1');
+    ok('purchase: GA4 is not also sent directly when GTM serves it', (await gtagEvents(a.page)).length === 0);
+    const g = await open({ ids: GA4_ONLY, events: [pur('ORD-2')], cookie: { a: 1, m: 0 } });
+    const ge = (await dl(g.page)).filter(e => Array.isArray(e) && e[0] === 'event' && e[1] === 'purchase');
+    ok('purchase: GA4-only store sends gtag purchase with transaction_id', ge.length === 1 && ge[0][2].transaction_id === 'ORD-2' && ge[0][2].shipping === 450000);
+    const n = await open({ ids: ALL, events: [pur('ORD-3')] });
+    await accept(n.page);
+    ok('purchase: an event that arrived before consent is NEVER replayed after the grant', !(await dlEvents(n.page)).includes('purchase') && (await fbq(n.page)).every(x => x[1] !== 'Purchase'));
+    const bad = await open({ ids: ALL, events: [ev('purchase', 'purchase:ORD-4'), pur('ORD 5'), pur('ORD-6', { tax: -1 }), pur('ORD-7', { coupon: 'x'.repeat(41) })], cookie: { a: 1, m: 1 } });
+    ok('purchase: without a valid transaction_id / with bad tax or coupon it is dropped', !(await dlEvents(bad.page)).includes('purchase') && (await fbq(bad.page)).every(x => x[1] !== 'Purchase'));
+    await a.page.reload({ waitUntil: 'networkidle' });
+    ok('purchase: the same order identity is not dispatched again after a reload (best-effort browser dedupe)', (await dlEvents(a.page)).filter(e => e === 'purchase').length === 0);
+  }
   // 9. no unhandled exceptions anywhere on the harness page
   { const { errors } = await open({ ids: ALL, events: [ev('view_item', 'vi-x')], cookie: { a: 1, m: 1 } });
     ok('no page errors', errors.length === 0, errors.join(' | '));

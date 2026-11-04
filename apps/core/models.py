@@ -652,3 +652,30 @@ class ImportProposal(models.Model):
     def path_label(self) -> str:
         """مسیرِ نمایشی: «والد > نام» برایِ زیردسته/مقدارِ ویژگی، وگرنه فقط نام."""
         return f"{self.parent_name} > {self.name}" if self.parent_name else self.name
+
+
+class TrackingEmission(models.Model):
+    """«ادعای چاپِ» رویدادِ Purchase: ردیفی یکتا به‌ازای هر سفارش که لحظه‌ی چاپِ رویداد برای مرورگرِ رضایت‌داده ساخته می‌شود.
+
+    معنا (دقیق، نه بیشتر): *سرور* رویدادِ این سفارش را **حداکثر یک‌بار** برای یک مرورگرِ رضایت‌داده چاپ کرد. این ردیف نه «تحویلِ موفق»،
+    نه «پذیرشِ GA4/Meta/GTM» و نه «رضایتِ ذخیره‌شده» را ثابت می‌کند (رضایت ویژگیِ بازدیدکننده است و در هر چاپ از کوکی/GPC دوباره سنجیده می‌شود).
+    ردیف در تراکنشِ مالی (``apply_payment_success``) ساخته **نمی‌شود**؛ فقط هنگامِ نمایشِ صفحه‌ی نتیجه‌ی پرداختِ همان مشتری، پس از احرازِ
+    شرایط و رضایت. بدون PII؛ با حذفِ سفارش حذف می‌شود."""
+
+    CHANNEL_BROWSER = "browser"
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="tracking_emissions")
+    order = models.ForeignKey("orders.Order", verbose_name="سفارش", on_delete=models.CASCADE, related_name="tracking_emissions")
+    event_name = models.CharField("رویداد", max_length=32)
+    event_id = models.CharField("شناسه‌ی رویداد", max_length=120)
+    channel = models.CharField("کانال", max_length=16, default=CHANNEL_BROWSER)
+    claimed_at = models.DateTimeField("زمانِ ادعای چاپ", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "ادعای چاپِ رویدادِ ردیابی"
+        verbose_name_plural = "ادعاهای چاپِ رویدادِ ردیابی"
+        constraints = [models.UniqueConstraint(fields=["order", "event_name", "channel"], name="uniq_tracking_emission")]
+        indexes = [models.Index(fields=["store", "claimed_at"], name="idx_trackemission_store_time")]
+
+    def __str__(self):
+        return f"{self.event_name}:{self.order_id} ({self.channel})"

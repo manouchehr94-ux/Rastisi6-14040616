@@ -53,6 +53,39 @@ def policy_version() -> int:
         return 1
 
 
+def server_decision(request) -> dict:
+    """The visitor's CURRENT choice as the server can verify it on this request: the first-party ``rs_consent`` cookie (current policy
+    version, ``a``/``m`` flags) and the ``Sec-GPC`` header (GPC overrides a stored marketing grant). Missing / unreadable / stale → both False."""
+    import json
+    from urllib.parse import unquote
+
+    analytics = marketing = False
+    raw = request.COOKIES.get(COOKIE_NAME)
+    if raw:
+        try:
+            data = json.loads(unquote(raw))
+            if isinstance(data, dict) and data.get("v") == policy_version() and data.get("a") in (0, 1) and data.get("m") in (0, 1):
+                analytics, marketing = bool(data["a"]), bool(data["m"])
+        except (ValueError, TypeError):
+            pass
+    if str(request.META.get("HTTP_SEC_GPC", "")).strip() == "1":
+        marketing = False
+    return {"analytics": analytics, "marketing": marketing}
+
+
+def would_dispatch(tracking_ids: dict, decision: dict) -> bool:
+    """True when consent.js would actually dispatch to at least one loaded tag under this decision (same ``needs`` rules as the browser)."""
+    config = build_config(tracking_ids)
+    if not config:
+        return False
+    for item in config.get("load", []):
+        needs = item.get("needs")
+        ok = decision["analytics"] if needs == "analytics" else decision["marketing"] if needs == "marketing" else (decision["analytics"] or decision["marketing"])
+        if ok:
+            return True
+    return False
+
+
 def build_config(tracking_ids: dict) -> dict | None:
     """The JSON-safe config for the page, or ``None`` when there is nothing to ask about (no tracker → no banner). Only validated ids are passed in."""
     ids = {k: v for k, v in (tracking_ids or {}).items() if k in ("ga4", "gtm", "meta_pixel") and v}

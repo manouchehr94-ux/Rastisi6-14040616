@@ -7,8 +7,9 @@ Rules enforced here (not in the browser):
 * no customer data of any kind — only item ids/names/variants/quantities/prices (and, for a purchase, the order code as ``transaction_id``);
 * the dict is JSON-safe and small; ``consent.js`` re-validates it and decides per provider/consent category what (if anything) is dispatched.
 
-``build_purchase`` exists, is unit-tested and is intentionally NOT connected to any view: a purchase must be recorded once, durably, and that needs a unique-constrained ledger
-(see docs/notifications/… report: ``TrackingEmission``). Until that is approved no code path emits a Purchase."""
+Purchase is wired ONLY through ``queue_purchase`` from the customer's own payment-result page (verified online gateway payments, server-verified consent, reporting window,
+unique print-claim ``TrackingEmission`` — at-most-once SERVER print, best-effort browser delivery, provider-side deduplication; see docs/tracking). COD / card-transfer
+orders become PAID in the admin panel without a customer browser, so they are never reported from a browser."""
 
 from __future__ import annotations
 
@@ -47,6 +48,48 @@ def queue(request, build, *args, **kwargs) -> dict | None:
         return None
     if event:
         request.rs_track_events = [*getattr(request, "rs_track_events", []), event]
+    return event
+
+
+def claim_purchase(order, event: dict) -> bool:
+    """Create the unique print-claim. True only for the ONE request that created it (others — concurrent or later — print nothing)."""
+    from django.db import IntegrityError, transaction
+
+    from apps.core.models import TrackingEmission
+
+    try:
+        with transaction.atomic():
+            _row, created = TrackingEmission.objects.get_or_create(
+                order=order, event_name="purchase", channel=TrackingEmission.CHANNEL_BROWSER,
+                defaults={"store": order.store, "event_id": event["id"]},
+            )
+    except IntegrityError:
+        return False
+    return created
+
+
+def queue_purchase(request, order) -> dict | None:
+    """Queue the Purchase event for the customer's own result page — only when ALL hold: tracking is active for this request (platform flag,
+    connected provider, public host, not a preview); the server verifies, on this request, a consent that lets at least one loaded tag dispatch
+    (cookie + GPC); the order is a verified online gateway payment inside the reporting window; and this request wins the unique print-claim.
+    A request without consent creates NO claim (it never burns the event). Never raises into the view."""
+    from apps.core import consent
+    from apps.core.context_processors import _tracking_ids
+
+    try:
+        ids = _tracking_ids(request)
+        if not ids or not consent.would_dispatch(ids, consent.server_decision(request)):
+            return None
+        event = build_purchase(order.store, order)
+        if not claim_purchase(order, event):
+            return None
+    except TrackingEventError as exc:
+        logger.debug("purchase not reported: %s", exc)
+        return None
+    except Exception:                                   # noqa: BLE001 — tracking must never break the payment result page
+        logger.warning("purchase tracking failed", exc_info=True)
+        return None
+    request.rs_track_events = [*getattr(request, "rs_track_events", []), event]
     return event
 
 
@@ -142,9 +185,17 @@ def build_purchase(store, order) -> dict:
         raise TrackingEventError("order does not belong to this store")
     if order.payment_status != Order.PaymentStatus.PAID:
         raise TrackingEventError("order is not paid")
-    tx = order.transactions.filter(status=Transaction.Status.OK, method=Transaction.Method.GATEWAY).first()
+    tx = order.transactions.filter(status=Transaction.Status.OK, method=Transaction.Method.GATEWAY).order_by("-created_at").first()
     if tx is None:
         raise TrackingEventError("no verified gateway transaction")
+    # Only a payment verified just now is reported from the customer's browser: a late reconciliation / an old order must never print a stale Purchase.
+    from datetime import timedelta
+    from django.conf import settings
+    from django.utils import timezone
+
+    window = timedelta(minutes=max(1, int(getattr(settings, "RASTISI_PURCHASE_WINDOW_MINUTES", 30))))
+    if tx.created_at < timezone.now() - window:
+        raise TrackingEventError("verified payment is outside the browser-reporting window")
     items = []
     for row in order.items.all():
         if row.product_id is None:
@@ -153,5 +204,5 @@ def build_purchase(store, order) -> dict:
         if row.variant_id:
             item["item_variant"] = _clean(row.variant_id, 64)
         items.append(item)
-    return _event("purchase", f"purchase:{order.code}", items, value=iso_amount(order.grand_total), transaction_id=order.code,
+    return _event("purchase", f"purchase:{order.code}", items, value=iso_amount(order.grand_total), transaction_id=order.code, once=True,
                   tax=iso_amount(order.tax), shipping=iso_amount(order.shipping_cost), coupon=_clean(order.coupon.code, 40) if order.coupon_id else "")

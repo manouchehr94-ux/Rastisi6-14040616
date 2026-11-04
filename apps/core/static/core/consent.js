@@ -142,7 +142,7 @@
   // The server hands over already-validated, server-priced events (#rs-track-events on page load, or an htmx «rsTrack» HX-Trigger after a successful cart add). They are
   // re-validated here and dispatched ONLY to a provider whose tag is loaded under the visitor's CURRENT consent. There is no queue and no replay: an event that arrives while the
   // visitor has not chosen (or has refused / withdrawn / has GPC on) is dropped for good and is never sent after a later choice. GA4 is sent directly only when it is NOT served by GTM.
-  var EVENTS = { view_item: 'ViewContent', add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout' };
+  var EVENTS = { view_item: 'ViewContent', add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout', purchase: 'Purchase' };
   var seen = {};
   function isInt(v, min, max) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v && v >= min && v <= max; }
   function isText(v, max) { return typeof v === 'string' && v.length > 0 && v.length <= max; }
@@ -158,7 +158,15 @@
       if (it.item_variant !== undefined) { if (!isText(it.item_variant, 64)) return null; item.item_variant = it.item_variant; }
       items.push(item);
     }
-    return { name: raw.name, id: raw.id, currency: 'IRR', value: raw.value, items: items, once: raw.once === true };
+    var ev = { name: raw.name, id: raw.id, currency: 'IRR', value: raw.value, items: items, once: raw.once === true };
+    if (raw.name === 'purchase') {                            // a purchase needs its order identity and (optionally) tax / shipping / coupon — all re-validated
+      if (!isText(raw.transaction_id, 64) || !/^[A-Za-z0-9_.:-]+$/.test(raw.transaction_id)) return null;
+      ev.transaction_id = raw.transaction_id;
+      if (raw.tax !== undefined) { if (!isInt(raw.tax, 0, 1e15)) return null; ev.tax = raw.tax; }
+      if (raw.shipping !== undefined) { if (!isInt(raw.shipping, 0, 1e15)) return null; ev.shipping = raw.shipping; }
+      if (raw.coupon !== undefined) { if (!isText(raw.coupon, 40)) return null; ev.coupon = raw.coupon; }
+    }
+    return ev;
   }
   function allowed(tracker) {                                 // the visitor's choice RIGHT NOW (cookie is the source of truth), loaded tag, and GPC for marketing
     var c = readChoice();
@@ -186,11 +194,14 @@
   }
   function send(ev) {
     var ecommerce = { currency: ev.currency, value: ev.value, items: ev.items };
+    ['transaction_id', 'tax', 'shipping', 'coupon'].forEach(function (k) { if (ev[k] !== undefined) ecommerce[k] = ev[k]; });
     if (allowed('gtm')) {
       window.dataLayer.push({ ecommerce: null });
       window.dataLayer.push({ event: ev.name, event_id: ev.id, ecommerce: ecommerce });
     } else if (!ids.gtm && allowed('ga4')) {
-      gtag('event', ev.name, { currency: ev.currency, value: ev.value, items: ev.items, event_id: ev.id });
+      var direct = { currency: ev.currency, value: ev.value, items: ev.items, event_id: ev.id };
+      ['transaction_id', 'tax', 'shipping', 'coupon'].forEach(function (k) { if (ev[k] !== undefined) direct[k] = ev[k]; });
+      gtag('event', ev.name, direct);
     }
     if (allowed('meta_pixel') && window.fbq) {
       window.fbq('track', EVENTS[ev.name], {

@@ -217,23 +217,3 @@ class LegacyIdentityDefectTests(CycleFixture):
         before = tracking_events.build_begin_checkout(self.store, cart)["id"]
         self.assertEqual(tracking_events.checkout_cycle(other, cart), 0)
         self.assertEqual(tracking_events.build_begin_checkout(self.store, cart)["id"], before)
-
-
-class PurchaseStaysBlockedAtRuntimeTests(CycleFixture):
-    def test_the_payment_result_page_of_a_paid_gateway_order_prints_no_tracking_event_at_all(self):
-        """Purchase is BLOCKED until a durable claim + consent design is approved: even for a verified, paid online order the result page carries no event payload."""
-        from apps.orders.models import Transaction
-
-        guest = self.visitor()
-        self.add(guest, self.a)
-        response = self.pay(guest)
-        order = Order.objects.get()
-        Order.objects.filter(pk=order.pk).update(payment_status=Order.PaymentStatus.PAID)
-        Transaction.objects.create(order=order, gateway=order.payment_gateway, code="TX-BLOCK-1", amount=order.grand_total, status=Transaction.Status.OK,
-                                   method=Transaction.Method.GATEWAY, ref_id="REF-1")
-        page = guest.get(reverse("orders:payment-result", args=[order.code]))
-        self.assertEqual(page.status_code, 200)
-        html = page.content.decode()
-        self.assertNotIn("rs-track-events", html)
-        self.assertNotIn("purchase", html.lower().replace("purchase_", ""))   # no purchase payload, no transaction_id
-        self.assertNotIn(order.code, "".join(re.findall(r'<script id="rs-[^>]*>.*?</script>', html, re.S)))

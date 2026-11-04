@@ -1,5 +1,5 @@
 """Canonical e-commerce tracking events: server-resolved money (Toman → IRR via apps.core.currency), no PII, tenant isolation, emission only at real events, nothing on previews or
-when tracking is inactive, and NO Purchase emission anywhere (durable dedupe needs an approved ledger table)."""
+when tracking is inactive, and Purchase reachable ONLY through the customer's own payment-result page (see test_purchase_tracking)."""
 
 import json
 import re
@@ -209,8 +209,9 @@ class BeginCheckoutTests(TrackingEventsBase):
         self.assertNotIn("rs-track-events", self.client_a.get("/checkout/").content.decode())
 
 
-class NoPurchaseEmissionTests(TrackingEventsBase):
-    def test_nothing_in_the_storefront_code_queues_or_prints_a_purchase(self):
+class PurchaseWiringTests(TrackingEventsBase):
+    def test_purchase_is_built_and_claimed_only_from_the_customers_payment_result_page(self):
+        """AST: ``queue_purchase`` / ``build_purchase`` / ``claim_purchase`` are referenced by no production code other than tracking_events itself and orders.views.payment_result."""
         import ast
         import pathlib
 
@@ -220,9 +221,9 @@ class NoPurchaseEmissionTests(TrackingEventsBase):
                 continue
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
-                if isinstance(node, ast.Attribute) and node.attr == "build_purchase":
-                    offenders.append(str(path))
-        self.assertEqual(offenders, [], "build_purchase must stay unwired until a durable TrackingEmission ledger is approved")
+                if isinstance(node, ast.Attribute) and node.attr in ("build_purchase", "queue_purchase", "claim_purchase"):
+                    offenders.append((str(path), node.attr))
+        self.assertEqual(offenders, [("apps/orders/views.py", "queue_purchase")])
 
 
 class ConsentJsDispatchContractTests(TestCase):
@@ -230,9 +231,10 @@ class ConsentJsDispatchContractTests(TestCase):
 
     JS = (__import__("pathlib").Path(__file__).resolve().parents[1] / "static" / "core" / "consent.js").read_text(encoding="utf-8")
 
-    def test_only_the_three_non_financial_events_are_dispatchable(self):
-        self.assertIn("var EVENTS = { view_item: 'ViewContent', add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout' }", self.JS)
-        self.assertNotIn("Purchase", self.JS)
+    def test_only_the_four_known_events_are_dispatchable_and_purchase_needs_its_order_identity(self):
+        self.assertIn("var EVENTS = { view_item: 'ViewContent', add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout', purchase: 'Purchase' }", self.JS)
+        self.assertIn("if (raw.name === 'purchase')", self.JS)
+        self.assertIn("isText(raw.transaction_id, 64)", self.JS)
 
     def test_events_are_validated_listened_for_through_htmx_and_never_queued_or_replayed(self):
         self.assertIn("document.addEventListener('rsTrack'", self.JS)

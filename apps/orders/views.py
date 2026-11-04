@@ -299,6 +299,9 @@ def payment_result(request, code):
             "items", "transactions"
         ),
     )
+    # Tracking: Purchase for a verified online payment, only for this customer's own result page (consent verified server-side, unique print-claim).
+    from apps.core import tracking_events
+    tracking_events.queue_purchase(request, order)
     return render_domain_page(request, "orders/payment_result.html", {"order": order})
 
 
