@@ -204,10 +204,20 @@ class InFlightViewTests(LifecycleBase):
 
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
-class InFlightThreadRaceTests(IdempotencyTenantBase, TransactionTestCase):
-    """Real OS threads; only meaningful with PostgreSQL row locks."""
+class InFlightThreadRaceTests(TransactionTestCase):
+    """Real OS threads; only meaningful with PostgreSQL row locks.
+
+    TransactionTestCase (no wrapping transaction) so worker threads, which use
+    their own connections, can see the committed fixtures.
+    """
 
     serialized_rollback = True
+
+    def setUp(self):
+        IdempotencyTenantBase.setUp(self)
+
+    def tearDown(self):
+        IdempotencyTenantBase.tearDown(self)
 
     def test_n_concurrent_same_operation_initiations_call_create_once(self):
         import time as _t
