@@ -1,0 +1,11 @@
+{
+  "template_key": "glass_commerce",
+  "version": "1",
+  "content_hash": "34565b25b7c988b77feda240b1762e4bc444fac9c9f14ea2118192d375aee818",
+  "preview_input_fingerprint": "22b9364c086b0c1a1eb361593f133bc883673ad2a15245dd259b63223b1ace02",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

@@ -28,6 +28,7 @@ from apps.storefront_builder.storefront_appearance.persistence import (
 from apps.stores.models import Store
 
 from .test_views import StorefrontBuilderViewsTestCase
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 
 # Families that Design Lab is allowed to randomize as visual DNA. Theme is
@@ -945,7 +946,7 @@ class DesignLabR4UITests(DesignLabBaseTestCase):
 
 class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
     def test_exactly_53_ready_templates_remain(self):
-        self.assertEqual(len(layout_preset_registry.list_ready_templates()), 53)
+        self.assertEqual(len(layout_preset_registry.list_ready_templates()), READY_TEMPLATE_COUNT)
 
     def test_design_lab_never_registers_a_ready_template(self):
         from apps.storefront_builder.services import design_lab_service
@@ -961,7 +962,7 @@ class DesignLabRegistrySafetyTests(DesignLabBaseTestCase):
         design_lab_service.resolve_candidate_appearance(self.draft, candidate)
         after = len(layout_preset_registry.list_ready_templates())
         self.assertEqual(after, before)
-        self.assertEqual(after, 53)
+        self.assertEqual(after, READY_TEMPLATE_COUNT)
 
 
 

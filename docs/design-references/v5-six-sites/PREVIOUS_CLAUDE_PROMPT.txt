@@ -1,0 +1,30 @@
+دستور Claude Code — ممیزی بصری ۶ سایت با شواهد تصویری — فقط READ ONLY
+
+نقش: تو مسئول مقایسه دقیق نیازهای شش مرجع بصری با موتور واحد RastiSi R4 / V5 هستی؛ این فاز نه پیاده‌سازی است، نه تغییر تم، نه بازطراحی کد.
+
+پیش‌شرط:
+- مسیر واقعی پوشه محلی `RastiSi_6_Sites_24_Screenshots_Claude_Reference` یا معادل آن که صاحب پروژه در دسترس تو قرار می‌دهد را شناسایی کن. هرگز نبودن یا وجود داشتنش را حدس نزن.
+- این پوشه شامل manifest.json، گزارش MD و تصاویر هر سایت است. در نسخه اصلی فایل‌های `references/<site>/screenshots/{home,product}-{desktop,mobile}.png` وجود دارند؛ در نسخه سبک، هر تصویر در چند `*-part-NN.webp` به ترتیب بالا به پایین تقسیم شده و مختصات هر بخش در manifest.json ثبت شده است.
+- اگر تصاویر در دسترس نیستند، در گزارش بنویس NOT ACCESSIBLE، و به‌هیچ‌وجه ادعا نکن آن‌ها را دیده‌ای.
+- Git worktree، branch، HEAD، status، config دیتابیس و media را فقط بخوان؛ main و QA_ARCH02 محافظت شده‌اند. هیچ checkout/reset/commit/migration/seed/write نباید انجام شود.
+
+کارهای الزامی:
+1) از manifest.json وجود چهار نمای home/product × desktop/mobile برای هر شش سایت (۲۴ نمای اصلی) و هش فایل‌ها را کنترل کن؛ در بسته WebP تمام segmentها را از بالا به پایین و با ترتیب manifest مرور کن. thumbnail تمام صفحه به‌تنهایی کافی نیست.
+2) برای هر شش مرجع: صفحه اصلی desktop و mobile و PDP desktop و mobile را جداگانه ممیزی کن. بخش‌ها را از بالا به پایین شماره‌گذاری کن و برای هر ناحیه: ساختار DOM مفهومی، متن/آیکن/نوع media، typography (family/size/weight/line-height), رنگ نقش‌محور، background, max-width, image ratio/fit/position, gap, padding, margin, border, radius, shadow, active/hover/focus, breakpoints, mobile stacking, sticky/floating, empty-state را در صورت رؤیت ثبت کن.
+3) هر اندازه/رنگ را با منبع برچسب بزن: CSS/HTML CONFIRMED، SCREENSHOT OBSERVED، APPROXIMATION، NOT VERIFIED. screenshot pixel dimensions را برابر viewport CSS یا computed CSS ندان.
+4) اگر PDP HTML/CSS، اطلاعات computed style یا تعامل‌های بازشده موجود نیست، به‌صراحت UNKNOWN اعلام کن و فهرست داده‌های موردنیاز را بنویس. از روی عکس state و منطق JS را اختراع نکن.
+5) گزارش اولیه RastiSi_V5_Six_References_Design_Audit.md را به‌عنوان فرض اولیه بخوان، نه مدرک قطعی و کامل؛ با تصاویر تطبیق بده و هر مغایرت، جاافتادگی یا اندازه T تخمینی را در نسخه جدید اصلاح کن.
+6) در کد V5، برای هر قابلیت با ارجاع path:line و جریان end-to-end مشخص کن: section_registry → settings_schema/Inspector → mutation R4 → draft/revision/undo/redo → shared preview/render → publish و موضوع theme/palette/mobile.
+7) برچسب وضعیت: VERIFIED COMPLETE (فقط پس از تست واقعی مرتبط)، EXISTS UNTESTED، PARTIAL، MISSING، NOT VERIFIABLE. صرفاً وجود کد یا تست روی دیسک PASS نیست.
+8) کنترل theme باید در HOME و PDP و Listing و Cart و سایر صفحات پشتیبانی‌شده، با حداقل دو پالت متضاد انجام شود؛ اگر تست اجرا نمی‌کنی نتیجه را NOT EXECUTED بگذار.
+9) خروجی: الف) شناسنامه مستقل هر سایت و هر viewport؛ ب) inventory سراسری اجزای قابل‌استفاده مجدد؛ ج) ماتریس ۱ به ۱ نیاز/قابلیت/شاهد کد/شاهد تصویر/نقص/ریسک/تست؛ د) فهرست اندازه‌های اثبات‌نشده و چیزهایی که از صاحب پروژه می‌خواهی؛ هـ) فازبندی پیشنهادی برای اجرا پس از اجازه.
+
+محدودیت‌های معماری:
+- R4 فقط یک renderer/registry/mutation/draft/publish/history واحد دارد؛ برای هر مرجع موتور مجزا نساز.
+- هر ویژگی قابل‌تعمیم اگر واقعاً مفقود بود با کوچک‌ترین تغییر اصولی در قابلیت مشترک ساخته شود؛ هیچ feature جدید قبل از بررسی معادل موجود.
+- product_main یک واحد state خرید/گالری/واریانت است و نباید بدون تصمیم معماری به اجزای ناسازگار خرد شود.
+- اطلاعات محصولات و سفارش‌ها و رسانه‌های فروشگاه نباید با قالب عوض شوند؛ تصویر مرجع نباید به محصول مشتری راه پیدا کند.
+- `container.add` در کد دیده شده ولی PASS تست Windows از این مشاهده استنتاج نمی‌شود.
+- هر تغییر کد، شاخه اصلی، دیتابیس، media، schema، خدمات انتشار یا مکانیزم ذخیره نیازمند مجوز مستقل است؛ این دستور مجوز تغییر نیست.
+
+در پایان، بدون انجام هیچ تغییری گزارش را همراه با شکاف‌های باقی‌مانده ارائه بده و منتظر دستور بعدی باش.

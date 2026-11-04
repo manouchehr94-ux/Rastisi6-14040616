@@ -2,11 +2,48 @@ from django.urls import path
 
 from apps.storefront_builder import media_views as storefront_builder_media_views
 from apps.storefront_builder import r4_views as storefront_builder_r4_views
+from apps.storefront_builder import vision_views as storefront_builder_vision_views
 from apps.storefront_builder import views as storefront_builder_views
 
-from . import cod_views, engagement_views, journal_views, payment_reconciliation_views, views
+from apps.notifications.inbox_views import VIEWS_DASH, url_patterns as _inbox_patterns
+from . import card_transfer_views, cod_views, engagement_views, journal_views, payment_reconciliation_views, views, views_domain
 
 app_name = "dashboard"
+
+
+def notification_inbox_urls():
+    return _inbox_patterns(VIEWS_DASH)
+
+
+# RastiSi Vision Studio — a second presentation of the SAME R4 session (route name ``vision-studio``; deliberately NOT prefixed with
+# ``storefront-builder-`` so the sidebar's active-state rules of the older tabs never claim it).
+# r4_editor.js resolves its write/read endpoints RELATIVE to the page it runs on (``new URL('mutate/', location.href)``), so the
+# Vision page needs the same relative endpoints under its own prefix. They are aliases of the ONE set of R4 views - the permission
+# decorators, Store resolution and Draft logic live on those views - never a second implementation. ``VISION_STUDIO_R4_ALIASES`` is the
+# single table the parity test (test_vision_studio.py) checks against r4_editor.js.
+VISION_STUDIO_TEMPLATE = "dashboard/vision/studio.html"
+VISION_STUDIO_R4_ALIASES = (
+    ("mutate/", storefront_builder_r4_views.storefront_r4_mutation, "vision-studio-mutate"),
+    ("sections/<int:pk>/inspector/", storefront_builder_r4_views.storefront_r4_section_inspector, "vision-studio-section-inspector"),
+    ("resources/picker/", storefront_builder_r4_views.storefront_r4_resource_picker, "vision-studio-resource-picker"),
+    ("history/", storefront_builder_r4_views.storefront_r4_history_command, "vision-studio-history"),
+    ("publish/", storefront_builder_r4_views.storefront_r4_publish, "vision-studio-publish"),
+    ("discard/", storefront_builder_r4_views.storefront_r4_discard, "vision-studio-discard"),
+    ("reset-page/", storefront_builder_r4_views.storefront_r4_reset_page, "vision-studio-reset-page"),
+    ("reset-storefront/", storefront_builder_r4_views.storefront_r4_reset_storefront, "vision-studio-reset-storefront"),
+    ("switch-template/", storefront_builder_r4_views.storefront_r4_switch_template, "vision-studio-switch-template"),
+)
+VISION_STUDIO_ROUTES = [
+    path(
+        "vision-studio/",
+        storefront_builder_r4_views.storefront_r4_editor,
+        {"template_name": VISION_STUDIO_TEMPLATE},
+        name="vision-studio",
+    ),
+    *[path("vision-studio/" + rel, view, name=name) for rel, view, name in VISION_STUDIO_R4_ALIASES],
+    # read-only «how would this header / footer model look» preview (Vision only; writes nothing)
+    path("vision-studio/region-preview/", storefront_builder_vision_views.region_variant_preview, name="vision-studio-region-preview"),
+]
 
 urlpatterns = [
     path("login/", views.admin_login, name="login"),
@@ -135,6 +172,8 @@ urlpatterns = [
 
     path("orders/", views.order_list, name="order-list"),
     path("orders/table/", views.order_table, name="order-table"),
+    path("orders/card-transfers/", card_transfer_views.card_transfer_list, name="card-transfer-list"),
+    path("orders/card-transfers/<int:pk>/<str:action>/", card_transfer_views.card_transfer_decide, name="card-transfer-decide"),
     path("orders/<str:code>/", views.order_detail, name="order-detail"),
 
     path("invoices/", views.invoice_list, name="invoice-list"),
@@ -195,6 +234,7 @@ urlpatterns = [
     path("campaigns/<int:pk>/preview/", engagement_views.campaign_preview, name="campaign-preview"),
     path("campaigns/<int:pk>/delete/", engagement_views.campaign_delete, name="campaign-delete"),
     # ---- اعلان‌ها
+    *notification_inbox_urls(),     # صندوقِ اعلانِ مدیران (پیشوند inbox/ — با notifications/<event_key>/ برخورد نمی‌کند)
     path("notifications/", engagement_views.notification_templates, name="notification-templates"),
     path("notifications/history/", engagement_views.notification_history, name="notification-history"),
     path("payments/reconciliation/", payment_reconciliation_views.payment_reconciliation_list, name="payment-reconciliations"),
@@ -228,8 +268,14 @@ urlpatterns = [
     path("settings/sms/outbox/", views.sms_outbox_list, name="sms-outbox-list"),
     path("settings/sms/outbox/<int:pk>/retry/", views.sms_outbox_retry, name="sms-outbox-retry"),
 
+    path("settings/domain/add/", views_domain.settings_domain_add, name="settings-domain-add"),
+    path("settings/domain/<int:domain_id>/begin/", views_domain.settings_domain_begin, name="settings-domain-begin"),
+    path("settings/domain/<int:domain_id>/check/", views_domain.settings_domain_check, name="settings-domain-check"),
+    path("settings/domain/<int:domain_id>/readiness/", views_domain.settings_domain_readiness, name="settings-domain-readiness"),
+    path("settings/domain/<int:domain_id>/refresh/", views_domain.settings_domain_refresh, name="settings-domain-refresh"),
     path("settings/integrations/<str:provider_code>/connect/", views.settings_integration_connect, name="settings-integration-connect"),
     path("settings/integrations/<str:provider_code>/disconnect/", views.settings_integration_disconnect, name="settings-integration-disconnect"),
+    path("settings/integrations/<str:provider_code>/toggle/", views.settings_integration_toggle, name="settings-integration-toggle"),
     path("settings/integrations/<str:provider_code>/test/", views.settings_integration_test, name="settings-integration-test"),
 
     # --- صفحات محتوایی ---
@@ -253,6 +299,21 @@ urlpatterns = [
         name="storefront-builder-r4-editor",
     ),
     path(
+        "storefront-builder/r4/announcement-image/",
+        storefront_builder_r4_views.storefront_r4_announcement_image,
+        name="storefront-builder-r4-announcement-image",
+    ),
+    path(
+        "storefront-builder/r4/announcement/inspector/",
+        storefront_builder_r4_views.storefront_r4_announcement_inspector,
+        name="storefront-builder-r4-announcement-inspector",
+    ),
+    path(
+        "storefront-builder/r4/layout-tree/",
+        storefront_builder_r4_views.storefront_r4_layout_tree,
+        name="storefront-builder-r4-layout-tree",
+    ),
+    path(
         "storefront-builder/r4/mutate/",
         storefront_builder_r4_views.storefront_r4_mutation,
         name="storefront-builder-r4-mutation",
@@ -271,6 +332,11 @@ urlpatterns = [
         "storefront-builder/r4/resources/picker/",
         storefront_builder_r4_views.storefront_r4_resource_picker,
         name="storefront-builder-r4-resource-picker",
+    ),
+    path(
+        "storefront-builder/r4/media/upload/",
+        storefront_builder_r4_views.storefront_r4_media_upload,
+        name="storefront-builder-r4-media-upload",
     ),
     path(
         "storefront-builder/r4/history/",
@@ -312,6 +378,7 @@ urlpatterns = [
         storefront_builder_r4_views.storefront_r4_apply_industry_layout,
         name="storefront-builder-r4-apply-industry-layout",
     ),
+    *VISION_STUDIO_ROUTES,
     path("storefront-builder/templates/", storefront_builder_views.storefront_template_gallery, name="storefront-builder-templates"),
     path(
         "storefront-builder/templates/<slug:key>/preview/",
@@ -319,6 +386,7 @@ urlpatterns = [
         name="storefront-builder-template-live-preview",
     ),
     path("storefront-builder/preview/", storefront_builder_views.storefront_preview, name="storefront-builder-preview"),
+    path("storefront-builder/draft-preview/", storefront_builder_views.storefront_draft_preview, name="storefront-builder-draft-preview"),
     path("storefront-builder/sections/<int:pk>/product-search/", storefront_builder_views.storefront_section_product_search, name="storefront-builder-section-product-search"),
     path("storefront-builder/history/", storefront_builder_views.storefront_history, name="storefront-builder-history"),
     path("storefront-builder/apply-preset/", storefront_builder_views.storefront_apply_layout_preset, name="storefront-builder-apply-preset"),
@@ -409,6 +477,8 @@ urlpatterns = [
     path("imports/template/<str:import_type>/", views.import_template, name="import-template"),
     path("imports/<int:pk>/", views.import_detail, name="import-detail"),
     path("imports/<int:pk>/execute/", views.import_execute, name="import-execute"),
+    path("imports/<int:pk>/proposals/approve-all/", views.import_proposals_approve_all, name="import-proposals-approve-all"),
+    path("imports/<int:pk>/proposals/<int:proposal_pk>/<str:action>/", views.import_proposal_decide, name="import-proposal-decide"),
     path("imports/<int:pk>/cancel/", views.import_cancel, name="import-cancel"),
     path("imports/<int:pk>/download/source/", views.import_download_source, name="import-download-source"),
     path("imports/<int:pk>/download/errors/", views.import_download_errors, name="import-download-errors"),
@@ -451,6 +521,7 @@ urlpatterns = [
 
     # --- راه‌اندازیِ سادهٔ ارسال (Onboarding) ---
     path("shipping/setup/", views.shipping_setup, name="shipping-setup"),
+    path("shipping/setup/<int:pk>/toggle/", views.shipping_method_toggle, name="shipping-method-toggle"),
     path("shipping/setup/<int:pk>/update/", views.shipping_method_simple_update, name="shipping-method-simple-update"),
 
     # --- مناطق و روش‌های ارسال (Shipping Zones/Methods/Rates) ---

@@ -3,7 +3,22 @@
 ویدیویِ کالا استفاده می‌شود؛ اینستاگرام همیشه فقط لینکِ امنِ بازشونده در
 تبِ جدید است، نه iframe (همان سیاستِ مستندشده‌یِ product_video_service).
 {% endcomment %}
-{% if video_embed_url or video_is_instagram %}
+{% if video_items and not video_embed_url and not video_is_instagram %}
+<section class="section video-grid-section">
+  {% if settings.title %}<div class="sec-head"><h2><span class="bar"></span>{{ settings.title }}</h2></div>{% endif %}
+  <div class="video-grid">
+    {% for v in video_items %}
+    <figure class="video-grid-item">
+      <div class="video-embed-wrap">
+        {% if v.embed_url %}<iframe src="{{ v.embed_url }}" allowfullscreen loading="lazy" title="{{ v.title|default:'ویدیو' }}"></iframe>
+        {% else %}<a href="{{ v.permalink }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">مشاهده در اینستاگرام</a>{% endif %}
+      </div>
+      {% if v.title %}<figcaption>{{ v.title }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% elif video_embed_url or video_is_instagram %}
 <section class="section">
   {% if settings.title %}
   <div class="sec-head"><h2><span class="bar"></span>{{ settings.title }}</h2></div>

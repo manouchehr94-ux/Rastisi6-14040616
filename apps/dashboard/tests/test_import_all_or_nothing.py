@@ -595,8 +595,9 @@ class StrictImportViewTests(ImportViewTestCase):
         job = self._upload(PRODUCT_HEADER + self._rows(3))
         html = self.client.get(reverse("dashboard:import-detail", args=[job.pk])).content.decode()
         self.assertIn("فایل با موفقیت بررسی شد. همه ردیف‌ها معتبرند و آماده اجرا هستند.", html)
-        self.assertIn("تأیید اجرای واقعی", html)
-        self.assertIn("با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند", html)
+        self.assertIn("ورود نهایی کالاها به فروشگاه", html)
+        self.assertIn("تأیید و اجرای نهایی", html)
+        self.assertIn("این کار اطلاعاتِ واقعیِ فروشگاه را تغییر می‌دهد", html)
         self.assertNotIn("این فایل قابل اجرا نیست", html)
 
     def test_all_valid_file_executes_once_and_replay_is_refused(self):

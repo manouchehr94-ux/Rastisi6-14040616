@@ -186,6 +186,8 @@ TEMPLATES = [
                 "apps.portal.context_processors.turnstile",
                 "apps.portal.context_processors.platform_enamad_verification",
                 "apps.core.context_processors.shop_settings",
+                "apps.core.context_processors.seo",
+                "apps.core.context_processors.tracking",
                 "apps.catalog.context_processors.nav_categories",
                 "apps.cart.context_processors.cart_badge",
                 "apps.customers.context_processors.wishlist_membership",
@@ -198,6 +200,7 @@ TEMPLATES = [
                 "apps.dashboard.context_processors.support_mode_banner",
                 "apps.dashboard.context_processors.platform_link",
                 "apps.dashboard.context_processors.storefront_link",
+                "apps.notifications.context_processors.inbox_bell",
                 "apps.dashboard.context_processors.nav_badges",
             ],
         },
@@ -402,7 +405,14 @@ LOGGING = {
 
 # Business defaults (Stage 2 will read these in the pricing service)
 SHOP_FREE_SHIPPING_THRESHOLD = 500_000
+# Legacy platform-wide rate. No new store reads it any more (see SHOP_NEW_STORE_TAX_* below); it only remains because the
+# historical backfill migration core/0006 and external imports referenced the name.
 SHOP_TAX_PERCENT = 9
+# Tax defaults for a store created from now on (``ShopSettings.provision_for`` and the model field defaults read these two
+# values - one source). New stores start WITHOUT tax; the merchant opts in on /admin-portal/tax/settings/ and the suggested
+# rate is already filled in. Existing stores and past orders are never touched by a change here.
+SHOP_NEW_STORE_TAX_ENABLED = env_bool("RASTISI_NEW_STORE_TAX_ENABLED", default=False)
+SHOP_NEW_STORE_TAX_PERCENT = env_str("RASTISI_NEW_STORE_TAX_PERCENT", "10.00")
 
 # هویت عمومی پلتفرم (نه یک فروشنده‌ی خاص) — مطابق اصل جنریک‌بودن سند مشخصات
 SHOP_NAME = "دیجی‌مارکت"
@@ -441,6 +451,9 @@ RASTISI_CUSTOM_DOMAIN_A_TARGETS = tuple(
 RASTISI_CUSTOM_DOMAIN_CNAME_TARGET = env_str(
     "RASTISI_CUSTOM_DOMAIN_CNAME_TARGET", ""
 ).lower().strip().rstrip(".")
+# Owner decision (1405/08/09): only the 19 curated Ready Templates are offered for a NEW choice (apps/storefront_builder/template_gallery_policy.py).
+# Nothing is deleted; set RASTISI_TEMPLATE_GALLERY_RESTRICTED=0 to offer every registered Ready Template again (no migration, no data change).
+RASTISI_TEMPLATE_GALLERY_RESTRICTED = env_bool("RASTISI_TEMPLATE_GALLERY_RESTRICTED", default=True)
 RASTISI_CUSTOM_DOMAIN_READINESS_MAX_AGE_SECONDS = env_int(
     "RASTISI_CUSTOM_DOMAIN_READINESS_MAX_AGE_SECONDS", default=900
 )
@@ -570,3 +583,34 @@ EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env_str("DJANGO_DEFAULT_FROM_EMAIL", "no-reply@rastisi.ir")
 
 
+
+# ── Search visibility (platform-level; see apps/core/seo_policy.py and apps/core/indexnow.py) ──────────────────────────────────
+# AI crawlers that only collect TRAINING data are disallowed in robots.txt unless the platform owner sets this to "allow".
+# (Search/answer crawlers such as OAI-SearchBot, ChatGPT-User, PerplexityBot are governed separately and stay allowed.)
+RASTISI_AI_TRAINING_CRAWLERS = env_str("RASTISI_AI_TRAINING_CRAWLERS", "disallow")
+# Submitting changed URLs to IndexNow participants (Bing & co.). OFF unless the platform owner enables it explicitly; never on in QA.
+RASTISI_INDEXNOW_ENABLED = env_bool("RASTISI_INDEXNOW_ENABLED", default=False)
+# Analytics / ad pixels (GA4, GTM, Meta pixel) on public storefront pages. OFF by default (privacy by default): the project has no
+# visitor-consent mechanism for tracking cookies (the only consent system, apps.customers.services.consent_service, covers promotional SMS/e-mail
+# of registered customers). Turn on only after the platform owner has confirmed the legal basis for the markets served.
+RASTISI_STOREFRONT_TRACKING_ENABLED = env_bool("RASTISI_STOREFRONT_TRACKING_ENABLED", default=False)
+# Visitor-consent policy version (apps.core.consent): bump it to ask every visitor again after a policy change. The consent banner only ever appears when a tracker is configured AND
+# tracking is enabled above; the policy itself is opt-in only (no tag before a choice).
+RASTISI_CONSENT_POLICY_VERSION = env_int("RASTISI_CONSENT_POLICY_VERSION", 1)
+# Google Search Console connection (OAuth + Search Console API: list the seller's properties, submit / read the sitemap). OFF unless the platform owner enables
+# it AND provides an approved OAuth client (consent screen / verification is done in Google Cloud by the owner). Never on in QA; QA uses a fake transport.
+RASTISI_GSC_OAUTH_ENABLED = env_bool("RASTISI_GSC_OAUTH_ENABLED", default=False)
+# Periodic read-only re-checks of pending / unready custom domains (apps.stores.services.domain_autocheck_service). OFF unless the platform owner enables it (it performs real DNS / HTTPS lookups
+# from the server). Never activates a domain and never changes DNS or certificates.
+RASTISI_DOMAIN_AUTOCHECK_ENABLED = env_bool("RASTISI_DOMAIN_AUTOCHECK_ENABLED", default=False)
+
+# ---- Notification Engine (apps.notifications): the in-app Inbox / toast / polling are always on; EXTERNAL channels are OFF by default -------------------------------
+# Web Push to the browser vendors' push services (needs VAPID keys from the environment — never in the repository), e-mail and mobile push.
+RASTISI_NOTIF_WEBPUSH_ENABLED = env_bool("RASTISI_NOTIF_WEBPUSH_ENABLED", default=False)
+RASTISI_NOTIF_EMAIL_ENABLED = env_bool("RASTISI_NOTIF_EMAIL_ENABLED", default=False)
+RASTISI_NOTIF_MOBILE_ENABLED = env_bool("RASTISI_NOTIF_MOBILE_ENABLED", default=False)
+RASTISI_VAPID_PRIVATE_KEY = env_str("RASTISI_VAPID_PRIVATE_KEY", "")       # PEM or base64url raw P-256 scalar; empty ⇒ Web Push unavailable
+RASTISI_VAPID_SUBJECT = env_str("RASTISI_VAPID_SUBJECT", "")               # e.g. mailto:ops@your-domain
+RASTISI_NOTIF_POLL_SECONDS = env_int("RASTISI_NOTIF_POLL_SECONDS", default=30)
+RASTISI_GOOGLE_OAUTH_CLIENT_ID = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_ID", "")
+RASTISI_GOOGLE_OAUTH_CLIENT_SECRET = env_str("RASTISI_GOOGLE_OAUTH_CLIENT_SECRET", "")

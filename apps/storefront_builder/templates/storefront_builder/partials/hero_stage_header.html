@@ -1,0 +1,12 @@
+{% comment %}
+Hero Stage — the Store's global header rendered INSIDE the stage (``hero_stage.html`` includes this only when
+``render_service.header_embedded_for`` said so, i.e. the shell has already skipped its own header). It resolves the same three
+inputs every header surface uses: the registered renderer (``header_variant_template``), the header config and the live/preview flags,
+so the embedded header is byte-for-byte the header the shell would have drawn — only its surroundings differ.
+{% endcomment %}
+{% if is_builder_preview %}
+  {% if version %}{% include header_variant_template with header_config=version.effective_header_config is_live_storefront=False is_builder_preview=True %}
+  {% else %}{% include header_variant_template with is_live_storefront=False is_builder_preview=True %}{% endif %}
+{% else %}
+  {% include header_variant_template with header_config=layout_header_config is_live_storefront=True is_builder_preview=False %}
+{% endif %}

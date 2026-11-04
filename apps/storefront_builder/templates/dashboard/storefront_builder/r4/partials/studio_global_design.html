@@ -127,7 +127,29 @@ after each successful global edit.
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_crossfade" {% if global_design.appearance.card_image_crossfade %}checked{% endif %}> <span>کراس‌فید تصویر کارت</span></label>
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="card_image_zoom" {% if global_design.appearance.card_image_zoom %}checked{% endif %}> <span>زوم تصویر کارت روی هاور</span></label>
 
-          <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض محتوای سایت</label>
+          <label class="r4-field-sublabel" for="r4GlobalHeadingStyle">سبک عنوان بخش‌ها</label>
+          <select id="r4GlobalHeadingStyle" class="r4-control" data-r4-global-field="heading_style">
+            {% for c in global_design.site_heading_style_choices %}
+            <option value="{{ c }}" {% if c == global_design.appearance.heading_style or c == 'default' and not global_design.appearance.heading_style %}selected{% endif %}>{{ c|rs_heading_style_label }}</option>
+            {% endfor %}
+          </select>
+
+          {% with pl=global_design.page_layout %}
+          <label class="r4-field-sublabel" for="r4GlobalPageWidthMode">عرض صفحه‌ها</label>
+          <select id="r4GlobalPageWidthMode" class="r4-control" data-r4-global-field="page_width_mode">
+            {% for key, label in global_design.page_width_modes %}
+            <option value="{{ key }}" {% if key == pl.mode %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="r4-page-custom" data-r4-page-custom{% if pl.mode != "custom" %} hidden{% endif %}>
+            <label class="r4-field-sublabel" for="r4GlobalPageMaxWidth">حداکثر عرض محتوا (پیکسل) — سفارشی</label>
+            <input type="number" id="r4GlobalPageMaxWidth" class="r4-control" inputmode="numeric" data-r4-global-field="page_max_width" min="{{ pl.max_width_range.0 }}" max="{{ pl.max_width_range.1 }}" step="10" value="{{ pl.max_width|default:pl.defaults.page_max_width }}">
+            <label class="r4-field-sublabel" for="r4GlobalPageGutter">فاصلهٔ کنارهٔ صفحه (پیکسل) — سفارشی</label>
+            <input type="number" id="r4GlobalPageGutter" class="r4-control" inputmode="numeric" data-r4-global-field="page_gutter" min="{{ pl.gutter_range.0 }}" max="{{ pl.gutter_range.1 }}" step="2" value="{{ pl.gutter|default:pl.defaults.page_gutter }}">
+          </div>
+          {% endwith %}
+
+          <label class="r4-field-sublabel" for="r4GlobalContentWidth">عرض پایهٔ قالب</label>
           <select id="r4GlobalContentWidth" class="r4-control" data-r4-global-field="content_width">
             {% for w in global_design.site_content_width_choices %}
             <option value="{{ w }}" {% if w == global_design.appearance.content_width %}selected{% endif %}>{{ w }}px</option>
@@ -191,6 +213,35 @@ after each successful global edit.
     <div class="rs-more-body">
         <section class="r4-global-design-group" data-r4-global-mutation="header.update"><span class="visually-hidden" data-r4-scope="global-group">سراسری — کل فروشگاه</span>
           <h4>هدر</h4>
+          {% comment %}Header placement + professional header recipes. One decision (header_placement.py → render_service.header_embedded_for): the
+             model above is Store-global; WHERE it is drawn (above the page / inside the hero stage / floating over the picture) is the first Hero
+             Stage's header_mode. Both are Draft edits with one Undo step; nothing here renders a header.{% endcomment %}
+          {% with hp=global_design.header_placement %}
+          <div class="r4-header-placement" data-r4-header-placement data-mode="{{ hp.mode }}" data-available="{% if hp.available %}1{% else %}0{% endif %}">
+            <h5 id="r4PlacementTitle">جایگاه هدر در صفحهٔ اصلی</h5>
+            <div class="r4-placement-choices" role="radiogroup" aria-labelledby="r4PlacementTitle">
+              {% for c in hp.choices %}
+              <button type="button" role="radio" class="r4-placement-choice" data-r4-placement="{{ c.key }}" aria-checked="{% if c.key == hp.mode %}true{% else %}false{% endif %}"{% if c.key != "independent" and not hp.available %} disabled{% endif %}>{{ c.label }}</button>
+              {% endfor %}
+            </div>
+            {% if not hp.available %}<p class="r4-field-hint" data-r4-placement-reason>{{ hp.reason_text }}</p>{% endif %}
+            {% if hp.recipes %}
+            <h5>هدرهای حرفه‌ای آماده</h5>
+            <p class="r4-field-hint">هر مورد یک مدل هدر همراه با جایگاه آن است و روی هر قالبی کار می‌کند. هیرو، فوتر، منو و اطلاعات فروشگاه تغییر نمی‌کنند.</p>
+            <ul class="r4-recipe-list" data-r4-recipe-list>
+              {% for r in hp.recipes %}
+              <li class="r4-recipe{% if r.current %} is-current{% endif %}" data-r4-recipe="{{ r.key }}" data-variant="{{ r.variant }}">
+                <div class="r4-recipe__text"><strong>{{ r.label }}</strong><small>{{ r.placement_label }} · {{ r.variant_label }}</small>
+                  {% if not hp.available %}<small class="r4-recipe__note">در این صفحه فقط مدل هدر اعمال می‌شود.</small>{% endif %}</div>
+                <button type="button" class="r4-recipe__apply" data-r4-apply-recipe="{{ r.key }}" data-placement="{{ r.placement }}"{% if r.current %} aria-pressed="true" disabled{% endif %}>{% if r.current %}فعلی{% elif hp.available %}اعمال{% else %}اعمال مدل{% endif %}</button>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            <p class="r4-field-hint" role="status" aria-live="polite" data-r4-placement-status></p>
+          </div>
+          {% endwith %}
+
           <label class="r4-field-sublabel" for="r4GlobalHeaderVariant">نوع هدر</label>
           <select id="r4GlobalHeaderVariant" class="r4-control" data-r4-global-field="header_variant">
             {% for v in global_design.header_variants %}
@@ -198,6 +249,7 @@ after each successful global edit.
             {% endfor %}
           </select>
           {% if storefront_has_baseline %}<button type="button" id="r4ResetHeaderButton">⟲ بازنشانی هدر به قالب</button>{% endif %}
+
 
           {% for key, label in global_design.header_toggle_fields %}
           <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="{{ key }}" {% if global_design.header|dictget:key %}checked{% endif %}> <span>{{ label }}</span></label>
@@ -219,50 +271,12 @@ after each successful global edit.
           </div>
           {% endif %}
 
-          <label class="r4-field-sublabel" for="r4GlobalAnnouncementText">متن نوار اعلان</label>
-          <input type="text" id="r4GlobalAnnouncementText" class="r4-control" maxlength="300" data-r4-global-field="announcement_text" value="{{ global_design.header.announcement_text }}">
-
-          <label class="r4-checkbox-row"><input type="checkbox" class="r4-switch" data-r4-global-field="announcement_show_phone" {% if global_design.header.announcement_show_phone %}checked{% endif %}> <span>نمایش تلفن در نوار اعلان</span></label>
-
-          <h5>لینک‌های نوار اعلان</h5>
-          <div class="r4-repeater" data-r4-global-repeater-field="announcement_links">
-            <div data-r4-repeater-rows>
-              {% for link in global_design.header.announcement_links %}
-              <div class="r4-repeater-row" data-r4-repeater-row>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">برچسب</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50" value="{{ link.label }}">
-                </div>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">لینک</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500" value="{{ link.url }}">
-                </div>
-                <div class="r4-repeater-row-actions">
-                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
-                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
-                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
-                </div>
-              </div>
-              {% endfor %}
-            </div>
-            <template data-r4-repeater-row-template>
-              <div class="r4-repeater-row" data-r4-repeater-row>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">برچسب</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="label" maxlength="50">
-                </div>
-                <div class="r4-repeater-subfield">
-                  <label class="r4-field-sublabel">لینک</label>
-                  <input type="text" class="r4-control" data-r4-repeater-subfield="url" maxlength="500">
-                </div>
-                <div class="r4-repeater-row-actions">
-                  <button type="button" data-r4-repeater-move-up aria-label="انتقال به بالا">↑</button>
-                  <button type="button" data-r4-repeater-move-down aria-label="انتقال به پایین">↓</button>
-                  <button type="button" class="danger" data-r4-repeater-remove aria-label="حذف">×</button>
-                </div>
-              </div>
-            </template>
-            <button type="button" class="r4-repeater-add" data-r4-repeater-add>+ افزودن لینک</button>
+          {% comment %}V5-UI-014 «نوار اطلاعیه» — edited like any Section: click the strip in the preview, then «ویرایش» (the standard R4 workspace). This is only a
+             shortcut to that same editor; the data (and its on/off switch above) is the one header_config.{% endcomment %}
+          <div class="r4-announce-entry" data-r4-announce-entry>
+            <h5>نوار اطلاعیه (بالاترین بخش صفحه، بالای هدر)</h5>
+            <p class="r4-field-hint">متن، تصویر کوچک، لینک، رنگ و اندازهٔ نوار در پنجرهٔ استاندارد ویرایش تنظیم می‌شود؛ همان پنجره‌ای که با کلیک روی نوار در پیش‌نمایش و زدن «ویرایش» باز می‌شود.</p>
+            <button type="button" class="outline" data-rastisi-action="edit-announcement">{% rs_icon "megaphone" %}ویرایش نوار اطلاعیه</button>
           </div>
 
           <h5>بلوک‌های اضافی هدر</h5>

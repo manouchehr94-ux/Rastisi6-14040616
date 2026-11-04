@@ -2,14 +2,15 @@
 
 Shared by every surface that shows Ready Templates (Merchant Admin Template Gallery, the R4
 Design Studio gallery and the owner-onboarding Template step). It owns no catalog and no
-thumbnail logic of its own: presets come from ``layout_preset_registry.list_ready_templates()``
-and screenshots/thumbnails from ``template_preview_service`` (``resolve_real_screenshot`` with the
-canonical SVG fallback). Pure reads — never writes.
+thumbnail logic of its own: presets come from ``layout_preset_registry.list_selectable_templates()``
+(seller-facing galleries, ``SCOPE_GALLERY``) or ``list_ready_templates()`` (the public landing site's
+display catalog, ``SCOPE_PUBLIC``) and screenshots/thumbnails from ``template_preview_service``
+(``resolve_real_screenshot`` with the canonical SVG fallback). Pure reads — never writes.
 """
 
 from django.templatetags.static import static
 
-from .. import appearance_registry, global_region_registry, layout_preset_registry
+from .. import appearance_registry, global_region_registry, layout_preset_registry, template_gallery_policy
 from . import template_preview_service
 
 
@@ -68,17 +69,37 @@ def build_ready_template_card(draft, preset, *, is_current):
     }
 
 
-def build_ready_template_cards(draft, *, current_template_key, current_template_version):
-    """Read projection of the ONE Ready Template catalog for merchant-facing
-    galleries. Pure read — never a second catalog/registry: every card comes
-    from ``layout_preset_registry.list_ready_templates()`` (the latest
-    merchant-facing version per key).
+#: Two DIFFERENT questions that must never control each other:
+#:  * SCOPE_PUBLIC  — "which Ready Templates does the platform DISPLAY?" (the public landing site's catalog). Every registered Ready Template,
+#:    display-only: nothing can be chosen from it, so the seller-choice restriction does not apply. This is the DEFAULT, because the public
+#:    landing site calls this builder without a scope.
+#:  * SCOPE_GALLERY — "which Ready Templates may a seller CHOOSE?" (onboarding gallery, Studio gallery). The owner-restricted subset
+#:    (``template_gallery_policy``) plus the pinned «current» card. EVERY seller-facing caller must pass this explicitly — enforced by
+#:    ``test_template_catalog_scope`` (an AST guard over all production call sites).
+SCOPE_PUBLIC = "public"
+SCOPE_GALLERY = "gallery"
+
+
+def build_ready_template_cards(draft, *, current_template_key, current_template_version, scope=SCOPE_PUBLIC):
+    """Read projection of the ONE Ready Template catalog. Pure read — never a second catalog/registry.
+
+    ``scope=SCOPE_GALLERY`` (seller-facing galleries): every card comes from ``layout_preset_registry.list_selectable_templates()`` (the
+    owner-approved subset of the latest merchant-facing versions, ``template_gallery_policy``).
+    ``scope=SCOPE_PUBLIC`` (default; the public landing site): every registered Ready Template via ``list_ready_templates()`` — the gallery
+    restriction limits what a seller may CHOOSE, never what the platform shows publicly.
 
     A card is "current" only for the Draft's EXACT applied template identity
     (key AND version from its provenance). A Draft on an older historical
     version of the same key therefore never marks the newer catalog card as
-    current; that card stays available for an explicit switch."""
-    return [
+    current; that card stays available for an explicit switch.
+
+    A Store whose applied template is NOT in the selectable subset keeps its identity: the exact applied
+    version is pinned as an extra «current» card (``is_hidden_current``) — it is shown, never replaced and never
+    offered to anyone else (gallery scope only; the public display catalog has no seller choice and no pinned card)."""
+    if scope not in (SCOPE_PUBLIC, SCOPE_GALLERY):
+        raise ValueError(f"unknown catalog scope: {scope!r}")
+    presets = layout_preset_registry.list_selectable_templates() if scope == SCOPE_GALLERY else layout_preset_registry.list_ready_templates()
+    cards = [
         build_ready_template_card(
             draft,
             preset,
@@ -89,8 +110,15 @@ def build_ready_template_cards(draft, *, current_template_key, current_template_
                 and preset.version == current_template_version
             ),
         )
-        for preset in layout_preset_registry.list_ready_templates()
+        for preset in presets
     ]
+    if scope == SCOPE_GALLERY and current_template_key and current_template_version and not any(card["is_current"] for card in cards):
+        applied = layout_preset_registry.get_layout_preset_version(current_template_key, current_template_version)
+        if applied is not None and applied.is_ready_template and not template_gallery_policy.is_selectable_key(applied.key):
+            pinned = build_ready_template_card(draft, applied, is_current=True)
+            pinned["is_hidden_current"] = True
+            cards.append(pinned)
+    return cards
 
 
 def resolve_applied_template_card(draft, cards, *, current_template_key, current_template_version):

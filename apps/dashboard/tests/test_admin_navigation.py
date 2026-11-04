@@ -3,7 +3,7 @@
 Covers the information architecture in ``apps.dashboard.navigation`` and its
 rendering in ``base_admin.html``:
 
-* the IA map itself (nine sections, the agreed tabs, no duplicate hrefs);
+* the IA map itself (ten sections, the agreed tabs, no duplicate hrefs);
 * routing coverage — every named dashboard route belongs to a section, so no
   screen is orphaned by the redesign;
 * round-trip — each tab's own URL resolves back to that tab;
@@ -25,11 +25,12 @@ from apps.stores.models import StoreMembership
 
 User = get_user_model()
 
-SECTION_ORDER = ["dashboard", "orders", "products", "finance", "customers",
+SECTION_ORDER = ["dashboard", "studio", "orders", "products", "finance", "customers",
                  "marketing", "store", "reports", "settings"]
 
 EXPECTED_TABS = {
-    "orders": ["همه سفارش‌ها", "مرجوعی‌ها"],
+    "studio": ["استودیو"],
+    "orders": ["همه سفارش‌ها", "بررسی کارت‌به‌کارت", "مرجوعی‌ها"],
     "products": ["همه کالاها", "دسته‌بندی‌ها", "برندها", "ویژگی‌ها", "موجودی", "انبارها",
                  "رزرو موجودی", "انتقال انبار"],
     "finance": ["فاکتورها", "پرداخت‌ها", "تطبیق پرداخت‌ها"],
@@ -38,8 +39,9 @@ EXPECTED_TABS = {
     "store": ["ظاهر و طراحی", "ساختار صفحه‌ها", "قالب‌های آماده", "کالکشن‌ها", "محتوا", "مجله",
               "رسانه‌های مشترک فروشگاه", "منوها", "فوتر", "شبکه‌های اجتماعی"],
     "reports": ["گزارش‌های حرفه‌ای", "گزارش رخدادها"],
-    "settings": ["تنظیمات عمومی", "ارسال", "مالیات", "تنظیمات مالی", "پیامک", "اعضای تیم",
-                 "اشتراک", "صورتحساب اشتراک", "مصرف و سقف‌ها", "ورود اطلاعات", "خروج اطلاعات"],
+    # one category bar; sub-screens (مالیات، درگاه‌ها، ورود/خروج اطلاعات، اعضا/اشتراک…) are Level-3 children of these
+    "settings": ["اطلاعات فروشگاه", "دامنه و آدرس", "مالی و پرداخت", "ارسال و تحویل", "پیامک و ارتباطات",
+                 "یکپارچه‌سازی‌ها", "ورود و خروج اطلاعات", "تیم و اشتراک"],
 }
 
 
@@ -67,11 +69,11 @@ def _dashboard_url_names():
 
 
 class NavigationMapTests(SimpleTestCase):
-    def test_nine_sections_in_the_agreed_order(self):
+    def test_ten_sections_in_the_agreed_order(self):
         self.assertEqual([s.key for s in navigation.SECTIONS], SECTION_ORDER)
         self.assertEqual(
             [s.label for s in navigation.SECTIONS],
-            ["داشبورد", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
+            ["داشبورد", "استودیو", "سفارش‌ها", "کالاها", "فاکتورها و مالی", "مشتریان",
              "بازاریابی", "فروشگاه", "گزارش‌ها", "تنظیمات"],
         )
 
@@ -141,17 +143,17 @@ class NavigationMapTests(SimpleTestCase):
             "report-body": ("reports", "reports"),
             "audit-log-table": ("reports", "audit-log"),
             "shipping-zone-list": ("settings", "shipping"),
-            "tax-rate-list": ("settings", "tax"),
+            "tax-rate-list": ("settings", "settings-finance"),
             "settings-industry-preview": ("settings", "settings-general"),
             "gift-wrap-products": ("settings", "settings-finance"),
             "sms-log-list": ("settings", "sms"),
             "sms-outbox-list": ("settings", "sms"),
-            "staff-add": ("settings", "staff"),
-            "subscription-plans": ("settings", "subscription"),
-            "billing-invoice-detail": ("settings", "billing"),
-            "usage-overview": ("settings", "usage"),
-            "import-detail": ("settings", "imports"),
-            "export-create": ("settings", "exports"),
+            "staff-add": ("settings", "account"),
+            "subscription-plans": ("settings", "account"),
+            "billing-invoice-detail": ("settings", "account"),
+            "usage-overview": ("settings", "account"),
+            "import-detail": ("settings", "data-transfer"),
+            "export-create": ("settings", "data-transfer"),
         }
         for url_name, expected in cases.items():
             self.assertEqual(navigation.resolve_active(url_name, {}, ""), expected, url_name)
@@ -163,7 +165,11 @@ class NavigationMapTests(SimpleTestCase):
         self.assertEqual(resolve("campaign-edit", {}, "occasions"), ("marketing", "occasions"))
         self.assertEqual(resolve("campaign-detail", {}, "campaigns"), ("marketing", "campaigns"))
         self.assertEqual(resolve("settings", {}, ""), ("settings", "settings-general"))
-        self.assertEqual(resolve("settings", {"section": "payment-config"}, ""), ("settings", "settings-general"))
+        # legacy ?section= bookmarks keep resolving — now into the merged categories
+        for legacy, tab in (("payment-config", "settings-finance"), ("unpaid-orders", "settings-finance"), ("delivery-payment", "shipping"),
+                            ("domain", "settings-domain"), ("integrations", "integrations"), ("industry", "settings-general"),
+                            ("general", "settings-general")):
+            self.assertEqual(resolve("settings", {"section": legacy}, ""), ("settings", tab), legacy)
         self.assertEqual(resolve("settings", {"section": "finance"}, ""), ("settings", "settings-finance"))
         self.assertEqual(resolve("settings", {"section": "sms"}, ""), ("settings", "sms"))
         self.assertEqual(
@@ -227,7 +233,7 @@ class NavigationPermissionFilteringTests(SimpleTestCase):
         self.assertEqual(items["همه کالاها"], "کالاها ← همه کالاها")
         self.assertEqual(items["همه سفارش‌ها"], "سفارش‌ها ← همه سفارش‌ها")
         self.assertEqual(items["کدهای تخفیف"], "بازاریابی ← کدهای تخفیف")
-        self.assertEqual(items["پیامک"], "تنظیمات ← پیامک")
+        self.assertEqual(items["پیامک و ارتباطات"], "تنظیمات ← پیامک و ارتباطات")
         self.assertEqual(items["نمای کلی"], "داشبورد")
         for path in items.values():
             for old in ("فروش ←", "مدیریت ←", "ارسال و مالیات ←"):
@@ -245,13 +251,13 @@ class NavigationRenderingTests(PermissionEnforcementTestCase):
         tab = soup.select_one(".admin-section-tab.active")
         return (section["data-section"] if section else None, tab["data-tab"] if tab else None)
 
-    def test_owner_sidebar_is_flat_with_nine_links_and_no_nested_items(self):
+    def test_owner_sidebar_is_flat_with_ten_links_and_no_nested_items(self):
         self._login(self.owner)
         soup, _ = self._soup("dashboard")
         links = soup.select(".sidebar nav.nav a.nav-item")
         self.assertEqual([a["data-section"] for a in links], SECTION_ORDER)
         self.assertEqual(soup.select(".sidebar .nav-group, .sidebar button[aria-expanded]"), [])
-        self.assertEqual(len(soup.select(".sidebar nav.nav a")), 9)
+        self.assertEqual(len(soup.select(".sidebar nav.nav a")), 10)
         self.assertEqual(soup.select(".admin-section-tabs"), [], "dashboard has a single screen: no tab bar")
 
     def test_navigation_partials_do_not_leak_template_comments(self):
@@ -279,7 +285,7 @@ class NavigationRenderingTests(PermissionEnforcementTestCase):
             (("settings",), "", ("settings", "settings-general")),
             (("settings",), "?section=finance", ("settings", "settings-finance")),
             (("shipping-setup",), "", ("settings", "shipping")),
-            (("staff-list",), "", ("settings", "staff")),
+            (("staff-list",), "", ("settings", "account")),
         ]
         for args, query, expected in cases:
             with self.subTest(page=args[0], query=query):
@@ -374,3 +380,66 @@ class NavigationRenderingTests(PermissionEnforcementTestCase):
     def test_embedded_mode_hides_chrome_via_css(self):
         css = open("apps/dashboard/static/css/admin_v2.css", encoding="utf-8").read()
         self.assertIn("body.admin-v2-embedded .admin-section-tabs", css)
+
+
+class SettingsInformationArchitectureTests(SimpleTestCase):
+    """One category bar, sub-screens as Level-3, no duplicated labels, search index derived from the same IA."""
+
+    def _settings(self):
+        return next(sec for sec in navigation.SECTIONS if sec.key == "settings")
+
+    def test_no_label_is_repeated_among_categories_and_their_children(self):
+        labels = []
+        for tab in self._settings().tabs:
+            labels.append(tab.label)
+            for child in tab.children:
+                if (child.url_name, child.query) != (tab.url_name, tab.query):
+                    labels.append(child.label)
+        self.assertEqual(len(labels), len(set(labels)), [l for l in labels if labels.count(l) > 1])
+
+    def test_children_have_unique_destinations_and_real_routes(self):
+        names = set(_dashboard_url_names())
+        seen = set()
+        for tab in self._settings().tabs:
+            for child in tab.children:
+                self.assertIn(child.url_name, names)
+                self.assertNotIn((child.url_name, child.query), seen, child.key)
+                seen.add((child.url_name, child.query))
+
+    def test_tax_and_shipping_editors_are_single_children(self):
+        tabs = {t.key: t for t in self._settings().tabs}
+        self.assertEqual([c.url_name for c in tabs["settings-finance"].children if c.key == "tax"], ["tax-settings"])
+        self.assertEqual([c.url_name for c in tabs["shipping"].children if c.key == "shipping-methods"], ["shipping-setup"])
+
+    def test_category_opens_its_first_permitted_screen_and_hides_when_none(self):
+        only_tax = {"can_view_tax_settings": True}
+        nav = navigation.build_navigation(only_tax, url_name="tax-settings")
+        finance = next(t for t in nav.active_section.tabs if t.key == "settings-finance")
+        self.assertEqual(finance.href, reverse("dashboard:tax-settings"))
+        self.assertEqual([c.key for c in finance.children], ["tax"])
+        self.assertEqual(nav.subtabs, [])                                    # a single screen is not a bar
+        none = navigation.build_navigation({"can_view_imports": False, "can_view_exports": False}, url_name="settings")
+        self.assertNotIn("data-transfer", [t.key for s in none.sections for t in s.tabs])
+
+    def test_subtabs_light_up_the_right_child(self):
+        flags = _all_flags()
+        nav = navigation.build_navigation(flags, url_name="tax-settings")
+        self.assertEqual([c.key for c in nav.subtabs if c.active], ["tax"])
+        nav = navigation.build_navigation(flags, url_name="settings", get={"section": "payment-config"})
+        self.assertEqual([c.key for c in nav.subtabs if c.active], ["payment-config"])
+        nav = navigation.build_navigation(flags, url_name="settings", get={"section": "delivery-payment"})
+        self.assertEqual(nav.active_tab.key, "shipping")
+        self.assertEqual([c.key for c in nav.subtabs if c.active], ["delivery-summary"])
+        nav = navigation.build_navigation(flags, url_name="export-list")
+        self.assertEqual([c.key for c in nav.subtabs if c.active], ["exports"])
+
+    def test_settings_index_is_permission_filtered_and_has_real_links(self):
+        full = {i.title: i for i in navigation.build_settings_index(_all_flags())}
+        for title in ("دامنه و آدرس", "مالیات", "درگاه‌های پرداخت", "ارسال و تحویل", "سفارش‌های پرداخت‌نشده", "ورود و خروج اطلاعات",
+                      "خروج اطلاعات", "یکپارچه‌سازی‌ها"):
+            self.assertIn(title, full, title)
+        self.assertTrue(full["مالیات"].href.endswith(reverse("dashboard:tax-settings")))
+        limited = {i.title for i in navigation.build_settings_index({"can_view_tax_settings": True})}
+        self.assertIn("مالیات", limited)
+        self.assertNotIn("درگاه‌های پرداخت", limited)
+        self.assertNotIn("دامنه و آدرس", limited)

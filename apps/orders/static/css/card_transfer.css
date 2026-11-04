@@ -1,0 +1,48 @@
+/* صفحه‌ی کارت‌به‌کارت — فقط توکن‌های تمِ فروشگاه (tokens.css)؛ کنتراست در تمِ روشن/تیره از خودِ توکن‌ها تأمین می‌شود. */
+.c2c-head { padding: 22px 20px 6px; text-align: center; }
+.c2c-head h1 { margin: 0 0 8px; font-size: 20px; font-weight: 800; color: var(--ink); }
+.c2c-head p { margin: 6px 0; font-size: 14px; line-height: 2; color: var(--muted); }
+.c2c-msg { color: var(--green-text) !important; font-weight: 700; }
+.c2c-msg--err { color: var(--danger-text) !important; }
+
+.c2c-amount { display: grid; gap: 2px; justify-items: center; padding: 14px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: var(--radius, 14px); background: var(--bg); }
+.c2c-amount span { font-size: 13px; color: var(--muted); }
+.c2c-amount b { font-size: 26px; font-weight: 800; color: var(--ink); line-height: 1.5; }
+
+.c2c-card {
+  position: relative; margin: 14px 0; padding: 18px 18px 14px; border-radius: calc(var(--radius, 14px) + 4px); color: var(--on-violet, #fff);
+  background: linear-gradient(135deg, var(--violet), color-mix(in srgb, var(--violet) 62%, #000));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--violet) 30%, transparent); overflow: hidden;
+}
+.c2c-card::after { content: ""; position: absolute; inset-inline-end: -40px; top: -40px; width: 140px; height: 140px; border-radius: 50%; background: color-mix(in srgb, var(--on-violet, #fff) 12%, transparent); pointer-events: none; }
+.c2c-card__top, .c2c-card__bottom { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; position: relative; z-index: 1; }
+.c2c-card__bank { font-weight: 800; }
+.c2c-num {
+  display: block; direction: ltr; unicode-bidi: isolate; text-align: center; font-size: 25px; font-weight: 800; letter-spacing: 2px;
+  font-variant-numeric: tabular-nums; margin: 14px 0; white-space: nowrap; user-select: all; position: relative; z-index: 1;
+}
+.c2c-card__sheba { margin-top: 8px; font-size: 12.5px; position: relative; z-index: 1; overflow-wrap: anywhere; }
+.c2c-copy {
+  border: 1.5px solid color-mix(in srgb, var(--on-violet, #fff) 70%, transparent); background: color-mix(in srgb, var(--on-violet, #fff) 16%, transparent); color: inherit;
+  min-height: 40px; padding: 0 16px; border-radius: var(--button-radius, 999px); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.c2c-copy:focus-visible { outline: 3px solid var(--on-violet, #fff); outline-offset: 2px; }
+.c2c-copymsg { margin: 8px 0 0; min-height: 1.4em; font-size: 12.5px; font-weight: 700; position: relative; z-index: 1; }
+
+.c2c-warn { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius, 12px); border: 1px solid var(--amber-text); color: var(--amber-text); background: color-mix(in srgb, var(--amber-text) 10%, var(--card)); font-size: 13px; line-height: 1.9; }
+.c2c-state { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius, 12px); font-size: 14px; font-weight: 700; line-height: 1.9; border: 1px solid var(--line); }
+.c2c-state--review { border-color: var(--violet); color: var(--ink); background: color-mix(in srgb, var(--violet) 8%, var(--card)); }
+.c2c-state--rejected { border-color: var(--danger-text); color: var(--danger-text); background: color-mix(in srgb, var(--danger-text) 8%, var(--card)); overflow-wrap: anywhere; }
+.c2c-ltr { white-space: nowrap; direction: ltr; unicode-bidi: isolate; }
+
+.c2c-form label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 6px; color: var(--ink); }
+.c2c-form input { width: 100%; min-height: 48px; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: var(--radius, 12px); font-size: 16px; direction: ltr; text-align: left; background: var(--card); color: var(--ink); }
+.c2c-form input:focus { outline: 0; border-color: var(--violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--violet) 25%, transparent); }
+.c2c-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+.c2c-actions--secondary { margin-top: 12px; }
+.c2c-actions .btn { min-height: 46px; }
+@media (max-width: 480px) {
+  .c2c-num { font-size: 19px; letter-spacing: 1px; }
+  .c2c-amount b { font-size: 22px; }
+  .c2c-actions .btn { flex: 1 1 100%; }
+}

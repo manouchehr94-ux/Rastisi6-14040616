@@ -1,0 +1,22 @@
+{% comment %}زنگِ اعلان در Header — فقط وقتی ``nt_bell`` هست (کاربرِ مجازِ همین محدوده). همه‌ی محتوای پویا با DOM API و textContent ساخته می‌شود (بدون innerHTML).{% endcomment %}
+{% if nt_bell %}
+<div class="nt-bell" data-nt-bell data-summary-url="{{ nt_bell.summary_url }}" data-inbox-url="{{ nt_bell.inbox_url }}" data-poll="{{ nt_bell.poll_seconds }}"
+     data-user-key="{{ nt_bell.user_key }}" data-csrf="{{ csrf_token }}" data-unread="{{ nt_bell.unread }}">
+  <button type="button" class="nt-bell__btn" aria-haspopup="dialog" aria-controls="nt-panel" data-nt-toggle title="اعلان‌ها">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+    <span class="au-sr" data-nt-sr>اعلان‌ها؛ {{ nt_bell.unread }} خوانده‌نشده</span>
+    <span class="nt-bell__badge" data-nt-badge{% if not nt_bell.unread %} hidden{% endif %} aria-hidden="true">{{ nt_bell.unread }}</span>
+  </button>
+  <div class="nt-panel" id="nt-panel" role="dialog" aria-label="آخرین اعلان‌ها" hidden>
+    <div class="nt-panel__head">
+      <strong>اعلان‌ها</strong>
+      <button type="button" class="nt-link" data-nt-readall>همه را خوانده کن</button>
+    </div>
+    <ul class="nt-list" data-nt-list></ul>
+    <p class="nt-state" data-nt-empty hidden>اعلان تازه‌ای ندارید.</p>
+    <p class="nt-state nt-state--err" data-nt-error role="alert" hidden>دریافتِ اعلان‌ها ممکن نشد؛ کمی بعد دوباره تلاش می‌شود.</p>
+    <div class="nt-panel__foot"><a href="{{ nt_bell.inbox_url }}">مشاهده همه اعلان‌ها</a><a class="nt-panel__prefs" href="{{ nt_bell.prefs_url }}">تنظیمات اعلان‌ها</a></div>
+  </div>
+  <div class="au-sr" aria-live="polite" data-nt-live></div>
+</div>
+{% endif %}

@@ -167,10 +167,12 @@ class NonSchemaSectionTests(R4MutationApiTestCase):
         # ``product_main`` is the correct representative now: it is
         # CONTEXT-AWARE-DOMAIN-OWNED — no schema AND no media kind, so it
         # genuinely has nothing for the Inspector to show.
-        product_main_section = StorefrontSection.objects.create(
-            version=self.draft, section_key="product_main", order=1,
+        # V5 (PDP بستهٔ ۱): ``product_main`` now has a presentation schema (generic design controls), so the representative of a
+        # context-aware, schema-less, media-less family is ``cart_items`` (the cart's own items block) — same rule, same 404.
+        domain_owned_section = StorefrontSection.objects.create(
+            version=self.draft, section_key="cart_items", order=1,
         )
-        response = self.client.get(_inspector_url(product_main_section.pk))
+        response = self.client.get(_inspector_url(domain_owned_section.pk))
         self.assertEqual(response.status_code, 404)
 
 

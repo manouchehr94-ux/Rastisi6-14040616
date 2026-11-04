@@ -267,9 +267,93 @@ def store_enamad_badge_for_request(
         return None
 
     credentials = connection.get_credentials()
+    if credentials.get("enamad_show_badge") == "0":                       # the seller switched the footer seal off (the ids stay saved)
+        return None
     try:
         return parse_enamad_badge_identifiers(
             credentials.get("enamad_id", ""), credentials.get("enamad_auth_code", ""),
         )
     except EnamadBadgeError:
         return None
+
+
+def store_has_verified_custom_domain(store) -> bool:
+    """The only place the meta tag and the final badge ever render (see ``_store_owns_verified_custom_domain``): a VERIFIED, not retired custom
+    domain of THIS store. Used by the Studio/settings page to say honestly where — and whether — the seal can appear."""
+    from apps.stores.models import StoreDomain
+
+    return StoreDomain.objects.filter(
+        store=store, domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN,
+        verification_status=StoreDomain.VerificationStatus.VERIFIED, retired_at__isnull=True,
+    ).exists()
+
+
+def enamad_flow(store, credentials: dict, *, connected: bool) -> dict:
+    """The two real stages of the eNamad flow as plain data, each computed from what is stored and where it would render.
+
+    Stage 1 — «احراز دسترسی فنی»: the technical meta eNamad gives while it checks the site (``verification_meta_tag``). Rendered ONLY in the
+    ``<head>`` of the home page of the store's own verified custom domain.
+    Stage 2 — «نمادِ صادرشده»: the id + code eNamad shows AFTER it granted the seal. RastiSi builds the image and link itself; shown sitewide in the
+    footer trust area, ONLY on the store's own verified custom domain.
+
+    Saving either never means «approved»: RastiSi cannot ask eNamad (no official API), so no state here is ever «تأییدشده»."""
+    verified_domain = store_has_verified_custom_domain(store)
+    meta_raw = str(credentials.get("verification_meta_tag") or "").strip()
+    badge_id = str(credentials.get("enamad_id") or "").strip()
+    badge_code = str(credentials.get("enamad_auth_code") or "").strip()
+    badge_hidden = credentials.get("enamad_show_badge") == "0"
+
+    def _stage(key, title, hint, saved, error, where):
+        if not saved:
+            state, text = "empty", "هنوز ذخیره نشده است."
+        elif error:
+            state, text = "invalid", error
+        elif not connected:
+            state, text = "paused", "ذخیره شده ولی خاموش است؛ نمایش داده نمی‌شود."
+        elif key == "badge" and badge_hidden:
+            state, text = "hidden", "ذخیره شد ولی نمایش نماد در فوتر خاموش است."
+        elif not verified_domain:
+            state, text = "waiting_domain", "ذخیره شد؛ پس از تأیید دامنهٔ اختصاصی شما " + where + " قرار می‌گیرد."
+        else:
+            state, text = "ready", "ذخیره شد و " + where + " دامنهٔ اختصاصی شما قرار می‌گیرد."
+        return {"key": key, "title": title, "hint": hint, "state": state, "text": text}
+
+    meta_error = badge_error = ""
+    if meta_raw:
+        try:
+            parse_enamad_verification_meta_tag(meta_raw)
+        except EnamadVerificationMetaError as exc:
+            meta_error = str(exc)
+    if badge_id or badge_code:
+        try:
+            parse_enamad_badge_identifiers(badge_id, badge_code)
+        except EnamadBadgeError as exc:
+            badge_error = str(exc)
+    stages = [
+            _stage("meta", "مرحلهٔ ۱ — احراز دسترسی فنی (متاتگ)",
+                   "اینماد هنگام بررسی سایت شما یک متاتگ می‌دهد. آن را اینجا بگذارید تا روی صفحهٔ اصلی سایت قرار بگیرد. این مرحله فقط «مالکیت/دسترسی» را نشان می‌دهد، نه صدور نماد.",
+                   bool(meta_raw), meta_error, "در بخش <head> صفحهٔ اصلیِ"),
+            _stage("badge", "مرحلهٔ ۲ — نمادِ صادرشده (شناسه و کد تأیید)",
+                   "فقط پس از اینکه اینماد نماد را صادر کرد، شناسه و کد تأییدی را که نشان می‌دهد وارد کنید. راستی‌سی خودش تصویر و پیوند امن را می‌سازد.",
+                   bool(badge_id or badge_code), badge_error, "در بخش نمادهای اعتماد فوترِ همهٔ صفحه‌های"),
+    ]
+    badge_stage = next(st for st in stages if st["key"] == "badge")
+    seal_reasons = {
+        "empty": "شناسه و کد نماد هنوز ذخیره نشده است؛ بنابراین هیچ نمادی نمایش داده نمی‌شود، حتی اگر گزینهٔ نمایش روشن باشد.",
+        "invalid": "شناسه یا کد نماد معتبر نیست؛ نمادی نمایش داده نمی‌شود.",
+        "paused": "استفاده از اطلاعات اینماد خاموش است؛ نمادی نمایش داده نمی‌شود.",
+        "hidden": "شما نمایش نماد در فوتر را خاموش کرده‌اید؛ شناسه و کد ذخیره می‌مانند.",
+        "waiting_domain": "دامنهٔ اختصاصیِ تأییدشده ندارید؛ نماد فقط روی دامنهٔ اختصاصیِ تأییدشده نمایش داده می‌شود (نه روی آدرس آزمایشی یا localhost).",
+        "ready": "نماد در فوتر دامنهٔ اختصاصیِ تأییدشدهٔ شما نمایش داده می‌شود. تأییدِ رسمیِ نماد را فقط پنل اینماد می‌دهد.",
+    }
+    return {
+        "verified_domain": verified_domain,
+        "stages": stages,
+        # the seller's CHOICE (checkbox) and the REAL display state are different things: the first can be on while the second is off
+        "badge_choice": not badge_hidden,
+        "badge_shown": badge_stage["state"] == "ready",
+        "badge_reason": seal_reasons.get(badge_stage["state"], ""),
+        "limit_text": "راستی‌سی از اینماد استعلام نمی‌گیرد (سرویس رسمی برای این کار در اختیار ندارد)؛ پس ذخیره‌کردن شناسه هرگز به معنی «اینماد تأییدشده» نیست. وضعیت واقعیِ نماد را در پنل اینماد ببینید.",
+        "display_text": ("نمایش فقط روی دامنهٔ اختصاصیِ تأییدشدهٔ همین فروشگاه انجام می‌شود." if verified_domain
+                         else "فعلاً دامنهٔ اختصاصیِ تأییدشده‌ای ندارید؛ تا آن زمان نه متاتگ و نه نماد روی سایت قرار نمی‌گیرد."),
+    }

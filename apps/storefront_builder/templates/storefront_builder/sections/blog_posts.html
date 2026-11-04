@@ -2,7 +2,23 @@
 بخش بازاستفاده‌پذیرِ مجله. فقط مطالب منتشرشده لینک واقعی دارند؛
 برای کاورهای گم‌شده جایگزین بصری و برای داده خالی پیام مناسب دارد.
 {% endcomment %}
-{% if settings.style == "panel_carousel" %}
+{% if settings.style == "editorial_cards" %}
+{% comment %}Editorial cards: picture on top with a date badge, the title and a quiet «continue» link below. Text colours follow the section background (a dark band works), cards stay readable surfaces.{% endcomment %}
+<section class="section blog-editorial">
+  <div class="blog-editorial-head"><h2>{{ settings.title|default:"آخرین مطالب وبلاگ" }}</h2></div>
+  <div class="blog-editorial-row">
+    {% for post in posts %}
+    <a class="blog-editorial-card" href="{{ post.get_absolute_url }}">
+      <span class="blog-editorial-th">
+        {% if post.has_available_cover %}<img src="{{ post.cover_image.url }}" data-img-role="article" alt="" loading="lazy">{% else %}<span class="blog-editorial-emoji" aria-hidden="true">{{ post.cover_emoji|default:"📰" }}</span>{% endif %}
+        {% if post.published_at %}<time class="blog-editorial-date" datetime="{{ post.published_at|date:'Y-m-d' }}"><b>{{ post.published_at|jalali:"%d" }}</b><span>{{ post.published_at|jalali_month_name }}</span></time>{% endif %}
+      </span>
+      <span class="blog-editorial-body"><h4>{{ post.title }}</h4><span class="read">ادامه مطلب</span></span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% elif settings.style == "panel_carousel" %}
 <section class="section blog-panel" data-sfb-card-surface>
   <div class="blog-panel-head"><h2>{{ settings.title|default:"آخرین مطالب وبلاگ" }}</h2><a class="more" href="{% url 'blog:index' %}">همه مطالب ←</a></div>
   <div class="blog-panel-row">

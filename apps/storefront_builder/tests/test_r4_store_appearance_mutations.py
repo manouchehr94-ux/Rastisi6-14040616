@@ -1,3 +1,4 @@
+from django.test import override_settings
 import copy
 import json
 
@@ -217,6 +218,7 @@ class ManifestApplyMutationTests(R4StoreAppearanceMutationTestCase):
         self.assertEqual(self._history_count(), before_history)
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class VersionedTemplateMutationTests(R4StoreAppearanceMutationTestCase):
     def test_versioned_ready_template_applies_as_one_semantic_mutation(self):
         preset = layout_preset_registry.get_layout_preset("dark_digital")
@@ -278,6 +280,7 @@ class VersionedTemplateMutationTests(R4StoreAppearanceMutationTestCase):
         self.assertEqual(response.json()["code"], "unknown_appearance_template")
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class AppearanceMutationIsolationTests(R4StoreAppearanceMutationTestCase):
     def test_stale_revision_rejects_appearance_mutation_without_write(self):
         self.draft.edit_revision = 4
@@ -722,6 +725,7 @@ class FieldParityUpdateTests(R4StoreAppearanceMutationTestCase):
         )
 
 
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class TemplateUndoRedoIdentityTests(R4StoreAppearanceMutationTestCase):
     def test_undo_redo_restores_template_metadata_and_slot_identity(self):
         first = layout_preset_registry.get_layout_preset("dense_marketplace")

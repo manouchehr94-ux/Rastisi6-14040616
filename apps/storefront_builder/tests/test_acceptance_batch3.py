@@ -40,6 +40,7 @@ from apps.storefront_builder.services import preset_service
 from apps.storefront_builder.services import template_preview_service as tps
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.models import Store, StoreDomain, StoreMembership
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 User = get_user_model()
 
@@ -127,6 +128,7 @@ class ThumbnailServiceTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=[ADMIN_HOST, PUBLIC_HOST, "testserver"])
+@override_settings(RASTISI_TEMPLATE_GALLERY_RESTRICTED=False)   # engine/catalogue test: the owner's 19-template gallery policy is not what it checks
 class GalleryPreviewIntegrationTests(TestCase):
     """Tests B/I/K at the HTTP/template level, and the full no-mutation
     contract (E-H) plus tenant isolation (L) end-to-end."""
@@ -154,7 +156,7 @@ class GalleryPreviewIntegrationTests(TestCase):
         response = studio_gallery_response(self.admin_client)
         self.assertEqual(response.status_code, 200)
         templates = gallery_client_templates(response)
-        self.assertEqual(len(templates), 53)
+        self.assertEqual(len(templates), READY_TEMPLATE_COUNT)
         missing = [
             t["key"] for t in templates
             if not (t["thumbnail_svg"].startswith("<svg") or (t["thumbnail_kind"] == "screenshot" and t["thumbnail_url"]))

@@ -21,6 +21,7 @@ from django.utils import timezone
 from apps.catalog.models import Category, Product, Vendor
 from apps.content.models import HeroSlide
 from apps.portal.services import provisioning_service
+from apps.portal.tests._industry import install_other_industry
 from apps.storefront_builder import appearance_registry, layout_preset_registry
 from apps.storefront_builder.models import StorefrontLayout, StorefrontLayoutVersion
 from apps.storefront_builder.services import store_template_service
@@ -32,7 +33,7 @@ _HOST = "rastisi.localhost"
 _PASS = "a-very-strong-pass-1"
 
 # Three visually contrasting canonical Ready Templates (dark neon / terracotta boutique / marketplace spectrum).
-TEMPLATES = ("dark_digital", "warm_boutique", "dense_marketplace")
+TEMPLATES = ("neon_digital_store", "warm_boutique", "gallery_minimal")      # (all three are in the 19-template gallery)
 
 
 def _public_get(store, path="/"):
@@ -43,10 +44,14 @@ def _public_get(store, path="/"):
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
 class FidelityBase(TestCase):
+    #: tests about an EMPTY catalogue (first-run placeholders) set this: the free-form industry's single generic category is removed
+    drop_industry_categories = False
+
     def setUp(self):
         cache.clear()
         self.owner = User.objects.create_user(username="fid-owner@example.com", email="fid-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاه وفاداری")
+        install_other_industry(self.store, drop_categories=self.drop_industry_categories)   # mandatory industry: tests start AFTER that step
         self.client.force_login(self.owner)
 
     def url(self, stage, store=None):
@@ -93,6 +98,7 @@ class DraftAndPublishedStructureMatchTheCatalogTests(FidelityBase):
                 cache.clear()
                 owner = User.objects.create_user(username=f"fid-{key}@example.com", email=f"fid-{key}@example.com", password=_PASS)
                 store = provisioning_service.provision_trial_store(owner=owner, name=f"فروشگاه {key}")
+                install_other_industry(store, drop_categories=self.drop_industry_categories)
                 client = Client()
                 client.force_login(owner)
                 client.post(self.url("template", store), {"template_key": key}, HTTP_HOST=_HOST)
@@ -112,6 +118,8 @@ class DraftAndPublishedStructureMatchTheCatalogTests(FidelityBase):
 
 
 class FirstRunPlaceholderTests(FidelityBase):
+    drop_industry_categories = True
+
     def published_public_html(self, key):
         self.select(key)
         self.publish()
@@ -127,6 +135,7 @@ class FirstRunPlaceholderTests(FidelityBase):
                 cache.clear()
                 owner = User.objects.create_user(username=f"fp-{key}@example.com", email=f"fp-{key}@example.com", password=_PASS)
                 store = provisioning_service.provision_trial_store(owner=owner, name=f"فروشگاه {key}")
+                install_other_industry(store, drop_categories=self.drop_industry_categories)
                 client = Client()
                 client.force_login(owner)
                 client.post(self.url("template", store), {"template_key": key}, HTTP_HOST=_HOST)
@@ -148,7 +157,7 @@ class FirstRunPlaceholderTests(FidelityBase):
 
     def test_category_rail_placeholder_appears_for_templates_that_compose_one(self):
         key = next(
-            p.key for p in layout_preset_registry.list_ready_templates()
+            p.key for p in layout_preset_registry.list_selectable_templates()
             if "category_grid" in [e.section_key for e in p.pages["home"]]
         )
         html = self.published_public_html(key)
@@ -157,7 +166,7 @@ class FirstRunPlaceholderTests(FidelityBase):
     def test_placeholders_are_never_persisted_and_create_no_merchant_records(self):
         before = self.commerce_counts()
         versions = StorefrontLayoutVersion.objects.count()
-        self.published_public_html("dark_digital")
+        self.published_public_html("neon_digital_store")
         _public_get(self.store)  # rendering the public page a second time creates nothing either
         self.assertEqual(self.commerce_counts(), before)
         self.assertEqual(self.commerce_counts(), (0, 0, 0))
@@ -166,7 +175,7 @@ class FirstRunPlaceholderTests(FidelityBase):
         self.assertEqual(StorefrontLayoutVersion.objects.count(), versions + 1)  # only the selected template's own Draft→Published
 
     def test_the_first_product_replaces_the_product_rows_but_the_empty_hero_stays_until_slides_exist(self):
-        html = self.published_public_html("dark_digital")
+        html = self.published_public_html("neon_digital_store")
         self.assertIn('data-first-run-placeholder="products"', html)
         vendor = Vendor.objects.create(store=self.store, name="v", slug="v-fr")
         category = Category.objects.create(store=self.store, name="c", slug="c-fr")
@@ -206,14 +215,14 @@ class FirstRunPlaceholderTests(FidelityBase):
             store=other, vendor=vendor, name="کالای دیگری", slug="p-o", sku="SKU-O", price=Decimal("1"),
             status=Product.Status.ACTIVE,
         )
-        html = self.published_public_html("dark_digital")
+        html = self.published_public_html("neon_digital_store")
         self.assertIn('data-first-run-placeholder="products"', html)  # this Store is still empty
         self.assertNotIn("کالای دیگری", html)
 
     def test_only_the_home_page_gets_placeholders(self):
         from apps.storefront_builder.services import first_run_placeholder_service as svc
 
-        self.select("dark_digital")
+        self.select("warm_boutique")
         self.publish()
         items = [{"section": type("S", (), {"section_key": "product_section"})(), "context": {"products": []}}]
         self.assertEqual(svc.apply_first_run_placeholders(items, self.store, page_type="product_list"), items)
@@ -227,8 +236,8 @@ class TemplateStepInteractionTests(FidelityBase):
 
     def test_every_card_has_an_explicit_choose_affordance_and_a_sample_content_label(self):
         html = self.html()
-        self.assertEqual(html.count('class="ob-tpl-choose"'), 50)
-        self.assertEqual(html.count('class="ob-tpl-sample"'), 50)
+        self.assertEqual(html.count('class="ob-tpl-choose"'), 19)
+        self.assertEqual(html.count('class="ob-tpl-sample"'), 19)
         self.assertIn("data-ob-sample-note", html)
         self.assertIn("پیش‌نمایش‌ها با محتوای نمونه ساخته شده‌اند", html)
 
@@ -262,9 +271,9 @@ class TemplateStepInteractionTests(FidelityBase):
     def test_preview_alone_never_applies_anything(self):
         """A GET (opening a page/preview) and a POST without an explicit template_key mutate nothing."""
         counts = (StorefrontLayout.objects.count(), StorefrontLayoutVersion.objects.count())
-        self.client.get(self.url("template") + "?template_key=dark_digital", HTTP_HOST=_HOST)
+        self.client.get(self.url("template") + "?template_key=warm_boutique", HTTP_HOST=_HOST)
         self.client.post(self.url("template"), {}, HTTP_HOST=_HOST)
-        self.client.post(self.url("template"), {"preview": "dark_digital", "zoom": "dark_digital"}, HTTP_HOST=_HOST)
+        self.client.post(self.url("template"), {"preview": "warm_boutique", "zoom": "warm_boutique"}, HTTP_HOST=_HOST)
         self.assertEqual((StorefrontLayout.objects.count(), StorefrontLayoutVersion.objects.count()), counts)
         self.assertIsNone(store_template_service.get_applied_template(self.store))
 
@@ -274,32 +283,32 @@ class TemplateStepInteractionTests(FidelityBase):
         self.assertEqual(applied.key, "warm_boutique")
 
     def test_the_selected_card_is_visibly_selected_after_apply(self):
-        self.select("dark_digital")
+        self.select("warm_boutique")
         html = self.html()
         self.assertEqual(html.count("ob-tpl-card is-selected"), 1)
-        self.assertRegex(html, r'value="dark_digital" checked')
+        self.assertRegex(html, r'value="warm_boutique" checked')
 
 
 class ReviewShowsTheAppliedTemplateTests(FidelityBase):
     def test_review_displays_name_version_screenshot_and_the_sample_content_explanation(self):
-        self.select("dark_digital")
+        self.select("warm_boutique")
         applied = store_template_service.get_applied_template(self.store)
         response = self.client.get(self.url("review"), HTTP_HOST=_HOST)
         html = response.content.decode()
         self.assertContains(response, "قالبِ انتخاب‌شده شما")
         self.assertContains(response, applied.preset.label_fa)
         self.assertContains(response, f"نسخه‌ی {applied.version}")
-        self.assertIn('data-ob-review-template="dark_digital"', html)
-        self.assertRegex(html, r'class="ob-review-tpl-shot" src="[^"]*dark_digital/v3\.webp"')
+        self.assertIn('data-ob-review-template="warm_boutique"', html)
+        self.assertRegex(html, r'class="ob-review-tpl-shot" src="[^"]*warm_boutique/v3\.webp"')
         self.assertIn("با محتوای نمونه ساخته شده است", html)
         self.assertIn("بدونِ محصول منتشر می‌شود", html)
 
     def test_review_reflects_a_later_change_of_template(self):
-        self.select("dark_digital")
+        self.select("utility_catalog")
         self.select("warm_boutique")
         html = self.client.get(self.url("review"), HTTP_HOST=_HOST).content.decode()
         self.assertIn('data-ob-review-template="warm_boutique"', html)
-        self.assertNotIn('data-ob-review-template="dark_digital"', html)
+        self.assertNotIn('data-ob-review-template="utility_catalog"', html)
 
 
 class PermissionsAndTenancyStayIntactTests(FidelityBase):
@@ -310,12 +319,12 @@ class PermissionsAndTenancyStayIntactTests(FidelityBase):
             status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
         )
         self.client.force_login(analyst)
-        self.assertEqual(self.select("dark_digital").status_code, 403)
+        self.assertEqual(self.select("warm_boutique").status_code, 403)
         self.assertIsNone(store_template_service.get_applied_template(self.store))
 
     def test_another_owner_cannot_apply_to_this_store(self):
         intruder = User.objects.create_user(username="fid-int@example.com", email="fid-int@example.com", password=_PASS)
         provisioning_service.provision_trial_store(owner=intruder, name="مهاجم")
         self.client.force_login(intruder)
-        self.assertEqual(self.select("dark_digital").status_code, 404)
+        self.assertEqual(self.select("warm_boutique").status_code, 404)
         self.assertIsNone(store_template_service.get_applied_template(self.store))

@@ -559,7 +559,8 @@ class ShellGeometryTests(R4MutationApiTestCase):
     def test_controls_are_offered_only_for_variants_that_draw_them(self):
         header_keys = {p.key for p in shell_geometry.properties_for("header", "stationery_search")}
         self.assertIn("search_max_width", header_keys)
-        self.assertEqual(shell_geometry.properties_for("header", "legacy_default"), [])
+        # the legacy header draws no layout geometry of its own — only the shared V5 announcement-strip controls (colours + picture size) exist in every variant
+        self.assertEqual({p.key for p in shell_geometry.properties_for("header", "legacy_default")}, {"announce_bg", "announce_fg", "announce_image_size", "announce_height", "announce_padding"})
         self.assertEqual(shell_geometry.properties_for("footer", "legacy_default"), [])
         self.assertIn("badge_size", {p.key for p in shell_geometry.properties_for("footer", "stationery_dark")})
 
@@ -664,10 +665,43 @@ class BuilderChromeIsLayoutNeutralTests(SimpleTestCase):
             self.assertNotRegex(body, r"display\s*:", selector)
 
     def test_add_controls_and_hidden_cell_notices_are_absolute_overlays(self):
-        for needle in (".sfb-cell-add-more", ".sfb-empty-cell-add", ".sfb-hidden-cell-content"):
+        # ``.sfb-cell-add-more`` is no longer an overlay: V5-UI-008 made it an in-flow row below the Cell's last Block (see next test)
+        for needle in (".sfb-empty-cell-add",):
             bodies = " ".join(body for selector, body in _css_rules(BUILDER_CSS, needle) if selector.strip() == needle)
             self.assertIn("position:absolute", bodies.replace(" ", ""), needle)
-        self.assertNotRegex(BUILDER_CSS, r"\.sfb-empty-cell\s*\{[^}]*min-height")
+        # V5-LAYOUT-011: the «hidden content» notice of an all-hidden Cell is in flow (the Cell holds nothing else), no longer an overlay
+        hidden = [body for selector, body in _css_rules(BUILDER_CSS, ".sfb-hidden-cell-content") if selector.strip() == ".sfb-hidden-cell-content"][-1]
+        self.assertIn("position:relative", hidden.replace(" ", ""))
+
+    def test_the_filled_cell_add_control_is_an_in_flow_row_and_never_floats_over_blocks(self):
+        last = [body for selector, body in _css_rules(BUILDER_CSS, ".sfb-cell-add-more") if selector.strip() == ".sfb-cell-add-more" and "position" in body][-1]
+        compact = last.replace(" ", "")
+        self.assertIn("position:static", compact)
+        self.assertNotIn("transform:translate", compact)
+        self.assertNotIn("bottom:-", compact)
+        # it exists only in builder markup (render_containers.html is_preview branches), so published geometry is untouched
+        template = (APP / "templates" / "storefront_builder" / "partials" / "render_container.html").read_text(encoding="utf-8")
+        self.assertEqual(template.count('class="sfb-cell-add-more"'), 2)         # both inside is_preview branches; the published HTML is asserted in test_v5_ui_006_add_controls
+
+    def test_the_only_builder_geometry_exceptions_are_visible_minimums_for_content_less_cells(self):
+        # V5-UI-006/007: an EMPTY Cell (and a Cell holding only content-less sections) gets a visible minimum height so its frame and its add
+        # control are not a zero-height line floating over the next section. Pinned narrowly: exactly these two selectors, only min-height /
+        # align-self, only on builder-only classes; filled Cells, Containers and every public class stay layout-neutral.
+        allowed = {
+            ".rcontainer-cell.sfb-empty-cell",
+            ".rcontainer-cell:has(> .rsec.sfb-rsec-builder-empty):not(:has(> .rsec:not(.sfb-rsec-builder-empty)))",
+        }
+        with_min_height = {
+            sel
+            for needle in ("sfb-empty-cell", "sfb-rsec-builder-empty")
+            for sel, body in _css_rules(BUILDER_CSS, needle)
+            if "min-height" in body and not sel.startswith(".sfb-empty-cell-add")
+        }
+        self.assertEqual(with_min_height, allowed)
+
+    def test_empty_cell_markup_is_emitted_for_builder_preview_only(self):
+        template = (APP / "templates" / "storefront_builder" / "partials" / "render_container.html").read_text(encoding="utf-8")
+        self.assertIn("{% if is_preview and not blocks %} sfb-empty-cell{% endif %}", template)
 
     def test_edit_mode_does_not_reposition_storefront_elements(self):
         css = (APP / "static" / "css" / "storefront_builder_preview_v22.css").read_text(encoding="utf-8")

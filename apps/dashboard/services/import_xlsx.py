@@ -45,6 +45,27 @@ YES_NO = ("بله", "خیر")
 SHEET_DATA = "داده‌ها"
 SHEET_GUIDE = "راهنما"
 SHEET_LISTS = "فهرست‌ها"
+SHEET_SAMPLE = "نمونه"
+SAMPLE_NEW = {
+    "name": "تیشرت نخی ساده", "category_code": "پوشاک", "subcategory_name": "مردانه", "price": "250000", "sku": "TSH-001",
+    "brand_code": "نایک", "stock": "40", "specifications": "جنس: پنبه؛ وزن: ۲۵۰ گرم", "attributes_text": "رنگ: قرمز؛ سایز: L",
+    "status": "فعال", "requires_shipping": "بله",
+}
+SAMPLE_UPDATE = {"sku": "TSH-001", "price": "275000", "stock": "55"}
+# نمونه‌یِ آموزشیِ «تنوع»: یک کالایِ فرضی «TSH-001» با دو ویژگیِ «رنگ» و «سایز». ردیفِ ۱ و ۲ تنوعِ تازه را با نامِ ویژگی/مقدار می‌سازند؛
+# ردیفِ ۳ فقط ستون‌هایِ لازم را دارد (ستونِ خالی = بدونِ تغییر/پیش‌فرض). هر سه ردیف تنوعِ تازه‌اند تا نمونه همیشه بدونِ وابستگی به داده‌یِ
+# قبلی در پیش‌نمایش معتبر باشد؛ بروزرسانیِ تنوعِ موجود در متنِ راهنما با مثال توضیح داده شده است.
+SAMPLE_VARIANT_ROWS = [
+    {"product_sku": "TSH-001", "variant_sku": "TSH-001-RED-L", "option_1_code": "رنگ", "option_1_value_code": "قرمز",
+     "option_2_code": "سایز", "option_2_value_code": "L", "price": "0", "stock": "12", "weight_grams": "260", "is_active": "بله", "is_default": "بله"},
+    {"product_sku": "TSH-001", "variant_sku": "TSH-001-BLUE-M", "option_1_code": "رنگ", "option_1_value_code": "آبی",
+     "option_2_code": "سایز", "option_2_value_code": "M", "price": "20000", "stock": "8", "is_active": "بله"},
+    {"product_sku": "TSH-001", "option_1_code": "رنگ", "option_1_value_code": "قرمز", "option_2_code": "سایز", "option_2_value_code": "M", "stock": "5"},
+]
+SAMPLE_ROWS = {
+    ImportJob.ImportType.PRODUCTS: [SAMPLE_NEW, SAMPLE_UPDATE],
+    ImportJob.ImportType.VARIANTS: SAMPLE_VARIANT_ROWS,
+}
 TEMPLATE_VALIDATION_ROWS = 1000
 
 
@@ -63,6 +84,7 @@ class ImportColumn:
     width: float = 18
     text_format: bool = False
     in_template: bool = True
+    allow_new: bool = False  # مقدارِ ناموجود مجاز است و «پیشنهاد» می‌شود (منویِ کشویی فقط هشدار می‌دهد، نه ممنوعیت)
 
     @property
     def base_label(self) -> str:
@@ -97,12 +119,26 @@ PRODUCT_COLUMNS = [
                  aliases=("نام", "عنوان کالا", "name"), width=32),
     ImportColumn("status", "وضعیت", kind="choice", list_key="product_status", help="وضعیتِ نمایشِ کالا در فروشگاه.",
                  accepted="فعال / غیرفعال / پیش‌نویس", example="فعال", blank="کالایِ تازه «فعال» می‌شود؛ کالایِ موجود تغییر نمی‌کند.", width=13),
-    ImportColumn("brand_code", "برند", kind="choice", list_key="brands", help="برندِ کالا؛ از فهرستِ برندهایِ همین فروشگاه انتخاب کنید.",
-                 accepted="یکی از برندهایِ فهرست", example="نایک", blank="برند تغییر نمی‌کند (کالایِ تازه بدونِ برند).", width=18),
-    ImportColumn("category_code", "دسته‌بندی", required="create", kind="choice", list_key="categories",
-                 help="دسته‌بندیِ کالا با مسیرِ کامل (والد > فرزند). فقط زیردسته‌ها قابلِ انتخاب‌اند.",
-                 accepted="یکی از مسیرهایِ فهرست", example="پوشاک > مردانه", blank="برایِ کالایِ موجود تغییر نمی‌کند؛ برایِ کالایِ تازه خطاست.",
-                 aliases=("دسته", "category"), width=30),
+    ImportColumn("brand_code", "برند", kind="choice", list_key="brands", allow_new=True,
+                 help="برندِ کالا؛ از فهرستِ برندهایِ همین فروشگاه انتخاب کنید. نامِ تازه هم می‌توانید بنویسید: به‌صورتِ پیشنهاد ثبت می‌شود و پس از تأییدِ شما در «برندها» ساخته می‌شود.",
+                 accepted="یکی از برندهایِ فهرست، یا نامِ برندِ تازه (نیازمندِ تأیید)", example="نایک", blank="برند تغییر نمی‌کند (کالایِ تازه بدونِ برند).", width=18),
+    ImportColumn("category_code", "دسته‌بندی (اصلی یا مسیر کامل)", required="create", kind="choice", list_key="main_categories", allow_new=True,
+                 help="دسته‌یِ اصلیِ کالا (مثلاً «پوشاک»)، و زیردسته را در ستونِ بعدی بنویسید. یا مسیرِ کامل «پوشاک > مردانه» را همین‌جا بنویسید و ستونِ زیردسته را خالی بگذارید. کالا همیشه در یک زیردسته قرار می‌گیرد.",
+                 accepted="دسته‌یِ اصلی یا مسیرِ کامل (والد > فرزند)؛ نامِ تازه نیازمندِ تأیید است", example="پوشاک",
+                 blank="برایِ کالایِ موجود تغییر نمی‌کند؛ برایِ کالایِ تازه خطاست.", aliases=("دسته", "category"), width=26),
+    ImportColumn("subcategory_name", "زیردسته‌بندی", kind="choice", list_key="subcategories", allow_new=True,
+                 help="زیردسته‌یِ کالا در دسته‌یِ اصلی (مثلاً «مردانه»). اگر مسیرِ کامل را در ستونِ دسته‌بندی نوشته‌اید این ستون را خالی بگذارید. نامِ تازه هم می‌توانید بنویسید؛ پس از تأییدِ شما ساخته می‌شود.",
+                 accepted="یکی از زیردسته‌هایِ فهرست، یا نامِ تازه (نیازمندِ تأیید)", example="مردانه",
+                 blank="اگر مسیرِ کامل در ستونِ دسته‌بندی باشد لازم نیست؛ وگرنه برایِ کالایِ تازه خطاست.",
+                 aliases=("زیر دسته", "زیردسته", "subcategory", "sub category"), width=22),
+    ImportColumn("specifications", "مشخصات فنی", help="مشخصاتِ نمایشیِ کالا؛ هر مورد «عنوان: مقدار» و موردها با «؛» (یا خطِ جدید) جدا می‌شوند.",
+                 accepted="عنوان: مقدار؛ عنوان: مقدار", example="جنس: پنبه؛ وزن: ۲۵۰ گرم",
+                 blank="مشخصاتِ کالا تغییر نمی‌کند. عنوانِ تکراری مقدارش به‌روز می‌شود؛ مواردِ دیگر حذف نمی‌شوند.",
+                 aliases=("مشخصات", "specs", "specifications"), width=42),
+    ImportColumn("attributes_text", "ویژگی‌ها", help="ویژگی‌هایِ توصیفیِ کالا از بخشِ «ویژگی‌ها»یِ فروشگاه؛ هر مورد «نامِ ویژگی: مقدار». برایِ ویژگیِ چندانتخابی مقدارها را با «،» جدا کنید.",
+                 accepted="نامِ ویژگی: مقدار؛ نامِ ویژگی: مقدار", example="رنگ: قرمز؛ سایز: L",
+                 blank="ویژگی‌هایِ کالا تغییر نمی‌کند. نامِ ویژگی یا مقدارِ تازه پیشنهاد می‌شود و پس از تأیید ساخته می‌شود.",
+                 aliases=("ویژگی", "attributes", "attribute"), width=42),
     ImportColumn("price", "قیمت (تومان)", required="create", kind="decimal", help="قیمتِ فروشِ پایه‌ی کالا به تومان.",
                  accepted="عددِ صفر یا بزرگ‌تر", example="150000", blank="برایِ کالایِ موجود تغییر نمی‌کند؛ برایِ کالایِ تازه خطاست.",
                  aliases=("قیمت", "price"), width=16),
@@ -125,6 +161,14 @@ PRODUCT_COLUMNS = [
     ImportColumn("slug", "نشانی صفحه (اسلاگ)", help="بخشی از آدرسِ صفحه‌ی کالا. معمولاً لازم نیست؛ خودکار ساخته می‌شود.", accepted="حروف، عدد و خط‌تیره",
                  example="cotton-tshirt", blank="خودکار ساخته می‌شود.", aliases=("اسلاگ", "slug"), width=22, in_template=False),
 ]
+
+#: ترتیبِ ستون‌ها در قالب: الزامی‌ها کنارِ هم و در ابتدا (نام، دسته‌بندی، زیردسته، قیمت)، سپس شناسایی (برایِ بروزرسانی)،
+#: سپس اختیاری‌ها. خواندنِ فایل بر پایه‌یِ نامِ ستون است، پس فایل‌هایِ قدیمی با هر ترتیبی همچنان خوانده می‌شوند.
+_PRODUCT_COLUMN_ORDER = (
+    "name", "category_code", "subcategory_name", "price", "product_id", "sku", "brand_code", "stock", "specifications",
+    "attributes_text", "status", "barcode", "weight_grams", "requires_shipping", "tax_class_code", "seo_title", "seo_description", "slug",
+)
+PRODUCT_COLUMNS = sorted(PRODUCT_COLUMNS, key=lambda c: _PRODUCT_COLUMN_ORDER.index(c.key))
 
 VARIANT_COLUMNS = [
     ImportColumn("product_id", "شناسه کالا", help="شناسه‌ی کالایِ مادر.", accepted="عددِ صحیح", example="125",
@@ -241,6 +285,23 @@ class ReferenceData:
         return self._memo("wh", lambda: [(w.name, w.code) for w in Warehouse.objects.filter(store=self.store).order_by("name")])
 
     @property
+    def main_categories(self):
+        from apps.catalog.models import Category
+
+        return self._memo("main_cats", lambda: sorted(Category.objects.filter(store=self.store, parent__isnull=True).values_list("name", flat=True)))
+
+    @property
+    def subcategories(self):
+        """نامِ یکتایِ همه‌یِ زیردسته‌ها (فقط برایِ منویِ کشویی؛ مسیرِ کامل در فهرستِ «دسته‌بندی‌ها (مسیر کامل)» است)."""
+        return self._memo("sub_names", lambda: sorted({p.split(">")[-1].strip() for p, _ in self.categories}))
+
+    @property
+    def attribute_labels(self):
+        from apps.catalog.models import Attribute
+
+        return self._memo("attr_labels", lambda: list(Attribute.objects.filter(store=self.store, is_active=True).order_by("display_order", "label").values_list("label", flat=True)))
+
+    @property
     def option_labels(self):
         def load():
             labels = ProductOption.objects.filter(product__store=self.store, is_active=True).values_list("label", flat=True).distinct()
@@ -256,7 +317,10 @@ class ReferenceData:
                 ("product_status", "وضعیت کالا", status),
                 ("yes_no", "بله / خیر", yes_no),
                 ("brands", "برندها", [n for n, _ in self.brands]),
+                ("main_categories", "دسته‌بندیِ اصلی", self.main_categories),
+                ("subcategories", "زیردسته‌بندی‌ها", self.subcategories),
                 ("categories", "دسته‌بندی‌ها (مسیر کامل)", [p for p, _ in self.categories]),
+                ("attributes", "ویژگی‌هایِ تعریف‌شده", self.attribute_labels),
                 ("tax_classes", "دسته‌هایِ مالیاتی", [CLEAR_TAX_LABEL] + [n for n, _ in self.tax_classes]),
             ]
         if import_type == ImportJob.ImportType.VARIANTS:
@@ -401,6 +465,7 @@ def parse_xlsx_import(fileobj, import_type: str, store) -> ParsedFile:
         data: dict = {}
         errors: list = []
         raw: list = []
+        category_parts: dict = {}
         for index, key in enumerate(keys):
             text = xrow.cells[index].strip() if index < len(xrow.cells) else ""
             header = headers[index] if index < len(headers) else ""
@@ -416,12 +481,23 @@ def parse_xlsx_import(fileobj, import_type: str, store) -> ParsedFile:
                 continue
             if key in _NUMERIC_KEYS and text:
                 text = _SEPARATORS_RE.sub("", text)
+            if import_type == ImportJob.ImportType.PRODUCTS and key in ("category_code", "subcategory_name"):
+                category_parts[key] = text   # «دسته‌بندی» و «زیردسته‌بندی» با هم به یک مسیر نگاشت می‌شوند (پایینِ حلقه)
+                continue
             value, problem = _map_value(import_type, key, text, mapper)
             if problem:
                 errors.append(problem)
             if key == "tax_class_code" and not text:
                 continue  # خالی = بدونِ تغییر (نه حذفِ دسته‌ی مالیاتی)
             data[key] = value
+        if category_parts:
+            main, sub_name = category_parts.get("category_code", ""), category_parts.get("subcategory_name", "")
+            joined = f"{main} > {sub_name}" if (main and sub_name) else (main or sub_name)
+            if joined:
+                value, problem = mapper.category(joined)
+                if problem:
+                    errors.append(problem)
+                data["category_code"] = value
         if import_type == ImportJob.ImportType.INVENTORY and not data.get("mode") and not errors:
             errors.append(
                 "نوعِ عملیات انتخاب نشده است: «تنظیم موجودی نهایی» یا «افزایش/کاهش موجودی» را از فهرست انتخاب کنید."
@@ -463,11 +539,14 @@ _FIELD_PHRASES = [
     ("تغییرِ قیمت", "price"), ("قیمتِ مقایسه", "compare_at_price"), ("بهایِ تمام", "cost"),
     ("برایِ قیمت", "price"), ("قیمت نمی‌تواند", "price"), ("برایِ موجودی", "stock"), ("موجودی نمی‌تواند", "stock"),
     ("برایِ وزن", "weight_grams"), ("برایِ تعداد", "quantity"), ("تعداد نمی‌تواند", "quantity"),
+    ("زیردسته‌بندیِ «", "subcategory_name"), ("دسته‌بندیِ اصلیِ «", "category_code"),
     ("وضعیتِ «", "status"), ("برندِ «", "brand_code"), ("دسته‌بندیِ «", "category_code"),
     ("دسته‌یِ مالیاتیِ", "tax_class_code"), ("انباری با کدِ", "warehouse_code"), ("حالتِ ردیفِ", "mode"),
     ("set_on_hand", "mode"), ("مقدارِ «", "option_1_value_code"), ("محورِ", "option_1_code"),
     ("شناسه‌ی کالا", "product_id"), ("شناسه‌ی تنوع", "variant_id"), ("SKUِ تنوع", "variant_sku"),
     ("SKUِ «", "sku"), ("کالایی با SKU", "product_sku"), ("تنوعی با SKU", "variant_sku"),
+    ("زیردسته‌بندیِ «", "subcategory_name"), ("دسته‌بندیِ اصلیِ «", "category_code"),
+    ("ویژگیِ «", "attributes_text"), ("مقدارِ ویژگیِ", "attributes_text"), ("مشخصاتِ", "specifications"),
 ]
 _TEXT_REPLACEMENTS = [
     ("فقط adjustment/set_on_hand", "فقط «تنظیم موجودی نهایی» یا «افزایش/کاهش موجودی»"),
@@ -480,6 +559,18 @@ _TEXT_REPLACEMENTS = [
     ("هم کدِ محور و هم کدِ مقدار", "هم نامِ ویژگی و هم مقدارِ ویژگی"),
     ("محورهای", "ویژگی‌هایِ"), ("محورِ", "ویژگیِ"), ("محورها", "ویژگی‌ها"),
 ]
+
+
+# پیام‌هایی که با نامِ همان ستونی شروع می‌شوند («برندِ «X» …») کنارِ برچسبِ ستون تکرار دیده می‌شدند («برندبرندِ …»).
+# برچسبِ ستون جدا و با «:» نشان داده می‌شود و ابتدای پیام که همان کلمه است حذف می‌شود.
+_LEADING_LABELS = ("زیردسته‌بندیِ ", "دسته‌بندیِ اصلیِ ", "دسته‌بندیِ ", "برندِ ", "ویژگیِ ")
+
+
+def _drop_duplicate_label(text: str) -> str:
+    for label in _LEADING_LABELS:
+        if text.startswith(label + "«"):
+            return text[len(label):]
+    return text
 
 
 def describe_errors(import_type: str, messages) -> list:
@@ -512,7 +603,8 @@ def describe_errors(import_type: str, messages) -> list:
             text = text.replace(f"«{internal}»", f"«{column.base_label}»")
         for old, new in _TEXT_REPLACEMENTS:
             text = text.replace(old, new)
-        results.append({"column": columns[key].base_label if key in columns else "", "message": text})
+        column = columns[key].base_label if key in columns else ""
+        results.append({"column": column, "message": _drop_duplicate_label(text) if column else text})
     return results
 
 
@@ -578,9 +670,15 @@ def build_template_xlsx(import_type: str, store) -> bytes:
             list_letter, count = ranges[column.list_key]
             validation = DataValidation(
                 type="list", formula1=f"'{SHEET_LISTS}'!${list_letter}$2:${list_letter}${count + 1}",
-                allow_blank=True, showErrorMessage=True, errorStyle="stop",
-                errorTitle="مقدارِ نامعتبر", error="لطفاً یکی از گزینه‌هایِ فهرست را انتخاب کنید.",
+                allow_blank=True, showErrorMessage=True, errorStyle=("warning" if column.allow_new else "stop"),
+                errorTitle=("نامِ تازه" if column.allow_new else "مقدارِ نامعتبر"),
+                error=(
+                    "این نام در فهرست نیست. اگر مورد تازه است ادامه دهید: پس از بارگذاری، به‌صورتِ پیشنهاد ثبت می‌شود و پس از تأییدِ مدیر ساخته می‌شود."
+                    if column.allow_new else "لطفاً یکی از گزینه‌هایِ فهرست را انتخاب کنید."
+                ),
             )
+        elif column.allow_new:
+            validation = None   # فهرستِ خالی: هر نامی پیشنهادِ تازه است
         elif column.kind == "int" and import_type != ImportJob.ImportType.INVENTORY:
             validation = DataValidation(
                 type="whole", operator="greaterThanOrEqual", formula1="0", allow_blank=True,
@@ -621,10 +719,22 @@ def build_template_xlsx(import_type: str, store) -> bytes:
             "تغییری که موجودیِ قابلِ فروش را زیرِ رزروهایِ فعال ببرد رد می‌شود."
         ))
     if import_type == ImportJob.ImportType.PRODUCTS:
-        intro.insert(0, (
-            "هر ردیف یا یک کالایِ تازه است یا بروزرسانیِ یک کالایِ موجود. کالایِ موجود با «شناسه کالا» (در اولویت) یا «SKU» شناخته می‌شود؛ "
-            "در ردیفِ بروزرسانی فقط ستون‌هایی را پر کنید که می‌خواهید عوض شوند، بقیه خالی بمانند."
-        ))
+        intro[0:0] = [
+            "هر ردیف یا یک کالایِ تازه است یا بروزرسانیِ یک کالایِ موجود. کالایِ موجود با «شناسه کالا» (در اولویت) یا «SKU» شناخته می‌شود.",
+            "کالایِ تازه: ستون‌هایِ الزامی که در ابتدایِ جدول کنارِ هم آمده‌اند (نام کالا، دسته‌بندی، زیردسته‌بندی یا مسیرِ کاملِ دسته‌بندی، قیمت) را پر کنید؛ بقیه اختیاری‌اند.",
+            "بروزرسانیِ کالایِ موجود: «شناسه کالا» یا «SKU» را بنویسید و فقط ستون‌هایی را پر کنید که می‌خواهید عوض شوند. ستونِ خالی یعنی «بدونِ تغییر» (قیمت و دسته‌بندی برایِ بروزرسانی لازم نیست).",
+            "برند/دسته/زیردسته/ویژگیِ تازه: اگر نامی در فهرست‌ها نیست، همان نامِ تازه را بنویسید. پس از بارگذاری، این نام‌ها به‌صورتِ «پیشنهاد» ثبت می‌شوند و فقط پس از تأییدِ مدیرِ فروشگاه ساخته می‌شوند؛ تا آن زمان فایل اجرا نمی‌شود. نامِ موجود (حتی با تفاوتِ نیم‌فاصله/فاصله/حروفِ عربی) دوباره ساخته نمی‌شود.",
+            "مشخصاتِ فنی و ویژگی‌ها: در هر سلول چند مورد به شکلِ «عنوان: مقدار» بنویسید و با «؛» جدا کنید. نمونه: «جنس: پنبه؛ وزن: ۲۵۰ گرم» و «رنگ: قرمز؛ سایز: L». برایِ ویژگیِ چندانتخابی مقدارها را با «،» جدا کنید.",
+            "شیتِ «نمونه» دو ردیفِ نمونه دارد (یک کالایِ تازه و یک بروزرسانی). آن شیت خوانده نمی‌شود؛ فقط ردیف‌هایِ شیتِ «داده‌ها» وارد می‌شوند.",
+        ]
+    if import_type == ImportJob.ImportType.VARIANTS:
+        intro[0:0] = [
+            "پیش از ورودِ تنوع: کالا و «ویژگی‌هایِ تنوع‌دار» آن (مثلاً رنگ و سایز با مقدارهایِ فعال) باید از قبل در صفحه‌ی کالا تعریف شده باشند. این ورود، ویژگی یا مقدارِ تازه نمی‌سازد؛ فقط تنوع‌هایِ همان ترکیب‌ها را می‌سازد یا بروزرسانی می‌کند.",
+            "تنوعِ تازه: «SKU کالا» (کالایِ مادر) و برایِ هر ویژگیِ تنوع، «نام ویژگی» و «مقدار ویژگی» را بنویسید (مثلاً رنگ ← قرمز، سایز ← L). نام و مقدار باید دقیقاً با ویژگی‌هایِ فعالِ همان کالا یکی باشد. اگر ترکیبی هنوز ساخته نشده باشد، سیستم تنوع‌هایِ همه‌ی ترکیب‌هایِ ممکنِ ویژگی‌هایِ فعالِ آن کالا را می‌سازد.",
+            "بروزرسانیِ تنوعِ موجود: «شناسه تنوع» یا «SKU تنوع» را بنویسید (نیازی به نامِ ویژگی نیست) و فقط ستون‌هایی را پر کنید که می‌خواهید عوض شوند؛ ستونِ خالی یعنی «بدونِ تغییر». مثال: فقط «SKU تنوع = TSH-001-RED-L» و «موجودی = ۳۰» موجودیِ همان تنوعِ موجود را ۳۰ می‌کند.",
+            "«تغییر قیمت» مبلغی است که به قیمتِ پایه‌یِ کالا اضافه (یا با عددِ منفی کم) می‌شود، نه قیمتِ نهاییِ تنوع. موجودی با ثبتِ حرکتِ انبار اعمال می‌شود.",
+            "شیتِ «نمونه» سه ردیفِ آموزشی دارد (سه تنوعِ تازه برایِ کالایِ فرضیِ TSH-001؛ ردیفِ سوم فقط ستون‌هایِ لازم را دارد). آن شیت خوانده نمی‌شود؛ فقط ردیف‌هایِ شیتِ «داده‌ها» وارد می‌شوند.",
+        ]
 
     rows = [
         (c.label, REQUIRED_TEXT[c.required], c.help, c.accepted, c.example, c.blank)
@@ -637,6 +747,16 @@ def build_template_xlsx(import_type: str, store) -> bytes:
         table_header=("ستون", "الزامی؟", "توضیح", "مقدارهایِ مجاز", "مثال", "اگر خالی بماند"),
         table_rows=rows, widths=(22, 18, 44, 34, 22, 40),
     )
+    if import_type in SAMPLE_ROWS:
+        sample_ws = wb.create_sheet(SHEET_SAMPLE)
+        sample_columns = [Column(c.base_label, width=c.width, text_format=c.text_format, tier="tech") for c in specs]
+        sample_rows = [[sample.get(c.key, "") for c in specs] for sample in SAMPLE_ROWS[import_type]]
+        xlsx_utils.write_table_sheet(sample_ws, sample_columns, sample_rows, header_height=34)
+        sample_ws.sheet_properties.tabColor = xlsx_utils.TECH_HEADER_FILL
+    # ترتیبِ شیت‌ها: داده‌ها (فعال)، راهنما، فهرست‌ها، (نمونه)
+    order = [SHEET_DATA, SHEET_GUIDE, SHEET_LISTS] + ([SHEET_SAMPLE] if import_type in SAMPLE_ROWS else [])
+    wb._sheets = [wb[name] for name in order]
+    wb.active = wb._sheets.index(wb[SHEET_DATA])
     return xlsx_utils.workbook_to_bytes(wb)
 
 
@@ -661,21 +781,25 @@ def build_error_report_xlsx(job, row_results, source_rows: dict, import_type: st
 
     alias = alias_map(import_type)
     fixed = [
-        Column("ردیف در اکسل", "id", width=11), Column("وضعیت", width=11),
+        Column("ردیف در اکسل", "id", width=11), Column("نام کالا", width=30, wrap=True), Column("وضعیت", width=11),
         Column("خطاها", width=60, wrap=True), Column("هشدارها", width=40, wrap=True),
     ]
     table_columns = fixed + [Column(h, width=18, wrap=True, tier="tech") for h in header_pool]
 
     results = list(row_results)
+    from apps.dashboard.services import import_service
+
+    display_names = import_service.row_display_names(job, results)
     described = []
     table_rows = []
     for result in results:
         details = describe_errors(import_type, result.errors)
         described.append(details)
         raw = dict(source_rows.get(result.row_number, {}).get("__raw__", []))
+        shown = display_names.get(result.row_number, {})
         table_rows.append([
-            result.row_number, ROW_STATUS_LABELS.get(result.status, result.status),
-            "\n".join(f"• {d['message']}" for d in details),
+            result.row_number, shown.get("name") or shown.get("fallback", ""), ROW_STATUS_LABELS.get(result.status, result.status),
+            "\n".join(f"• {d['column'] + ': ' if d['column'] else ''}{d['message']}" for d in details),
             "\n".join(f"• {w}" for w in result.warnings),
             *[raw.get(h, "") for h in header_pool],
         ])
@@ -683,10 +807,10 @@ def build_error_report_xlsx(job, row_results, source_rows: dict, import_type: st
 
     error_fill = PatternFill("solid", start_color=xlsx_utils.ERROR_FILL, end_color=xlsx_utils.ERROR_FILL)
     for offset, (result, details) in enumerate(zip(results, described), start=2):
-        for column_index in (2, 3):
+        for column_index in (3, 4):
             cell = ws.cell(row=offset, column=column_index)
             cell.fill = error_fill
-            cell.font = Font(name=xlsx_utils.FONT_NAME, size=10, bold=(column_index == 2), color=xlsx_utils.ERROR_TEXT)
+            cell.font = Font(name=xlsx_utils.FONT_NAME, size=10, bold=(column_index == 3), color=xlsx_utils.ERROR_TEXT)
         flagged = {d["column"] for d in details if d["column"]}
         for position, header in enumerate(header_pool, start=len(fixed) + 1):
             key = alias.get(header_key(header))

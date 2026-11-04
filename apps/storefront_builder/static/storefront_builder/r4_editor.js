@@ -127,6 +127,10 @@ window.RastiSiR4 = {
       : '.rsec[data-section-id="' + fragment.id + '"]';
     var current = doc.querySelector(selector);
     if (!current) return false;
+    // V5 Groups: a Group that carries a title / look is rendered inside its own frame (.rgroup) — the fragment is that whole frame, so it
+    // replaces the frame, never just the row inside it (which would nest a second frame inside the first one on every edit)
+    if (fragment.kind === 'container' && current.parentElement && current.parentElement.classList.contains('rgroup')
+        && current.parentElement.getAttribute('data-group-id') === String(fragment.id)) current = current.parentElement;
     var holder = doc.createElement('template');
     holder.innerHTML = fragment.html;
     var next = holder.content.firstElementChild;
@@ -525,6 +529,8 @@ window.RastiSiR4 = {
     return previewRefresh.promise;
   }
   R4.reloadPreview = reloadPreviewFrame;
+  // read-only: true while a twin-frame refresh is running or queued (the Studio's layout layer and the browser tests wait for it to go quiet)
+  R4.previewRefreshBusy = function () { return Boolean(previewRefresh.busy || previewRefresh.again); };
 
   // ---- R4 Task 8 — structural mutations (add/remove/duplicate/move) go
   // through the SAME single queue/endpoint as every other mutation; this
@@ -1044,6 +1050,17 @@ window.RastiSiR4 = {
     } catch (err) { /* cross-document access is best effort */ }
   };
 
+  // A refused / failed Inspector request is never silent: the seller gets a clear Persian message (the Studio's own notification) and the
+  // technical detail (status + path only — no ids of other stores, no response body) goes to the console for troubleshooting.
+  function reportInspectorFailure(url, status, detail) {
+    var message = status === 404 ? 'تنظیمات این بخش باز نشد: بخش در پیش‌نویس فعلی پیدا نشد یا هنوز ویرایشگر ندارد. صفحه را تازه کنید و اگر تکرار شد، گزارش دهید.'
+      : status === 403 ? 'اجازهٔ ویرایش این بخش را ندارید.'
+      : status >= 500 ? 'خطای سرور هنگام باز کردن تنظیمات این بخش؛ کمی بعد دوباره تلاش کنید.'
+      : 'ارتباط با سرور برقرار نشد؛ تنظیمات این بخش باز نشد.';
+    try { console.warn('R4 openSection failed', { status: status, path: url.pathname, detail: detail || '' }); } catch (e) { /* console unavailable */ }
+    if (typeof R4.notify === 'function') R4.notify(message);
+  }
+
   R4.openSection = function (sectionId) {
     if (!inspector || !sectionId) return Promise.resolve();
     lastSent = {}; // the control values are re-read from the server below: nothing "already sent" survives
@@ -1053,9 +1070,9 @@ window.RastiSiR4 = {
     var url = new URL('sections/' + sectionId + '/inspector/', window.location.href);
     return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (response) {
-        if (!response.ok) return null;
+        if (!response.ok) { reportInspectorFailure(url, response.status); return null; }
         return response.text();
-      })
+      }, function (e) { reportInspectorFailure(url, 0, String(e)); return null; })
       .then(function (html) {
         if (html == null) return;
         inspector.innerHTML = html;
@@ -1098,9 +1115,10 @@ window.RastiSiR4 = {
         // it already mounts storefrontRichTextEditor()'s CKEditor here.
         // Do NOT also call Alpine.initTree(): doing so double-mounts.
       })
-      .catch(function () {
-        // Network/render failure opening the Inspector — no R3 fallback,
-        // no popup; the shell simply stays as it already was.
+      .catch(function (err) {
+        // A failure while building the Inspector view (after a successful response): no R3 fallback, no popup — but not silent either.
+        try { console.error('R4 openSection render failed', err); } catch (e) { /* console unavailable */ }
+        if (typeof R4.notify === 'function') R4.notify('تنظیمات این بخش درست نمایش داده نشد؛ صفحه را تازه کنید.');
       });
   };
 
@@ -2146,6 +2164,36 @@ window.RastiSiR4 = {
     });
   }
 
+  var HEADER_PLACEMENT_REFUSALS = {
+    header_placement_needs_stage: 'بالای صفحهٔ اصلی «بوم هدر و هیرو» نیست؛ هدر فقط به‌صورت مستقل نمایش داده می‌شود و چیزی تغییر نکرد.',
+    header_placement_stage_hidden: 'بوم هدر و هیرو در بعضی دستگاه‌ها پنهان است؛ هدر یکپارچه فعال نشد تا سبد خرید همیشه در دسترس بماند.',
+    section_locked: 'بوم هدر و هیرو قفل است؛ ابتدا قفل آن را باز کنید.',
+    stale_revision: 'نسخهٔ طراحی در همین حین تغییر کرده؛ صفحه را تازه کنید و دوباره امتحان کنید.',
+  };
+  function applyHeaderPlacementMutation(button, mutation) {
+    var box = button.closest('[data-r4-header-placement]');
+    if (box) box.setAttribute('aria-busy', 'true');
+    var wanted = button.getAttribute('data-placement') || mutation.placement || '';
+    var isRecipe = mutation.type === 'header.apply_recipe';
+    var say = function (text) {
+      var status = globalDesignPanel && globalDesignPanel.querySelector('[data-r4-placement-status]');
+      if (status) status.textContent = text;
+    };
+    return R4.enqueueMutation(mutation).then(function (result) {
+      if (result && result.ok) {
+        return refreshGlobalDesignAndPreview().then(function () {
+          var fresh = globalDesignPanel && globalDesignPanel.querySelector('[data-r4-header-placement]');
+          var mode = fresh ? fresh.getAttribute('data-mode') : '';
+          if (isRecipe && wanted && mode !== wanted) say('مدل هدر اعمال شد؛ چون بالای صفحه «بوم هدر و هیرو» نیست، هدر مستقل نمایش داده می‌شود. با «بازگرداندن» برمی‌گردد.');
+          else say('اعمال شد و در پیش‌نویس ذخیره شد. با «بازگرداندن» برمی‌گردد.');
+        });
+      }
+      if (box) box.removeAttribute('aria-busy');
+      say(HEADER_PLACEMENT_REFUSALS[result && result.code] || 'این تغییر انجام نشد؛ هیچ چیز ذخیره نشد.');
+      return result;
+    });
+  }
+
   if (globalDesignPanel) {
     globalDesignPanel.addEventListener('click', function (evt) {
       if (evt.target.closest('[data-r4-global-design-close]')) closeGlobalDesign();
@@ -2197,6 +2245,18 @@ window.RastiSiR4 = {
         }).then(function (result) {
           if (result && result.ok) refreshGlobalDesignAndPreview();
         });
+        return;
+      }
+      // Header placement / professional header recipe: Draft-only mutations through the one boundary; the panel and the preview are re-read from the
+      // server afterwards (the server decides what was applied and what could not be), and the outcome is stated in plain words.
+      var placementButton = evt.target.closest('[data-r4-placement]');
+      if (placementButton) {
+        applyHeaderPlacementMutation(placementButton, { type: 'header.set_placement', placement: placementButton.getAttribute('data-r4-placement') });
+        return;
+      }
+      var recipeButton = evt.target.closest('[data-r4-apply-recipe]');
+      if (recipeButton) {
+        applyHeaderPlacementMutation(recipeButton, { type: 'header.apply_recipe', recipe_key: recipeButton.getAttribute('data-r4-apply-recipe') });
         return;
       }
       if (evt.target.closest('#r4ResetHeaderButton')) {

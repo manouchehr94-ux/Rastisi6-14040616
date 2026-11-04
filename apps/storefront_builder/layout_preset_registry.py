@@ -318,6 +318,18 @@ def list_ready_templates() -> list[LayoutPresetDefinition]:
     return [preset for preset in list_layout_presets() if preset.is_ready_template]
 
 
+def list_selectable_templates() -> list[LayoutPresetDefinition]:
+    """The Ready Templates offered for a NEW selection, in the owner's order (``template_gallery_policy``) — the ONE list every gallery,
+    search, counter and server-side switch check reads. A strict subset of ``list_ready_templates()``: hidden templates stay registered,
+    renderable and applicable by identity; they are only not offered."""
+    from . import template_gallery_policy
+
+    if not template_gallery_policy.is_restricted():
+        return list_ready_templates()
+    by_key = {preset.key: preset for preset in list_ready_templates()}
+    return [by_key[key] for key in template_gallery_policy.SELECTABLE_TEMPLATE_KEYS if key in by_key]
+
+
 def _validate_page_composition_shape(definition: LayoutPresetDefinition) -> None:
     """اعتبارسنجیِ بخشِ section/page در زمانِ import — تنها به
     ``section_registry`` (کاملاً خالص) وابسته است، پس اینجا امن است.
@@ -1697,3 +1709,7 @@ from . import a8_ready_templates as _a8_ready_templates  # noqa: E402,F401
 # Reference-fidelity Ready Templates 51-53 (data-only recipes) register after
 # the A8 catalog so the 50 token-built identities keep their import order.
 from . import a9_reference_templates as _a9_reference_templates  # noqa: E402,F401
+
+# V5 six-site reference templates 54-59 (data-only recipes) register after 51-53.
+from . import a10_reference_templates as _a10_reference_templates  # noqa: E402,F401
+from . import a11_stage_templates as _a11_stage_templates  # noqa: E402,F401

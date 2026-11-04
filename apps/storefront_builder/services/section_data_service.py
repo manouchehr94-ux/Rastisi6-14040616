@@ -381,3 +381,41 @@ def resolve_products(store, settings: dict, *, availability=None) -> tuple[list,
     if resolver is None:
         return [], None
     return resolver(store, settings, availability)
+
+
+#: Fixed vocabulary of the ``sorts`` tab set: (label, data source). Labels are generic Persian words, not Store copy.
+_SORT_TABS = (
+    ("پرفروش‌ترین‌ها", "best_sellers"),
+    ("پرتخفیف‌ترین‌ها", "discounted"),
+    ("جدیدترین‌ها", "newest"),
+)
+
+
+def resolve_product_tabs(store, settings: dict, *, availability=None) -> list[dict]:
+    """Tabs for a ``product_section`` with ``tabs_source`` set: ``[{"label", "products", "url"}, ...]``.
+
+    ``categories`` — the Store's OWN active top-level categories that really have products (never a stored id, never another
+    Store's category). ``sorts`` — newest / best sellers / discounted. Tabs with no products are dropped; fewer than two
+    usable tabs returns ``[]`` so the section falls back to its single historical row.
+    """
+    mode = settings.get("tabs_source")
+    limit = settings.get("item_limit") or 8
+    count = max(2, min(6, int(settings.get("tabs_count") or 4)))
+    tabs: list[dict] = []
+    if mode in ("categories", "subcategories"):
+        from .category_selection import select_categories
+
+        for category in select_categories(store, "top_level" if mode == "categories" else "subcategories"):
+            products = products_in_category(store, category, limit, availability)
+            if products:
+                url = reverse("catalog:product-list") + "?" + urlencode({"category": category.slug})
+                tabs.append({"label": category.name, "products": products, "url": url})
+            if len(tabs) >= count:
+                break
+    elif mode == "sorts":
+        for label, source in _SORT_TABS:
+            resolver = _RESOLVERS.get(source)
+            products, url = resolver(store, {**settings, "data_source": source, "item_limit": limit}, availability)
+            if products:
+                tabs.append({"label": label, "products": products, "url": url})
+    return tabs if len(tabs) >= 2 else []

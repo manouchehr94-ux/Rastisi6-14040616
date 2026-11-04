@@ -2,15 +2,18 @@ import json
 
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
+from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.catalog.services.product_publish_service import storefront_visible_products
 from apps.core.services import session_service
 from apps.orders.models import Order
+from apps.orders.services.order_tracker import build as build_order_tracker
 from apps.sms.services import otp_service
 from apps.storefront_builder.services.storefront_context_service import render_domain_page
-from apps.stores.resolution import resolve_store_for_service, resolve_store_for_storefront
+from apps.stores.resolution import CompatibilityFallbackUnavailableError, resolve_store_for_service, resolve_store_for_storefront
 
 from apps.core.services.client_ip import get_client_ip_bucket
 
@@ -18,7 +21,7 @@ from .forms import AddressForm, LoginForm, OtpRequestForm, OtpVerifyForm, Profil
 from .models import Address, Customer, Wishlist
 from apps.cart.services import coupon_service
 
-from .services import auth_service, profile_service
+from .services import account_security_service, account_service, auth_service, profile_service
 
 _OTP_REMEMBER_SESSION_KEY = "customers_otp_remember_me"
 
@@ -250,9 +253,19 @@ def logout_view(request):
     return redirect("catalog:home")
 
 
+def _account_store(request):
+    """فروشگاهِ جاریِ درخواست برای صفحه‌های حساب؛ میزبانِ نامشخص ⇒ ۴۰۴ (هرگز تجمیعِ همه‌ی فروشگاه‌ها)."""
+    try:
+        return resolve_store_for_service(request)
+    except CompatibilityFallbackUnavailableError as exc:
+        raise Http404("no storefront for this host") from exc
+
+
 def _account_context(request, *, profile_form=None, address_form=None):
     customer = request.user.customer_profile
+    store = _account_store(request)
     return {
+        "store_summary": account_service.store_summary(store, customer),
         "can_view": True,
         "customer": customer,
         "profile_form": profile_form or ProfileForm(initial={
@@ -262,7 +275,7 @@ def _account_context(request, *, profile_form=None, address_form=None):
             "accepts_promotional_email": customer.accepts_promotional_email,
         }),
         "address_form": address_form or AddressForm(),
-        "orders": Order.objects.filter(customer=customer).select_related("shipping_method").order_by("-created_at"),
+        "orders": account_service.store_orders(store, customer).select_related("shipping_method").order_by("-created_at"),
         "addresses": customer.addresses.all(),
         "my_coupons": coupon_service.customer_coupons(resolve_store_for_service(request), customer),
     }
@@ -299,7 +312,8 @@ def account_profile_update(request):
         customer.refresh_from_db()
         response = render(
             request, "customers/partials/account_profile.html",
-            {"customer": customer, "profile_form": ProfileForm(initial={
+            {"customer": customer, "store_summary": account_service.store_summary(_account_store(request), customer),
+             "profile_form": ProfileForm(initial={
                 **form.cleaned_data, "birth_date": customer.birth_date,
                 "accepts_promotional_sms": customer.accepts_promotional_sms,
                 "accepts_promotional_email": customer.accepts_promotional_email,
@@ -308,10 +322,70 @@ def account_profile_update(request):
         response["HX-Trigger"] = json.dumps({"toast": {"message": "پروفایل به‌روزرسانی شد", "type": "ok"}})
         return response
     response = render(
-        request, "customers/partials/account_profile.html", {"customer": customer, "profile_form": form}
+        request, "customers/partials/account_profile.html",
+        {"customer": customer, "profile_form": form, "store_summary": account_service.store_summary(_account_store(request), customer)},
     )
     response["HX-Trigger"] = json.dumps({"toast": {"message": "لطفاً خطاهای فرم را برطرف کنید", "type": "err"}})
     return response
+
+
+@require_POST
+def _security_context(request, **extra):
+    errors = {("general" if key == "" else key): msg for key, msg in (extra.pop("security_errors", None) or {}).items()}
+    return {"customer": request.user.customer_profile, "security_errors": errors, "security_stage": "idle", **extra}
+
+
+def _security_response(request, *, ok_message="", err_message="", **extra):
+    response = render(request, "customers/partials/account_security.html", _security_context(request, **extra))
+    message, kind = (ok_message, "ok") if ok_message else (err_message, "err")
+    if message:
+        response["HX-Trigger"] = json.dumps({"toast": {"message": message, "type": kind}})
+    return response
+
+
+def _customer_or_403(request):
+    if not _can_use_wishlist(request):
+        raise PermissionDenied
+    return request.user.customer_profile
+
+
+@require_POST
+def account_password_change(request):
+    customer = _customer_or_403(request)
+    try:
+        account_security_service.change_password(
+            request, customer, current=request.POST.get("current_password", ""), new=request.POST.get("new_password", ""),
+            confirm=request.POST.get("confirm_password", ""), store=_account_store(request),
+        )
+    except account_security_service.PasswordChangeError as exc:
+        return _security_response(request, err_message="رمز تغییر نکرد؛ خطاها را بررسی کنید", security_errors=exc.errors, security_form="change")
+    return _security_response(request, ok_message="رمز عبور شما تغییر کرد", security_done="changed")
+
+
+@require_POST
+def account_password_code_request(request):
+    customer = _customer_or_403(request)
+    try:
+        account_security_service.request_password_code(
+            customer, store=_account_store(request), ip_address=get_client_ip_bucket(request),
+        )
+    except account_security_service.PasswordChangeError as exc:
+        return _security_response(request, err_message=str(exc), security_errors=exc.errors, security_form="code")
+    return _security_response(request, ok_message="کد تأیید به موبایل شما ارسال شد", security_stage="code")
+
+
+@require_POST
+def account_password_set(request):
+    customer = _customer_or_403(request)
+    try:
+        account_security_service.set_password_with_code(
+            request, customer, code=request.POST.get("code", ""), new=request.POST.get("new_password", ""),
+            confirm=request.POST.get("confirm_password", ""), store=_account_store(request),
+        )
+    except account_security_service.PasswordChangeError as exc:
+        return _security_response(request, err_message="رمز تعیین نشد؛ خطاها را بررسی کنید", security_errors=exc.errors,
+                                  security_stage="code", security_form="set")
+    return _security_response(request, ok_message="رمز جدید شما ثبت شد", security_done="set")
 
 
 @require_POST
@@ -374,8 +448,12 @@ def account_order_detail(request, code):
         return render_domain_page(request, "customers/order_detail.html", {"can_view": False})
     order = get_object_or_404(
         Order.objects.select_related("shipping_method", "payment_gateway").prefetch_related(
-            "items", "status_history", "transactions"
+            "items", "status_history", "transactions", "card_transfers"
         ),
-        code=code, customer=request.user.customer_profile,
+        code=code, customer=request.user.customer_profile, store=_account_store(request),
     )
-    return render_domain_page(request, "customers/order_detail.html", {"can_view": True, "order": order})
+    tracker = build_order_tracker(order)
+    return render_domain_page(
+        request, "customers/order_detail.html",
+        {"can_view": True, "order": order, "tracker": tracker, "tracker_tracks": [tracker.payment, tracker.fulfillment]},
+    )

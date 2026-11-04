@@ -50,6 +50,22 @@ def jalali(value, fmt="%Y/%m/%d"):
     return to_fa_digits(jd.strftime(fmt))
 
 
+_JALALI_MONTHS = ("فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")
+
+
+@register.filter
+def jalali_month_name(value):
+    """نام فارسیِ ماهِ شمسیِ یک تاریخ (مثلاً «مهر»)؛ برای نشان‌های تاریخِ کوتاه کنارِ ``jalali:"%d"``."""
+    if not value:
+        return ""
+    value = _localised(value)
+    try:
+        jd = jdatetime.date.fromgregorian(date=value.date() if hasattr(value, "date") and callable(value.date) else value)
+    except (TypeError, ValueError):
+        return ""
+    return _JALALI_MONTHS[jd.month - 1]
+
+
 @register.filter
 def jalali_dt(value, fmt="%Y/%m/%d %H:%M"):
     """تاریخ و ساعتِ شمسی (۲۴ساعته، ارقام فارسی) در منطقهٔ زمانیِ فروشگاه — برای لاگ، سفارش، فاکتور و … (FOLLOWUP-14)."""

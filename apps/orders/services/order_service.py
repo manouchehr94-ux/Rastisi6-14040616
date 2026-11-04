@@ -368,7 +368,8 @@ def create_order_from_cart(
       واکشی و برمی‌گرداند — بدون تلاش دوباره برای ساخت قلم‌ها یا کاهش موجودی.
     """
     if idempotency_key:
-        existing = Order.objects.filter(idempotency_key=idempotency_key).first()
+        # replay فقط برایِ همان مشتری و همان فروشگاه معنا دارد؛ سفارشِ دیگری هرگز با کلید پیدا/برگردانده نمی‌شود.
+        existing = Order.objects.filter(idempotency_key=idempotency_key, customer=customer, store=store).first()
         if existing is not None:
             return existing
 
@@ -489,7 +490,7 @@ def create_order_from_cart(
             )
     except IntegrityError:
         if idempotency_key:
-            existing = Order.objects.filter(idempotency_key=idempotency_key).first()
+            existing = Order.objects.filter(idempotency_key=idempotency_key, customer=customer, store=store).first()
             if existing is not None:
                 return existing
         raise

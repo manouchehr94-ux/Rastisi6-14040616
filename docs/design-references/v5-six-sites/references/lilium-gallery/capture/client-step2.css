@@ -1,0 +1,6 @@
+@font-face {
+  font-family: "fontsans";
+  font-style: normal;font-weight: normal;
+  src: url("") format("embedded-opentype"), url("IRANSansWeb(FaNum)_Light.woff") format("woff"),url("IRANSansWeb(FaNum)_Light.woff2") format("woff2"), url("IRANSansWeb(FaNum)_Light.ttf") format("truetype");
+}
+/*.clientchat .box-header {background: black;}*/

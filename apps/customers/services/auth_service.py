@@ -162,6 +162,11 @@ def merge_guest_cart(request, customer: Customer) -> None:
     # عضویت) قفل می‌شود؛ ``guest_cart`` در پایان حذف می‌شود و هدفِ هیچ
     # تسویه‌حسابِ هم‌زمانی نیست.
     user_cart = Cart.objects.select_for_update().get(pk=user_cart.pk)
+    if guest_cart.items.exists():
+        # قلم‌هایِ مهمان چرخه‌ی خریدِ تازه‌ای را در سبدِ (احتمالاً خالی) کاربر شروع می‌کنند — کلیدِ سفارشِ قبلی نباید بماند.
+        from apps.cart.services.cart_service import start_new_checkout_cycle_if_empty
+
+        start_new_checkout_cycle_if_empty(user_cart)
 
     for item in guest_cart.items.select_related("product", "variant"):
         existing = user_cart.items.filter(product=item.product, variant=item.variant).first()

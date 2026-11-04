@@ -395,6 +395,9 @@ def change_role(membership: StoreMembership, *, new_role: str, actor=None) -> St
         object_type="StoreMembership", object_id=membership.pk, object_label=membership.user.username,
         before={"role": old_role}, after={"role": new_role},
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.role_changed(membership, old_role)
     return membership
 
 
@@ -417,6 +420,9 @@ def revoke_membership(membership: StoreMembership, *, actor=None) -> StoreMember
         store=membership.store, actor=actor, action_code="staff.revoked",
         object_type="StoreMembership", object_id=membership.pk, object_label=membership.user.username,
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.access_revoked(membership)
     return membership
 
 

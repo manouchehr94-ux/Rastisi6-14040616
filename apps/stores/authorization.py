@@ -96,6 +96,7 @@ CUSTOMER_EXPORT = "customer.export"  # separate from IMPORT_EXPORT_* — PII, ga
 ORDER_VIEW = "order.view"
 ORDER_STATUS_CHANGE = "order.status_change"
 ORDER_CONFIRM_COD_PAYMENT = "order.confirm_cod_payment"  # تأییدِ دریافتِ وجهِ پرداخت در محل (Owner/Admin/Order Manager)
+ORDER_REVIEW_CARD_TRANSFER = "order.review_card_transfer"  # بررسی/تأیید/ردِ پرداختِ کارت‌به‌کارت (Owner/Admin/Order Manager)
 
 CUSTOMER_VIEW = "customer.view"
 CUSTOMER_EDIT = "customer.edit"  # reserved — no customer-edit view yet
@@ -131,7 +132,7 @@ STOREFRONT_LAYOUT_MANAGE = "storefront_layout.manage"
 COLLECTION_MANAGE = "collection.manage"
 
 STAFF_MANAGE = "staff.manage"
-DOMAIN_MANAGE = "domain.manage"  # reserved — no domain-management UI yet
+DOMAIN_MANAGE = "domain.manage"  # custom-domain management (owner portal); the admin «دامنه و آدرس» page is read-only + a link
 SUBSCRIPTION_MANAGE = "subscription.manage"  # coarse legacy key — kept for back-compat
 # Soft-deleting the whole Store is the single most destructive owner action.
 # It gets its own granular key (rather than reusing SETTINGS_MANAGE) and is
@@ -179,7 +180,7 @@ ALL_PERMISSIONS = frozenset({
     SHIPPING_SETTINGS_VIEW, SHIPPING_SETTINGS_MANAGE, TAX_SETTINGS_VIEW, TAX_SETTINGS_MANAGE,
     IMPORT_EXPORT_VIEW, IMPORT_EXPORT_MANAGE,
     CUSTOMER_NOTE_MANAGE, CUSTOMER_TAG_MANAGE, CUSTOMER_SEGMENT_VIEW, CUSTOMER_SEGMENT_MANAGE, CUSTOMER_EXPORT,
-    ORDER_VIEW, ORDER_STATUS_CHANGE, ORDER_CONFIRM_COD_PAYMENT,
+    ORDER_VIEW, ORDER_STATUS_CHANGE, ORDER_CONFIRM_COD_PAYMENT, ORDER_REVIEW_CARD_TRANSFER,
     CUSTOMER_VIEW, CUSTOMER_EDIT,
     REPORTS_VIEW, COUPON_VIEW, DISCOUNT_MANAGE,
     RETURN_VIEW, RETURN_MANAGE, REFUND_VIEW, REFUND_MANAGE,
@@ -210,7 +211,7 @@ _CATALOG_READ_WRITE = frozenset({
 # an order-fulfillment concern) but only VIEWS Tax settings — Tax changes
 # require Owner/Administrator since they affect every future order's totals.
 _ORDER_READ_WRITE = frozenset({
-    ORDER_VIEW, ORDER_STATUS_CHANGE, ORDER_CONFIRM_COD_PAYMENT, CUSTOMER_VIEW, CUSTOMER_EDIT,
+    ORDER_VIEW, ORDER_STATUS_CHANGE, ORDER_CONFIRM_COD_PAYMENT, ORDER_REVIEW_CARD_TRANSFER, CUSTOMER_VIEW, CUSTOMER_EDIT,
     RETURN_VIEW, RETURN_MANAGE, REFUND_VIEW, REFUND_MANAGE,
     WAREHOUSE_VIEW, RESERVATION_VIEW, TRANSFER_VIEW,
     SHIPPING_SETTINGS_VIEW, SHIPPING_SETTINGS_MANAGE, TAX_SETTINGS_VIEW,

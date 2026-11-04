@@ -3,7 +3,7 @@
 One transaction, in this order:
 
 1. lock the Store row (a double-click / racing POST waits, then sees the finished state and no-ops);
-2. require a valid applied Ready Template (read from the real Storefront Layout provenance — never
+2. require an installed industry (mandatory — a business not in the list picks «سایر (صنف آزاد)») and a valid applied Ready Template (read from the real Storefront Layout provenance — never
    only ``Store.onboarding_stage``);
 3. publish the Draft through the canonical ``layout_service.publish`` (no second publisher);
 4. only then set ``onboarding_completed_at`` / ``onboarding_stage = DONE``.
@@ -16,10 +16,12 @@ from dataclasses import dataclass
 from django.db import DatabaseError, transaction
 from django.utils import timezone
 
+from apps.catalog.models import StoreIndustryInstallation
 from apps.core.services.rate_limit import RateLimitExceeded
 from apps.storefront_builder.services import layout_service, store_template_service
 from apps.stores.models import Store
 
+NO_INDUSTRY_MESSAGE = "برای انتشارِ فروشگاه ابتدا باید «صنف» را انتخاب کنید؛ اگر صنفِ شما در فهرست نیست «سایر (صنف آزاد)» را برگزینید."
 NO_TEMPLATE_MESSAGE = "برای انتشارِ فروشگاه ابتدا باید یک «قالبِ فروشگاه» انتخاب کنید."
 PUBLISH_FAILED_MESSAGE = "انتشارِ ویترین انجام نشد و فروشگاه هنوز خصوصی است؛ لطفاً کمی بعد دوباره تلاش کنید."
 RATE_LIMITED_MESSAGE = "تعدادِ انتشار در این بازه بیش از حدِ مجاز است؛ کمی بعد دوباره تلاش کنید."
@@ -43,6 +45,9 @@ def complete_onboarding(*, store, actor) -> PublishOutcome:
             locked = Store.objects.select_for_update().get(pk=store.pk)
             if locked.onboarding_completed_at:
                 return PublishOutcome(already_completed=True, published_storefront=False)
+
+            if not StoreIndustryInstallation.objects.filter(store=locked).exists():
+                raise OnboardingPublishError("no_industry", NO_INDUSTRY_MESSAGE)    # mandatory industry (owner decision)
 
             applied = store_template_service.get_applied_template(locked)
             if applied is None:

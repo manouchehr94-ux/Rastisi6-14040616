@@ -1,6 +1,7 @@
-{% load content_tags %}
+{% load content_tags storefront_builder_extras %}
 {% if banners %}
 <section class="section banner-section banner-section--{{ settings.layout_variant|default:'default' }}">
+  {% if settings.title %}<div class="sec-head banner-section-head"><h2>{% if settings.heading_icon %}<span class="sec-head-icon" aria-hidden="true">{{ settings.heading_icon|engine_icon }}</span>{% else %}<span class="bar"></span>{% endif %}{{ settings.title }}</h2></div>{% endif %}
   <div class="grid rsec-cols promo-grid promo-grid--{{ settings.layout_variant|default:'default' }}">
     {% for banner in banners %}
     {% resolve_destination banner as bdest %}

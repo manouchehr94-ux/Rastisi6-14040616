@@ -519,6 +519,32 @@ class StorefrontLayoutVersion(TimeStampedModel):
                 ],
             })
 
+        # V5 nested Groups: appended only when a page has any, with the parent Cell's stable id, so a version without nested Groups
+        # fingerprints exactly as before while any edit inside a Group changes the fingerprint.
+        for nested in StorefrontContainer.all_objects.filter(page__version=self, parent_cell__isnull=False).select_related(
+            "page", "parent_cell"
+        ).prefetch_related("cells__section", "cells__blocks").order_by("page__page_type", "parent_cell_id", "order", "id"):
+            containers.append({
+                "page_type": nested.page.page_type,
+                "order": nested.order,
+                "layout_key": nested.layout_key,
+                "settings": nested.settings,
+                "parent_cell_stable_id": str(nested.parent_cell.stable_id),
+                "cells": [
+                    {
+                        "order": cell.order,
+                        "span": cell.span,
+                        "settings": cell.settings,
+                        "stable_id": str(cell.stable_id),
+                        "blocks": [
+                            {"section_stable_id": str(block.stable_id), "cell_order": block.cell_order}
+                            for block in cell.blocks.order_by("cell_order", "id")
+                        ],
+                    }
+                    for cell in nested.cells.all().order_by("order", "id")
+                ],
+            })
+
         payload = {
             "header_config": self.header_config,
             "footer_config": self.footer_config,
@@ -828,6 +854,19 @@ class StorefrontSection(TimeStampedModel):
         return f"{self.section_key} (#{self.order})"
 
 
+class TopLevelContainerManager(models.Manager):
+    """Default manager of ``StorefrontContainer``: the page's TOP-LEVEL rows only.
+
+    A V5 «Group» is a Container nested inside a Cell of another Container (``parent_cell``). Every pre-existing code path
+    (``page.containers``, the preset/template services, the structure panel...) means «the rows of the page» when it says
+    ``containers``, so the default manager keeps returning exactly those; code that must see the whole tree (clone, history,
+    render, the nested-layout mutations) uses ``StorefrontContainer.all_objects`` explicitly. Deleting a Cell still cascades to its
+    nested Containers (Django's collector uses the unfiltered base manager)."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(parent_cell__isnull=True)
+
+
 class StorefrontContainer(TimeStampedModel):
     """Layout container for one page in the visual builder.
 
@@ -873,8 +912,21 @@ class StorefrontContainer(TimeStampedModel):
         default=False,
         help_text="قفل Container مستقل از قفل محتوای داخل Cellها است.",
     )
+    parent_cell = models.ForeignKey(
+        "StorefrontCell",
+        verbose_name="خانهٔ والد",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="child_containers",
+        help_text="خالی = ردیف سطح صفحه. اگر پر باشد، این Container یک «گروه» تودرتو داخل همان خانه است و جای محتوای مستقیم آن خانه را می‌گیرد.",
+    )
+
+    objects = TopLevelContainerManager()
+    all_objects = models.Manager()
 
     class Meta:
+        base_manager_name = "all_objects"
         verbose_name = "کانتینر چیدمان فروشگاه"
         verbose_name_plural = "کانتینرهای چیدمان فروشگاه"
         ordering = ["order", "id"]

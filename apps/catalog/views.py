@@ -491,6 +491,9 @@ def product_detail(request, slug):
     context.update(build_universal_storefront_context(
         request, store, StorefrontPage.PageType.PRODUCT_DETAIL, page_context=context,
     ))
+    # Tracking: one view_item for this render (server-resolved price, consent-gated in the browser; nothing when tracking is inactive).
+    from apps.core import tracking_events
+    tracking_events.queue(request, tracking_events.build_view_item, store, product)
     return render(request, "catalog/product_detail.html", context)
 
 

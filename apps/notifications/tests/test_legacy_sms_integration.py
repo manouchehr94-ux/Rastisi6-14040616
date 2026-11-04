@@ -49,6 +49,12 @@ class AliasMapTests(TestCase):
 
 class Base(TestCase):
     def setUp(self):
+        # The platform configuration is cached in the process-wide cache (not rolled back with the DB): a sibling test in the same worker that
+        # left a Kavenegar config there made these tests dial the real SMS gateway instead of the patched console backend.
+        from django.core.cache import cache
+        from apps.portal.services.platform_config_service import _CACHE_KEY
+        cache.delete(_CACHE_KEY)
+        self.addCleanup(cache.delete, _CACHE_KEY)
         self.store = Store.objects.get(slug="akhlaghi")
         SmsTemplate.ensure_defaults()
         SmsBalance.objects.update_or_create(store=self.store, defaults={"credits": 1000})

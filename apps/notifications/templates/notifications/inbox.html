@@ -1,0 +1,75 @@
+{% extends base_template %}
+{% load persian %}
+{% block title %}صندوق اعلان‌ها{% endblock %}
+{% block page_title %}صندوق اعلان‌ها{% endblock %}
+{% block page_sub %}همه‌ی رویدادهای مهمِ شما، یک‌جا{% endblock %}
+{% block content %}
+<div class="nt-page" data-testid="inbox-home">
+  <div class="nt-head">
+    <div>
+      <h2>صندوق اعلان‌ها</h2>
+      <p data-testid="inbox-unread">{% if unread %}{{ unread|fa_number }} اعلان خوانده‌نشده{% else %}همه‌ی اعلان‌ها خوانده شده‌اند{% endif %}</p>
+    </div>
+    <div class="nt-actions">
+      <form method="post" action="{{ nt_urls.all_read }}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="nt-btn" type="submit" data-testid="inbox-mark-all"{% if not unread %} disabled{% endif %}>همه را خوانده کن</button></form>
+      <a class="nt-btn nt-btn--primary" href="{{ nt_urls.prefs }}" data-testid="inbox-prefs-link">تنظیمات اعلان‌ها</a>
+    </div>
+  </div>
+
+  <nav class="nt-tabs" aria-label="نمای صندوق">
+    {% for key, label in views %}<a class="nt-tab{% if params.view|default:'' == key %} is-active{% endif %}" href="?view={{ key }}" data-view="{{ key|default:'active' }}"{% if params.view|default:'' == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
+
+  <form class="nt-filters" method="get" role="search" aria-label="فیلتر اعلان‌ها" data-testid="inbox-filters">
+    {% if params.view %}<input type="hidden" name="view" value="{{ params.view }}">{% endif %}
+    <label>جست‌وجو در عنوان و متن<input type="search" name="q" value="{{ params.q|default:'' }}" maxlength="80" placeholder="مثلاً سفارش"></label>
+    <label>دسته<select name="category"><option value="">همه</option>{% for k, v in categories %}<option value="{{ k }}"{% if params.category == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>سطح اهمیت<select name="severity"><option value="">همه</option>{% for k, v in severities %}<option value="{{ k }}"{% if params.severity == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>بازه‌ی زمانی<select name="range">{% for k, v in ranges %}<option value="{{ k }}"{% if params.range|default:'' == k %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>مرتب‌سازی<select name="sort"><option value="">جدیدترین</option><option value="oldest"{% if params.sort == "oldest" %} selected{% endif %}>قدیمی‌ترین</option></select></label>
+    <div class="nt-actions"><button class="nt-btn nt-btn--primary" type="submit">اعمال</button>{% if base_qs %}<a class="nt-btn" href="?">پاک‌کردن</a>{% endif %}</div>
+  </form>
+
+  {% if messages %}{% for m in messages %}<p class="nt-note" role="status">{{ m }}</p>{% endfor %}{% endif %}
+
+  {% if items %}
+  <div class="nt-rows" data-testid="inbox-rows">
+    {% for i in items %}
+    <article class="nt-row nt-row--{{ i.tone }}{% if not i.read %} is-unread{% endif %}" data-testid="inbox-row" data-id="{{ i.id }}" data-read="{% if i.read %}1{% else %}0{% endif %}">
+      <div class="nt-row__main">
+        <h3 class="nt-row__title"><a href="{% url site.ns|add:':inbox-detail' public_id=i.obj.public_id %}">{{ i.title }}{% if i.count > 1 %} (×{{ i.count|fa_number }}){% endif %}</a></h3>
+        {% if i.summary %}<p class="nt-row__sum">{{ i.summary }}</p>{% endif %}
+        <div class="nt-row__meta"><span class="nt-chip nt-chip--{{ i.tone }}">{{ i.severity_label }}</span><span>{{ i.category_label }}</span><span>{{ i.obj.created_at|jalali_dt }}</span>{% if i.pinned %}<span>📌 سنجاق‌شده</span>{% endif %}{% if i.snoozed %}<span>⏰ تا {{ i.obj.snoozed_until|jalali_dt }}</span>{% endif %}</div>
+      </div>
+      <div class="nt-row__ops">
+        {% if i.has_link %}<a class="nt-btn nt-btn--sm" href="{% url site.ns|add:':inbox-go' public_id=i.obj.public_id %}">رفتن به آن</a>{% endif %}
+        <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action=i.read|yesno:'unread,read' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit" data-testid="row-toggle-read">{% if i.read %}خوانده‌نشده{% else %}خوانده شد{% endif %}</button></form>
+        <details class="nt-more"><summary class="nt-btn nt-btn--sm">بیشتر</summary><div class="nt-more__body">
+          <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action=i.pinned|yesno:'unpin,pin' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit">{% if i.pinned %}برداشتن سنجاق{% else %}سنجاق{% endif %}</button></form>
+        {% if i.obj.archived_at %}
+          <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='unarchive' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit">برگرداندن</button></form>
+        {% else %}
+          {% if i.snoozed %}
+          <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='unsnooze' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit" data-testid="row-unsnooze">لغو تعویق</button></form>
+          {% endif %}
+          <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='snooze' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><select name="snooze" aria-label="تعویق تا">{% for k, v in snoozes %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="nt-btn nt-btn--sm" type="submit">به‌تعویق</button></form>
+          <form method="post" action="{% url site.ns|add:':inbox-action' public_id=i.obj.public_id action='archive' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="nt-btn nt-btn--sm" type="submit" data-testid="row-archive">بایگانی</button></form>
+        {% endif %}
+        </div></details>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="nt-pager" aria-label="صفحه‌بندی">
+    {% if page.has_previous %}<a class="nt-btn nt-btn--sm" href="?{% if base_qs %}{{ base_qs }}&amp;{% endif %}page={{ page.previous_page_number }}">قبلی</a>{% endif %}
+    <span>صفحه {{ page.number|fa_number }} از {{ page.paginator.num_pages|fa_number }}</span>
+    {% if page.has_next %}<a class="nt-btn nt-btn--sm" href="?{% if base_qs %}{{ base_qs }}&amp;{% endif %}page={{ page.next_page_number }}">بعدی</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="nt-empty-state" data-testid="inbox-empty"><strong>{% if base_qs %}نتیجه‌ای پیدا نشد{% else %}اعلانی نیست{% endif %}</strong>{% if base_qs %}فیلترها را تغییر دهید یا پاک کنید.{% else %}وقتی رویداد مهمی رخ دهد (سفارش جدید، پرداخت مشکوک، تغییر دسترسی…) اینجا و روی زنگِ بالای صفحه می‌آید.{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

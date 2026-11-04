@@ -1,0 +1,169 @@
+{% load persian %}
+{# «دامنه و آدرس فروشگاه»: ثبت و پیگیریِ دامنه داخلِ همین پنل (یک وضعیت + یک اقدامِ بعدی برای هر دامنه)؛ فقط تأییدِ نهایی با Step-Up در پرتالِ مالک است. #}
+<div class="au-page" data-testid="domain-settings">
+  <div class="au-note au-note--{% if domain_overview.summary.tone == 'ok' %}ok{% elif domain_overview.summary.tone == 'warn' %}warn{% else %}info{% endif %} domain-summary" data-testid="domain-status-summary" data-summary="{{ domain_overview.summary.key }}" role="status">
+    <b>{{ domain_overview.summary.title }}</b>
+    <div>{{ domain_overview.summary.text }}</div>
+  </div>
+
+  <div class="au-card domain-who" data-testid="domain-who-does-what">
+    <div class="au-card__head"><h2>🧭 چه کاری با شما و چه کاری با راستی‌سی است؟</h2></div>
+    <div class="au-card__body">
+      <ul class="domain-who__list">
+        <li><b>شما:</b> دامنه‌تان را وارد می‌کنید و هر جا لازم شد، یک رکورد را در پنلِ شرکتی که دامنه را از آن خریده‌اید کپی و اضافه می‌کنید.</li>
+        <li><b>راستی‌سی:</b> رکوردِ لازم را می‌سازد، مالکیت، DNS و HTTPS را بررسی می‌کند و وضعیت را همین‌جا نشان می‌دهد.</li>
+        <li><b>تأییدِ نهایی:</b> یک تأییدِ کوتاه با کدِ پیامکی در «پرتالِ مالکِ راستی‌سی»، تا بدونِ اجازهٔ شما آدرسِ فروشگاه عوض نشود.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="au-card">
+    <div class="au-card__head"><h2>🌐 نشانیِ فعلیِ فروشگاه</h2></div>
+    <div class="au-card__body">
+      {% if domain_overview.storefront_url %}
+      {% if domain_overview.storefront_is_local %}
+      <div class="au-note au-note--warn" data-testid="storefront-local-note">همین نشانی فقط برای آزمایش است؛ مشتریانِ واقعی با آن وارد نمی‌شوند.</div>
+      <div class="au-field"><span class="au-label">نشانیِ فعلیِ محیط آزمایشی</span>
+      {% else %}
+      <div class="au-field"><span class="au-label">آدرسی که مشتریان می‌بینند</span>
+      {% endif %}
+        <a class="au-btn" dir="ltr" href="{{ domain_overview.storefront_url }}" target="_blank" rel="noopener" data-testid="storefront-url" style="justify-content:flex-start;text-transform:none">{{ domain_overview.storefront_url }}</a></div>
+      {% else %}<div class="au-note au-note--warn">هنوز نشانیِ عمومیِ قابل‌استفاده‌ای برای فروشگاه ثبت نشده است.</div>{% endif %}
+      {% if domain_overview.platform_domains %}
+      <div class="au-field"><span class="au-label">زیردامنه‌ی دائمیِ راستی‌سی</span>
+        <ul style="margin:0;padding-inline-start:18px;line-height:2">{% for d in domain_overview.platform_domains %}<li><bdi dir="ltr">{{ d.hostname }}</bdi> <span class="au-hint">— {{ d.kind }}{% if d.is_primary %} (اصلی){% endif %}</span></li>{% endfor %}</ul></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="au-card">
+    <div class="au-card__head"><h2>🔗 دامنه‌ی اختصاصی <small class="au-hint">اختیاری — آدرسِ خودتان مثل shop.example.com</small></h2>
+      {% if domain_overview.custom_domains %}<span class="au-sub">{{ domain_overview.custom_domains|length|fa_number }} دامنه</span>{% endif %}</div>
+    <div class="au-card__body">
+      {% if domain_overview.can_manage %}
+      <form method="post" action="{% url 'dashboard:settings-domain-add' %}" class="domain-add" data-testid="domain-add-form">
+        {% csrf_token %}
+        <label for="domainHostname" class="au-label">دامنهٔ اختصاصی شما</label>
+        <div class="domain-add__row">
+          <input id="domainHostname" name="hostname" class="au-input au-input--ltr" dir="ltr" inputmode="url" autocomplete="off" required placeholder="shop.example.com">
+          <button type="submit" class="au-btn au-btn--primary">ثبت دامنه</button>
+        </div>
+        <span class="au-hint">فقط نامِ دامنه را بنویسید (بدون http و /). ثبتِ دامنه چیزی را در فروشگاهِ فعلی تغییر نمی‌دهد.</span>
+      </form>
+      {% endif %}
+      {% for d in domain_overview.custom_domains %}
+      <div class="au-note {% if d.phase_tone == 'ok' %}au-note--ok{% elif d.phase_tone == 'danger' %}au-note--danger{% elif d.phase_tone == 'info' %}au-note--info{% else %}au-note--warn{% endif %} domain-row" data-testid="custom-domain-row" data-phase="{{ d.phase }}"
+           {% if d.auto_refresh %}data-autorefresh data-expected="{% if d.phase == 'awaiting_ownership' %}txt_missing{% elif d.phase == 'needs_action' %}routing_pending{% else %}tls_pending{% endif %}"{% endif %}>
+        <div class="domain-row__head"><b dir="ltr">{{ d.hostname }}</b>
+          <span class="domain-phase domain-phase--{{ d.phase_tone }}" data-testid="domain-phase" data-phase-key="{{ d.phase }}">{{ d.phase_label }}</span></div>
+        <p class="domain-next" data-testid="domain-next-step">{{ d.next_text }}</p>
+        {% if d.nothing_text %}<p class="domain-nothing" data-testid="domain-nothing-to-do">{{ d.nothing_text }}</p>{% endif %}
+        {% if domain_overview.can_manage %}
+        {% if d.txt_record %}
+        <div class="domain-record" data-testid="domain-txt-record">
+          <p class="au-hint">در پنل DNS دامنه‌تان این رکورد را اضافه کنید:</p>
+          <dl><dt>نوع</dt><dd dir="ltr">TXT</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ d.txt_record.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.txt_record.host }}">کپی</button></dd>
+          <dt>مقدار</dt><dd dir="ltr"><bdi>{{ d.txt_record.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.txt_record.value }}">کپی</button></dd></dl>
+        </div>
+        {% elif d.routing_records and d.routing_records.rows and d.phase == "needs_action" %}
+        <div class="domain-record" data-testid="domain-routing-records">
+          <p class="au-hint">در پنل DNS دامنه‌تان این رکورد را اضافه کنید:</p>
+          {% for row in d.routing_records.rows %}{% if row.recommended or d.routing_records.rows|length == 1 %}<dl><dt>نوع</dt><dd dir="ltr">{{ row.type }}</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ row.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.host }}">کپی</button></dd>
+          <dt>مقدار</dt><dd dir="ltr"><bdi>{{ row.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.value }}">کپی</button></dd></dl>{% endif %}{% endfor %}
+          <span class="au-hint">اگر پنلِ DNSِ شما این نوع رکورد را نمی‌پذیرد، گزینهٔ دیگر در «تنظیمات پیشرفته» است.</span>
+        </div>
+        {% endif %}
+        <div class="domain-actions">
+        {% if d.button == "begin" %}
+        <form method="post" action="{% url 'dashboard:settings-domain-begin' d.id %}">{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-begin">{{ d.button_label }}</button></form>
+        {% elif d.button == "refresh" %}
+        <form method="post" action="{% url 'dashboard:settings-domain-refresh' d.id %}" data-refresh-form>{% csrf_token %}<button class="au-btn au-btn--primary" type="submit" data-testid="domain-act-refresh">{{ d.button_label }}</button></form>
+        {% elif d.button == "activate" %}
+        <a class="au-btn au-btn--primary" href="{{ domain_overview.portal_url }}" data-testid="domain-act-activate">{{ d.button_label }}</a>
+        <span class="au-hint">این تأیید در پرتالِ مالک انجام می‌شود (با کدِ پیامکی)؛ پس از آن وضعیتِ نهایی همین‌جا دیده می‌شود.</span>
+        {% endif %}
+        </div>
+        {% endif %}
+        {% if d.auto_refresh %}<span class="au-hint domain-autonote" data-testid="domain-autorefresh-note">این صفحه وضعیت را هر چند لحظه خودش بررسی می‌کند.</span>{% endif %}
+        <details class="domain-advanced" data-testid="domain-advanced">
+          <summary>تنظیمات پیشرفته</summary>
+          <div class="au-hint">مالکیت: {{ d.verification }} · اتصال DNS: {{ d.routing }} · HTTPS: {{ d.tls }}</div>
+          {% if d.next_step %}<div class="au-hint"><b>مرحلهٔ جاری:</b> {{ d.next_step }}{% if d.next_hint %} — {{ d.next_hint }}{% endif %}</div>{% endif %}
+          {% if domain_overview.can_manage %}
+          {% if d.all_txt_record %}
+          <div class="domain-record" data-testid="domain-adv-txt">
+            <p class="au-hint">رکورد تأیید مالکیت (TXT):</p>
+            <dl><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ d.all_txt_record.host }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.all_txt_record.host }}">کپی</button></dd>
+            <dt>مقدار</dt><dd dir="ltr"><bdi>{{ d.all_txt_record.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ d.all_txt_record.value }}">کپی</button></dd></dl>
+          </div>
+          {% endif %}
+          {% if d.all_routing_records.rows %}
+          <div class="domain-record" data-testid="domain-adv-routing">
+            <p class="au-hint">رکوردهای اتصال (یکی کافی است):</p>
+            {% for row in d.all_routing_records.rows %}<dl><dt>نوع</dt><dd dir="ltr">{{ row.type }}{% if row.recommended %} <small>(پیشنهادی)</small>{% endif %}</dd><dt>نام (Host)</dt><dd dir="ltr"><bdi>{{ row.host }}</bdi></dd>
+            <dt>مقدار</dt><dd dir="ltr"><bdi>{{ row.value }}</bdi> <button type="button" class="au-btn au-btn--ghost" data-copy="{{ row.value }}">کپی</button></dd></dl>{% endfor %}
+          </div>
+          {% elif d.verification != "تأییدنشده" %}<div class="au-note au-note--warn">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسطِ راستی‌سی تنظیم نشده است.</div>{% endif %}
+          {% endif %}
+          <ol class="domain-steps" data-testid="domain-steps" aria-label="مرحله‌های اتصالِ این دامنه">
+            {% for step in d.steps %}<li class="domain-step domain-step--{{ step.state }}"><span class="domain-step__mark" aria-hidden="true"></span><span>{{ step.title }}</span><small>{{ step.state_label }}</small></li>{% endfor %}
+          </ol>
+        </details>
+      </div>
+      {% empty %}
+      <p class="au-hint" style="margin:0" data-testid="domain-register-phase"><span class="domain-phase domain-phase--info">{{ domain_overview.register_phase.label }}</span> {{ domain_overview.register_phase.text }}</p>
+      {% endfor %}
+      {% if not domain_overview.targets_configured %}
+      <div class="au-note au-note--warn" data-testid="targets-missing">مقصدِ اتصالِ دامنه‌های اختصاصی هنوز توسط مدیر زیرساختِ راستی‌سی تنظیم نشده است؛ تا آن زمان مرحله‌ی اتصال و فعال‌سازی ممکن نیست.</div>
+      {% endif %}
+      <details class="domain-guide" data-testid="domain-six-steps"{% if not domain_overview.custom_domains %} open{% endif %}>
+        <summary>راهنمای شش‌مرحله‌ایِ اتصالِ دامنه</summary>
+      <ol class="au-hint" style="margin:8px 0 0;padding-inline-start:20px;line-height:2">
+        <li>دامنه را تهیه کنید و به پنل DNS آن دسترسی داشته باشید.</li><li>دامنه را در پرتال ثبت کنید.</li><li>رکورد TXT را برای اثبات مالکیت اضافه کنید.</li>
+        <li>رکورد A یا CNAME را برای اتصال ثبت کنید.</li><li>اتصال DNS و HTTPS را بررسی کنید.</li><li>با تأیید مالک، دامنه را فعال کنید.</li>
+      </ol>
+      </details>
+    </div>
+    {% if domain_overview.can_manage %}
+    <div class="au-card__foot"><span class="au-hint">برای دیدنِ سابقه یا انجامِ تأییدِ نهایی می‌توانید «پرتالِ مالک» را هم باز کنید: <a href="{{ domain_overview.portal_url }}" data-testid="portal-domains-link">باز کردنِ پرتالِ مالک</a> (برای استفادهٔ عادی لازم نیست).</span></div>
+    {% else %}
+    <div class="au-card__foot"><span class="au-hint" data-testid="owner-only">افزودن و فعال‌سازیِ دامنه فقط توسطِ مالکِ فروشگاه انجام می‌شود.</span></div>
+    {% endif %}
+  </div>
+</div>
+<style>
+.domain-row__head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.domain-phase{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;background:var(--bg,#f4f4f7)}
+.domain-next{margin:8px 0 4px;font-weight:700}.domain-nothing{margin:2px 0 8px;font-weight:700;color:var(--muted,#6b7280)}
+.domain-actions{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.domain-actions .au-btn{min-height:44px}
+.domain-advanced{margin-top:10px}.domain-advanced>summary{cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center}
+</style>
+<script>
+(function () {
+  // safe background re-check: only while this page waits for DNS / HTTPS; at most 6 POSTs, 45 s apart, only while the tab is visible
+  var row = document.querySelector('[data-autorefresh]');
+  var form = row && row.querySelector('form[data-refresh-form]');
+  if (!row || !form || !window.fetch) return;
+  var count = 0, MAX = 6, DELAY = 45000, expected = row.getAttribute('data-expected');
+  function tick() {
+    if (count >= MAX) return;
+    if (document.visibilityState !== 'visible') { setTimeout(tick, DELAY); return; }
+    count++;
+    fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok && d.outcome !== expected) location.reload(); else setTimeout(tick, DELAY); })
+      .catch(function () {});
+  }
+  setTimeout(tick, DELAY);
+})();
+</script>
+<script>
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest && e.target.closest('[data-copy]');
+  if (!btn) return;
+  var text = btn.getAttribute('data-copy');
+  var done = function () { var old = btn.textContent; btn.textContent = 'کپی شد'; setTimeout(function () { btn.textContent = old; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done);
+  else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch (err) {} t.remove(); }
+});
+</script>

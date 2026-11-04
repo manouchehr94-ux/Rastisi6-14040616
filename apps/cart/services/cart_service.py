@@ -68,6 +68,22 @@ def get_cart(request, create=False):
     return Cart.objects.filter(session_key=session_key, customer=None).first()
 
 
+def start_new_checkout_cycle_if_empty(locked_cart, *mirrors) -> bool:
+    """شروعِ چرخه‌ی خریدِ جدید: اگر سبد خالی است و کلیدِ تسویه‌حسابِ چرخه‌ی قبلی هنوز روی آن مانده، آن را پاک می‌کند تا نخستین
+    تسویه‌حسابِ بعدی کلیدِ تازه و مستقل بگیرد (``checkout_service.get_or_create_checkout_token``).
+
+    ``locked_cart`` باید *همین الان* با ``select_for_update`` قفل شده باشد (همان قفلِ حصارِ عضویتِ ``add_item_to_cart`` /
+    ``merge_guest_cart``)؛ پس با ثبتِ سفارشِ هم‌زمان که همان ردیفِ Cart را قفل می‌کند سریالی می‌شود. کلید بلافاصله پس از ثبتِ سفارش پاک
+    *نمی‌شود* (تا کلیکِ دوم/retry همان سفارشِ اول را برگرداند)؛ فقط هنگامِ افزودنِ نخستین قلمِ چرخه‌ی بعد پاک می‌شود."""
+    if locked_cart.checkout_token and not locked_cart.items.exists():
+        locked_cart.checkout_token = ""
+        locked_cart.save(update_fields=["checkout_token", "updated_at"])
+        for mirror in mirrors:
+            mirror.checkout_token = ""
+        return True
+    return False
+
+
 def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=False, gift_message=""):
     """محصول (و در صورت وجود، تنوع) را به سبد اضافه می‌کند یا تعداد را افزایش می‌دهد.
 
@@ -128,7 +144,8 @@ def add_item_to_cart(cart, product, variant, quantity, *, gift_wrap_requested=Fa
         # ترتیبِ قفل عمداً Product/Variant → Cart → CartItem است تا با
         # ``order_service._lock_cart_items_and_resolve_final_prices`` یکی
         # باشد و وارونگیِ بن‌بست (Cart→Product) رخ ندهد.
-        Cart.objects.select_for_update().get(pk=cart.pk)
+        locked_cart = Cart.objects.select_for_update().get(pk=cart.pk)
+        start_new_checkout_cycle_if_empty(locked_cart, cart)
 
         item = cart.items.select_for_update().filter(product=product, variant=variant).first()
         existing_quantity = item.quantity if item else 0

@@ -16,10 +16,13 @@ from django.db import transaction
 
 from apps.storefront_builder import (
     appearance_registry,
+    hero_stage,
     layout_preset_registry,
     resource_source,
     section_registry,
     shell_geometry,
+    template_gallery_policy,
+    variant_contract,
 )
 from apps.storefront_builder.models import (
     APPEARANCE_COLOR_KEYS,
@@ -85,9 +88,24 @@ _MUTATION_HISTORY_LABELS = {
     "section.toggle_active": "نمایش/مخفی کردن بخش",
     "section.toggle_locked": "قفل/بازکردن بخش",
     "container.change_layout": "تغییر چیدمان",
+    "container.add": "افزودن چیدمان",
+    "container.remove": "حذف چیدمان",
+    "section.resize": "تغییر اندازه بخش",
+    "container.resize": "تغییر اندازه ستون‌ها",
     "cell.add_section": "افزودن بخش به خانه",
     "section.move_to_cell": "انتقال بخش به خانه دیگر",
     "container.update_settings": "ویرایش تنظیمات چیدمان",
+    # V5 Groups (free nested layout)
+    "row.add": "افزودن ردیف ساده",
+    "cell.split": "تقسیم خانه",
+    "container.set_layout": "تغییر چیدمان گروه",
+    "container.add_cell": "افزودن خانه به گروه",
+    "cell.remove": "حذف خانه",
+    "container.remove_group": "حذف گروه",
+    "cell.duplicate": "کپی خانه",
+    "container.duplicate": "کپی ردیف",
+    "cell.move": "جابه‌جایی خانه",
+    "container.move": "جابه‌جایی ردیف",
     "section.reset_to_baseline": "بازنشانی بخش به قالب",
     "section.reset_setting_to_baseline": "بازنشانی فیلد بخش به قالب",
     "appearance.reset_setting_to_baseline": "بازنشانی تنظیم ظاهر به قالب",
@@ -95,6 +113,10 @@ _MUTATION_HISTORY_LABELS = {
     "footer.reset_to_baseline": "بازنشانی فوتر به قالب",
     "appearance.update": "ویرایش طراحی کلی",
     "header.update": "ویرایش هدر",
+    "header.apply_template": "اعمال هدرِ یک قالب",
+    "header.set_placement": "جایگاه هدر",
+    "header.apply_recipe": "اعمال هدرِ حرفه‌ای",
+    "hero.apply_template": "اعمال چیدمانِ هیروی یک قالب",
     "footer.update": "ویرایش فوتر",
     "appearance.component.update": "تغییر جزء طراحی فروشگاه",
     "appearance.manifest.apply": "اعمال طراحی فروشگاه",
@@ -332,10 +354,63 @@ R4_ERROR_MESSAGES_FA = {
     ),
     "invalid_appearance_template": "قالب انتخاب‌شده قابل اعمال نیست؛ هیچ تغییری ذخیره نشد.",
     "unknown_appearance_template": "قالب انتخاب‌شده در فهرست قالب‌ها وجود ندارد.",
+    "template_not_selectable": "این قالب فعلاً برای انتخاب در دسترس نیست؛ یکی از قالب‌های فهرست را انتخاب کنید.",
     "template_version_mismatch": "نسخهٔ قالب تغییر کرده است؛ صفحه را تازه کنید و دوباره انتخاب کنید.",
     "invalid_preset": "این بازنشانی انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "baseline_reset_error": "بازنشانی به قالب انجام نشد؛ هیچ تغییری ذخیره نشد.",
     "no_active_draft": "پیش‌نویس فعالی وجود ندارد؛ صفحه را دوباره بارگذاری کنید.",
+    # V5-QA-FIX-01 (V5-FUNC-002) — structural refusals are legitimate, protective server decisions (nothing was written).
+    # Without a Persian ``message`` the Studio could only show the generic «ذخیره ناموفق»; with one, the client's existing
+    # known-refusal path keeps the saved state and tells the merchant exactly why the move/duplicate/remove did not happen.
+    "move_boundary": "این بخش در همان جهت جای دیگری برای رفتن ندارد.",
+    "section_locked": "این بخش قفل است؛ برای جابه‌جایی یا تغییر، ابتدا قفل آن را باز کنید. هیچ تغییری ذخیره نشد.",
+    "target_locked": "بخش مجاور قفل است و جابه‌جایی از روی آن ممکن نیست؛ قفل آن را باز کنید یا جای دیگری امتحان کنید. هیچ تغییری ذخیره نشد.",
+    "container_locked": "ردیفی که این بخش در آن است قفل شده؛ هیچ تغییری ذخیره نشد.",
+    "target_container_locked": "ردیف مجاور قفل شده و جابه‌جایی از روی آن ممکن نیست؛ هیچ تغییری ذخیره نشد.",
+    "row_layout_invalid": (
+        "این جابه‌جایی چیدمان یک ردیف چندبخشی را به‌هم می‌ریزد؛ بخش را بعد از کل آن ردیف قرار دهید. "
+        "هیچ تغییری ذخیره نشد."
+    ),
+    "unsupported_placement": "جایگاه این بخش با این جابه‌جایی سازگار نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_placement": "جایگاه انتخاب‌شده برای این بخش معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "section_not_placed": "این بخش هنوز در چیدمان صفحه جایگاهی ندارد؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "section_not_found": "این بخش دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "cell_not_found": "این خانه دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "container_not_found": "این ردیف دیگر در پیش‌نویس نیست؛ صفحه را تازه کنید و دوباره تلاش کنید.",
+    "section_not_removable": "این بخش برای صفحه ضروری است و حذف نمی‌شود.",
+    "section_not_duplicable": "از این بخش فقط یک نمونه می‌تواند در صفحه باشد.",
+    "max_instances_exceeded": "به حداکثر تعداد مجاز این بخش در صفحه رسیده‌اید.",
+    "min_instances_violation": "تعداد لازم از این بخش باید در صفحه بماند؛ حذف آن ممکن نیست.",
+    "row_member": "این بخش عضو یک ردیف چندبخشی است و از اینجا حذف نمی‌شود؛ هیچ تغییری ذخیره نشد.",
+    # V5-LAYOUT-ATOMIC — container.add / cell.add_section refusals (the whole build is rolled back; nothing was saved)
+    "invalid_section_key": "یکی از بخش‌های انتخاب‌شده معتبر نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "section_not_allowed_on_page": "یکی از بخش‌های انتخاب‌شده روی این صفحه مجاز نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "section_hidden_from_library": "یکی از بخش‌های انتخاب‌شده دیگر در کتابخانه نیست؛ چیدمان ساخته نشد و هیچ تغییری ذخیره نشد.",
+    "invalid_container_layout": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_layout_key": "این چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_cells": "انتخاب بخش‌های چیدمان معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_page_type": "نوع صفحه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    # V5-LAYOUT-011 — container.remove refusals (nothing was changed)
+    "container_has_locked_section": "یکی از بخش‌های این چیدمان قفل است؛ ابتدا قفل آن را باز کنید. چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
+    "invalid_resize_value": "اندازهٔ واردشده معتبر نیست یا خارج از محدودهٔ مجاز است؛ هیچ تغییری ذخیره نشد.",
+    "invalid_resize_layout": "این چیدمان با این تغییر اندازه سازگار نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_announcement_image": "تصویر نوار اطلاعیه متعلق به این فروشگاه نیست یا وجود ندارد؛ هیچ تغییری ذخیره نشد.",
+    "container_has_row_member": "یکی از بخش‌های این چیدمان عضو یک ردیف چندبخشی قدیمی است؛ چیدمان حذف نشد و هیچ تغییری ذخیره نشد.",
+    # V5 Groups — nested layout refusals (nothing was saved)
+    "invalid_axis": "جهت تقسیم نامعتبر است؛ هیچ تغییری ذخیره نشد.",
+    "invalid_split_count": "تعداد قسمت‌ها معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "block_locked": "یکی از بخش‌های این خانه قفل است؛ ابتدا قفل آن را باز کنید. هیچ تغییری ذخیره نشد.",
+    "group_depth_limit": "گروه‌ها بیش از این تودرتو نمی‌شوند؛ یک گروه بالاتر را تقسیم کنید. هیچ تغییری ذخیره نشد.",
+    "page_cell_limit": "تعداد خانه‌های این صفحه به سقف مجاز رسیده است؛ هیچ تغییری ذخیره نشد.",
+    "cell_limit": "هر گروه حداکثر ۶ خانه دارد؛ برای خانهٔ بیشتر یکی از خانه‌ها را دوباره تقسیم کنید. هیچ تغییری ذخیره نشد.",
+    "group_has_children": "برای کم‌کردن خانه‌ها، ابتدا گروه‌های داخل خانه‌های حذفی را جابه‌جا یا حذف کنید؛ هیچ تغییری ذخیره نشد.",
+    "last_cell": "آخرین خانهٔ یک گروه جدا حذف نمی‌شود؛ خودِ گروه را حذف کنید. هیچ تغییری ذخیره نشد.",
+    "cell_not_empty": "خانهٔ دارای محتوا مستقیماً حذف نمی‌شود؛ هیچ تغییری ذخیره نشد.",
+    "not_top_level": "این عملیات فقط برای ردیف‌های سطح صفحه است؛ هیچ تغییری ذخیره نشد.",
+    "not_group_cell": "این خانه جزو یک گروه تقسیم‌شده نیست؛ ابتدا آن را تقسیم کنید. هیچ تغییری ذخیره نشد.",
+    "cell_hosts_group": "این خانه یک گروه تودرتو دارد؛ بخش را داخل یکی از خانه‌های همان گروه اضافه کنید. هیچ تغییری ذخیره نشد.",
+    "invalid_group_settings": "تنظیمات گروه معتبر نیست؛ هیچ تغییری ذخیره نشد.",
+    "invalid_direction": "جهت جابه‌جایی نامعتبر است؛ هیچ تغییری ذخیره نشد.",
 }
 
 
@@ -488,6 +563,92 @@ def _apply_container_change_layout(*, draft: StorefrontLayoutVersion, mutation: 
         raise R4MutationError(exc.code) from exc
 
 
+def _apply_container_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-LAYOUT-ATOMIC — one new Container (layout preset) with EMPTY or pre-filled Cells, all-or-nothing inside this mutation's
+    single transaction. Shape checks here; every legality rule is the existing service code (see ``add_container``)."""
+    page_type = mutation.get("page_type")
+    layout_key = mutation.get("layout_key")
+    cells = mutation.get("cells")
+    if not isinstance(layout_key, str) or not layout_key:
+        raise R4MutationError("invalid_layout_key")
+    if cells is not None and not isinstance(cells, list):
+        raise R4MutationError("invalid_cells")
+    spans = mutation.get("spans")
+    if spans is not None and (not isinstance(spans, list) or not all(_is_strict_int(v) for v in spans)):
+        raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.add_container(draft=draft, page_type=page_type, layout_key=layout_key, cells=cells, spans=spans)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+_SECTION_RESIZE_FIELDS = {"height": (0, 1600), "width": (30, 100)}
+_SECTION_RESIZE_ALIGN = ("start", "center", "end")
+
+
+def _apply_section_resize(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-RESIZE — one drag = one mutation. Payload: ``section_id`` plus any of ``height`` (px, floor), ``width`` (% of the Cell),
+    ``align`` (start/center/end); a key present with ``null`` returns that dimension to Auto, an absent key leaves it untouched.
+    Nothing else is accepted, so the mutation can only ever write the three size keys of the design block."""
+    section_id = mutation.get("section_id")
+    if not _is_strict_int(section_id):
+        raise R4MutationError("invalid_section_id")
+    unknown = set(mutation) - {"type", "section_id", *section_structure_service.RESIZE_DIMENSIONS}
+    changes = {k: mutation[k] for k in section_structure_service.RESIZE_DIMENSIONS if k in mutation}
+    if unknown or not changes:
+        raise R4MutationError("invalid_resize_value")
+    for dimension, value in changes.items():
+        if value is None:
+            continue
+        if dimension == "align":
+            if value not in _SECTION_RESIZE_ALIGN:
+                raise R4MutationError("invalid_resize_value")
+            continue
+        low, high = _SECTION_RESIZE_FIELDS[dimension]
+        if not _is_strict_int(value) or not low <= value <= high:
+            raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.resize_section(draft=draft, section_id=section_id, changes=changes)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_resize(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-RESIZE — column widths (``spans``: one int per Cell, the existing ``Cell.span`` truth) and/or the stacked layout's height split
+    (``stack_split``: the top small Cell's share in %, ``null`` = Auto). One drag = one mutation."""
+    container_id = mutation.get("container_id")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    unknown = set(mutation) - {"type", "container_id", "spans", "stack_split"}
+    if unknown or not ({"spans", "stack_split"} & set(mutation)):
+        raise R4MutationError("invalid_resize_value")
+    spans = mutation.get("spans")
+    if "spans" in mutation and (not isinstance(spans, list) or not all(_is_strict_int(v) for v in spans)):
+        raise R4MutationError("invalid_resize_value")
+    split = mutation.get("stack_split")
+    if "stack_split" in mutation and split is not None and not _is_strict_int(split):
+        raise R4MutationError("invalid_resize_value")
+    try:
+        section_structure_service.resize_container(
+            draft=draft, container_id=container_id, spans=spans if "spans" in mutation else None,
+            stack_split=split, set_split="stack_split" in mutation,
+        )
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
+def _apply_container_remove(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """V5-LAYOUT-011 — remove one Container; content is always preserved (an empty Container is deleted, a filled one is dissolved into
+    independent rows). No payload option can delete a Section: the only accepted fields are ``type`` and ``container_id``."""
+    container_id = mutation.get("container_id")
+    if not _is_strict_int(container_id):
+        raise R4MutationError("invalid_container_id")
+    try:
+        section_structure_service.remove_container(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+
+
 def _apply_cell_add_section(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
     section_key = mutation.get("section_key")
     cell_id = mutation.get("cell_id")
@@ -528,8 +689,10 @@ def _apply_section_move_to_cell(*, draft: StorefrontLayoutVersion, mutation: dic
 #: family-safe implementation"), so it stays INTERNAL/NOT MERCHANT-FACING
 #: here as well, never a new capability invented beyond legacy parity.
 _CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS = frozenset({
-    "gap", "mobile_mode", "vertical_align", "height_mode",
+    "gap", "mobile_mode", "mobile_order", "vertical_align", "height_mode",
     "background_mode", "background_color", "background_pattern",
+    # V5 Groups: title / description / presentation of a Group and the two extra background modes (gradient / picture)
+    "title", "description", "title_visible", "style", "background_color2", "background_media_asset_id",
 })
 
 
@@ -543,7 +706,7 @@ def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation
     if set(patch) - _CONTAINER_SETTINGS_ALLOWED_PATCH_KEYS:
         raise R4MutationError("invalid_container_settings_patch")
     try:
-        container = StorefrontContainer.objects.select_for_update().get(
+        container = StorefrontContainer.all_objects.select_for_update().get(
             pk=container_id, page__version=draft,
         )
     except StorefrontContainer.DoesNotExist:
@@ -551,8 +714,30 @@ def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation
     if container.is_locked:
         raise R4MutationError("container_locked")
 
+    from .. import group_style
+
     current = container_service.effective_container_settings(container.settings)
     candidate = dict(current)
+    patch = dict(patch)
+    try:
+        if "style" in patch:
+            # a PARTIAL style patch merges onto the stored one (None / "" clears a key) and is validated strictly: a bad value refuses the whole edit
+            patch["style"] = group_style.validate_style(group_style.merge_style_patch(current.get("style"), patch["style"]))
+        if "title" in patch:
+            patch["title"] = group_style.clean_text(patch["title"], group_style.MAX_TITLE_LENGTH, "عنوان گروه")
+        if "description" in patch:
+            patch["description"] = group_style.clean_text(patch["description"], group_style.MAX_DESCRIPTION_LENGTH, "توضیح گروه")
+        if "title_visible" in patch and not isinstance(patch["title_visible"], bool):
+            raise group_style.GroupStyleError("نمایش عنوان باید روشن/خاموش باشد")
+    except group_style.GroupStyleError as exc:
+        raise R4MutationError("invalid_group_settings", payload={"message": str(exc)}) from exc
+    for key in ("title", "description", "style", "background_color2", "background_media_asset_id"):
+        if key in patch and patch[key] in ("", None, {}):
+            candidate.pop(key, None)
+            patch.pop(key)
+    if patch.get("title_visible") is True:
+        candidate.pop("title_visible", None)
+        patch.pop("title_visible")
     candidate.update(patch)
     # content_width is preserved unconditionally — same restraint as the
     # legacy view, never settable via this patch even if posted (the
@@ -561,6 +746,106 @@ def _apply_container_update_settings(*, draft: StorefrontLayoutVersion, mutation
     candidate["content_width"] = current["content_width"]
     container.settings = container_service.effective_container_settings(candidate)
     container.save(update_fields=["settings", "updated_at"])
+
+
+def _group_error(exc) -> "R4MutationError":
+    return R4MutationError(exc.code)
+
+
+def _int_field(mutation: dict, key: str, error: str) -> int:
+    value = mutation.get(key)
+    if not _is_strict_int(value):
+        raise R4MutationError(error)
+    return value
+
+
+def _apply_row_add(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    try:
+        section_structure_service.add_row(draft=draft, page_type=mutation.get("page_type"))
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_split(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    count = mutation.get("count")
+    if not _is_strict_int(count):
+        raise R4MutationError("invalid_split_count")
+    if mutation.get("axis") not in container_service.GROUP_AXES:
+        raise R4MutationError("invalid_axis")
+    try:
+        section_structure_service.split_cell(draft=draft, cell_id=cell_id, axis=mutation["axis"], count=count)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_set_layout(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    count = mutation.get("count")
+    if not _is_strict_int(count):
+        raise R4MutationError("invalid_split_count")
+    if mutation.get("axis") not in container_service.GROUP_AXES:
+        raise R4MutationError("invalid_axis")
+    try:
+        section_structure_service.set_group_layout(draft=draft, container_id=container_id, axis=mutation["axis"], count=count)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_add_cell(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.add_group_cell(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_remove(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    try:
+        section_structure_service.remove_cell(draft=draft, cell_id=cell_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_remove_group(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.remove_group(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_duplicate(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    try:
+        section_structure_service.duplicate_cell(draft=draft, cell_id=cell_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_duplicate(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.duplicate_container(draft=draft, container_id=container_id)
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_cell_move(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    cell_id = _int_field(mutation, "cell_id", "invalid_cell_id")
+    try:
+        section_structure_service.move_cell(draft=draft, cell_id=cell_id, direction=mutation.get("direction"))
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
+
+
+def _apply_container_move(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    container_id = _int_field(mutation, "container_id", "invalid_container_id")
+    try:
+        section_structure_service.move_container(draft=draft, container_id=container_id, direction=mutation.get("direction"))
+    except section_structure_service.SectionStructureError as exc:
+        raise _group_error(exc) from exc
 
 
 #: Pre-Task-10 remediation (field-parity closure) — widened from the
@@ -575,7 +860,8 @@ _APPEARANCE_UPDATE_ALLOWED_PATCH_KEYS = frozenset({
     "template_slug", "palette_slug", "font", "type_scale", "motion", "button_style",
     "radius", "button_radius", "density",
     "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
-    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+    "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
+    "page_width_mode", "page_max_width", "page_gutter",
     "color_overrides", "theme_overrides",
     # explicit, labelled merchant action: drop EVERY global colour / region-colour override (never a side effect of anything else)
     "clear_global_color_overrides",
@@ -905,6 +1191,27 @@ def _resolve_ready_template(template_key, template_version):
     return preset
 
 
+def ensure_template_selectable(*, store, template_key) -> None:
+    """The gallery policy (``template_gallery_policy``) for a NEW choice made by a seller through a seller-facing entry point (Studio
+    gallery switch, ``appearance.template.apply`` from the Studio, the dashboard preset form). A registered Ready Template outside the
+    owner-approved subset cannot be chosen, EXCEPT the one this Store's Draft already carries (re-applying/resetting your own template is not
+    a new choice). Unknown keys fall through to the engine's own error codes. The engine itself (``switch_template``, ``apply_mutation``,
+    previews, publishing, repair commands) is deliberately NOT gated: hidden templates stay fully renderable, editable and applicable by
+    identity — only their selection by a seller is closed."""
+    if not isinstance(template_key, str) or template_gallery_policy.is_selectable_key(template_key):
+        return
+    preset = layout_preset_registry.get_layout_preset(template_key)
+    if preset is None or not preset.is_ready_template:
+        return
+    draft = layout_service.get_existing_draft(store)
+    try:
+        current_key = variant_contract.validate_template_provenance(draft.template_provenance)["template"]["key"] if draft else None
+    except Exception:  # noqa: BLE001 — an unreadable provenance simply means «no current template»
+        current_key = None
+    if current_key != template_key:
+        raise R4MutationError("template_not_selectable")
+
+
 def _replace_template_exact_with_checkpoint(
     *, draft: StorefrontLayoutVersion, preset, actor=None,
     confirm_replace: bool = False, allow_locked: bool = False,
@@ -1012,7 +1319,8 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # ``new_template is None`` either.
     for field in (
         "image_fit", "image_hover", "card_image_crossfade", "card_image_zoom",
-        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style",
+        "content_width", "grid_density", "card_shadow", "card_hover", "hero_style", "heading_style",
+        "page_width_mode", "page_max_width", "page_gutter",
     ):
         if field in patch:
             candidate[field] = patch[field]
@@ -1057,6 +1365,9 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     try:
         cleaned = layout_service.validate_appearance_config(candidate)
     except layout_service.AppearanceConfigValidationError as exc:
+        if any(key in patch for key in appearance_registry.PAGE_LAYOUT_KEYS):
+            # the page-width validator's own Persian sentence names the control and its bounds, so the seller sees WHY nothing was saved
+            raise R4MutationError("invalid_appearance_config", payload={"message": f"{exc}؛ هیچ تغییری ذخیره نشد."}) from exc
         raise R4MutationError("invalid_appearance_config") from exc
 
     # Phase 1 (Task 4) — delegate the final appearance_config transformation to
@@ -1067,6 +1378,11 @@ def _apply_appearance_update(*, draft: StorefrontLayoutVersion, mutation: dict) 
     # can be a semantic no-op (for example, boutique keeps the default motion),
     # but template-owned fields such as template_slug/font still changed and
     # must be visible to record_change(), which reloads the Draft from the DB.
+    if patch.get("page_width_mode") == "standard":
+        cleaned = {**cleaned, "page_width_mode": "standard"}      # tell the authority merge to REMOVE the stored mode and its custom numbers
+    if patch.get("heading_style") == "default":
+        # the sparse key is absent from ``cleaned`` when it is the default; tell the authority merge to REMOVE the stored one
+        cleaned = {**cleaned, "heading_style": "default"}
     appearance_authority_service.apply_appearance_patch(version=draft, patch=cleaned)
     if "motion" in patch or new_template is not None:
         _sync_manifest_from_live_selectors(draft=draft)
@@ -1103,8 +1419,17 @@ _HEADER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
     {
         "header_variant", "announcement_text", "announcement_show_phone",
         "announcement_links", "extra_blocks", "responsive", "geometry",
+        # V5 — the announcement bar's picture / link / alignment / page scope (sparse extension of the SAME header_config)
+        "announcement_image_asset_id", "announcement_image_alt", "announcement_image_side",
+        "announcement_link_url", "announcement_link_new_tab", "announcement_align", "announcement_pages",
     }
     | set(HEADER_TOGGLE_FIELDS)
+)
+
+
+_ANNOUNCEMENT_EXTRA_KEYS = (
+    "announcement_image_asset_id", "announcement_image_alt", "announcement_image_side",
+    "announcement_link_url", "announcement_link_new_tab", "announcement_align", "announcement_pages",
 )
 
 
@@ -1127,6 +1452,9 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["announcement_show_phone"] = patch["announcement_show_phone"]
     if "announcement_links" in patch:
         candidate["announcement_links"] = patch["announcement_links"]
+    for key in _ANNOUNCEMENT_EXTRA_KEYS:
+        if key in patch:
+            candidate[key] = patch[key]
     if "extra_blocks" in patch:
         candidate["extra_blocks"] = patch["extra_blocks"]
     if "responsive" in patch:
@@ -1137,7 +1465,15 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
     try:
         cleaned = layout_service.validate_header_config(candidate)
     except layout_service.HeaderConfigValidationError as exc:
-        raise R4MutationError("invalid_header_config") from exc
+        # the validator's own Persian sentence names the control and the rule («لینک نوار اعلان…»), so the merchant sees WHY nothing was saved
+        raise R4MutationError("invalid_header_config", payload={"message": f"{exc}؛ هیچ تغییری ذخیره نشد."}) from exc
+    # V5 — the announcement picture must be a MediaAsset of THIS Draft's store (never another tenant's, never a made-up id)
+    asset_id = cleaned.get("announcement_image_asset_id")
+    if asset_id is not None:
+        from apps.content.models import MediaAsset
+
+        if not MediaAsset.objects.filter(pk=asset_id, store_id=draft.layout.store_id).exists():
+            raise R4MutationError("invalid_announcement_image")
 
     # Persist the full validated header config first (toggles/announcement/
     # content preserved), then delegate the typed manifest header selection
@@ -1152,6 +1488,113 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         raise R4MutationError("invalid_store_appearance_manifest") from exc
 
 
+def template_header_patch(preset) -> dict:
+    """The part of a Ready Template that is its HEADER STYLE (variant + show/sticky toggles) as a ``header.update`` patch — never the
+    merchant's announcement bar. Empty when the template carries no header recipe."""
+    overlay = preset.header if isinstance(preset.header, dict) else {}
+    return {
+        key: value for key, value in overlay.items()
+        if key in _HEADER_UPDATE_ALLOWED_PATCH_KEYS and not key.startswith("announcement_")
+    }
+
+
+def template_hero_stage_entry(preset):
+    """The Hero Stage row of a Ready Template's home page, or ``None`` (a slider/banner hero is not a stage recipe)."""
+    return next((entry for entry in (preset.pages or {}).get("home", ()) if entry.section_key == hero_stage.SECTION_KEY), None)
+
+
+def template_parts(preset) -> dict:
+    """What a Ready Template can offer on its own — drives the «فقط هدر» / «فقط هیرو» actions of the Studio gallery."""
+    return {"header": bool(template_header_patch(preset)), "hero": template_hero_stage_entry(preset) is not None}
+
+
+def _apply_header_from_template(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Take ONLY the header of a Ready Template: its variant and show/sticky toggles. Pages, sections, the hero, the footer, the palette and the
+    merchant's announcement bar (a message, not a style) are left exactly as they are. One history step; goes through the same validated
+    ``header.update`` path, so the typed Store Appearance manifest stays in sync."""
+    preset = _resolve_ready_template(mutation.get("template_key"), mutation.get("template_version"))
+    patch = template_header_patch(preset)
+    if not patch:
+        raise R4MutationError("template_has_no_header")
+    _apply_header_update(draft=draft, mutation={"patch": patch})
+
+
+def _apply_header_set_placement(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Move the Store's header between «above the page» / «inside the Hero Stage» / «floating over the picture» WITHOUT touching the header model,
+    the hero's pictures or texts, the footer or any other section. It is one validated ``section.update_settings`` of the page's first top-level
+    Hero Stage (``header_mode``) — the same schema path the stage's own Inspector uses — so Undo/Redo, revisions and tenant scoping are the
+    engine's. Without such a stage the request is refused with a stable code: the header is never half-embedded or drawn twice."""
+    from .. import header_placement
+
+    placement = mutation.get("placement")
+    if placement not in header_placement.PLACEMENT_KEYS:
+        raise R4MutationError("invalid_placement")
+    state = header_placement.placement_state(draft)
+    if placement == "independent" and state["stage"] is None:
+        return                                            # nothing embeds the header: already independent
+    if state["stage"] is None:
+        raise R4MutationError("header_placement_needs_stage", payload={"message": f"{header_placement.REASONS['no_stage']} هیچ تغییری ذخیره نشد."})
+    if placement != "independent":
+        if state["reason"] == "stage_hidden":
+            raise R4MutationError("header_placement_stage_hidden", payload={"message": f"{header_placement.REASONS['stage_hidden']} هیچ تغییری ذخیره نشد."})
+        if state["reason"] == "stage_locked":
+            raise R4MutationError("section_locked")
+    elif state["stage"].is_locked:
+        raise R4MutationError("section_locked")
+    _apply_section_update_settings(
+        store=draft.layout.store, draft=draft,
+        mutation={"section_id": state["stage"].pk, "patch": {"header_mode": placement}},
+    )
+
+
+def _apply_header_recipe(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Apply a Header Recipe (model + placement read off a Ready Template of the registry) to this Draft, in one history step. The MODEL is always
+    applied; the PLACEMENT only when the home page opens with a usable Hero Stage — otherwise the header stays independent (honest degradation,
+    reported to the seller by the Inspector) and nothing else changes: hero, footer, palette, pages and the merchant's announcement bar are kept."""
+    from .. import header_placement
+
+    recipe = header_placement.get_recipe(mutation.get("recipe_key"))
+    if recipe is None:
+        raise R4MutationError("unknown_header_recipe")
+    preset = layout_preset_registry.get_layout_preset(recipe["key"])
+    _apply_header_update(draft=draft, mutation={"patch": template_header_patch(preset)})
+    state = header_placement.placement_state(draft)
+    if state["stage"] is not None and state["available"]:
+        _apply_header_set_placement(draft=draft, mutation={"placement": recipe["placement"]})
+
+
+def _apply_hero_from_template(*, draft: StorefrontLayoutVersion, mutation: dict) -> None:
+    """Take ONLY the Hero Stage LOOK of a Ready Template (header mode, panels, split, alignment, scrim, frame, heights, slot order…) and
+    apply it to this Draft's stage — the merchant's own texts, pictures and focal points, the header chosen for the Store, and every other
+    section stay untouched. When the home page has no stage yet, one is added at the very top (a stage is a normal single-instance section).
+    Templates whose hero is not a Hero Stage (a slider, a banner…) have no recipe to take: refused with a stable code, never faked."""
+    preset = _resolve_ready_template(mutation.get("template_key"), mutation.get("template_version"))
+    source = template_hero_stage_entry(preset)
+    if source is None:
+        raise R4MutationError("template_has_no_hero_stage")
+    recipe = hero_stage.layout_recipe(source.settings)
+
+    page = draft.get_page("home")
+    stage = page.sections.filter(section_key=hero_stage.SECTION_KEY).order_by("order", "id").first()
+    try:
+        if stage is None:
+            stage = section_structure_service.add_section(draft=draft, section_key=hero_stage.SECTION_KEY, page_type="home")
+            while True:                                              # a new section lands last: walk it up to the top of the page
+                try:
+                    section_structure_service.move_section(draft=draft, section_id=stage.pk, direction="up")
+                except section_structure_service.SectionStructureError as exc:
+                    if exc.code == "move_boundary":
+                        break
+                    raise
+            stage.refresh_from_db()
+    except section_structure_service.SectionStructureError as exc:
+        raise R4MutationError(exc.code) from exc
+    if stage.is_locked:
+        raise R4MutationError("section_locked")
+    stage.settings = hero_stage.apply_layout_recipe(stage.settings, recipe)
+    stage.save(update_fields=["settings"])
+
+
 #: Pre-Task-10 remediation — widened from ``footer_variant``-only to cover
 #: every REQUIRED EXISTING CAPABILITY toggle the legacy footer form exposes
 #: with no prior R4 equivalent (see headline finding #3). Pre-Task-10 final
@@ -1164,7 +1607,8 @@ def _apply_header_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
 #: JSON and was already validated/synced on every save — it simply could
 #: never be CHANGED by a merchant through R4 before this.
 _FOOTER_UPDATE_ALLOWED_PATCH_KEYS = frozenset(
-    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry"} | set(FOOTER_TOGGLE_FIELDS)
+    {"footer_variant", "mobile_nav_variant", "extra_blocks", "responsive", "geometry",
+     "floating_whatsapp", "floating_phone", "floating_back_to_top", "floating_position"} | set(FOOTER_TOGGLE_FIELDS)
 )
 
 
@@ -1189,6 +1633,9 @@ def _apply_footer_update(*, draft: StorefrontLayoutVersion, mutation: dict) -> N
         candidate["responsive"] = _merge_shell_responsive_patch(candidate.get("responsive"), patch["responsive"])
     if "geometry" in patch:
         candidate["geometry"] = shell_geometry.merge_patch(candidate.get("geometry"), patch["geometry"])
+    for field in (*layout_service.FLOATING_ACTION_KEYS, "floating_position"):
+        if field in patch:
+            candidate[field] = patch[field]
 
     try:
         cleaned = layout_service.validate_footer_config(candidate)
@@ -1241,6 +1688,18 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
     if mutation_type == "container.change_layout":
         _apply_container_change_layout(draft=draft, mutation=mutation)
         return
+    if mutation_type == "container.add":
+        _apply_container_add(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.remove":
+        _apply_container_remove(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "section.resize":
+        _apply_section_resize(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "container.resize":
+        _apply_container_resize(draft=draft, mutation=mutation)
+        return
     if mutation_type == "cell.add_section":
         _apply_cell_add_section(draft=draft, mutation=mutation)
         return
@@ -1250,6 +1709,16 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
     if mutation_type == "container.update_settings":
         _apply_container_update_settings(draft=draft, mutation=mutation)
         return
+    # V5 Groups — the free nested layout (each is ONE mutation = one Revision = one Undo step)
+    for _type, _handler in (
+        ("row.add", _apply_row_add), ("cell.split", _apply_cell_split), ("container.set_layout", _apply_container_set_layout),
+        ("container.add_cell", _apply_container_add_cell), ("cell.remove", _apply_cell_remove),
+        ("container.remove_group", _apply_container_remove_group), ("cell.duplicate", _apply_cell_duplicate),
+        ("container.duplicate", _apply_container_duplicate), ("cell.move", _apply_cell_move), ("container.move", _apply_container_move),
+    ):
+        if mutation_type == _type:
+            _handler(draft=draft, mutation=mutation)
+            return
     if mutation_type == "section.reset_to_baseline":
         _apply_section_reset_to_baseline(draft=draft, mutation=mutation)
         return
@@ -1270,6 +1739,18 @@ def _dispatch_mutation(*, store, draft: StorefrontLayoutVersion, mutation: dict)
         return
     if mutation_type == "header.update":
         _apply_header_update(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.apply_template":
+        _apply_header_from_template(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "hero.apply_template":
+        _apply_hero_from_template(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.set_placement":
+        _apply_header_set_placement(draft=draft, mutation=mutation)
+        return
+    if mutation_type == "header.apply_recipe":
+        _apply_header_recipe(draft=draft, mutation=mutation)
         return
     if mutation_type == "footer.update":
         _apply_footer_update(draft=draft, mutation=mutation)

@@ -29,6 +29,10 @@ was added anywhere for this to work.
     </div>
     {% endif %}
     <div class="gh-actions">
+      {% if hc.geometry.mobile_search_icon and hc.show_search %}
+      <input type="checkbox" id="gh-sx" class="gh-sx-check" hidden>
+      <label for="gh-sx" class="gh-btn gh-sx-toggle" role="button" aria-label="جستجو">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="search" %}</label>
+      {% endif %}
       {% include "storefront_builder/partials/global_header/_shared/admin_shortcut.html" %}
       {% for block in hc.extra_blocks %}
       {% if block.type == "phone" and SHOP_CONTACT_PHONE %}

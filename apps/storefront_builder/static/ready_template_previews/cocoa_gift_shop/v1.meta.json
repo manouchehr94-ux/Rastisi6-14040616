@@ -1,0 +1,11 @@
+{
+  "template_key": "cocoa_gift_shop",
+  "version": "1",
+  "content_hash": "20c5377540a62db092a03e55aa5a79f921ad1ef607c5586fecbc212c4d8618bb",
+  "preview_input_fingerprint": "a46f0280a44d405ecdae9e3a464d3a940279dfd9426c2c0c7e6a17ed4317585d",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

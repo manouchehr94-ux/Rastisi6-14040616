@@ -1,60 +1,260 @@
 {% load persian dashboard_extras %}
-<div class="card">
-  <div class="card-head">
-    <h3>🔗 یکپارچه‌سازی‌های بیرونی</h3>
-    <span class="hint">اینماد، ترب، گوگل آنالیتیکس، گوگل تگ منیجر و پیکسلِ تبلیغاتی</span>
-  </div>
-  <div class="card-body" style="display:flex;flex-direction:column;gap:14px">
-    {% for row in integration_rows %}
-    <div style="border:1px solid var(--border);border-radius:12px;padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-        <div>
-          <b style="font-size:13.5px">{{ row.provider.display_name }}</b>
-          {% if row.is_connected %}
-          <span class="badge b-green" style="margin-right:8px">متصل</span>
-          {% else %}
-          <span class="badge" style="margin-right:8px;background:var(--bg);color:var(--muted)">متصل‌نشده</span>
-          {% endif %}
-          <div style="font-size:11.5px;color:var(--muted);margin-top:4px">{{ row.provider.description }}</div>
-        </div>
-        <a href="{{ row.provider.setup_guide }}" target="_blank" rel="noopener" class="btn btn-sm">راهنمای اتصال</a>
-      </div>
+{% comment %}«یکپارچه‌سازی‌ها» — شش دستهٔ افقی (نوار سطح ۳ که base_admin یک‌بار رندر می‌کند، با ?view=): نمای کلی · جست‌وجو و سئو · آمار و تبلیغات · ترب · اینماد · امکانات آینده.
+   فقط دستهٔ انتخاب‌شده رندر می‌شود (لینک واقعی، بدون JS هم کار می‌کند). هر وضعیت از داده‌ی واقعی Backend می‌آید؛ هیچ اتصال یا تأییدِ نمایشی وجود ندارد.
+   «ذخیره‌شده» ≠ «استفاده روشن» ≠ «آماده» ≠ «همین حالا فعال». هر سرویس یک کارت خلاصه دارد و جزئیات/فرم در پنل کناری (Drawer) است.{% endcomment %}
+<div class="au-page int-page" data-testid="integrations-page" data-view="{{ integration_view }}">
+  {% with ov=integration_overview sp=search_presence view=integration_view %}
 
-      {% if row.connection.last_tested_at %}
-      <div style="font-size:11.5px;margin-top:10px;padding:8px 10px;border-radius:8px;
-                  background:{% if row.connection.last_test_result == 'success' %}var(--green-soft){% else %}var(--red-soft){% endif %};
-                  color:{% if row.connection.last_test_result == 'success' %}var(--green){% else %}var(--red){% endif %}">
-        {% if row.connection.last_test_result == "success" %}✅{% else %}⚠️{% endif %} {{ row.connection.last_test_message }}
-      </div>
-      {% endif %}
-
-      <form method="post" action="{% url 'dashboard:settings-integration-connect' row.provider.code %}" style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        {% csrf_token %}
-        {% for field in row.provider.fields %}
-        <div class="form-group" style="margin-bottom:0;flex:1;min-width:180px">
-          <label>{{ field.label }}</label>
-          <input class="inp" type="{% if field.is_secret %}password{% else %}text{% endif %}" name="{{ field.key }}"
-                 value="{% if not field.is_secret %}{{ row.credentials|get_item:field.key }}{% endif %}"
-                 placeholder="{{ field.placeholder }}" dir="ltr">
-        </div>
-        {% endfor %}
-        <button type="submit" class="btn btn-primary btn-sm">{% if row.is_connected %}به‌روزرسانی{% else %}اتصال{% endif %}</button>
-      </form>
-
-      {% if row.is_connected %}
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <form method="post" action="{% url 'dashboard:settings-integration-test' row.provider.code %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm">تستِ اتصال</button>
-        </form>
-        <form method="post" action="{% url 'dashboard:settings-integration-disconnect' row.provider.code %}"
-              onsubmit="return confirm('اتصالِ این یکپارچه‌سازی قطع شود؟')">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm btn-danger">قطعِ اتصال</button>
-        </form>
-      </div>
-      {% endif %}
+  {% if view == "overview" %}
+  {# ═════════ نمای کلی ═════════ #}
+  <section class="int-summary int-summary--{% if ov.ready and sp.indexable %}ok{% else %}todo{% endif %}" data-testid="integration-summary" role="status">
+    <div class="int-summary__main">
+      <h2>{{ ov.headline }}</h2>
+      <p>اینجا می‌بینید راستی‌سی خودش چه کاری انجام داده، چه کاری فقط از شماست و هر سرویس دقیقاً در چه وضعیتی است. «ذخیره‌شده» با «فعال» و «ردیابی فعال است» یکی نیست.</p>
+      {% if ov.next_action %}<p class="int-summary__next" data-testid="integration-next-action"><b>قدم بعدی:</b> <span data-testid="next-action-label">{{ ov.next_action.label }}</span></p>
+      {% else %}<p class="int-summary__next" data-testid="integration-next-action">فعلاً نیازی به انجام کاری از طرف شما نیست.</p>{% endif %}
     </div>
-    {% endfor %}
-  </div>
+    <ul class="int-summary__stats">
+      {% if ov.infra_active %}<li data-testid="stat-active"><b>{{ ov.infra_active|fa_number }}</b><span>قابلیت فنی فعال/آماده</span></li>{% endif %}
+      {% if ov.infra_waiting %}<li data-testid="stat-waiting"><b>{{ ov.infra_waiting|fa_number }}</b><span>قابلیت منتظر آدرس عمومی/انتشار</span></li>{% endif %}
+      <li><b>{{ ov.not_available_count|fa_number }}</b><span>سرویسِ به‌زودی</span></li>
+    </ul>
+  </section>
+
+  <section class="rs-group" aria-labelledby="g-attention" data-testid="overview-attention">
+    <h2 id="g-attention" class="rs-group__title">اقدام‌های لازم از شما</h2>
+    {% if ov.attention %}
+    <ul class="rs-todo">
+      {% for row in ov.attention %}<li data-testid="attention-{{ row.provider.code }}"><span class="int-chip int-chip--{{ row.guide.tone }}">{{ row.guide.label }}</span>
+        <span><b>{{ row.provider.display_name }}:</b> {{ row.guide.next }}</span>
+        <a class="au-btn au-btn--sm" href="?section=integrations&amp;view={{ row.view }}&amp;manage={{ row.provider.code }}">مدیریت</a></li>{% endfor %}
+    </ul>
+    {% else %}<p class="au-hint">برای سرویس‌های شناسه‌دار کاری از شما باقی نمانده است.</p>{% endif %}
+  </section>
+
+  <section class="rs-group" aria-labelledby="g-services">
+    <h2 id="g-services" class="rs-group__title">سرویس‌ها</h2>
+    <div class="rs-svc-list" data-testid="integration-accordions">
+      {% for row in ov.all_rows %}{% include "dashboard/partials/settings_integration_card.html" with link_mode=True %}{% endfor %}
+    </div>
+  </section>
+
+  {% elif view == "seo" %}
+  {# ═════════ جست‌وجو و سئو — ترتیب اجباری: ۱ وضعیت و اقدام لازم · ۲ کارِ مشتری · ۳ کارِ خودکارِ راستی‌سی · ۴ سرویس‌های بیرونی ═════════ #}
+  <section class="rs-group" aria-labelledby="g-seo-1" data-testid="seo-group-status">
+    <h2 id="g-seo-1" class="rs-group__title"><span class="rs-group__n">۱</span> وضعیت فروشگاه و اقدام لازم</h2>
+      <section class="au-card pres-summary" data-testid="presence-summary" aria-labelledby="pres-summary-title">
+        <h3 id="pres-summary-title" class="au-card__title">خلاصهٔ آمادگی</h3>
+        <ul class="vis-list">
+          {% for item in sp.summary_items %}
+          <li class="vis-item vis-item--{% if item.ok %}ok{% else %}todo{% endif %}" data-testid="presence-item-{{ item.key }}" data-ok="{% if item.ok %}1{% else %}0{% endif %}">
+            <span class="vis-item__mark" aria-hidden="true">{% if item.ok %}✓{% else %}!{% endif %}</span>
+            <span class="vis-item__body"><strong>{{ item.label }}</strong><span>{{ item.text }}</span></span>
+          </li>
+          {% endfor %}
+          <li class="vis-item vis-item--{% if sp.next_action %}todo{% else %}ok{% endif %}" data-testid="presence-item-next">
+            <span class="vis-item__mark" aria-hidden="true">{% if sp.next_action %}→{% else %}✓{% endif %}</span>
+            <span class="vis-item__body"><strong>اقدام بعدی شما</strong>
+              {% if sp.next_action %}<span><a class="au-btn au-btn--primary au-btn--sm" href="{{ sp.next_action.href }}" data-testid="presence-next-action">{{ sp.next_action.label }}</a></span>
+              {% else %}<span>فعلاً کاری از شما لازم نیست.</span>{% endif %}</span>
+          </li>
+        </ul>
+        {% if sp.test_env_message %}<p class="au-note" data-testid="presence-test-env">{{ sp.test_env_message }}</p>{% endif %}
+      </section>
+      <details class="int-card" data-testid="presence-address" open>
+        <summary><span class="int-card__title">آدرس عمومی فروشگاه</span><span class="int-chip int-chip--{{ sp.address.tone }}" data-testid="presence-address-state" data-state="{{ sp.address.state }}">{{ sp.address.label }}</span></summary>
+        <div class="int-card__body">
+          <p data-testid="presence-address-text">{{ sp.address.text }}</p>
+          <a class="au-btn {% if sp.address.primary %}au-btn--primary{% else %}au-btn--ghost{% endif %}" href="{{ sp.address.href }}" data-testid="presence-address-button">تنظیمات دامنهٔ همین فروشگاه</a>
+        </div>
+      </details>
+  </section>
+
+  <section class="rs-group" aria-labelledby="g-seo-2" data-testid="seo-group-customer">
+    <h2 id="g-seo-2" class="rs-group__title"><span class="rs-group__n">۲</span> کارهایی که باید خودتان تنظیم کنید</h2>
+      <details class="int-card" data-testid="presence-search-console">
+        <summary><span class="int-card__title">{{ sp.search_console.title }}</span><span class="int-chip int-chip--{% if sp.search_console.auto_connect_available %}info{% else %}off{% endif %}" data-testid="presence-sc-state" data-state="{{ sp.search_console.auto_state }}">{{ sp.search_console.auto_label }}</span></summary>
+        <div class="int-card__body">
+          <ul class="int-points">
+            <li>ثبت در Search Console برای ایندکس‌شدن <b>الزامی نیست</b>.</li>
+            <li>برای دیدن عملکرد و خطاهای سایت در گوگل مفید است.</li>
+            <li>مالکیت سایت باید توسط صاحب حساب مجاز گوگل تأیید شود؛ راستی‌سی این کار را به‌جای شما انجام نمی‌دهد.</li>
+          </ul>
+          <p class="au-hint" data-testid="presence-sc-auto">{{ sp.search_console.auto_connect_text }}</p>
+          {% if sp.search_console.sitemap_url %}
+          <div class="pres-sitemap" data-testid="presence-sitemap">
+            <span>آدرس نقشهٔ سایت برای ثبت:</span>
+            <bdi dir="ltr" class="pres-sitemap__url" data-testid="presence-sitemap-url">{{ sp.search_console.sitemap_url }}</bdi>
+            <button type="button" class="au-btn au-btn--sm" data-copy="{{ sp.search_console.sitemap_url }}" data-testid="presence-sitemap-copy">کپی</button>
+          </div>
+          <div class="au-acc__foot">
+            <a class="au-btn au-btn--ghost" href="{{ sp.search_console.links.search_console }}" target="_blank" rel="noopener noreferrer" data-testid="presence-sc-link">باز کردن Google Search Console</a>
+            <a class="au-btn au-btn--ghost" href="{{ sp.search_console.links.sitemap_guide }}" target="_blank" rel="noopener noreferrer" data-testid="presence-sc-guide">راهنمای ثبت نقشهٔ سایت (گوگل)</a>
+          </div>
+          {% else %}<p class="au-note" data-testid="presence-sc-waiting">{{ sp.search_console.waiting_text }}</p>{% endif %}
+        </div>
+      </details>
+  </section>
+
+  <section class="rs-group" aria-labelledby="g-seo-3" data-testid="seo-group-automatic">
+    <h2 id="g-seo-3" class="rs-group__title"><span class="rs-group__n">۳</span> کارهایی که راستی‌سی خودش مدیریت می‌کند</h2>
+      <details class="int-card" data-testid="presence-automatic">
+        <summary><span class="int-card__title">کارهایی که راستی‌سی خودکار انجام می‌دهد</span>
+          <span class="int-chip int-chip--{{ sp.counters.tone }}" data-testid="presence-automatic-counter">{{ sp.counters.text }}</span></summary>
+        <div class="int-card__body">
+          <ul class="vis-list">
+            {% for cap in sp.capabilities %}
+            <li class="vis-item" data-testid="presence-cap-{{ cap.key }}" data-state="{{ cap.state }}">
+              <span class="int-chip int-chip--{{ cap.tone }}" data-testid="presence-cap-{{ cap.key }}-state">{{ cap.label }}</span>
+              <span class="vis-item__body"><strong>{{ cap.title }}</strong><span>{{ cap.detail }}</span></span>
+            </li>
+            {% endfor %}
+          </ul>
+          <p class="au-hint">این قابلیت‌ها فقط صفحه‌ها را قابل‌خواندن می‌کنند؛ ایندکس‌شدن، رتبه یا نمایش در پاسخ هوش مصنوعی را هیچ ابزاری تضمین نمی‌کند.</p>
+        </div>
+      </details>
+  </section>
+
+  <section class="rs-group" aria-labelledby="g-seo-4" data-testid="seo-group-external">
+    <h2 id="g-seo-4" class="rs-group__title"><span class="rs-group__n">۴</span> وضعیت سرویس‌های بیرونی مرتبط</h2>
+      <details class="int-card int-card--tech" data-testid="presence-bing-ai">
+        <summary><span class="int-card__title">Bing و جست‌وجوی هوشمند <small>— جزئیات فنی</small></span></summary>
+        <div class="int-card__body">
+          {% for cap in sp.capabilities %}{% if cap.key == "indexnow" %}
+          <p data-testid="presence-indexnow"><span class="int-chip int-chip--{{ cap.tone }}" data-state="{{ cap.state }}">{{ cap.label }}</span> <b>{{ cap.title }}:</b> {{ cap.detail }}</p>
+          {% endif %}{% endfor %}
+          <p class="au-hint">IndexNow فقط «پیشنهادِ بازدید» برای موتورهای شرکت‌کننده است؛ ایندکس‌شدن در Bing را تضمین نمی‌کند.</p>
+          <h4 class="int-sub">خزنده‌ها: دو دستهٔ جدا</h4>
+          <ul class="vis-list" data-testid="presence-crawlers">
+            <li class="vis-item"><span class="int-chip int-chip--ok">مجاز</span><span class="vis-item__body"><strong>خزنده‌های جست‌وجو (پاسخ به پرسش کاربر)</strong><span dir="ltr">{{ sp.crawlers.search|join:", " }}</span></span></li>
+            <li class="vis-item"><span class="int-chip int-chip--{% if sp.crawlers.training_blocked %}off{% else %}info{% endif %}">{% if sp.crawlers.training_blocked %}مسدود{% else %}مجاز{% endif %}</span><span class="vis-item__body"><strong>خزنده‌های آموزش مدل هوش مصنوعی</strong><span dir="ltr">{{ sp.crawlers.training|join:", " }}</span><span>طبق سیاست پلتفرم؛ این تنظیم را فروشنده تغییر نمی‌دهد.</span></span></li>
+          </ul>
+          <p class="au-hint">سیاست خزنده‌ها (robots.txt) کاملاً جدا از ردیابی بازدیدکننده (بخش B) است: هیچ‌کدام دیگری را روشن یا خاموش نمی‌کند. هیچ تضمینی برای رتبهٔ گوگل یا نمایش در ChatGPT و سایر هوش‌های مصنوعی وجود ندارد.</p>
+        </div>
+      </details>
+    <ul class="vis-list" data-testid="seo-external-status">
+      <li class="vis-item vis-item--off"><span class="vis-item__mark" aria-hidden="true">–</span><span class="vis-item__body"><strong>اتصال خودکار به Search Console</strong><span>{{ sp.search_console.auto_connect_text }}</span></span></li>
+      {% for n in visibility_not_available %}{% if n.key == "bing_webmaster" %}<li class="vis-item vis-item--off" data-key="{{ n.key }}"><span class="vis-item__mark" aria-hidden="true">–</span><span class="vis-item__body"><strong>{{ n.title }}</strong><span>{{ n.note }}</span></span></li>{% endif %}{% endfor %}
+    </ul>
+  </section>
+
+  {% elif view == "analytics" %}
+  {# ═════════ آمار و تبلیغات ═════════ #}
+  <section class="rs-group" aria-labelledby="g-an" data-testid="analytics-group">
+    <h2 id="g-an" class="rs-group__title">آمار و تبلیغات</h2>
+    <p class="au-hint" data-testid="tracking-consent-note">{{ tracking_consent_note }}</p>
+    {% if ov.tracking_guidance %}
+    <aside class="rs-guidance rs-guidance--{{ ov.tracking_guidance.state }}" data-testid="tracking-guidance" data-state="{{ ov.tracking_guidance.state }}" aria-labelledby="g-guid">
+      <h3 id="g-guid">{{ ov.tracking_guidance.title }}</h3>
+      <ul>{% for pt in ov.tracking_guidance.points %}<li>{{ pt }}</li>{% endfor %}</ul>
+    </aside>
+    {% endif %}
+    <div class="rs-svc-list" data-testid="integration-accordions">
+      {% for row in ov.analytics_rows %}{% include "dashboard/partials/settings_integration_card.html" with link_mode=False %}{% endfor %}
+    </div>
+  </section>
+  {% for row in ov.analytics_rows %}{% include "dashboard/partials/settings_integration_drawer.html" %}{% endfor %}
+
+  {% elif view == "torob" %}
+  {# ═════════ ترب ═════════ #}
+  <section class="rs-group" aria-labelledby="g-torob" data-testid="torob-group">
+    <h2 id="g-torob" class="rs-group__title">ترب</h2>
+    <div class="rs-svc-list" data-testid="integration-accordions-stored">
+      {% for row in ov.sales_rows %}{% include "dashboard/partials/settings_integration_card.html" with link_mode=False %}{% endfor %}
+    </div>
+    <section class="int-readiness rs-readiness" data-testid="torob-readiness" aria-labelledby="g-ready">
+      <h3 id="g-ready" class="rs-block__title">آمادگی اطلاعات کالاها برای ترب</h3>
+      <p data-testid="torob-readiness-summary">{{ channel_readiness.summary }}</p>
+      {% if channel_readiness.total %}
+      <ul class="rs-stats" data-testid="torob-stats">
+        <li data-testid="torob-stat-total"><b>{{ channel_readiness.total|fa_number }}</b><span>کالای بررسی‌شده</span></li>
+        <li data-testid="torob-stat-ready"><b>{{ channel_readiness.ready|fa_number }}</b><span>آماده (عنوان، قیمت و تصویر دارد)</span></li>
+        <li data-testid="torob-stat-not-ready"><b>{{ channel_readiness.not_ready|fa_number }}</b><span>اطلاعات ناقص</span></li>
+        <li data-testid="torob-stat-oos"><b>{{ channel_readiness.out_of_stock|fa_number }}</b><span>ناموجود (اطلاع‌رسانی؛ خطا نیست)</span></li>
+      </ul>
+      <p class="au-hint" data-testid="torob-overlap-note">{{ channel_readiness.overlap_note }}{% if channel_readiness.ready_out_of_stock %} از «آماده‌ها»، {{ channel_readiness.ready_in_stock|fa_number }} کالا موجود و {{ channel_readiness.ready_out_of_stock|fa_number }} کالا ناموجود است.{% endif %}</p>
+      {% endif %}
+      {% if channel_readiness.rows %}<ul class="vis-list">
+        {% for r in channel_readiness.rows %}<li class="vis-item" data-testid="readiness-{{ r.key }}"><span class="int-chip int-chip--{% if r.blocking %}warn{% else %}info{% endif %}">{{ r.count|fa_number }}</span>
+          <span class="vis-item__body"><strong>{{ r.label }}</strong><span>{{ r.samples|join:"، " }}</span></span></li>{% endfor %}
+      </ul>{% endif %}
+      <p class="au-hint">این فقط بررسی داخلیِ داده‌های خودِ شماست؛ چیزی به ترب ارسال نمی‌شود و فید یا API ساخته نمی‌شود. ذخیرهٔ شناسهٔ فروشنده هم اتصال عملیاتی نیست. شرایط دقیق ترب را در راهنمای رسمی آن ببینید.</p>
+    </section>
+  </section>
+  {% for row in ov.sales_rows %}{% include "dashboard/partials/settings_integration_drawer.html" %}{% endfor %}
+
+  {% elif view == "enamad" %}
+  {# ═════════ اینماد ═════════ #}
+  <section class="rs-group" aria-labelledby="g-en" data-testid="enamad-group">
+    <h2 id="g-en" class="rs-group__title">اینماد</h2>
+    <p class="au-hint">«شناسهٔ ذخیره‌شده» با «تأییدِ واقعی» یکی نیست: راستی‌سی فقط قالب را می‌سنجد و از اینماد استعلام نمی‌کند.</p>
+    <div class="rs-svc-list" data-testid="integration-accordions-trust">
+      {% for row in ov.trust_rows %}{% include "dashboard/partials/settings_integration_card.html" with link_mode=False %}
+      <ol class="rs-steps" data-testid="enamad-steps">
+        {% for st in row.enamad.stages %}<li data-state="{{ st.state }}"><b>{{ st.title }}</b> <span class="int-chip int-chip--{% if st.state == 'ready' %}ok{% elif st.state == 'invalid' %}danger{% elif st.state == 'empty' %}off{% else %}info{% endif %}">{{ st.text }}</span></li>{% endfor %}
+      </ol>
+      <p class="au-note" data-testid="enamad-badge-state" data-shown="{% if row.enamad.badge_shown %}1{% else %}0{% endif %}"><b>نمایش نماد در فوتر:</b> {% if row.enamad.badge_shown %}نمایش داده می‌شود.{% else %}نمایش داده نمی‌شود — {{ row.enamad.badge_reason }}{% endif %}</p>
+      {% endfor %}
+    </div>
+  </section>
+  {% for row in ov.trust_rows %}{% include "dashboard/partials/settings_integration_drawer.html" %}{% endfor %}
+
+  {% else %}
+  {# ═════════ امکانات آینده ═════════ #}
+  <section class="rs-group" aria-labelledby="g-fu" data-testid="int-section-future">
+    <h2 id="g-fu" class="rs-group__title">امکانات آینده</h2>
+    <p class="au-hint">این سرویس‌ها هنوز ساخته نشده‌اند؛ هیچ‌کدام وصل یا فعال نیست و فرمِ اتصال ندارند.</p>
+      <ul class="vis-list" data-testid="visibility-not-available">
+        {% for n in visibility_not_available %}<li class="vis-item vis-item--off" data-key="{{ n.key }}"><span class="vis-item__mark" aria-hidden="true">–</span><span class="vis-item__body"><strong>{{ n.title }}</strong><span>{{ n.note }}</span></span></li>{% endfor %}
+      </ul>
+  </section>
+  {% endif %}
+  {% endwith %}
 </div>
+<script>
+(function () {
+  var opener = null;
+  function lock(on) { document.documentElement.classList.toggle('rs-lock', on); }
+  function snapshot(d) { var f = d.querySelector('form[data-rs-form]'); return f ? new URLSearchParams(new FormData(f)).toString() : ''; }
+  function openDrawer(d, from) {
+    opener = from || document.activeElement;
+    d.__snap = snapshot(d);
+    if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); } else { d.setAttribute('open', ''); }
+    lock(true);
+    var first = d.querySelector('input:not([type=hidden]), button, a[href]');
+    var bad = d.querySelector('[aria-invalid="true"]');
+    (bad || first || d).focus();
+  }
+  function closeDrawer(d, force) {
+    if (!force && snapshot(d) !== d.__snap && !window.confirm('تغییرهای ذخیره‌نشده از بین می‌روند. بسته شود؟')) return false;
+    if (typeof d.close === 'function') d.close(); else d.removeAttribute('open');
+    return true;
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-drawer-open]');
+    if (t) { var d = document.getElementById(t.getAttribute('data-drawer-open')); if (d) { e.preventDefault(); openDrawer(d, t); } return; }
+    var c = e.target.closest && e.target.closest('[data-drawer-close]');
+    if (c) { closeDrawer(c.closest('dialog')); return; }
+    if (e.target.tagName === 'DIALOG' && e.target.classList.contains('rs-drawer')) closeDrawer(e.target);        // backdrop click
+    var b = e.target.closest && e.target.closest('[data-copy]');
+    if (!b) return;
+    var done = function () { var t0 = b.textContent; b.textContent = 'کپی شد'; setTimeout(function () { b.textContent = t0; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(b.getAttribute('data-copy')).then(done, function () {});
+  });
+  document.querySelectorAll('dialog.rs-drawer').forEach(function (d) {
+    d.addEventListener('cancel', function (e) { if (snapshot(d) !== d.__snap && !window.confirm('تغییرهای ذخیره‌نشده از بین می‌روند. بسته شود؟')) e.preventDefault(); });   // Escape
+    d.addEventListener('close', function () { lock(false); if (opener && document.contains(opener)) opener.focus(); });
+    var f = d.querySelector('form[data-rs-form]');
+    if (f) f.addEventListener('submit', function () {                                                                                         // loading state while the real POST runs
+      var btns = d.querySelectorAll('button[type=submit][form="' + f.id + '"], form[data-rs-form] button[type=submit]');
+      btns.forEach(function (b) { b.setAttribute('aria-busy', 'true'); b.textContent = b.getAttribute('data-busy-text') || b.textContent; setTimeout(function () { b.disabled = true; }, 0); });
+      d.__snap = snapshot(d);
+    });
+    if (d.hasAttribute('data-autoopen')) openDrawer(d, null);
+  });
+  var activeTab = document.querySelector('.admin-subtabs .admin-subtab.active');              // keep the selected category visible in the touch-scrolled bar
+  if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
+  var m = new URLSearchParams(location.search).get('manage');
+  if (m) { var d = document.getElementById('drawer-' + m); if (d && !d.open) openDrawer(d, null); }
+})();
+</script>

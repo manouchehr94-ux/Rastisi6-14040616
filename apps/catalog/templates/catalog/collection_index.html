@@ -3,7 +3,7 @@
 
 {% block title %}کالکشن‌ها | {{ SHOP_NAME }}{% endblock %}
 {% block meta_description %}<meta name="description" content="کالکشن‌های فروشگاه {{ SHOP_NAME }}">{% endblock %}
-{% block canonical %}{{ request.scheme }}://{{ request.get_host }}{% url 'catalog:collection-index' %}{% endblock %}
+{% block canonical %}{{ SEO_ORIGIN }}{% url 'catalog:collection-index' %}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/product_list.css' %}">

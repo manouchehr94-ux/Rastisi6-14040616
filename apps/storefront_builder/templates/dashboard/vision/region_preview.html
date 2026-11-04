@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load static storefront_builder_extras %}
+{% comment %}Read-only model preview (see vision_views.py): the asked region ONLY, rendered by the registry renderer of the asked model with the Store's own
+data. The other region and the page body are not rendered (no markup, no placeholder), so the dialog frames exactly the model.{% endcomment %}
+
+{% block title %}پیش‌نمایش مدل — {{ SHOP_NAME }}{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% sfb_static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/home.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder_preview_v22.css' %}">
+<style>
+  /* the frame is sized to the region itself: no viewport-high body, no margin */
+  html,body{margin:0;min-height:0!important;height:auto!important}
+</style>
+{% endblock %}
+
+{% block header %}{% if region == "header" %}<div data-vs-region="header" data-vs-candidate="1">{% include variant_template with header_config=version.effective_header_config is_live_storefront=False is_builder_preview=True %}</div>{% endif %}{% endblock %}
+
+{% block content %}{% endblock %}
+
+{% block footer %}{% if region == "footer" %}<div data-vs-region="footer" data-vs-candidate="1">{% include variant_template with footer_config=version.effective_footer_config is_live_storefront=False is_builder_preview=True %}</div>{% endif %}{% endblock %}
+
+{% block extra_js %}
+<script>
+  // a model preview is for looking: no link or form inside it may navigate away from the preview
+  document.addEventListener('click', function (e) { if (e.target.closest('a,button,[role="button"]')) e.preventDefault(); }, true);
+  document.addEventListener('submit', function (e) { e.preventDefault(); }, true);
+</script>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% load persian dashboard_extras %}
+{% comment %}Management drawer of ONE service — a native <dialog> opened by settings_integrations.html's script (Escape, focus return and the backdrop come with it).
+   Real Django form: POST to settings-integration-connect (CSRF, permission and store scoping enforced there); a rejected value comes back as a field error and the previously
+   SAVED value is untouched. Never localStorage. Secrets are never echoed.{% endcomment %}
+{% with code=row.provider.code %}
+<dialog class="rs-drawer" id="drawer-{{ code }}" aria-labelledby="drawer-title-{{ code }}" data-testid="drawer-{{ code }}"{% if integration_open == code %} data-autoopen="1"{% endif %}>
+  <div class="rs-drawer__head">
+    <div>
+      <p class="rs-drawer__kicker">مدیریت سرویس</p>
+      <h2 id="drawer-title-{{ code }}">{{ row.provider.display_name }}</h2>
+    </div>
+    <button type="button" class="rs-drawer__x" data-drawer-close aria-label="بستن پنل {{ row.provider.display_name }}">✕</button>
+  </div>
+
+  <div class="rs-drawer__body">
+    {% if row.field_error and not row.field_error.field %}<p class="rs-field-error rs-field-error--top" role="alert" data-testid="int-form-error">{{ row.field_error.message }}</p>{% endif %}
+
+    <section class="rs-block" aria-labelledby="drawer-status-{{ code }}">
+      <h3 id="drawer-status-{{ code }}" class="rs-block__title">وضعیت دقیق</h3>
+      <ul class="int-facts" data-testid="int-state-list">
+        {% for ax in row.status.axes %}
+        <li data-testid="int-fact-{{ ax.key }}" data-on="{% if ax.on %}1{% else %}0{% endif %}"><b>{{ ax.label }}</b> {% if ax.on %}بله{% else %}خیر{% endif %}</li>
+        {% endfor %}
+        <li data-testid="int-fact-validation" data-state="{{ row.validation.state }}"><b>قالب معتبر؟</b> {{ row.validation.text }}</li>
+        <li data-testid="int-fact-effect" data-effect="{{ row.effect.state }}"><b>وضعیت:</b> {{ row.effect.text }}</li>
+      </ul>
+      {% if row.status.reason %}<p class="au-note" data-testid="int-drawer-reason">{{ row.status.reason }}</p>{% endif %}
+      <dl class="int-guide" data-testid="int-guide" data-status="{{ row.guide.status }}">
+        <div><dt>شما چه کاری باید انجام دهید؟</dt><dd>{{ row.guide.you }}</dd></div>
+        <div><dt>قدم بعدی</dt><dd>{{ row.guide.next|default:"کاری لازم نیست." }}</dd></div>
+      </dl>
+      {% if row.connection.last_tested_at %}
+      <div class="au-note {% if row.connection.last_test_result == 'success' %}au-note--ok{% else %}au-note--danger{% endif %}" data-testid="int-last-test">
+        آخرین بررسی قالب: {{ row.connection.last_tested_at|jalali_dt }} — {% if row.connection.last_test_result == "success" %}معتبر{% else %}نامعتبر{% endif %}: {{ row.connection.last_test_message }}
+      </div>
+      {% endif %}
+    </section>
+
+    {% if code == "enamad" %}
+    <div class="rs-safety" data-testid="enamad-display"><strong>نمایش واقعی نماد</strong><p>{{ row.enamad.display_text }}</p></div>
+    <p class="au-hint" data-testid="enamad-limit">{{ row.enamad.limit_text }}</p>
+    {% endif %}
+    {% if code == "torob" %}
+    <p class="au-note" data-testid="torob-note">ذخیرهٔ شناسهٔ ترب یک اتصال عملیاتی نیست: راستی‌سی فعلاً برای ترب فید یا API نمی‌سازد و چیزی به ترب نمی‌فرستد. ثبت‌نام و روش همکاری را از راهنمای رسمی ترب دنبال کنید.</p>
+    {% endif %}
+
+    <form method="post" action="{% url 'dashboard:settings-integration-connect' code %}" id="int-form-{{ code }}" class="rs-form" novalidate data-rs-form>
+      {% csrf_token %}
+      {% for group in row.field_groups %}
+      <fieldset class="int-fieldset"{% if group.title %} data-testid="int-stage-{{ forloop.counter }}" data-state="{{ group.state }}"{% endif %}>
+        {% if group.title %}<legend>{{ group.title }} <span class="int-chip int-chip--{% if group.state == 'ready' %}ok{% elif group.state == 'invalid' %}danger{% elif group.state == 'empty' %}off{% else %}info{% endif %}">{{ group.text }}</span></legend>
+        <p class="au-hint">{{ group.hint }}</p>{% endif %}
+        {% for field in group.fields %}
+        {% if field.kind == "checkbox" %}
+        <div class="au-field au-field--check">
+          <label for="int-{{ code }}-{{ field.key }}"><input id="int-{{ code }}-{{ field.key }}" type="checkbox" name="{{ field.key }}" value="1" data-testid="int-{{ field.key }}" aria-describedby="int-{{ code }}-{{ field.key }}-real"{% if row.form_values|get_item:field.key != "0" %} checked{% endif %}> {{ field.label }}</label>
+          {% if code == "enamad" %}
+          <p class="rs-real-state rs-real-state--{% if row.enamad.badge_shown %}on{% else %}off{% endif %}" id="int-{{ code }}-{{ field.key }}-real" data-testid="enamad-real-display" data-shown="{% if row.enamad.badge_shown %}1{% else %}0{% endif %}">
+            <b>این فقط انتخاب شماست.</b> وضعیت واقعی: {% if row.enamad.badge_shown %}نماد همین حالا نمایش داده می‌شود.{% else %}نماد نمایش داده نمی‌شود — {{ row.enamad.badge_reason }}{% endif %}
+          </p>
+          {% endif %}
+        </div>
+        {% else %}
+        {% with err=row.field_error %}
+        <div class="au-field{% if err.field == field.key %} au-field--error{% endif %}">
+          <label for="int-{{ code }}-{{ field.key }}">{{ field.label }}</label>
+          <input class="au-input au-input--ltr" id="int-{{ code }}-{{ field.key }}" type="{% if field.is_secret %}password{% else %}text{% endif %}" name="{{ field.key }}" dir="ltr" autocomplete="off" spellcheck="false" maxlength="600"
+                 value="{% if not field.is_secret %}{{ row.form_values|get_item:field.key }}{% endif %}" placeholder="{{ field.placeholder }}"
+                 {% if err.field == field.key %}aria-invalid="true" aria-describedby="int-{{ code }}-{{ field.key }}-err"{% endif %}>
+          {% if err.field == field.key %}<p class="rs-field-error" id="int-{{ code }}-{{ field.key }}-err" role="alert" data-testid="int-field-error">{{ err.message }}</p>{% endif %}
+        </div>
+        {% endwith %}
+        {% endif %}
+        {% endfor %}
+      </fieldset>
+      {% endfor %}
+      <p class="au-hint rs-safe-note">فقط شناسه ذخیره می‌شود (کد دلخواه پذیرفته نمی‌شود). اگر مقدار نادرست باشد، شناسهٔ قبلیِ ذخیره‌شده تغییر نمی‌کند.</p>
+    </form>
+
+    {% if row.has_saved_credentials %}
+    <section class="rs-block" aria-labelledby="drawer-ops-{{ code }}">
+      <h3 id="drawer-ops-{{ code }}" class="rs-block__title">عملیات</h3>
+      <div class="rs-ops">
+        <form method="post" action="{% url 'dashboard:settings-integration-test' code %}">{% csrf_token %}
+          <button type="submit" class="au-btn au-btn--sm" title="قالبِ شناسهٔ ذخیره‌شده را بررسی می‌کند؛ با سرویسِ بیرونی تماسی گرفته نمی‌شود.">بررسی قالب شناسه</button></form>
+        {% if row.is_connected %}
+        <form method="post" action="{% url 'dashboard:settings-integration-disconnect' code %}" data-au-confirm="استفاده از شناسهٔ {{ row.provider.display_name }} خاموش شود؟ شناسه ذخیره می‌ماند.">{% csrf_token %}
+          <button type="submit" class="au-btn au-btn--sm au-btn--danger" data-testid="int-disable">خاموش‌کردن استفاده از شناسه</button></form>
+        {% elif row.can_reenable %}
+        <form method="post" action="{% url 'dashboard:settings-integration-toggle' code %}">{% csrf_token %}
+          <button type="submit" class="au-btn au-btn--sm" data-testid="int-enable">روشن‌کردن دوبارهٔ استفاده از شناسه</button></form>
+        {% endif %}
+      </div>
+      <p class="au-hint">«بررسی قالب» فقط درستیِ قالبِ شناسه را می‌سنجد و به سرویس بیرونی درخواستی نمی‌فرستد.</p>
+    </section>
+    {% endif %}
+    <a href="{{ row.provider.setup_guide }}" target="_blank" rel="noopener noreferrer" class="rs-link" data-testid="int-setup-link">{% if code == "torob" %}ثبت فروشگاه در ترب{% else %}راهنمای رسمی سرویس{% endif %} <span aria-hidden="true">↗</span></a>
+  </div>
+
+  <div class="rs-drawer__foot">
+    <button type="submit" form="int-form-{{ code }}" class="au-btn au-btn--primary" data-testid="int-save" data-busy-text="در حال ذخیره…">ذخیرهٔ شناسه</button>
+    <button type="button" class="au-btn au-btn--ghost" data-drawer-close>بستن</button>
+  </div>
+</dialog>
+{% endwith %}

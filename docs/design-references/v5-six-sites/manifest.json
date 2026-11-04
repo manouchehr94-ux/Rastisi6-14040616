@@ -1,0 +1,416 @@
+{
+  "schema_version": 2,
+  "date": "2026-10-22",
+  "purpose": "Read-only references for six designs of RastiSi V5; no product code or demo data",
+  "repo_target": "manouchehr94-ux/Rastisi6-14040616",
+  "branch_target": "feature/v5-design-studio-20261020",
+  "data_notice": "External reference content provided by user; no license to redistribute or reuse brand assets is asserted. Public GitHub repo alert.",
+  "sites": {
+    "AsalBanoo": {
+      "original_zip": "AsalBanoo.zip",
+      "original_zip_sha256": "46f87167065458558a55a5eb189010095eb0ee9f6b68d245592279560db4f570",
+      "source_files": 639,
+      "source_uncompressed_bytes": 17754383,
+      "extension_counts": {
+        ".css": 41,
+        ".gif": 2,
+        ".html": 1,
+        ".ico": 1,
+        ".jpg": 217,
+        ".png": 52,
+        ".svg": 10,
+        ".ttf": 1,
+        ".webp": 311,
+        ".woff": 1,
+        ".woff2": 2
+      },
+      "saved_html": [
+        {
+          "file": "references/AsalBanoo/capture/index.html",
+          "bytes": 318999,
+          "title": "فروشگاه خرید لوازم آرایشی، محصولات پوستی، مویی و عطر"
+        }
+      ],
+      "screenshots": [
+        {
+          "page": "home",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 8483,
+          "bytes": 5994251,
+          "sha256": "ef1927003d049523a75bc54667abce338011fa750e0acb7d661879ef9f09b34e",
+          "source_entry": "AsalBanoo/ScreenShot/Screenshot 2026-10-22 at 13-01-40 فروشگاه خرید لوازم آرایشی، محصولات پوستی، مویی و عطر.png"
+        },
+        {
+          "page": "home",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 10693,
+          "bytes": 2461749,
+          "sha256": "c9500e0b5f3df7ece06780d26774cbaf9ef1a4232b063e088e20964e82bfb1f4",
+          "source_entry": "AsalBanoo/ScreenShot/Screenshot 2026-10-22 at 13-00-42 فروشگاه خرید لوازم آرایشی، محصولات پوستی، مویی و عطر.png"
+        },
+        {
+          "page": "product",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 6578,
+          "bytes": 1065210,
+          "sha256": "dba33c84570123ce1677b3e87b19d04565bc3bcf66a1244aa4e4a68758734d08",
+          "source_entry": "AsalBanoo/ScreenShot/Screenshot 2026-10-22 at 13-01-21 خرید اسپری ضد آفتاب مای SPF50 اصل با قیمت مناسب.png"
+        },
+        {
+          "page": "product",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 10585,
+          "bytes": 744861,
+          "sha256": "01576b7a970f9852d74928af4852d09feaf5683fdfa3faaee10d5153c96357ae",
+          "source_entry": "AsalBanoo/ScreenShot/Screenshot 2026-10-22 at 13-01-09 خرید اسپری ضد آفتاب مای SPF50 اصل با قیمت مناسب.png"
+        }
+      ],
+      "screenshot_originals_relocated": 4
+    },
+    "Dize": {
+      "original_zip": "Dize.zip",
+      "original_zip_sha256": "cec3f7301125f0c09140cfa55df940b824c6116cb192c54a8b9e4d1faacea78a",
+      "source_files": 233,
+      "source_uncompressed_bytes": 46192532,
+      "extension_counts": {
+        ".css": 64,
+        ".html": 1,
+        ".jpeg": 28,
+        ".jpg": 25,
+        ".mp3": 1,
+        ".png": 27,
+        ".svg": 43,
+        ".ttf": 12,
+        ".woff": 8,
+        ".woff2": 24
+      },
+      "saved_html": [
+        {
+          "file": "references/Dize/capture/index.html",
+          "bytes": 1072387,
+          "title": "خانه - دیزه"
+        }
+      ],
+      "screenshots": [
+        {
+          "page": "home",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 5852,
+          "bytes": 7718211,
+          "sha256": "b58901da19675e2e0a3c6b9ad07a46d3d8797fa081fb5ec702e040d5c5cff1f4",
+          "source_entry": "Dize/Screenshot/Screenshot 2026-10-22 at 13-12-46 خانه - دیزه.png"
+        },
+        {
+          "page": "home",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 5390,
+          "bytes": 2372042,
+          "sha256": "08b13e7e1fec25b645a1e4afb1efc315ed8b8cdd6c0b0e3074f0ecff2efcabfa",
+          "source_entry": "Dize/Screenshot/Screenshot 2026-10-22 at 13-13-19 خانه - دیزه.png"
+        },
+        {
+          "page": "product",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 3205,
+          "bytes": 3028283,
+          "sha256": "86b49176a1a01939d481ba5257641b3ceb78810a5d7bea421551d9cdbc8566ab",
+          "source_entry": "Dize/Screenshot/Screenshot 2026-10-22 at 13-12-54 کاسه شیشه و سنگ تراورتن سایز کوچک - دیزه.png"
+        },
+        {
+          "page": "product",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 3015,
+          "bytes": 687836,
+          "sha256": "087def655aa7d41c7181d8c0668ebc105c5c1512543fd25d013e83a681bf229b",
+          "source_entry": "Dize/Screenshot/Screenshot 2026-10-22 at 13-13-09 کاسه شیشه و سنگ تراورتن سایز کوچک - دیزه.png"
+        }
+      ],
+      "screenshot_originals_relocated": 4
+    },
+    "khanehshokolati": {
+      "original_zip": "khanehshokolati.zip",
+      "original_zip_sha256": "c0aa506b726fe43d236e7e5d9ad3592ee8e0adba7e9c94dab2f92f6bec839b55",
+      "source_files": 252,
+      "source_uncompressed_bytes": 11483482,
+      "extension_counts": {
+        ".css": 3,
+        ".html": 1,
+        ".jpg": 40,
+        ".png": 59,
+        ".svg": 56,
+        ".ttf": 6,
+        ".webp": 77,
+        ".woff": 4,
+        ".woff2": 6
+      },
+      "saved_html": [
+        {
+          "file": "references/khanehshokolati/capture/index.html",
+          "bytes": 1720513,
+          "title": "فروشگاه اینترنتی خانه شکلاتی"
+        }
+      ],
+      "screenshots": [
+        {
+          "page": "home",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 11695,
+          "bytes": 13261429,
+          "sha256": "35053b4ae5cbdb6519950c5c28c09f720f398072039dc900f5bf9755fffecc65",
+          "source_entry": "khanehshokolati/ScreenShot/Screenshot 2026-10-22 at 11-57-57 فروشگاه اینترنتی خانه شکلاتی.png"
+        },
+        {
+          "page": "home",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 15998,
+          "bytes": 5160016,
+          "sha256": "de8b54c9e2d9e74b652350b7aa8428e1e1aacb3729d97c3ac1e9349b80d79b25",
+          "source_entry": "khanehshokolati/ScreenShot/Screenshot 2026-10-22 at 12-04-44 فروشگاه اینترنتی خانه شکلاتی.png"
+        },
+        {
+          "page": "product",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 4263,
+          "bytes": 2980417,
+          "sha256": "f69b2e0d44edc1e3ddc460f30ae21c060c5305f1ffc95fc781832867a7b30006",
+          "source_entry": "khanehshokolati/ScreenShot/Screenshot 2026-10-22 at 11-58-19 خرید تراول ماگ 1050 میل تایسو کالکشن جدید 01025_01 - خانه شکلاتی.png"
+        },
+        {
+          "page": "product",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 5998,
+          "bytes": 1069985,
+          "sha256": "9470df49944b9d3b6d04dc60700aeeb6024122947611eec676b0a0e1a1c4aac6",
+          "source_entry": "khanehshokolati/ScreenShot/Screenshot 2026-10-22 at 11-58-35 خرید تراول ماگ 1050 میل تایسو کالکشن جدید 01025_01 - خانه شکلاتی.png"
+        }
+      ],
+      "screenshot_originals_relocated": 4
+    },
+    "lilikacosmetics": {
+      "original_zip": "lilikacosmetics.zip",
+      "original_zip_sha256": "54707ab054fa24077d6dbcf88418eb701833fd9a680fabdead55485ba7a4e3b0",
+      "source_files": 301,
+      "source_uncompressed_bytes": 15047155,
+      "extension_counts": {
+        ".avif": 13,
+        ".css": 76,
+        ".html": 1,
+        ".jpeg": 73,
+        ".jpg": 56,
+        ".png": 44,
+        ".svg": 2,
+        ".ttf": 3,
+        ".webp": 26,
+        ".woff": 4,
+        ".woff2": 3
+      },
+      "saved_html": [
+        {
+          "file": "references/lilikacosmetics/capture/index.html",
+          "bytes": 971534,
+          "title": "فروشگاه لوازم آرایشی لیلیکا - انواع لوازم آرایشی برند"
+        }
+      ],
+      "screenshots": [
+        {
+          "page": "home",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 5668,
+          "bytes": 4235507,
+          "sha256": "4d6f2d68e6940ff980451c4fe8a11b433f4b6b411302872ca3bade040cacac56",
+          "source_entry": "lilikacosmetics/Screenshot/Screenshot 2026-10-22 at 13-07-43 فروشگاه لوازم آرایشی لیلیکا - انواع لوازم آرایشی برند.png"
+        },
+        {
+          "page": "home",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 7145,
+          "bytes": 1826489,
+          "sha256": "969ca613e1c7fddcb8a644a9aefcd39fcaeea3794a724958852c61338b4a1cac",
+          "source_entry": "lilikacosmetics/Screenshot/Screenshot 2026-10-22 at 13-09-03 فروشگاه لوازم آرایشی لیلیکا - انواع لوازم آرایشی برند.png"
+        },
+        {
+          "page": "product",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 3301,
+          "bytes": 609776,
+          "sha256": "06cf13478d7492a7defaac7c6c752c6fdad52d88cf7c27d769a3c897a830cc56",
+          "source_entry": "lilikacosmetics/Screenshot/Screenshot 2026-10-22 at 13-08-38 ریمل حجم دهنده و بلند کننده بیولیس(beaulis) - فروشگاه لوازم آرایشی لیلیکا.png"
+        },
+        {
+          "page": "product",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 4677,
+          "bytes": 402510,
+          "sha256": "ddc740eabcb115bafe8d51b0f835a9a31c2339e4eb526c913042133738e617d3",
+          "source_entry": "lilikacosmetics/Screenshot/Screenshot 2026-10-22 at 13-08-47 ریمل حجم دهنده و بلند کننده بیولیس(beaulis) - فروشگاه لوازم آرایشی لیلیکا.png"
+        }
+      ],
+      "screenshot_originals_relocated": 4
+    },
+    "lilium-gallery": {
+      "original_zip": "lilium-gallery.zip",
+      "original_zip_sha256": "0cd6b69419a69e022fb14b489ee2f8f18406583bae85036daefdb50c10f69756",
+      "source_files": 216,
+      "source_uncompressed_bytes": 5697013,
+      "extension_counts": {
+        ".css": 13,
+        ".html": 2,
+        ".jpg": 2,
+        ".mp3": 2,
+        ".png": 5,
+        ".ttf": 1,
+        ".webp": 183,
+        ".woff": 1,
+        ".woff2": 7
+      },
+      "saved_html": [
+        {
+          "file": "references/lilium-gallery/capture/index.html",
+          "bytes": 233296,
+          "title": "فروشگاه اینترنتی لیلیوم گالری وارد کننده برترین برند ها - فروشگاه اینترنتی لیلیوم گالری"
+        },
+        {
+          "file": "references/lilium-gallery/capture/index_1.html",
+          "bytes": 10961,
+          "title": ""
+        }
+      ],
+      "screenshots": [
+        {
+          "page": "home",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 5232,
+          "bytes": 6295099,
+          "sha256": "a15d493aac30018f89db2e2d4fe701e753f09c3a64fd94469c2d1effd2ad4cc9",
+          "source_entry": "lilium-gallery/Screenshot/Screenshot 2026-10-22 at 13-10-58 فروشگاه اینترنتی لیلیوم گالری وارد کننده برترین برند ها - فروشگاه اینترنتی لیلیوم گالری.png"
+        },
+        {
+          "page": "home",
+          "device": "mobile",
+          "pixel_width": 503,
+          "pixel_height": 3791,
+          "bytes": 1005980,
+          "sha256": "51bf51d4130b603ba59d21f2599863e960f41bac942220db22c1f53696d401a4",
+          "source_entry": "lilium-gallery/Screenshot/Screenshot 2026-10-22 at 13-11-16 فروشگاه اینترنتی لیلیوم گالری وارد کننده برترین برند ها - فروشگاه اینترنتی لیلیوم گالری.png"
+        },
+        {
+          "page": "product",
+          "device": "desktop",
+          "pixel_width": 1847,
+          "pixel_height": 5285,
+          "bytes": 1191048,
+          "sha256": "18bd257fd5e32025f8e99b498623fb8d1c50c5991e55cad179a15fe26e4cb2db",
+          "source_entry": "lilium-gallery/Screenshot/Screenshot 2026-10-22 at 13-11-05 پک آرایشی ماتریکس شیگلم The Matrix Resurrections - فروشگاه اینترنتی لیلیوم گالری.png"
+        },
+        {
+          "page": "product",
+          "device": "mobile",
+          "pixel_width": 503,
+          "pixel_height": 6646,
+          "bytes": 635571,
+          "sha256": "3d43cb14bbc817db482497ba6a36acdd43343d715ed8490583c26e673d96b292",
+          "source_entry": "lilium-gallery/Screenshot/Screenshot 2026-10-22 at 13-11-26 پک آرایشی ماتریکس شیگلم The Matrix Resurrections - فروشگاه اینترنتی لیلیوم گالری.png"
+        }
+      ],
+      "screenshot_originals_relocated": 4
+    },
+    "zhimunplus": {
+      "original_zip": "zhimunplus.zip",
+      "original_zip_sha256": "464888ab7df354ceede01a3a354661ba1d1bef0f692fe54c1aad64dd74518939",
+      "source_files": 586,
+      "source_uncompressed_bytes": 67195461,
+      "extension_counts": {
+        ".css": 2,
+        ".html": 3,
+        ".jpg": 431,
+        ".png": 124,
+        ".svg": 16,
+        ".woff2": 10
+      },
+      "saved_html": [
+        {
+          "file": "references/zhimunplus/capture/index.html",
+          "bytes": 521776,
+          "title": "ژیمون پلاس - خرید اکانت پریمیوم💎"
+        },
+        {
+          "file": "references/zhimunplus/capture/index_1.html",
+          "bytes": 8818,
+          "title": ""
+        },
+        {
+          "file": "references/zhimunplus/capture/index_2.html",
+          "bytes": 96291,
+          "title": "LottieFiles animation"
+        }
+      ],
+      "screenshots": [
+        {
+          "page": "home",
+          "device": "desktop",
+          "pixel_width": 1858,
+          "pixel_height": 7470,
+          "bytes": 5181385,
+          "sha256": "f9e3c04242f3a87b9817c3e5ac473375b6602fcb36b3d76552ad5693d7efd247",
+          "source_entry": "zhimunplus/Screenshot/Screenshot 2026-10-22 at 13-15-25 ژیمون پلاس - خرید اکانت پریمیوم💎.png"
+        },
+        {
+          "page": "home",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 8788,
+          "bytes": 1722435,
+          "sha256": "2d981895010eefaf37f4caae49029f9579615f7abef2cba1cef991d2d7c00a42",
+          "source_entry": "zhimunplus/Screenshot/Screenshot 2026-10-22 at 13-16-35 ژیمون پلاس - خرید اکانت پریمیوم💎.png"
+        },
+        {
+          "page": "product",
+          "device": "desktop",
+          "pixel_width": 1858,
+          "pixel_height": 3573,
+          "bytes": 1893144,
+          "sha256": "e056e3fedbaae519cd36417bbbbd1f551e491a127fe6c516497fb3241dd1b152",
+          "source_entry": "zhimunplus/Screenshot/Screenshot 2026-10-22 at 13-15-40 خرید اکانت ChatGPT ارزان و قانونی ۱۰۰% تضمینی - ژیمون پلاس - خرید اکانت پریمیوم💎.png"
+        },
+        {
+          "page": "product",
+          "device": "mobile",
+          "pixel_width": 487,
+          "pixel_height": 26022,
+          "bytes": 2840853,
+          "sha256": "cdedf81e1f962a3f5de40617a82cbfc642479601c3a278d510f2055833792a22",
+          "source_entry": "zhimunplus/Screenshot/Screenshot 2026-10-22 at 13-16-21 خرید اکانت ChatGPT ارزان و قانونی ۱۰۰% تضمینی - ژیمون پلاس - خرید اکانت پریمیوم💎.png"
+        }
+      ],
+      "screenshot_originals_relocated": 4
+    }
+  },
+  "screenshots": {
+    "count_original": 24,
+    "count_segments": 78,
+    "original_png_are_byte_identical_to_user_zips": true,
+    "segment_format": "lossy webp; use originals for precise reference color"
+  },
+  "limitations": [
+    "The saved HTML pages have home-page titles; product-page HTML/CSS capture is not reliably included.",
+    "A screenshot is not a computed CSS/interaction trace.",
+    "Do not treat initial design audit as pixel-verified."
+  ]
+}

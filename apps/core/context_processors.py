@@ -1,3 +1,4 @@
+from django.utils.functional import SimpleLazyObject
 from apps.content.models import SocialLink
 from apps.core.color_utils import mix_hex, safe_hex
 from apps.core.models import ShopSettings, ShopSettingsNotProvisionedError
@@ -175,6 +176,8 @@ def shop_settings(request):
         shop_image_hover = global_config.get("image_hover", "zoom")
         shop_card_image_crossfade = global_config.get("card_image_crossfade", False)
         shop_card_image_zoom = global_config.get("card_image_zoom", True)
+        shop_heading_style = global_config.get("heading_style") or "default"
+        shop_page_layout = _appearance_registry.resolve_page_layout(global_config)
     else:
         shop_font = _default_template.font
         shop_radius = _default_template.radius
@@ -186,6 +189,8 @@ def shop_settings(request):
         shop_image_hover = "zoom"
         shop_card_image_crossfade = False
         shop_card_image_zoom = True
+        shop_heading_style = "default"
+        shop_page_layout = _appearance_registry.resolve_page_layout(None)
 
     # ساختارِ *صفحه‌ی اصلی* (عرضِ محتوا/تعدادِ ستون/سبکِ هیرو/سایه و
     # هاورِ کارت/تراکم) — عمداً محدود به صفحاتِ Builder-aware می‌ماند؛
@@ -412,6 +417,12 @@ def shop_settings(request):
         "SHOP_HERO_STYLE": shop_hero_style,
         "SHOP_IMAGE_FIT": shop_image_fit,
         "SHOP_IMAGE_HOVER": shop_image_hover,
+        "SHOP_HEADING_STYLE": shop_heading_style,
+        # «چیدمان و عرض صفحات» — Store-global like the identity tokens above (every page, Preview == Public); base.html turns it into ONE
+        # data attribute + two validated custom properties, base.css owns the maths.
+        "SHOP_PAGE_WIDTH_MODE": shop_page_layout["mode"],
+        "SHOP_PAGE_MAX_WIDTH": shop_page_layout["max_width"],
+        "SHOP_PAGE_GUTTER": shop_page_layout["gutter"],
         "SHOP_CARD_IMAGE_CROSSFADE": "1" if shop_card_image_crossfade else "",
         "SHOP_CARD_IMAGE_ZOOM": "1" if shop_card_image_zoom else "",
         # P5-W2 — occasion Theme overlay projection (platform-owned; drives the
@@ -440,3 +451,76 @@ def shop_settings(request):
             is_active=True, show_in_header=True, store_id=shop.store_id,
         ).order_by("display_order", "id"),
     }
+
+
+def _seo_facts(request) -> dict:
+    """Computed at most once per request, and only when a template actually reads an ``SEO_*`` / ``TRACKING_IDS`` name (the admin
+    shell never does, so it pays no queries for them). Never raises: an unknown host / unprovisioned store just means «request
+    origin, not indexable»."""
+    cached = getattr(request, "_seo_context", None)
+    if cached is not None:
+        return cached
+    from apps.core import seo_policy
+
+    store = getattr(request, "store", None)
+    origin = f"{request.scheme}://{request.get_host()}"
+    noindex = False
+    reason = ""
+    if store is not None:
+        try:
+            state = seo_policy.indexability(request, store)
+            noindex, reason = not state.indexable, state.code
+            origin = seo_policy.canonical_origin(request, store)
+        except Exception:                                           # noqa: BLE001 - SEO facts must never break a page
+            pass
+    request._seo_context = {"SEO_ORIGIN": origin, "SEO_NOINDEX": noindex, "SEO_NOINDEX_REASON": reason}
+    return request._seo_context
+
+
+def _tracking_ids(request) -> dict:
+    cached = getattr(request, "_tracking_ids", None)
+    if cached is not None:
+        return cached
+    ids: dict = {}
+    store = getattr(request, "store", None)
+    match = getattr(request, "resolver_match", None)
+    if match is not None and getattr(match, "namespace", "") == "dashboard":
+        # پیش‌نمایش‌هایِ سازنده (draft / ready-template / builder) روی هاستِ مدیریت از همان پوسته‌ی عمومی رندر می‌شوند؛ آن‌ها «بازدید مشتری» نیستند:
+        # شناسه‌ها و consent.js چاپ نمی‌شود تا مالک با پیش‌نمایش، آمار یا پیکسلِ تبلیغاتیِ فروشگاه را آلوده نکند.
+        store = None
+    if store is not None and not _seo_facts(request)["SEO_NOINDEX"]:
+        try:
+            from apps.stores.services.tracking_service import active_tracking_ids
+
+            ids = active_tracking_ids(store)
+        except Exception:                                                   # noqa: BLE001 - analytics must never break a page
+            ids = {}
+    request._tracking_ids = ids
+    return ids
+
+
+def tracking_active(request) -> bool:
+    """True only on a real public storefront request of a store that connected a provider (platform flag on, indexable host, not an admin preview) — the ONLY condition under which
+    any tracking payload is built or printed."""
+    return bool(_tracking_ids(request))
+
+
+def seo(request):
+    """Storefront SEO facts for every template (lazy — see ``_seo_facts``)."""
+    return {key: SimpleLazyObject(lambda key=key: _seo_facts(request)[key]) for key in ("SEO_ORIGIN", "SEO_NOINDEX", "SEO_NOINDEX_REASON")}
+
+
+def tracking(request):
+    """``TRACKING_IDS`` for the public storefront templates: empty unless this request is a real, indexable public page of a Store
+    that connected the provider (see ``apps.stores.services.tracking_service``). Lazy; never raises."""
+    def _consent():
+        from apps.core import consent
+
+        return consent.build_config(_tracking_ids(request))
+
+    def _events():
+        # events queued by the view of THIS request (apps.core.tracking_events.queue) — only when tracking is active for the request
+        return list(getattr(request, "rs_track_events", []) or []) if _tracking_ids(request) else []
+
+    return {"TRACKING_IDS": SimpleLazyObject(lambda: _tracking_ids(request)), "CONSENT_CONFIG": SimpleLazyObject(_consent),
+            "TRACKING_EVENTS": SimpleLazyObject(_events)}

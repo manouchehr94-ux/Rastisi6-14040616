@@ -1,0 +1,185 @@
+{
+ "regions": {
+  "footer": {
+   "app_download": {
+    "fingerprint": "6097e718bc34bb2e1d8a3d7246e56f53563353eca9e8a5924c82ded7e1557dbb",
+    "same_as": "beauty_retail_columns"
+   },
+   "beauty_retail_columns": {
+    "fingerprint": "15681c4553e5c3cf7cd5767dff296b72871a5f1a93f7e87fabb4104f71f95df9",
+    "same_as": null
+   },
+   "bold_columns": {
+    "fingerprint": "8553e5be84eacc879a99b40a168a69b388848dbc8a79e74437ee5789f3238686",
+    "same_as": "dark_tech"
+   },
+   "boutique_editorial": {
+    "fingerprint": "21dd0fe26cdbb46ef2c1c2c903473760f4072270bce31ca6bdc333386a9782da",
+    "same_as": null
+   },
+   "brand_story": {
+    "fingerprint": "3f7af53a3475869473b4443d892706e5772c3330785a0bbeab19880a6141f10c",
+    "same_as": "promo_columns"
+   },
+   "centered": {
+    "fingerprint": "f317c6c36201919adeda2e762a7b01211093384563e9d9515cc66a4f09cb2c1f",
+    "same_as": "premium_columns"
+   },
+   "centered_contact": {
+    "fingerprint": "0b07e0abae01a1328e1976f01b2f88e055a1fb47c963571982dbf7d406ce7237",
+    "same_as": null
+   },
+   "chocolate_dark_columns": {
+    "fingerprint": "a3e6eb43dec97411d8fc1685c2cc598e62ef7525e814110811423a428a2e9176",
+    "same_as": null
+   },
+   "dark_tech": {
+    "fingerprint": "dd3da5107137ae0d4406b735b440bff0724e43a6088cd050b61254125e4f6b66",
+    "same_as": null
+   },
+   "editorial_wordmark": {
+    "fingerprint": "a65a2c7b0a67741223a3225eeb6689e883d1ab44ace8749667b9dc5ba83d3f9a",
+    "same_as": "boutique_editorial"
+   },
+   "kawaii_minimal": {
+    "fingerprint": "0e0dc354a71660f9c24e019316cc4d1bed2e22065a07eea836b556aa364ec113",
+    "same_as": null
+   },
+   "legacy_default": {
+    "fingerprint": "320e233bc2b3d1c440c77d1578413b820b03765249ceff176cd4090bf9683498",
+    "same_as": null
+   },
+   "marketplace_columns": {
+    "fingerprint": "88d312ff928930aff1a8c51a466f012e9209d7e4fbedd71f9293a1865a317886",
+    "same_as": "marketplace_dense"
+   },
+   "marketplace_dense": {
+    "fingerprint": "9ce692a6fde3267f1f9a2933e56d5a2314e395be04e3134818c0ddf3d195edad",
+    "same_as": null
+   },
+   "minimal": {
+    "fingerprint": "d3aa00c0d6c618a40520f431a3cf47a338f4bf46fc75a418fd4833e4c6aef45a",
+    "same_as": "legacy_default"
+   },
+   "playful_wave": {
+    "fingerprint": "0fceb9a10213eb7137b3f3b80a616807044ed2a96107131a6f663fab051f92d3",
+    "same_as": "chocolate_dark_columns"
+   },
+   "premium_columns": {
+    "fingerprint": "211100bd44e7a66eff38f971aad42b5c7518cc766445f460cf48cbf976791e90",
+    "same_as": null
+   },
+   "promo_columns": {
+    "fingerprint": "49c1ae43317779a810a5ea24ac983f64d3654c07a95782c36013f9ad4da82053",
+    "same_as": null
+   },
+   "stationery_dark": {
+    "fingerprint": "42945c331cf06fb1f2f3c3d718e31d81419c08d29c91cca2071af6e2b2d569c5",
+    "same_as": null
+   }
+  },
+  "header": {
+   "atelier_nav": {
+    "fingerprint": "2e11422791ebae1cd62aa6f3f18bc4674c2809c0cc2105616e1d7ce9f2cab4b7",
+    "same_as": null
+   },
+   "beauty_search_nav": {
+    "fingerprint": "d0dde6e26d49bd930e3dfae65eb9a84aad5ad45daaa2e4369bb70d0ffc8d74e2",
+    "same_as": null
+   },
+   "boutique_centered": {
+    "fingerprint": "63e883d323a5d63bcaadf295fa5ebd3a1f66a2011d1037de9b54fd56353891c8",
+    "same_as": null
+   },
+   "category_tabs": {
+    "fingerprint": "4ed0a368ada8553129f5fd8d0d681355b0cf7c3d897d56230605ab7845331eb5",
+    "same_as": "premium_three_column"
+   },
+   "centered_brand": {
+    "fingerprint": "69f122e03b0498743f0de8a923c9f50b2e5b87123261d62bdcfe763f1c992fc5",
+    "same_as": "premium_three_column"
+   },
+   "chocolate_centered_search": {
+    "fingerprint": "cb69a8645080022e568d24a7226562329383cc65e53105b855ace2b29d49dad2",
+    "same_as": null
+   },
+   "community_shortcuts": {
+    "fingerprint": "8b997bd38f8120a3fb3baa68a654fcc4b2341b05b6984cf12d504f1b38391c4a",
+    "same_as": "boutique_centered"
+   },
+   "compact_drawer": {
+    "fingerprint": "f02700521ac7665fae2318bef3d13d77c828757bcb40c297dc2ee9bf5a6c2b5a",
+    "same_as": "legacy_default"
+   },
+   "compact_menu": {
+    "fingerprint": "73f17794832383d34018d77bb31641956badbfadc46cd00d7b6e67ecad3d6588",
+    "same_as": "legacy_default"
+   },
+   "dark_tech": {
+    "fingerprint": "873fb49cfd34ab2d67a5ba589f0ec125258e03d780134793a5fc3fcdc36d3622",
+    "same_as": null
+   },
+   "editorial_masthead": {
+    "fingerprint": "3c0068f6fe3d75f7d0bceacf53157abfce716c2da9f4af7396967534e5053847",
+    "same_as": "boutique_centered"
+   },
+   "editorial_row": {
+    "fingerprint": "0c97b0656832ec13af9a3cdf7c4e796ca15207e825d6eddff2320cf9ca5a8926",
+    "same_as": "atelier_nav"
+   },
+   "floating_card": {
+    "fingerprint": "625944974127993428860d14323dc26bbaf65c64d9ce6ff19847a63f0f08d08e",
+    "same_as": null
+   },
+   "floating_compact": {
+    "fingerprint": "b092050802ef4168583a024b7ac306be5126c04c9f5402be32ff70833535121c",
+    "same_as": "atelier_nav"
+   },
+   "kawaii_center": {
+    "fingerprint": "e98c1c1d2f1bcdb641cfafd3928e2fe3dfeba20381f449e1aa1cc5b41153fe3e",
+    "same_as": null
+   },
+   "legacy_default": {
+    "fingerprint": "4ffbda27cd816c20500b9275a85d3062e1ee4f130cd4632fe79f47cee6644ac0",
+    "same_as": null
+   },
+   "luxury_search": {
+    "fingerprint": "e0e93a35621876a90cf09f35d0e82c91bfd8ba748f59f1901adbc37f255fa46f",
+    "same_as": null
+   },
+   "marketplace_search": {
+    "fingerprint": "1de368b808695ffdcdd65637d1510a4d7799daa5d4168df17bdb68d54e72717b",
+    "same_as": "marketplace_search_first"
+   },
+   "marketplace_search_first": {
+    "fingerprint": "a649624be61e884fffb6b3787b30d523c52b185ab03d0f0b70b844e6873551b8",
+    "same_as": null
+   },
+   "overlay_transparent": {
+    "fingerprint": "595888f02bb9a78ac3763e5ff20628917772e0555d8995e38790e6cc29d45263",
+    "same_as": "atelier_nav"
+   },
+   "playful_canopy": {
+    "fingerprint": "8a5936e13b63c1737a5830d61a1b1a609a21800e50050ef409013446d35d8683",
+    "same_as": "boutique_centered"
+   },
+   "premium_three_column": {
+    "fingerprint": "3b4fd42aee33c6fdc167fa8b8ae7545190d6e6b41fe5c9cfad09c8a3b387edcc",
+    "same_as": null
+   },
+   "promo_bar": {
+    "fingerprint": "b1ab1a5a0e398b60199baef46bf39bab5ae5d0fbd903ce259d1195f1233f05be",
+    "same_as": "promo_search_nav"
+   },
+   "promo_search_nav": {
+    "fingerprint": "b216abe92bc6c7fb08e23a76b26bc183947aaac8205dbabfabf6bb54600ab04b",
+    "same_as": null
+   },
+   "stationery_search": {
+    "fingerprint": "674d10e6cca9f3f93ad5951014b450b4de66742927593dfb2fcff39cf0f571ba",
+    "same_as": null
+   }
+  }
+ },
+ "version": 1
+}

@@ -4,7 +4,7 @@ from django.utils import timezone
 from apps.core.context_processors import shop_settings
 from apps.core.models import ShopSettings
 from apps.stores.models import Store, StoreDomain
-from apps.stores.services import integration_service
+from apps.stores.services import enamad_verification_service, integration_service
 from apps.stores.services.enamad_verification_service import (
     EnamadBadgeError,
     EnamadVerificationMetaError,
@@ -314,3 +314,45 @@ class MerchantEnamadBadgeRenderingTests(TestCase):
             context = shop_settings(request)
         self.assertEqual(context["SHOP_ENAMAD_BADGE_PROFILE_URL"], "")
         self.assertNotIn("otherStoresSecretCode", str(context))
+
+
+@override_settings(ALLOWED_HOSTS=["toggle-badge.example", "testserver"])
+class EnamadBadgeDisplayToggleTests(TestCase):
+    """The seller can hide the footer seal without losing the saved ids; the state is reported separately from «saved»; another store's seal never shows."""
+
+    def setUp(self):
+        self.store = Store.objects.create(name="Toggle Merchant", slug="toggle-merchant", admin_subdomain="toggle-merchant", status=Store.Status.ACTIVE,
+                                          onboarding_completed_at=timezone.now())
+        ShopSettings.provision_for(self.store)
+        StoreDomain.objects.create(store=self.store, hostname="toggle-badge.example", is_primary=True, domain_type=StoreDomain.DomainType.CUSTOM_DOMAIN,
+                                   verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
+        self.values = {"enamad_id": "221617", "enamad_auth_code": "94MqMPJEnuahlSHjb9kP"}
+
+    def _ctx(self):
+        request = RequestFactory().get("/", HTTP_HOST="toggle-badge.example")
+        request.store = self.store
+        return shop_settings(request)
+
+    def test_default_is_shown_and_switching_off_hides_it_while_the_ids_stay_saved(self):
+        integration_service.connect(store=self.store, provider_code="enamad", values={**self.values, "enamad_show_badge": "1"}, actor=None)
+        self.assertTrue(self._ctx()["SHOP_ENAMAD_BADGE_PROFILE_URL"])
+        integration_service.connect(store=self.store, provider_code="enamad", values={**self.values, "enamad_show_badge": "0"}, actor=None)
+        context = self._ctx()
+        self.assertFalse(context.get("SHOP_ENAMAD_BADGE_PROFILE_URL"))
+        saved = integration_service.connections_context(store=self.store)
+        row = next(r for r in saved if r["provider"].code == "enamad")
+        self.assertEqual(row["credentials"]["enamad_id"], "221617")
+        flow = enamad_verification_service.enamad_flow(self.store, row["credentials"], connected=True)
+        self.assertEqual(flow["stages"][1]["state"], "hidden")
+
+    def test_a_connection_that_only_has_the_display_switch_counts_as_nothing_saved(self):
+        conn = integration_service.get_or_create_connection(store=self.store, provider_code="enamad")
+        conn.set_credentials({"enamad_show_badge": "0"})
+        conn.save()
+        row = next(r for r in integration_service.connections_context(store=self.store) if r["provider"].code == "enamad")
+        self.assertFalse(row["has_saved_credentials"])
+
+    def test_another_stores_seal_never_shows_on_this_stores_domain(self):
+        other = Store.objects.create(name="Other Seal", slug="other-seal", admin_subdomain="other-seal", status=Store.Status.ACTIVE)
+        integration_service.connect(store=other, provider_code="enamad", values={"enamad_id": "999999", "enamad_auth_code": "OTHERCODE123456789", "enamad_show_badge": "1"}, actor=None)
+        self.assertFalse(self._ctx().get("SHOP_ENAMAD_BADGE_PROFILE_URL"))

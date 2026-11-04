@@ -23,6 +23,7 @@ from apps.storefront_builder.tests.test_a8_ready_template_catalog import (
     FORBIDDEN_DATA_KEYS,
     _walk,
 )
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 # Captured once, before any production edit, at git HEAD
 # fac7e3653ad07d5df5c9e4210137171134d7f90f (apps/ still byte-identical to
@@ -188,7 +189,7 @@ class ExactFiftyLatestCatalogTests(SimpleTestCase):
 
     def test_list_ready_templates_is_the_fifty_plus_three_reference_templates(self):
         # 50 token-built A8 identities + reference templates 51-53.
-        self.assertEqual(len(lpr.list_ready_templates()), 53)
+        self.assertEqual(len(lpr.list_ready_templates()), READY_TEMPLATE_COUNT)
 
 
 # P5-W4C rendered-visual-distinctness repair (source HEAD
@@ -377,8 +378,8 @@ class DiversityContractTests(SimpleTestCase):
 
         presets = lpr.list_ready_templates()
         signatures = [recipe_signature(preset) for preset in presets]
-        self.assertEqual(len(signatures), 53)
-        self.assertEqual(len(set(signatures)), 53)
+        self.assertEqual(len(signatures), READY_TEMPLATE_COUNT)
+        self.assertEqual(len(set(signatures)), READY_TEMPLATE_COUNT)
 
 
 class AllFiftyCanonicalApplyRegressionTests(TestCase):
@@ -392,7 +393,7 @@ class AllFiftyCanonicalApplyRegressionTests(TestCase):
 
         store = Store.objects.get(slug="akhlaghi")
         presets = lpr.list_ready_templates()
-        self.assertEqual(len(presets), 53)
+        self.assertEqual(len(presets), READY_TEMPLATE_COUNT)
         for preset in presets:
             with self.subTest(key=preset.key, version=preset.version):
                 draft = svc.get_or_create_draft(store)

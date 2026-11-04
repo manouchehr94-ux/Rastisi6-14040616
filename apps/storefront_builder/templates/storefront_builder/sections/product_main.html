@@ -1,4 +1,4 @@
-{% load persian catalog_extras storefront_builder_extras %}
+{% load persian catalog_extras storefront_builder_extras l10n %}
 {% comment %}
 Phase 5 — گالری/عنوان/قیمت/انتخابِ تنوع/تعداد/افزودن‌به‌سبد صفحه محصول.
 یک بلوکِ Alpine واحد (``variantSelector``) — طبقِ همان دلیلِ فنی که
@@ -7,6 +7,8 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
 {% endcomment %}
 {% if product %}
 <div class="wrap">
+  {% comment %}«{% if not pdp or … %}»: بدونِ ``pdp`` در context (رندرِ مستقیمِ قالب) همه‌چیز مثلِ پیش‌فرض نمایان می‌ماند.{% endcomment %}
+  {% if not pdp or pdp.show_breadcrumb %}
   <div class="breadcrumb">
     <a href="/">خانه</a>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -20,6 +22,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     <span style="color:var(--ink)">{{ product.name }}</span>
   </div>
+  {% endif %}
 
   {{ variant_selector|json_script:"variant-selector-data" }}
   {{ product_price_json|json_script:"product-price-data" }}
@@ -30,13 +33,22 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
   nothing for the other 7 Ready Templates; "fashion" repositions the
   thumbnail rail and restyles the variant chips/CTA row for a Ready
   Template that opts in.
+
+  V5 (PDP بستهٔ ۱) — ``pdp`` is the lenient, validated view of THIS section's presentation settings
+  (``pdp_settings.resolve_product_main_view``). Every extra ``data-*`` attribute is written ONLY when it differs from its default, so a
+  Store that never touched these controls renders exactly what it rendered before. They are consumed only by CSS
+  (``product_detail.css``) plus ``$el.closest('.pdp').dataset.optionStyle`` below — price / stock / variants / the add-to-cart form never read them.
   {% endcomment %}
-  <div class="pdp" data-pdp-layout="{{ settings.layout_variant|default:'standard' }}" x-data="variantSelector(
+  <div class="pdp" data-pdp-layout="{{ pdp.layout_variant|default:'standard' }}"{% for name, value in pdp.attrs %} data-{{ name }}="{{ value }}"{% endfor %}{% if pdp.order_style %} style="{{ pdp.order_style }}"{% endif %} x-data="variantSelector(
          JSON.parse(document.getElementById('variant-selector-data').textContent),
          JSON.parse(document.getElementById('product-price-data').textContent)
        )">
-    <div class="gallery">
-      <div class="main">
+    <div class="gallery"{% if pdp.gallery_lightbox %} x-data="{ lb: false, zoomed: false, touchX: null,
+         urls() { return [...$root.querySelectorAll('.gallery .main [data-slide-url]')].map(e => e.dataset.slideUrl).filter(Boolean) },
+         go(d) { const n = this.urls().length; if (n > 1) { activeSlide = (activeSlide + d + n) % n; zoomed = false } },
+         swipeEnd(e) { if (this.touchX === null) return; const dx = e.changedTouches[0].clientX - this.touchX; this.touchX = null; if (Math.abs(dx) > 40) this.go(dx < 0 ? 1 : -1) } }"
+         @keydown.escape.window="lb = false" x-effect="document.body.style.overflow = lb ? 'hidden' : ''"{% endif %}>
+      <div class="main"{% if pdp.gallery_lightbox %} @touchstart.passive="touchX = $event.touches[0].clientX" @touchend="swipeEnd($event)"{% endif %}>
         {% for slide in gallery_slides %}
           {% if slide.type == "image" %}
           <img data-slide data-slide-url="{{ slide.url }}" data-cover="{% if slide.is_cover %}true{% else %}false{% endif %}" x-show="activeSlide === {{ forloop.counter0 }}" src="{{ slide.url }}" data-img-role="product" alt="{{ slide.alt }}">
@@ -45,8 +57,18 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
                 style="position:absolute;inset:0;display:grid;place-items:center;border-radius:22px;background:{{ slide.tint }}">{{ slide.emoji }}</span>
           {% endif %}
         {% endfor %}
-        <span class="pill pill-disc" x-show="displayPrice.savings > 0" x-text="discountPercentText()"></span>
+        {% if not pdp or pdp.show_discount_badge %}<span class="pill pill-disc" x-show="displayPrice.savings > 0" x-text="discountPercentText()"></span>{% endif %}
+        {% if pdp.gallery_lightbox %}<button type="button" class="zoom" @click="lb = true" aria-label="بزرگ‌نمایی تصویر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>{% endif %}
       </div>
+      {% if pdp.gallery_lightbox %}
+      <div class="pdp-lb" x-show="lb" x-cloak role="dialog" aria-modal="true" aria-label="نمایش بزرگ تصویر" @click.self="lb = false; zoomed = false"
+           @touchstart.passive="touchX = $event.touches[0].clientX" @touchend="swipeEnd($event)">
+        <button type="button" class="pdp-lb-close" @click="lb = false; zoomed = false" aria-label="بستن">×</button>
+        <button type="button" class="pdp-lb-nav pdp-lb-prev" @click="go(-1)" aria-label="تصویر قبلی" x-show="urls().length > 1">‹</button>
+        <img class="pdp-lb-img" :class="{ 'is-zoomed': zoomed }" :src="urls()[activeSlide]" alt="" @click="zoomed = !zoomed">
+        <button type="button" class="pdp-lb-nav pdp-lb-next" @click="go(1)" aria-label="تصویر بعدی" x-show="urls().length > 1">›</button>
+      </div>
+      {% endif %}
       <div class="thumbs">
         {% for slide in gallery_slides %}
         <button type="button" class="th" :class="{ active: activeSlide === {{ forloop.counter0 }} }" @click="activeSlide = {{ forloop.counter0 }}"
@@ -59,6 +81,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
 
     <div class="pinfo">
       <h1>{{ product.name }}</h1>
+      {% if not pdp or pdp.show_topline %}
       <div class="topline">
         {% if product.brand %}
         <span class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>{{ product.brand.name }}</span>
@@ -67,15 +90,16 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         <span>|</span><span>{{ review_count|fa_number }} نظر</span>
         <span>|</span><span>{{ product.sold_count|fa_number }} فروش</span>
       </div>
+      {% endif %}
 
       <form hx-post="{% url 'cart:add' product.slug %}" hx-swap="none" @submit="if (!canAddToCart) $event.preventDefault()">
         {% csrf_token %}
         <input type="hidden" name="variant_id" :value="current ? current.variant_id : ''">
 
         <template x-for="axis in axes" :key="axis.id">
-          <div class="opt-block">
+          <div class="opt-block"{% if pdp.order_style %} data-blk="options"{% endif %}>
             <div class="lbl"><span x-text="axis.label"></span>: <span x-text="selectedLabel(axis)"></span></div>
-            <template x-if="axis.values.some(v => v.color_hex)">
+            <template x-if="$el.closest('.pdp').dataset.optionStyle !== 'chips' && axis.values.some(v => v.color_hex)">
               <div class="swatches">
                 <template x-for="v in axis.values" :key="v.id">
                   <div class="swatch" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"
@@ -87,7 +111,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
                 </template>
               </div>
             </template>
-            <template x-if="!axis.values.some(v => v.color_hex)">
+            <template x-if="$el.closest('.pdp').dataset.optionStyle === 'chips' || !axis.values.some(v => v.color_hex)">
               <div class="sizes">
                 <template x-for="v in axis.values" :key="v.id">
                   <button type="button" class="size" :class="{ active: selected[axis.id] === v.id, unavailable: !isValueAvailable(axis.id, v.id) }"
@@ -99,9 +123,9 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         </template>
 
         <template x-for="group in groups" :key="group.label">
-          <div class="opt-block">
+          <div class="opt-block"{% if pdp.order_style %} data-blk="options"{% endif %}>
             <div class="lbl"><span x-text="group.label"></span>: <span x-text="currentLegacyLabel(group)"></span></div>
-            <template x-if="group.values.some(v => v.color_hex)">
+            <template x-if="$el.closest('.pdp').dataset.optionStyle !== 'chips' && group.values.some(v => v.color_hex)">
               <div class="swatches">
                 <template x-for="v in group.values" :key="v.id">
                   <div class="swatch" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"
@@ -113,7 +137,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
                 </template>
               </div>
             </template>
-            <template x-if="!group.values.some(v => v.color_hex)">
+            <template x-if="$el.closest('.pdp').dataset.optionStyle === 'chips' || !group.values.some(v => v.color_hex)">
               <div class="sizes">
                 <template x-for="v in group.values" :key="v.id">
                   <button type="button" class="size" :class="{ active: selectedVariantId === v.id, unavailable: !v.is_purchasable }"
@@ -127,14 +151,14 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         {% if price_inquiry %}
         {% comment %}«استعلام قیمت»: هیچ قیمت، تخفیف یا دکمه‌ی خریدی نمایش داده نمی‌شود. باز شدن
         «درباره ما» فقط یک ناوبری است و درخواستی ثبت/ارسال نمی‌کند.{% endcomment %}
-        <div class="pricebox pricebox-inquiry">
+        <div class="pricebox pricebox-inquiry"{% if pdp.order_style %} data-blk="price"{% endif %}>
           <div class="now">استعلام قیمت</div>
           <p class="pdp-inquiry-note">قیمت این کالا با استعلام تعیین می‌شود.</p>
           {% if price_inquiry.url %}<a class="btn btn-primary pdp-inquiry-cta" href="{{ price_inquiry.url }}">استعلام قیمت</a>{% else %}<p class="pdp-inquiry-note" role="status">راه ارتباطی برای استعلام هنوز توسط فروشگاه منتشر نشده است.</p>{% endif %}
-          <div class="sku-line">کد کالا: <span dir="ltr">{{ product.sku }}</span></div>
+          {% if not pdp or pdp.show_sku %}<div class="sku-line">کد کالا: <span dir="ltr">{{ product.sku }}</span></div>{% endif %}
         </div>
         {% else %}
-        <div class="pricebox">
+        <div class="pricebox"{% if pdp.order_style %} data-blk="price"{% endif %}>
           <div class="row1" x-show="displayPrice.savings > 0">
             <span class="save" x-text="'صرفه‌جویی ' + formatToman(displayPrice.savings)"></span>
             <span class="old" x-text="formatToman(displayPrice.regular)"></span>
@@ -155,12 +179,15 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
               <span style="color:var(--pink)">ناموجود</span>
             </template>
           </div>
-          <div class="sku-line" x-show="current && current.sku">کد کالا: <span dir="ltr" x-text="current ? current.sku : ''"></span></div>
+          {% if not pdp or pdp.show_sku %}<div class="sku-line" x-show="current && current.sku">کد کالا: <span dir="ltr" x-text="current ? current.sku : ''"></span></div>{% endif %}
         </div>
         {% endif %}
+        {% if pdp.show_spec_summary %}{% with specs=product.specifications.all %}{% if specs %}
+        <ul data-pdp-specs{% if pdp.order_style %} data-blk="specs"{% endif %}>{% for spec in specs|slice:":6" %}<li><b>{{ spec.label }}</b>{% if spec.value %}<span>{{ spec.value }}</span>{% endif %}</li>{% endfor %}</ul>
+        {% endif %}{% endwith %}{% endif %}
 
         {% if gift_wrap and gift_wrap.eligible and not price_inquiry %}
-        <div class="gift-wrap-option" style="margin:12px 0;padding:10px 12px;border:1px dashed var(--line,#d9dce3);border-radius:12px;display:grid;gap:6px">
+        <div class="gift-wrap-option"{% if pdp.order_style %} data-blk="gift"{% endif %} style="margin:12px 0;padding:10px 12px;border:1px dashed var(--line,#d9dce3);border-radius:12px;display:grid;gap:6px">
           <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
             <input type="checkbox" name="gift_wrap" value="1" x-model="giftWrapSelected" aria-describedby="gw-desc-pdp">
             <span>🎁 {{ gift_wrap.title }}
@@ -176,7 +203,8 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         {% endif %}
 
         {% if not price_inquiry %}
-        <div class="qty" x-data="{ qty: 1 }">
+        {% comment %}«show_quantity» خاموش = فقط پنهان‌کردنِ کنترل؛ ورودیِ ``quantity`` (مقدارِ ۱) همچنان در همین فرمِ واقعی ارسال می‌شود.{% endcomment %}
+        <div class="qty"{% if pdp.order_style %} data-blk="actions"{% endif %} x-data="{ qty: 1 }"{% if pdp and not pdp.show_quantity %} hidden{% endif %}>
           <span class="lbl">تعداد:</span>
           <div class="stepper">
             <button type="button" @click="qty = Math.max(1, qty - 1)">−</button>
@@ -185,12 +213,12 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           </div>
         </div>
 
-        <div class="pdp-actions">
+        <div class="pdp-actions"{% if pdp.order_style %} data-blk="actions"{% endif %}>
           <button type="submit" class="btn btn-primary" :disabled="!canAddToCart">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
             <span x-text="needsSelection ? 'ابتدا یک گزینه را انتخاب کنید' : (displayStock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید')"></span>
           </button>
-          {% include "customers/partials/wishlist_button.html" with button_class="wish" %}
+          {% if not pdp or pdp.show_wishlist %}{% include "customers/partials/wishlist_button.html" with button_class="wish" %}{% endif %}
         </div>
 
         {% comment %}
@@ -210,7 +238,19 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
         gated to the mobile breakpoint. ``x-cloak`` avoids a pre-boot flash;
         with no JS the CSS keeps it hidden (the in-flow form still works).
         {% endcomment %}
-        <div class="pdp-satc" x-cloak aria-label="خرید سریع">
+        {% comment %}
+        V5 desktop sticky purchase bar (``show_desktop_sticky_bar``, default OFF): the SAME element/getters, shown on wide screens only
+        after the in-flow add-to-cart button has scrolled out above the viewport. ``data-satc`` is written only when the switch is on
+        (``md`` = mobile + desktop, ``d`` = desktop only) so every existing Store renders byte-identically.
+        {% endcomment %}
+        {% if not pdp or pdp.show_mobile_sticky_bar or pdp.show_desktop_sticky_bar %}
+        <div class="pdp-satc"{% if pdp.show_desktop_sticky_bar %} data-satc="{% if pdp.show_mobile_sticky_bar %}md{% else %}d{% endif %}" x-init="pdpSatcWatch($el)"{% endif %} x-cloak aria-label="خرید سریع">
+          {% if pdp.show_desktop_sticky_bar %}
+          <div class="pdp-satc-id">
+            {% with cover=gallery_slides.0 %}{% if cover and cover.type == "image" %}<img src="{{ cover.url }}" alt="" width="40" height="40" loading="lazy">{% endif %}{% endwith %}
+            <b>{{ product.name }}</b>
+          </div>
+          {% endif %}
           <div class="pdp-satc-price" aria-hidden="true">
             <span class="pdp-satc-now" x-text="formatToman(displayPrice.price)"></span>
             <span class="pdp-satc-old" x-show="displayPrice.savings > 0" x-text="formatToman(displayPrice.regular)"></span>
@@ -223,7 +263,30 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
           </button>
         </div>
         {% endif %}
+        {% endif %}
       </form>
+
+      {% if pdp and not price_inquiry %}
+      {% if pdp.show_low_stock_alert %}
+      <div class="pdp-lowstock"{% if pdp.order_style %} data-blk="notices"{% endif %} x-show="displayStock > 0 && displayStock <= 10" x-cloak role="status">
+        <div class="pdp-lowstock-text"><b>موجودی این محصول رو به اتمام است</b><small>تا قبل از تمام‌شدن، خریدتان را انجام دهید — فقط <span x-text="displayStock"></span> عدد مانده است.</small></div>
+        <div class="pdp-lowstock-bar" aria-hidden="true"><i :style="'width:' + Math.max(8, displayStock * 10) + '%'"></i></div>
+      </div>
+      {% endif %}
+      {% if pdp.show_free_shipping_notice and SHOP_FREE_SHIPPING_THRESHOLD and product.requires_shipping %}
+      <div class="pdp-freeship"{% if pdp.order_style %} data-blk="notices"{% endif %} x-show="displayPrice.price >= {{ SHOP_FREE_SHIPPING_THRESHOLD|unlocalize }}" x-cloak role="status">با افزودن این محصول به سبد خرید، ارسال شما رایگان می‌شود.</div>
+      {% endif %}
+      {% if pdp.show_contact_buttons %}
+      {% with whatsapp=SOCIAL_LINKS_FOOTER|first_social:"whatsapp" phone=FOOTER_SETTINGS.phone|default:SHOP_CONTACT_PHONE %}
+      {% if phone or whatsapp %}
+      <div class="pdp-contact"{% if pdp.order_style %} data-blk="contact"{% endif %}>
+        {% if phone %}<a class="pdp-contact-btn" href="tel:{{ phone }}">مشاوره تلفنی</a>{% endif %}
+        {% if whatsapp %}<a class="pdp-contact-btn" href="{{ whatsapp.url }}" target="_blank" rel="noopener noreferrer">مشاوره واتساپ</a>{% endif %}
+      </div>
+      {% endif %}
+      {% endwith %}
+      {% endif %}
+      {% endif %}
 
       {% comment %}PDTX (Phase 5 Task 5) — this hard-coded guarantee strip is
       the backward-compatible FALLBACK. It renders only when the page has NO
@@ -236,7 +299,7 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
       روی هر صفحهٔ محصول عمومی بودند؛ دیگر اینجا ثابت نمایش داده نمی‌شوند (فروشنده می‌تواند آن‌ها را در «ردیف اعتماد و ویژگی‌ها»
       با تیک «تأییدشده» اضافه کند). ارسال فقط وقتی ادعا می‌شود که حداقل یک روش ارسال فعال باشد.{% endcomment %}
       {% if product.requires_shipping and svc_claims.shipping or not product.requires_shipping %}
-      <div class="guarantee">
+      <div class="guarantee"{% if pdp.order_style %} data-blk="trust"{% endif %}>
         {% if product.requires_shipping %}
         <div class="g"><span class="ic">{% include "storefront_builder/partials/global_header/_shared/icon.html" with name="truck" %}</span>ارسال سفارش</div>
         {% else %}
@@ -250,7 +313,47 @@ Preview بدونِ هیچ محصولی در این فروشگاه — چیزی �
   </div>
 </div>
 <script>
-document.addEventListener('alpine:init', () => {
+{% if pdp.show_desktop_sticky_bar %}/* desktop sticky purchase bar (only written when ``show_desktop_sticky_bar`` is on): show it while the in-flow add-to-cart button is above the viewport */
+window.pdpSatcWatch = function (el) {
+  const cta = el.closest('form').querySelector('button[type=submit]:not(.pdp-satc-btn)');
+  if (!cta || !('IntersectionObserver' in window)) { return; }
+  new IntersectionObserver((entries) => {
+    const e = entries[0];
+    el.classList.toggle('is-shown', !e.isIntersecting && e.boundingClientRect.top < 0);
+  }).observe(cta);
+};
+{% endif %}{% if not pdp or pdp.show_mobile_sticky_bar or pdp.show_desktop_sticky_bar %}(function () {
+  /* phone quick-buy bar: step aside while an in-flow buy control (price, options, quantity, add-to-cart) sits in the strip the bar covers,
+     so the bar never hides what the shopper is about to use; it comes back as soon as those controls are clear of that strip */
+  function init() {
+    var bar = document.querySelector('.pdp-satc');
+    if (!bar || !window.matchMedia) { return; }
+    var scope = bar.closest('.pdp') || document;
+    var phone = window.matchMedia('(max-width:680px)');
+    var queued = false;
+    function check() {
+      queued = false;
+      if (!phone.matches) { bar.removeAttribute('data-away'); return; }
+      var offset = parseFloat(getComputedStyle(bar).bottom) || 0;
+      var floor = window.innerHeight - offset;
+      var ceiling = floor - bar.offsetHeight;
+      var away = false;
+      scope.querySelectorAll('.pricebox, .opt-block, .qty, .pdp-actions').forEach(function (el) {
+        if (el.hidden || bar.contains(el)) { return; }
+        var r = el.getBoundingClientRect();
+        if (r.height > 0 && r.bottom > ceiling && r.top < floor) { away = true; }
+      });
+      bar.toggleAttribute('data-away', away);
+    }
+    function queue() { if (!queued) { queued = true; window.requestAnimationFrame(check); } }
+    window.addEventListener('scroll', queue, { passive: true });
+    window.addEventListener('resize', queue);
+    if (phone.addEventListener) { phone.addEventListener('change', queue); }
+    check();
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
+})();
+{% endif %}document.addEventListener('alpine:init', () => {
   Alpine.data('variantSelector', (selectorData, productData) => ({
     mode: selectorData.mode,
     axes: selectorData.axes,

@@ -54,12 +54,24 @@ SECTOR_DEFAULT_SECTIONS = {
 class Command(BaseCommand):
     help = "بارگذاری idempotent قالب‌های صنف (پلتفرم‌محور) از apps.catalog.industry_templates.registry"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--only-missing", action="store_true",
+            help="فقط قالب‌هایی را بساز که (slug, version)شان هنوز در پایگاه‌داده نیست؛ رکوردهای موجود را هرگز تغییر نمی‌دهد "
+                 "(بدون این پرچم، update_or_create رکوردهای موجود را با داده‌ی رجیستری هم‌گرا می‌کند).",
+        )
+
     @transaction.atomic
     def handle(self, *args, **options):
         created_templates = 0
         updated_templates = 0
 
-        for entry in INDUSTRY_TEMPLATES:
+        entries = INDUSTRY_TEMPLATES
+        if options.get("only_missing"):
+            existing = set(IndustryTemplate.objects.values_list("slug", "version"))
+            entries = [entry for entry in INDUSTRY_TEMPLATES if (entry["slug"], entry["version"]) not in existing]
+
+        for entry in entries:
             sector = entry.get("sector", IndustryTemplate.Sector.OTHER)
             default_section_keys = entry.get("default_section_keys") or SECTOR_DEFAULT_SECTIONS.get(
                 sector, SECTOR_DEFAULT_SECTIONS["other"],
@@ -95,7 +107,13 @@ class Command(BaseCommand):
                 f"— اعتبارسنجی: {status} ({template.readiness}, امتیاز {result.quality_score})"
             )
 
-        deprecated_count = IndustryTemplate.objects.filter(slug__in=DEPRECATED_LEGACY_SLUGS).update(
+        # The legacy templates are part of the registry data but must never be offered. A full seed re-sweeps all of them; --only-missing
+        # sweeps ONLY the legacy rows it created in this run, so a row that already existed is never touched.
+        legacy_scope = (
+            [entry["slug"] for entry in entries if entry["slug"] in DEPRECATED_LEGACY_SLUGS]
+            if options.get("only_missing") else DEPRECATED_LEGACY_SLUGS
+        )
+        deprecated_count = IndustryTemplate.objects.filter(slug__in=legacy_scope).update(
             is_active=False, readiness=IndustryTemplate.Readiness.DEPRECATED,
         )
         if deprecated_count:

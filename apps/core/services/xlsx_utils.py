@@ -521,7 +521,7 @@ def read_xlsx_table(fileobj, *, sheet_names: tuple = ("داده‌ها", "داد
                 sheet = workbook[by_name[wanted]]
                 break
         if sheet is None:
-            skip = {"راهنما", "فهرست‌ها", "فهرست ها", "درباره فایل"}
+            skip = {"راهنما", "فهرست‌ها", "فهرست ها", "درباره فایل", "نمونه"}
             for name in workbook.sheetnames:
                 if name.strip() not in skip:
                     sheet = workbook[name]

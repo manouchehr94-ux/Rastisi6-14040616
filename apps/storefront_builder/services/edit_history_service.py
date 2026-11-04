@@ -87,12 +87,12 @@ def _serialize_section(section: StorefrontSection, media: dict | None = None) ->
     return data
 
 
-def _serialize_cell(cell: StorefrontCell, blocks=None, section_stable_id=None) -> dict:
+def _serialize_cell(cell: StorefrontCell, blocks=None, section_stable_id=None, children=None) -> dict:
     if blocks is None:
         blocks = list(cell.blocks.all())
     if section_stable_id is None and cell.section_id:
         section_stable_id = cell.section.stable_id
-    return {
+    data = {
         "stable_id": str(cell.stable_id),
         "order": cell.order,
         "span": cell.span,
@@ -112,20 +112,29 @@ def _serialize_cell(cell: StorefrontCell, blocks=None, section_stable_id=None) -
             for block in sorted(blocks, key=lambda block: (block.cell_order, block.pk))
         ],
     }
+    # V5 Groups: the Containers nested in this Cell — the key exists only when there are any, so every snapshot of a page without Groups
+    # is exactly what it was before (old and new history entries stay interchangeable).
+    if children:
+        data["children"] = children
+    return data
 
 
-def _serialize_container(container: StorefrontContainer, cells=None, blocks_by_cell=None, sections_by_id=None) -> dict:
+def _serialize_container(container: StorefrontContainer, cells=None, blocks_by_cell=None, sections_by_id=None, nested_by_cell=None) -> dict:
     if cells is None:
         cells = list(container.cells.all())
     out = []
     for cell in sorted(cells, key=lambda cell: (cell.order, cell.pk)):
+        children = [
+            _serialize_container(child, (nested_by_cell or {}).get("cells", {}).get(child.pk, []), blocks_by_cell, sections_by_id, nested_by_cell)
+            for child in (nested_by_cell or {}).get("by_cell", {}).get(cell.pk, [])
+        ] if nested_by_cell else None
         if blocks_by_cell is None:
-            out.append(_serialize_cell(cell))
+            out.append(_serialize_cell(cell, children=children))
             continue
         linked = sections_by_id.get(cell.section_id) if cell.section_id else None
         out.append(_serialize_cell(
             cell, blocks=blocks_by_cell.get(cell.pk, []),
-            section_stable_id=linked.stable_id if linked is not None else None,
+            section_stable_id=linked.stable_id if linked is not None else None, children=children,
         ))
     return {
         "stable_id": str(container.stable_id),
@@ -158,20 +167,25 @@ def snapshot_draft(draft: StorefrontLayoutVersion) -> dict:
         for row in model.objects.filter(section_id__in=sections_by_id).order_by("id"):
             grouped.setdefault(row.section_id, []).append(row)
         media[related_name] = grouped
-    containers = list(StorefrontContainer.objects.filter(page_id__in=page_ids).order_by("order", "id"))
+    containers = list(StorefrontContainer.all_objects.filter(page_id__in=page_ids).order_by("order", "id"))
     cells_by_container: dict = {}
     for cell in StorefrontCell.objects.filter(container__in=containers):
         cells_by_container.setdefault(cell.container_id, []).append(cell)
     containers_by_page: dict = {}
+    nested_by_cell: dict = {}
     for container in containers:
-        containers_by_page.setdefault(container.page_id, []).append(container)
+        if container.parent_cell_id is None:
+            containers_by_page.setdefault(container.page_id, []).append(container)
+        else:
+            nested_by_cell.setdefault(container.parent_cell_id, []).append(container)
+    nested_context = {"by_cell": nested_by_cell, "cells": cells_by_container} if nested_by_cell else None
 
     pages = {}
     containers_out = {}
     for page in page_list:
         pages[page.page_type] = [_serialize_section(section, media) for section in sections_by_page.get(page.pk, [])]
         containers_out[page.page_type] = [
-            _serialize_container(container, cells_by_container.get(container.pk, []), blocks_by_cell, sections_by_id)
+            _serialize_container(container, cells_by_container.get(container.pk, []), blocks_by_cell, sections_by_id, nested_context)
             for container in containers_by_page.get(page.pk, [])
         ]
     return {
@@ -193,6 +207,47 @@ def _restore_media(section: StorefrontSection, media_state: dict) -> None:
             kwargs["store_id"] = store_id
             kwargs["section"] = section
             model.objects.create(**kwargs)
+
+
+def _restore_container(container_data: dict, page, parent_cell, section_map: dict, blocks_to_assign: list) -> None:
+    """Recreate one snapshot Container (and, recursively, the Groups nested in its Cells)."""
+    container = StorefrontContainer.objects.create(
+        page=page,
+        parent_cell=parent_cell,
+        stable_id=container_data["stable_id"],
+        order=container_data.get("order", 0),
+        layout_key=container_data.get("layout_key", "single"),
+        settings=dict(container_data.get("settings") or {}),
+        is_locked=container_data.get("is_locked", False),
+    )
+    StorefrontCell.objects.bulk_create([
+        StorefrontCell(
+            container=container,
+            stable_id=cell_data["stable_id"],
+            order=cell_data.get("order", 0),
+            span=cell_data.get("span", 12),
+            settings=dict(cell_data.get("settings") or {}),
+            section=section_map.get(cell_data.get("section_stable_id")),
+        )
+        for cell_data in container_data.get("cells", [])
+    ])
+    # Phase 2B: re-fetch the just-created Cells by stable_id (the same pattern ``layout_service._clone_version_content`` and
+    # ``container_service.clone_page_containers`` already use) before wiring up the multi-block FK — ``bulk_create`` does not reliably
+    # populate PKs on every backend, and the target Cell objects above were never individually saved.
+    cells_by_stable_id = {str(cell.stable_id): cell for cell in container.cells.all()}
+    for cell_data in container_data.get("cells", []):
+        target_cell = cells_by_stable_id.get(cell_data["stable_id"])
+        if target_cell is None:
+            continue
+        # Old history entries recorded before Phase 2B never have a "blocks" key at all — ``.get(..., [])`` makes restoring them behave
+        # exactly as before.
+        for block_data in cell_data.get("blocks", []):
+            block_section = section_map.get(block_data.get("section_stable_id"))
+            if block_section is None:
+                continue
+            blocks_to_assign.append((block_section, target_cell.pk, block_data.get("cell_order", 0)))
+        for child_data in cell_data.get("children", []):
+            _restore_container(child_data, page, target_cell, section_map, blocks_to_assign)
 
 
 @transaction.atomic
@@ -269,48 +324,7 @@ def restore_draft_state(draft: StorefrontLayoutVersion, state: dict) -> None:
                 continue
             section_map = section_by_page_and_stable_id.get(page_type, {})
             for container_data in containers:
-                container = StorefrontContainer.objects.create(
-                    page=page,
-                    stable_id=container_data["stable_id"],
-                    order=container_data.get("order", 0),
-                    layout_key=container_data.get("layout_key", "single"),
-                    settings=dict(container_data.get("settings") or {}),
-                    is_locked=container_data.get("is_locked", False),
-                )
-                StorefrontCell.objects.bulk_create([
-                    StorefrontCell(
-                        container=container,
-                        stable_id=cell_data["stable_id"],
-                        order=cell_data.get("order", 0),
-                        span=cell_data.get("span", 12),
-                        settings=dict(cell_data.get("settings") or {}),
-                        section=section_map.get(cell_data.get("section_stable_id")),
-                    )
-                    for cell_data in container_data.get("cells", [])
-                ])
-                # Phase 2B: re-fetch the just-created Cells by stable_id (the
-                # same pattern ``layout_service._clone_version_content`` and
-                # ``container_service.clone_page_containers`` already use)
-                # before wiring up the new multi-block FK — ``bulk_create``
-                # does not reliably populate PKs on every backend, and the
-                # target Cell objects above were never individually saved.
-                cells_by_stable_id = {
-                    str(cell.stable_id): cell for cell in container.cells.all()
-                }
-                for cell_data in container_data.get("cells", []):
-                    target_cell = cells_by_stable_id.get(cell_data["stable_id"])
-                    if target_cell is None:
-                        continue
-                    # Old history entries recorded before Phase 2B never have
-                    # a "blocks" key at all — ``.get(..., [])`` makes restoring
-                    # them behave exactly as before (no multi-block FK ever
-                    # written for those entries, matching the fact that the
-                    # field didn't exist yet when they were recorded).
-                    for block_data in cell_data.get("blocks", []):
-                        block_section = section_map.get(block_data.get("section_stable_id"))
-                        if block_section is None:
-                            continue
-                        blocks_to_assign.append((block_section, target_cell.pk, block_data.get("cell_order", 0)))
+                _restore_container(container_data, page, None, section_map, blocks_to_assign)
         if blocks_to_assign:
             updated_sections = []
             for section, cell_pk, cell_order in blocks_to_assign:

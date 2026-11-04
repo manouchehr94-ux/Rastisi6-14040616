@@ -252,9 +252,12 @@ class PdpTrustIsMerchantEditableTests(TestCase):
         from apps.storefront_builder import section_registry
         definition = section_registry.get_definition("trust_features")
         self.assertIsNotNone(definition.settings_schema)
-        # product_main stays a schema-less passthrough (no new schema attached).
+        # product_main carries NO trust settings of its own: since V5 (PDP بستهٔ ۱) it has a generic *presentation* schema, but
+        # nothing in it can hold or replace trust content — the trust_features section stays the only authority.
         product_main = section_registry.get_definition("product_main")
-        self.assertIsNone(product_main.settings_schema)
+        for field in (product_main.settings_schema.fields if product_main.settings_schema else ()):
+            self.assertNotIn("trust", field.key)
+            self.assertNotIn("guarantee", field.key)
 
 
 @override_settings(ALLOWED_HOSTS=[PUBLIC_HOST, "pdtx-foreign.example.com", "testserver"])

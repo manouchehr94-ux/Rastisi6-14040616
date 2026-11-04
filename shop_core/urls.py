@@ -18,9 +18,9 @@ Including another URLconf
 from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
-from django.urls import include, path
+from django.urls import include, path, re_path
 
-from apps.core.seo import robots_txt, sitemap_xml
+from apps.core.seo import indexnow_key_file, robots_txt, sitemap_xml
 from apps.core.views import admin_panel_compat_redirect, favicon_view
 
 urlpatterns = [
@@ -28,6 +28,7 @@ urlpatterns = [
     # SEO — tenant-safe, scoped to the Host-resolved Store (ADR-90).
     path("sitemap.xml", sitemap_xml, name="sitemap-xml"),
     path("robots.txt", robots_txt, name="robots-txt"),
+    re_path(r"^(?P<key>[0-9a-f]{32})\.txt$", indexnow_key_file, name="indexnow-key"),
     path("admin/", admin.site.urls),
     path("", include("apps.catalog.urls")),
     path("cart/", include("apps.cart.urls")),

@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.dashboard.tests.integration_pages import all_views_html, view_html, view_url
 from apps.stores.models import Store, StoreMembership
 from apps.stores.services import integration_service
 
@@ -25,24 +26,23 @@ class IntegrationSettingsSectionTests(TestCase):
         self.client.login(username="09121197001", password="pass12345")
 
     def test_section_lists_all_providers(self):
-        response = self.client.get(reverse("dashboard:settings") + "?section=integrations")
-        self.assertContains(response, "اینماد")
-        self.assertContains(response, "ترب")
-        self.assertContains(response, "گوگل آنالیتیکس")
+        html = view_html(self.client, "overview")
+        for name in ("اینماد", "ترب", "گوگل آنالیتیکس", "گوگل تگ منیجر", "پیکسلِ تبلیغاتی"):
+            self.assertIn(name, html)
 
     def test_connect_activates_integration(self):
         response = self.client.post(
             reverse("dashboard:settings-integration-connect", args=["enamad"]),
             {"enamad_id": "123456", "enamad_auth_code": "abcDEF123"},
         )
-        self.assertRedirects(response, "/admin-portal/settings/?section=integrations")
+        self.assertRedirects(response, "/admin-portal/settings/?section=integrations&view=enamad")
         store = Store.objects.get(slug="akhlaghi")
         rows = integration_service.connections_context(store=store)
         enamad_row = next(row for row in rows if row["provider"].code == "enamad")
         self.assertTrue(enamad_row["is_connected"])
 
     def test_enamad_meta_field_is_visible_to_merchant_admin(self):
-        response = self.client.get(reverse("dashboard:settings") + "?section=integrations")
+        response = self.client.get(view_url("enamad"))
         self.assertContains(response, "متاتگ احراز فنی اینماد")
 
     def test_enamad_can_connect_with_verification_meta_before_badge_is_issued(self):
@@ -51,7 +51,7 @@ class IntegrationSettingsSectionTests(TestCase):
             reverse("dashboard:settings-integration-connect", args=["enamad"]),
             {"verification_meta_tag": meta, "enamad_code": ""},
         )
-        self.assertRedirects(response, "/admin-portal/settings/?section=integrations")
+        self.assertRedirects(response, "/admin-portal/settings/?section=integrations&view=enamad")
         store = Store.objects.get(slug="akhlaghi")
         row = next(
             row for row in integration_service.connections_context(store=store)
@@ -65,7 +65,7 @@ class IntegrationSettingsSectionTests(TestCase):
             reverse("dashboard:settings-integration-connect", args=["enamad"]),
             {"enamad_id": "221617", "enamad_auth_code": "94MqMPJEnuahlSHjb9kP"},
         )
-        self.assertRedirects(response, "/admin-portal/settings/?section=integrations")
+        self.assertRedirects(response, "/admin-portal/settings/?section=integrations&view=enamad")
         store = Store.objects.get(slug="akhlaghi")
         row = next(
             row for row in integration_service.connections_context(store=store)
@@ -102,7 +102,7 @@ class IntegrationSettingsSectionTests(TestCase):
         store = Store.objects.get(slug="akhlaghi")
         integration_service.connect(store=store, provider_code="torob", values={"merchant_id": "m-1"}, actor=None)
         response = self.client.post(reverse("dashboard:settings-integration-disconnect", args=["torob"]))
-        self.assertRedirects(response, "/admin-portal/settings/?section=integrations")
+        self.assertRedirects(response, "/admin-portal/settings/?section=integrations&view=torob")
         rows = integration_service.connections_context(store=store)
         torob_row = next(row for row in rows if row["provider"].code == "torob")
         self.assertFalse(torob_row["is_connected"])
@@ -180,3 +180,63 @@ class IntegrationTenantIsolationViewTests(TestCase):
             reverse("dashboard:settings") + "?section=integrations", HTTP_HOST=_HOST_B,
         )
         self.assertNotContains(response, "akhlaghiSecretCode")
+
+
+class IntegrationAccordionTests(TestCase):
+    """Accordion rows: closed by default, «connected» = the real is_active flag, toggle = disconnect / reconnect with saved data."""
+
+    def setUp(self):
+        self.staff = User.objects.create_user(username="09121197002", password="pass12345", is_staff=True)
+        _grant_akhlaghi_membership(self.staff)
+        self.client.login(username="09121197002", password="pass12345")
+        self.url = reverse("dashboard:settings") + "?section=integrations"
+        self.store = Store.objects.get(slug="akhlaghi")
+
+    def row(self, code):
+        return next(r for r in integration_service.connections_context(store=self.store) if r["provider"].code == code)
+
+    def test_five_rows_closed_by_default_without_toggle_until_something_is_saved(self):
+        html = view_html(self.client, "overview")
+        for code in ("enamad", "torob", "google_analytics", "google_tag_manager", "ad_pixel"):
+            self.assertIn(f'id="int-{code}"', html)
+        self.assertNotIn('data-autoopen="1"', html)           # nothing opens by itself
+        self.assertNotIn('role="switch"', html)
+
+    def test_toggle_off_keeps_credentials_and_toggle_on_restores_the_connection(self):
+        self.client.post(reverse("dashboard:settings-integration-connect", args=["torob"]), {"merchant_id": "SHOP-77"})
+        self.assertTrue(self.row("torob")["is_connected"])
+        self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
+        row = self.row("torob")
+        self.assertFalse(row["is_connected"])
+        self.assertTrue(row["can_reenable"])                    # data kept; «connected» and «enabled» are the same real flag
+        torob = view_html(self.client, "torob")
+        self.assertIn('data-testid="int-axis-saved" data-on="1"', torob)
+        self.assertIn('data-testid="int-axis-enabled" data-on="0"', torob)
+        self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
+        self.assertTrue(self.row("torob")["is_connected"])
+        self.assertEqual(self.row("torob")["credentials"]["merchant_id"], "SHOP-77")
+
+    def test_toggle_on_without_saved_data_explains_and_stays_off(self):
+        self.client.post(reverse("dashboard:settings-integration-toggle", args=["torob"]))
+        self.assertFalse(self.row("torob")["is_connected"])
+
+    def test_connect_error_reopens_the_row_with_the_message(self):
+        self.client.post(reverse("dashboard:settings-integration-connect", args=["google_analytics"]), {"measurement_id": "bad"})
+        page = view_html(self.client, "analytics")                      # the POST sends the seller back to the tab that holds the service
+        self.assertIn('data-autoopen="1"', page)                        # the drawer reopens on the failed attempt
+        self.assertIn('aria-invalid="true"', page)
+        self.assertIn('data-testid="int-field-error"', page)
+        self.assertIn("الگو", page)
+        self.assertNotIn('data-testid="int-field-error"', view_html(self.client, "analytics"))     # one-shot flash
+
+    def test_test_result_and_date_are_shown_and_say_no_external_call(self):
+        self.client.post(reverse("dashboard:settings-integration-connect", args=["torob"]), {"merchant_id": "SHOP-77"})
+        self.client.post(reverse("dashboard:settings-integration-test", args=["torob"]))
+        page = view_html(self.client, "torob")
+        self.assertIn('data-testid="int-last-test"', page)
+        self.assertIn("به سرویس بیرونی درخواستی نمی‌فرستد", page)
+
+    def test_toggle_is_store_scoped_and_needs_authentication(self):
+        anon = self.client_class()
+        self.assertEqual(anon.post(reverse("dashboard:settings-integration-toggle", args=["torob"])).status_code, 302)
+        self.assertEqual(self.client.post(reverse("dashboard:settings-integration-toggle", args=["nope"])).status_code, 404)

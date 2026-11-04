@@ -2,7 +2,7 @@
 {% load persian %}
 {% block title %}ورود اطلاعات #{{ job.pk }} | پنل مدیریت{% endblock %}
 {% block page_title %}ورود اطلاعات: {{ job.get_import_type_display }} (شماره {{ job.pk|fa_number }}){% endblock %}
-{% block page_sub %}{% if uses_mode %}{{ mode_label }} — {% endif %}فایل: {{ job.original_filename }}{% endblock %}
+{% block page_sub %}{% if uses_mode %}{{ mode_label }} — {% endif %}فایل: <bdi dir="ltr">{{ job.original_filename }}</bdi>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -19,7 +19,15 @@
 .imp-banner.is-warn{background:var(--amber-soft)}
 .imp-banner.is-bad{background:var(--red-soft)}
 .imp-err{display:flex;gap:8px;align-items:baseline;color:var(--red-ink);font-size:12.5px;line-height:1.9}
-.imp-err .imp-col{flex:none;padding:0 8px;border-radius:999px;background:var(--red-soft);font-size:11.5px;font-weight:700;white-space:nowrap}
+.imp-err .imp-col{flex:none;padding:0 8px;margin-inline-end:2px;border-radius:999px;background:var(--red-soft);font-size:11.5px;font-weight:700;white-space:nowrap}
+.imp-final{display:grid;gap:10px;padding:16px 18px;border-radius:14px;background:var(--primary-soft);border:1px solid var(--primary)}
+.imp-final.is-blocked{background:var(--bg);border-color:var(--border)}
+.imp-final h3{margin:0;font-size:15px}
+.imp-final p{margin:0;font-size:12.5px;line-height:1.9;color:var(--muted)}
+.imp-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.imp-counts div{padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.imp-counts b{display:block;font-size:20px}
+.imp-counts span{font-size:12px;color:var(--muted)}
 .imp-warn{color:var(--amber-ink);font-size:12.5px}
 .imp-blockers{margin:8px 0 0;padding:0 18px;font-size:12.5px;line-height:2}
 .imp-confirm{margin:0 0 10px;padding:10px 14px;border-radius:12px;background:var(--amber-soft);font-size:12.5px;line-height:1.9}
@@ -51,6 +59,7 @@
       <div class="imp-tile"><b>{{ summary.total|fa_number }}</b><span>کلِ ردیف‌ها</span></div>
       <div class="imp-tile is-good"><b>{{ summary.will_create|fa_number }}</b><span>ساخته می‌شوند</span></div>
       <div class="imp-tile is-info"><b>{{ summary.will_update|fa_number }}</b><span>بروزرسانی می‌شوند</span></div>
+      <div class="imp-tile is-warn" data-testid="tile-awaiting"><b>{{ summary.awaiting|fa_number }}</b><span>منتظرِ تأییدِ مورد جدید</span></div>
       <div class="imp-tile is-bad"><b>{{ summary.invalid|fa_number }}</b><span>ردیفِ دارایِ خطا</span></div>
       <div class="imp-tile is-warn"><b>{{ summary.warnings|fa_number }}</b><span>ردیفِ دارایِ هشدار</span></div>
     </div>
@@ -68,7 +77,12 @@
 
   {% if job.status == "preview_ready" %}
   <div class="card-body" style="padding-top:0">
-    {% if summary.blockers %}
+    {% if summary.blockers and summary.awaiting and not summary.invalid %}
+    <div class="imp-banner is-warn" role="status">
+      <b>این فایل مواردِ جدیدی (برند/دسته/ویژگی) دارد که هنوز در فروشگاه نیستند.</b>
+      <div>در بخشِ «مواردِ جدیدِ پیشنهادی» پایین، هر مورد را تأیید یا رد کنید. با تأیید، مورد در فروشگاه ساخته می‌شود و ردیف‌هایِ وابسته معتبر می‌شوند؛ سپس می‌توانید فایل را اجرا کنید. تا آن زمان هیچ تغییری روی فروشگاه اعمال نشده است.</div>
+    </div>
+    {% elif summary.blockers %}
     <div class="imp-banner is-bad" role="alert">
       <b>این فایل قابل اجرا نیست. ابتدا همه خطاها را اصلاح و فایل را دوباره بارگذاری کنید.</b>
       <ul class="imp-blockers">{% for reason in summary.blockers %}<li>{{ reason }}</li>{% endfor %}</ul>
@@ -85,13 +99,17 @@
   {% endif %}
 
   <div class="card-body" style="border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    {% if can_execute %}
-    <form method="post" action="{% url 'dashboard:import-execute' job.pk %}" style="flex-basis:100%">{% csrf_token %}
-      <p class="imp-confirm">با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند. فایل پیش از اجرا یک بارِ دیگر با وضعیتِ فعلیِ فروشگاه بررسی می‌شود و اگر هر مشکلی پیدا شود هیچ تغییری اعمال نمی‌شود.</p>
-      <button type="submit" class="btn btn-primary" onclick="return confirm('با تأیید، اطلاعاتِ فروشگاه تغییر می‌کند. ادامه می‌دهید؟')">
-        تأیید اجرای واقعی
-      </button>
-    </form>
+    {% if job.status == "preview_ready" and can_manage_imports %}
+    <div class="imp-final{% if not can_execute %} is-blocked{% endif %}" style="flex-basis:100%" data-testid="final-import-panel">
+      <h3>ورود نهایی {{ item_plural }} به فروشگاه</h3>
+      {% if can_execute %}
+      <p>همه‌ی ردیف‌ها معتبرند{% if summary.proposals.total %} و مواردِ جدید تأیید شده‌اند{% endif %}. تا وقتی دکمه‌ی زیر را نزنید هیچ تغییری روی فروشگاه اعمال نمی‌شود.</p>
+      <div><button type="button" class="au-btn au-btn--primary" data-au-open="#final-import-modal" data-testid="final-import-open">ورود نهایی {{ item_plural }} به فروشگاه</button></div>
+      {% else %}
+      <p>{% if summary.awaiting %}ابتدا {{ summary.awaiting|fa_number }} ردیفِ منتظرِ تأییدِ موردِ جدید را در بخش «مواردِ جدیدِ پیشنهادی» تأیید کنید.{% elif summary.invalid %}ابتدا خطاهایِ فایل را اصلاح و آن را دوباره بارگذاری کنید.{% else %}ورودِ نهایی هنوز ممکن نیست؛ دلیل را در بالا ببینید.{% endif %}</p>
+      <div><button type="button" class="au-btn" disabled aria-disabled="true" data-testid="final-import-open">ورود نهایی {{ item_plural }} به فروشگاه</button></div>
+      {% endif %}
+    </div>
     {% endif %}
     {% if job.status == "preview_ready" and can_manage_imports %}
     <form method="post" action="{% url 'dashboard:import-cancel' job.pk %}">{% csrf_token %}
@@ -100,9 +118,56 @@
     {% endif %}
     {% if job.error_report_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-errors' job.pk %}">دریافتِ گزارشِ خطا (اکسل)</a>{% endif %}
     {% if job.source_file %}<a class="btn btn-sm" href="{% url 'dashboard:import-download-source' job.pk %}">دریافتِ فایلِ بارگذاری‌شده ({{ source_format|upper }})</a>{% endif %}
+    {% if job.status == "completed" and job.import_type == "products" %}<a class="btn btn-primary" href="{% url 'dashboard:product-list' %}" data-testid="to-product-list">مشاهده‌یِ فهرستِ کالاها</a>{% endif %}
     {% if can_manage_imports and job.status != "preview_ready" %}<a class="btn btn-sm" href="{% url 'dashboard:import-upload' %}?type={{ job.import_type }}">ورودِ اطلاعاتِ تازه</a>{% endif %}
   </div>
 </div>
+
+{% if proposals %}
+<div class="card" style="margin-bottom:16px" id="proposals" data-testid="proposals-card">
+  <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <div><b>مواردِ جدیدِ پیشنهادی</b>
+      <div style="font-size:12px;color:var(--muted)">نام‌هایی که در فایل بود ولی در فروشگاه شما وجود ندارد. تا تأیید نشوند ساخته نمی‌شوند و فایل اجرا نمی‌شود. نام‌هایِ موجود (حتی با تفاوتِ نیم‌فاصله/فاصله) دوباره ساخته نمی‌شوند.</div>
+    </div>
+    {% if job.status == "preview_ready" and can_decide_any %}
+    <form method="post" action="{% url 'dashboard:import-proposals-approve-all' job.pk %}">{% csrf_token %}
+      <button type="submit" class="btn btn-primary" data-au-confirm="همه‌یِ مواردِ در انتظار تأیید می‌شوند و در فروشگاه ساخته می‌شوند. ادامه می‌دهید؟">تأییدِ همه</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>نوع</th><th>نام / مسیر</th><th>ردیف‌ها در فایل</th><th>فایل</th><th>درخواست‌دهنده</th><th>وضعیت</th><th>تصمیم</th><th></th></tr></thead>
+    <tbody>
+    {% for p in proposals %}
+      <tr data-proposal="{{ p.pk }}" data-status="{{ p.status }}">
+        <td>{{ p.get_kind_display }}</td>
+        <td><b>{{ p.name }}</b>{% if p.parent_name %}<div style="font-size:11.5px;color:var(--muted)">زیرِ «{{ p.parent_name }}»</div>{% endif %}</td>
+        <td style="font-size:12px">{% for n in p.source_rows|slice:":12" %}{{ n|fa_number }}{% if not forloop.last %}، {% endif %}{% endfor %}{% if p.source_rows|length > 12 %}…{% endif %}</td>
+        <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis"><bdi dir="ltr" title="{{ p.source_filename }}">{{ p.source_filename|default:"—" }}</bdi></td>
+        <td style="font-size:12px">{{ p.requested_by.get_full_name|default:p.requested_by.username|default:"—" }}</td>
+        <td>
+          {% if p.status == "pending" %}<span class="badge b-amber">در انتظارِ تأیید</span>
+          {% elif p.status == "approved" %}<span class="badge b-green">تأییدشده</span>
+          {% else %}<span class="badge b-red">ردشده</span>{% endif %}
+        </td>
+        <td style="font-size:12px">{% if p.decided_by %}{{ p.decided_by.get_full_name|default:p.decided_by.username }}<div style="color:var(--muted)">{{ p.decided_at|jalali_dt }}</div>{% if p.decision_note %}<div style="color:var(--muted)">{{ p.decision_note }}</div>{% endif %}{% else %}—{% endif %}</td>
+        <td style="white-space:nowrap">
+          {% if p.status == "pending" and job.status == "preview_ready" %}
+            {% if p.can_decide %}
+            <form method="post" action="{% url 'dashboard:import-proposal-decide' job.pk p.pk 'approve' %}" style="display:inline">{% csrf_token %}<button type="submit" class="btn btn-sm btn-primary">تأیید</button></form>
+            <form method="post" action="{% url 'dashboard:import-proposal-decide' job.pk p.pk 'reject' %}" style="display:inline-flex;gap:4px">{% csrf_token %}
+              <input type="text" name="note" class="inp" placeholder="دلیل (اختیاری)" style="width:130px;padding:4px 8px" maxlength="300">
+              <button type="submit" class="btn btn-sm" data-au-confirm="این مورد رد می‌شود و ردیف‌هایِ وابسته تا اصلاحِ فایل اجرا نمی‌شوند. ادامه می‌دهید؟">رد</button>
+            </form>
+            {% else %}<span style="font-size:11.5px;color:var(--muted)">مجوزِ تأیید ندارید</span>{% endif %}
+          {% elif p.status == "approved" and p.created_object_type %}<span style="font-size:11.5px;color:var(--muted)">ساخته شد</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -113,12 +178,15 @@
     </span>
   </div>
   <div class="table-wrap"><table>
-    <thead><tr><th>{{ row_label }}</th><th>شناسه</th><th>وضعیت</th><th>مشکل / هشدار</th></tr></thead>
+    <thead><tr><th>{{ row_label }}</th><th>نامِ {{ item_label }}</th><th>وضعیت</th><th>مشکل / هشدار</th></tr></thead>
     <tbody>
     {% for row in row_results %}
       <tr>
         <td>{{ row.row_number|fa_number }}</td>
-        <td dir="ltr" style="text-align:right">{{ row.source_identifier|default:"—" }}</td>
+        <td data-testid="row-name">
+          {% if row.shown.name %}<b>{{ row.shown.name }}</b>{% else %}<span style="color:var(--muted)">{{ row.shown.fallback|default:"—" }}</span>{% endif %}
+          {% if row.shown.ident or row.shown.extra %}<div style="font-size:11.5px;color:var(--muted)">{% if row.shown.name %}{{ row.shown.extra|default:row.shown.ident }}{% endif %}{% if row.shown.name and row.shown.extra and row.shown.ident and row.shown.ident != row.shown.extra %} · {{ row.shown.ident }}{% endif %}</div>{% endif %}
+        </td>
         <td>
           {% if row.status == "created" %}<span class="badge b-green">ساخته شد</span>
           {% elif row.status == "updated" %}<span class="badge b-blue">بروزرسانی شد</span>
@@ -127,11 +195,12 @@
             {% elif row.normalized_data_summary.action == "update" %}<span class="badge b-blue">بروزرسانی می‌شود</span>
             {% else %}<span class="badge b-blue">معتبر</span>{% endif %}
           {% elif row.status == "skipped" %}<span class="badge b-gray">بدونِ تغییر</span>
+          {% elif row.status == "invalid" and row.is_awaiting %}<span class="badge b-blue">منتظرِ تأیید</span>
           {% elif row.status == "invalid" %}<span class="badge b-amber">دارایِ خطا</span>
           {% else %}<span class="badge b-red">ناموفق</span>{% endif %}
         </td>
         <td>
-          {% for e in row.described_errors %}<div class="imp-err">{% if e.column %}<span class="imp-col">{{ e.column }}</span>{% endif %}<span>{{ e.message }}</span></div>{% endfor %}
+          {% for e in row.described_errors %}<div class="imp-err">{% if e.column %}<span class="imp-col">{{ e.column }}:</span>{% endif %}<span>{{ e.message }}</span></div>{% endfor %}
           {% for w in row.warnings %}<div class="imp-warn">⚠ {{ w }}</div>{% endfor %}
           {% if not row.errors and not row.warnings %}—{% endif %}
         </td>
@@ -153,4 +222,33 @@
   </div>
   {% endif %}
 </div>
+{% if can_execute %}
+<dialog class="au-modal au-modal--wide" id="final-import-modal" aria-labelledby="final-import-title" data-testid="final-import-modal">
+  <div class="au-modal__head"><h3 id="final-import-title">تأیید ورود نهایی {{ item_plural }} به فروشگاه</h3><button type="button" class="au-x" data-au-close aria-label="بستن">×</button></div>
+  <div class="au-modal__body">
+    <div>فایل: <b><bdi dir="ltr">{{ job.original_filename }}</bdi></b></div>
+    <div class="imp-counts" data-testid="final-import-counts">
+      <div><b>{{ summary.total|fa_number }}</b><span>کلِ ردیف‌ها</span></div>
+      <div><b>{{ summary.will_create|fa_number }}</b><span>{{ item_label }}‌ای که ساخته می‌شود</span></div>
+      <div><b>{{ summary.will_update|fa_number }}</b><span>{{ item_label }}‌ای که بروزرسانی می‌شود</span></div>
+      <div><b>{{ summary.invalid|fa_number }}</b><span>ردیفِ دارایِ خطا</span></div>
+      <div><b>{{ summary.awaiting|fa_number }}</b><span>منتظرِ تأیید</span></div>
+      <div><b>{{ summary.warnings|fa_number }}</b><span>ردیفِ دارایِ هشدار</span></div>
+    </div>
+    <div class="au-note au-note--warn"><b>این کار اطلاعاتِ واقعیِ فروشگاه را تغییر می‌دهد.</b> فایل پیش از اجرا یک بارِ دیگر با وضعیتِ فعلیِ فروشگاه بررسی می‌شود؛ اگر حتی یک مشکل پیدا شود، هیچ تغییری اعمال نمی‌شود (همه یا هیچ). اجرا فقط یک بار انجام می‌شود.</div>
+  </div>
+  <form method="post" action="{% url 'dashboard:import-execute' job.pk %}" class="au-modal__foot" data-once>
+    {% csrf_token %}
+    <button type="submit" class="au-btn au-btn--primary" data-testid="final-import-confirm">تأیید و اجرای نهایی</button>
+    <button type="button" class="au-btn au-btn--ghost" data-au-close>انصراف</button>
+  </form>
+</dialog>
+<script>
+document.querySelectorAll('form[data-once]').forEach(function (f) {
+  f.addEventListener('submit', function () {
+    f.querySelectorAll('button[type=submit]').forEach(function (b) { setTimeout(function () { b.disabled = true; b.textContent = 'در حال اجرا…'; }, 0); });
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

@@ -12,6 +12,8 @@
   var POSITIONS = { center: 'وسط', top: 'بالا', bottom: 'پایین', left: 'چپ', right: 'راست' };
   var POS_CSS = { center: 'center', top: 'center top', bottom: 'center bottom', left: 'left center', right: 'right center' };
   var ZOOMS = [1, 1.1, 1.25, 1.5, 1.75];
+  /* «W×H» — or only the width when the placement leaves the height free (the picture keeps its own ratio) */
+  function dim(a) { return a[1] ? fa(a[0]) + '×' + fa(a[1]) : 'عرض ' + fa(a[0]); }
 
   /* نوعِ واقعیِ فایل از بایت‌های ابتدایی (نه از پسوند) — همان چیزی که Pillow در سرور تشخیص می‌دهد */
   function detectFormat(b) {
@@ -83,10 +85,10 @@
     var px = info.w * info.h;
     infos.push('ابعاد: ' + fa(info.w) + '×' + fa(info.h) + ' پیکسل (' + fa((px / 1e6).toFixed(1)) + ' مگاپیکسل)');
     if (px > spec.maxPixels) errors.push('ابعاد تصویر بیش از حد بزرگ است (بیش از ' + fa(Math.round(spec.maxPixels / 1e6)) + ' مگاپیکسل)؛ ذخیره نمی‌شود.');
-    if (info.w < spec.min[0] || info.h < spec.min[1]) {
-      warns.push('وضوح کمتر از حداقلِ ' + fa(spec.min[0]) + '×' + fa(spec.min[1]) + ' است؛ در فروشگاه کدر یا پیکسلی دیده می‌شود. بزرگ‌ترش نکنید؛ تصویرِ اصلیِ بزرگ‌تر بگیرید.');
+    if (info.w < spec.min[0] || (spec.min[1] && info.h < spec.min[1])) {
+      warns.push('وضوح کمتر از حداقلِ ' + dim(spec.min) + ' است؛ در فروشگاه کدر یا پیکسلی دیده می‌شود. بزرگ‌ترش نکنید؛ تصویرِ اصلیِ بزرگ‌تر بگیرید.');
     } else if (info.w < spec.rec[0] * 0.6) {
-      warns.push('برای صفحه‌های پرتراکم (رتینا) تصویرِ بزرگ‌تر، نزدیک به ' + fa(spec.rec[0]) + '×' + fa(spec.rec[1]) + '، شفاف‌تر دیده می‌شود.');
+      warns.push('برای صفحه‌های پرتراکم (رتینا) تصویرِ بزرگ‌تر، نزدیک به ' + dim(spec.rec) + '، شفاف‌تر دیده می‌شود.');
     }
     var r = info.w / info.h;
     if (r > 4 || r < 0.25) warns.push('نسبتِ تصویر (' + num(r, 2) + ' به ۱) بسیار کشیده است و در بیشتر قاب‌ها بخش بزرگی از آن دیده نمی‌شود.');
@@ -94,7 +96,7 @@
       warns.push('تصویر بسیار فشرده شده است و ممکن است لکه‌دار یا بلوکی دیده شود؛ نسخه‌ای با کیفیتِ بالاتر بدهید.');
     }
     (spec.frames || []).forEach(function (f) {
-      if (f.shape === 'circle') return;
+      if (f.shape === 'circle' || f.free) return;   // a free-height placement keeps the picture's own ratio: nothing is cropped or left empty
       var c = crop(info.w, info.h, f.ratio, 1, f.fit, f.zoom || 1);
       var name = '«' + f.label + '»' + (f.approx ? ' (تقریبی)' : '');
       if (f.fit === 'cover' && c.cropped > 0.12) warns.push('در قابِ ' + name + ' حدود ' + fa(Math.round(c.cropped * 100)) + '٪ از تصویر بریده می‌شود؛ سوژه را وسطِ عکس نگه دارید یا نسبتِ عکس را به ' + num(f.ratio, 2) + ' نزدیک کنید.');
@@ -137,13 +139,13 @@
     var tiles = frames.map(function (f) {
       var tile = el('figure', 'imgguide-tile');
       var frame = el('div', 'imgguide-frame' + (f.shape === 'circle' ? ' is-circle' : ''));
-      frame.style.aspectRatio = String(f.ratio);
+      frame.style.aspectRatio = String(f.free ? info.w / info.h : f.ratio);
       frame.style.width = f.ratio >= 2 ? '100%' : (f.ratio >= 1.2 ? 'min(100%,260px)' : 'min(100%,200px)');
       var img = el('img'); img.src = info.url; img.alt = 'پیش‌نمایشِ ' + f.label; img.decoding = 'async';
       frame.appendChild(img);
       var cap = el('figcaption', 'imgguide-cap');
       var stat = el('span', 'imgguide-stat'), cur = el('span', 'imgguide-cur');
-      cap.appendChild(el('strong', '', f.label + ' · ' + num(f.ratio, 2) + ':۱' + (f.approx ? ' (تقریبی)' : '')));
+      cap.appendChild(el('strong', '', f.label + ' · ' + (f.free ? 'ارتفاع آزاد' : num(f.ratio, 2) + ':۱' + (f.approx ? ' (تقریبی)' : ''))));
       cap.appendChild(stat); cap.appendChild(cur);
       if (f.used_by && f.used_by.length) cap.appendChild(el('span', 'imgguide-used', 'بخش‌ها: ' + f.used_by.join('، ')));
       if (f.note) cap.appendChild(el('span', 'imgguide-used', f.note));
@@ -162,8 +164,8 @@
         var fit = state.fit || t.f.fit, pos = state.pos || t.f.pos || 'center', zoom = state.zoom || t.f.zoom || 1;
         t.img.style.objectFit = fit; t.img.style.objectPosition = POS_CSS[pos] || 'center';
         t.img.style.transform = zoom !== 1 ? 'scale(' + zoom + ')' : ''; t.img.style.transformOrigin = POS_CSS[pos] || 'center';
-        var c = crop(info.w, info.h, t.f.ratio, 1, fit, zoom), parts = [];
-        parts.push(fit === 'cover' ? 'پر کردن قاب' : 'نمایش کامل');
+        var c = crop(info.w, info.h, t.f.free ? info.w / info.h : t.f.ratio, 1, fit, zoom), parts = [];
+        parts.push(t.f.free ? 'نسبتِ طبیعیِ تصویر' : (fit === 'cover' ? 'پر کردن قاب' : 'نمایش کامل'));
         parts.push(c.cropped > 0.005 ? 'حدود ' + fa(Math.round(c.cropped * 100)) + '٪ از تصویر بریده می‌شود' : 'تمامِ تصویر دیده می‌شود');
         if (fit === 'contain' && c.empty > 0.05) parts.push('حدود ' + fa(Math.round(c.empty * 100)) + '٪ قاب خالی می‌ماند');
         if (t.f.shape === 'circle') parts.push('گوشه‌ها در دایره دیده نمی‌شوند');

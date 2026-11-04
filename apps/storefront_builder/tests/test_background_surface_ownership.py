@@ -115,10 +115,17 @@ class CapabilityRegistryIsTheSourceOfTruthTests(SimpleTestCase):
     def test_the_property_table_per_section_matches_what_shipped_before_the_registry_move(self):
         expected = {
             "surface_panel": 14, "product_section": 28, "category_grid": 26, "brand_carousel": 23,
-            "blog_posts": 28, "amazing_offers": 24, "decorative_strip": 4,
+            "blog_posts": 29, "amazing_offers": 24, "decorative_strip": 4,
             # R4-11: sections that show merchant images now offer the image controls (fit / position / ratio, R4-13 zoom) and nothing else
-            "best_sellers": 4, "newest_products": 4, "discounted_products": 4, "collection_tiles": 3,
-            "hero_banner": 1, "image_slider": 1, "multi_banner": 1, "image_text": 2,
+            "best_sellers": 4, "newest_products": 4, "discounted_products": 4, "collection_tiles": 5,
+            "hero_banner": 1, "image_slider": 1, "image_text": 2,
+            # V5 composition: card-row / text sections offer the phone layout, vertical placement, finer ratios, gap, corners
+            "multi_banner": 17, "trust_features": 3, "testimonials": 2, "quick_links": 2, "video_section": 2, "rich_text": 15,
+            # V5 «عکس لینک‌دار»: border / radius / shadow / spacing + the image fit and focal point (no background, no copy)
+            "linked_image": 14,
+            # V5 PDP package 1: the two product-page sections reuse the Design Block (frame / text / buttons / price / gap / image
+            # controls on product_main; frame / text on product_description) — no surface colour, their markup has no surface marker
+            "product_main": 21, "product_description": 13,
         }
         actual = {d.key: len(design_block.applicable_properties(d.key)) for d in _design_capable()}
         self.assertEqual(actual, expected)

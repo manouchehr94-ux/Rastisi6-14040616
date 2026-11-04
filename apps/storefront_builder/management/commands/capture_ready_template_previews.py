@@ -107,8 +107,10 @@ def _find_chromium_executable() -> str | None:
         if candidate.is_file():
             return str(candidate)
 
-    for match in glob.glob("/opt/pw-browsers/chromium*/chrome-linux/chrome"):
-        return match
+    # Playwright ≥ 1.57 unpacks to ``chrome-linux64`` (older builds used ``chrome-linux``)
+    for pattern in ("/opt/pw-browsers/chromium*/chrome-linux64/chrome", "/opt/pw-browsers/chromium*/chrome-linux/chrome"):
+        for match in sorted(glob.glob(pattern)):
+            return match
     return None
 
 

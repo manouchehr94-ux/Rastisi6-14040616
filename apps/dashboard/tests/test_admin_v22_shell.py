@@ -48,7 +48,7 @@ class AdminV22ShellContractTests(SimpleTestCase):
             "can_manage_settings",
         )}
         titles = {item.title for item in navigation.build_palette(flags)}
-        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "پیامک", "گزارش پیامک‌ها"):
+        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "پیامک و ارتباطات", "گزارش پیامک‌ها"):
             self.assertIn(term, titles)
         hrefs = " ".join(item.href for item in navigation.build_palette(flags))
         self.assertIn("panel=header", hrefs)
@@ -62,19 +62,28 @@ class AdminV22ShellContractTests(SimpleTestCase):
         self.assertIn(".admin-section-tabs a[href]", js)
 
     def test_dashboard_setup_checklist_contract_is_preserved(self):
-        dashboard = self._read("apps/dashboard/templates/dashboard/dashboard.html")
-        self.assertIn("setup_checklist.all_complete", dashboard)
-        self.assertIn("چک‌لیست راه‌اندازی فروشگاه", dashboard)
-        self.assertIn("setup_checklist.steps", dashboard)
-        self.assertIn("setup_checklist.percent", dashboard)
-        self.assertIn("step.is_unlocked", dashboard)
-        self.assertIn("step.is_next", dashboard)
+        # the checklist markup lives in a partial that dashboard.html includes; it renders the honest model (required-only progress,
+        # goal groups, per-step state, one primary action) — the old «all steps / percent / is_unlocked» tokens are intentionally gone
+        page = self._read("apps/dashboard/templates/dashboard/dashboard.html")
+        partial = self._read("apps/dashboard/templates/dashboard/partials/setup_checklist.html")
+        self.assertIn("partials/setup_checklist.html", page)
+        # a finished checklist is folded into a summary INSIDE the partial — dashboard.html must never swap it for another card
+        self.assertNotIn("setup_checklist.all_complete", page)
+        self.assertIn("setup_checklist.all_complete", partial)
+        self.assertIn("چک‌لیست راه‌اندازی فروشگاه", partial)
+        for token in ("setup_checklist.groups", "setup_checklist.required_percent", "setup_checklist.primary_action", "step.state", "step.url"):
+            self.assertIn(token, partial)
 
     def test_settings_remains_top_tab_navigation(self):
         settings_template = self._read("apps/dashboard/templates/dashboard/settings.html")
-        self.assertIn('class="settings-nav"', settings_template)
-        self.assertIn('aria-label="بخش‌های تنظیمات"', settings_template)
+        # Navigation is the shell's single section-tab bar (+ level-3 screens + search) — settings.html no longer renders a second tab row.
+        self.assertNotIn('class="settings-nav"', settings_template)
         self.assertNotIn("settings-sidebar", settings_template)
+        base = self._read("apps/dashboard/templates/dashboard/base_admin.html")
+        self.assertIn("{% admin_section_tabs %}", base)
+        tabs = self._read("apps/dashboard/templates/dashboard/partials/_admin_section_tabs.html")
+        self.assertIn('class="admin-subtabs"', tabs)
+        self.assertIn("data-au-search", tabs)
 
     def test_admin_v22_supports_embedded_real_editor_pages(self):
         js = self._read("apps/dashboard/static/js/admin_v2.js")

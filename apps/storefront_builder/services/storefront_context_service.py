@@ -128,12 +128,18 @@ def _build_published_shell_context(
         rows = render_service.group_items_into_rows(items)
         render_containers = render_service.build_container_render_items(page, items)
         use_container_layout = page.containers.exists()
+    # Hero Stage — ONE decision (``render_service.header_embedded_for``) shared by every surface: when the page's first section is a
+    # ``hero_stage`` that draws the header inside itself, the shell must not render a second one.
+    header_embedded = render_service.header_embedded_for(
+        items, use_container_layout=use_container_layout, render_containers=render_containers,
+    )
 
     return {
         "storefront_version": version,
         "storefront_page": page,
         "page_type": page_type,
         "layout_header_config": header_config,
+        "header_embedded": header_embedded,
         "store_appearance": store_appearance,
         # U2A — رشته‌ی نامِ Templateِ Djangoِ هدرِ فعال، از رویِ Registryِ
         # امن resolve شده (نگاه کنید به ``global_region_registry``)؛ هرگز
@@ -157,6 +163,18 @@ def _build_published_shell_context(
         "use_container_layout": use_container_layout,
         "top_level_categories": _top_level_categories(store),
     }
+
+
+def build_draft_preview_context(request, store, version, page_type: str, page_context: dict | None = None) -> dict:
+    """The SAME public shell + page-body context as ``build_universal_storefront_context``, fed from ``version`` (the Store's
+    current Draft) instead of the Published version — the read-only «customer view» of unpublished changes (staff preview only).
+
+    It is the public assembly (``_build_published_shell_context``), not a second renderer: header / footer / announcement / appearance and
+    every section go through the identical resolvers and templates, with no builder instrumentation. Nothing is written."""
+    page = version.pages.filter(page_type=page_type).first()
+    if page is None:  # an unknown ``page_type`` is a programming error, never a silent fallback to another body
+        raise ValueError(f"unknown storefront page type {page_type!r}")
+    return _build_published_shell_context(request, store, version, page=page, page_type=page_type, page_context=page_context)
 
 
 def render_domain_page(request, template_name: str, context: dict | None = None, *, page_type: str = "domain_page"):

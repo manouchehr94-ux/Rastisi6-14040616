@@ -1,3 +1,4 @@
+from apps.portal.tests._industry import choose_other_industry, install_other_industry
 """Owner onboarding — the «قالب فروشگاه» (Ready Template) step and the publish boundary.
 
 The catalog is the Storefront Builder's ONE Ready Template registry
@@ -36,7 +37,8 @@ User = get_user_model()
 _HOST = "rastisi.localhost"
 _PASS = "a-very-strong-pass-1"
 
-READY = layout_preset_registry.list_ready_templates()
+#: the gallery offers only the owner-approved subset (template_gallery_policy); hidden templates stay registered but are not selectable
+READY = layout_preset_registry.list_selectable_templates()
 KEY_A, KEY_B = READY[0].key, READY[1].key
 NON_READY_KEY = next(k for k, v in layout_preset_registry.LAYOUT_PRESET_REGISTRY.items() if not v.is_ready_template)
 
@@ -54,6 +56,7 @@ class Base(TestCase):
         cache.clear()  # per-Store rate-limit counters are keyed by pk, which a rolled-back DB can reuse
         self.owner = User.objects.create_user(username="tpl-owner@example.com", email="tpl-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ قالب")
+        install_other_industry(self.store)          # the industry choice is mandatory: these tests start AFTER that step
         plan = Plan.objects.create(code="tpl-plan", name="Tpl")
         version = PlanVersion.objects.create(plan=plan, version_number=1, status=PlanVersion.Status.PUBLISHED)
         StoreSubscription.objects.create(
@@ -94,10 +97,10 @@ class CatalogTests(Base):
     def test_gallery_exposes_exactly_the_canonical_current_ready_templates(self):
         response = self.get("template")
         cards = response.context["template_cards"]
-        self.assertEqual(len(READY), 50)  # the pinned catalog contract
-        self.assertEqual([c["preset"].key for c in cards], [p.key for p in layout_preset_registry.list_ready_templates()])
+        self.assertEqual(len(READY), 19)  # the pinned gallery contract (owner decision: 19 selectable templates)
+        self.assertEqual([c["preset"].key for c in cards], [p.key for p in layout_preset_registry.list_selectable_templates()])
         html = response.content.decode()
-        self.assertEqual(len(re.findall(r"<article class=\"ob-tpl-card", html)), 50)
+        self.assertEqual(len(re.findall(r"<article class=\"ob-tpl-card", html)), 19)
 
     def test_no_historical_versions_and_no_non_ready_presets(self):
         cards = self.get("template").context["template_cards"]
@@ -134,7 +137,7 @@ class CatalogTests(Base):
     def test_cards_are_the_shared_projection_used_by_the_merchant_gallery(self):
         cards = self.get("template").context["template_cards"]
         shared = ready_template_card_service.build_ready_template_cards(
-            None, current_template_key=None, current_template_version=None,
+            None, current_template_key=None, current_template_version=None, scope=ready_template_card_service.SCOPE_GALLERY,   # the seller gallery's own scope
         )
         self.assertEqual([c["thumbnail_url"] for c in cards], [c["thumbnail_url"] for c in shared])
         import inspect
@@ -156,7 +159,7 @@ class CatalogTests(Base):
         for forbidden in ("A8_READY_TEMPLATES", "StorefrontSection(", "StorefrontSection.objects", "template_provenance =",
                           "template_baseline_snapshot", "apply_preset(", "switch_ready_template_preserving"):
             self.assertNotIn(forbidden, source)
-        self.assertIn("list_ready_templates", inspect.getsource(ready_template_card_service))
+        self.assertIn("list_selectable_templates", inspect.getsource(ready_template_card_service))
 
 
 # ── UI ──────────────────────────────────────────────────────────────────────
@@ -170,8 +173,8 @@ class GalleryUiTests(Base):
             preset = card["preset"]
             self.assertIn(f'data-name="{preset.label_fa}"', html)
             self.assertIn(f'alt="پیش‌نمایشِ قالبِ {preset.label_fa}"', html)
-        self.assertEqual(html.count('loading="lazy"'), 50)
-        self.assertEqual(html.count("data-ob-zoom"), 50)
+        self.assertEqual(html.count('loading="lazy"'), 19)
+        self.assertEqual(html.count("data-ob-zoom"), 19)
         self.assertIn("مشاهده بزرگ‌تر", html)
         self.assertIn("<dialog", html)
         # no 50 live preview iframes
@@ -200,7 +203,7 @@ class GalleryUiTests(Base):
         for query in ("", "?q=zzz", "?template_key=" + KEY_A, "?search=بازار"):
             response = self.client.get(self.url("template") + query, HTTP_HOST=_HOST)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(len(response.context["template_cards"]), 50)  # the server never filters/selects
+            self.assertEqual(len(response.context["template_cards"]), 19)  # the server never filters/selects
         self.assertIn("data-ob-tpl-search", response.content.decode())
         self.assertEqual(self.counts(), before)  # not even a Draft is created by GET
         self.store.refresh_from_db()
@@ -375,7 +378,7 @@ class WizardTests(Base):
         )
         r = self.client.post(self.url("identity"), {"name": "نام"}, HTTP_HOST=_HOST)
         self.assertRedirects(r, self.url("industry"))
-        r = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
+        r = choose_other_industry(self.client, self.url("industry"), _HOST)
         self.assertRedirects(r, self.url("template"))
         html = self.get("template").content.decode()
         self.assertIn("مرحله 3 از 5", html.replace("۳", "3").replace("۵", "5"))
@@ -597,8 +600,11 @@ class RegressionTests(Base):
     def test_industry_template_stays_independent_of_the_ready_template(self):
         from apps.catalog.models import StoreIndustryInstallation
 
+        before = list(StoreIndustryInstallation.objects.filter(store=self.store).values_list("pk", "industry_template_id"))
+        self.assertEqual(len(before), 1)                      # the (mandatory) industry choice made earlier
         self.select(KEY_A)
-        self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+        # choosing a Ready Template neither installs nor changes any industry template
+        self.assertEqual(list(StoreIndustryInstallation.objects.filter(store=self.store).values_list("pk", "industry_template_id")), before)
 
     def test_the_demo_store_is_untouched(self):
         demo = Store.objects.filter(slug="rasti-mode-demo").first()
@@ -628,6 +634,7 @@ class PrePublishPrivacyTests(TestCase):
         cache.clear()
         self.owner = User.objects.create_user(username="priv-owner@example.com", email="priv-owner@example.com", password=_PASS)
         self.store = provisioning_service.provision_trial_store(owner=self.owner, name="فروشگاهِ خصوصی")
+        install_other_industry(self.store)
         self.domain = self.store.domains.filter(is_primary=True).first().hostname
         self.client.force_login(self.owner)
 

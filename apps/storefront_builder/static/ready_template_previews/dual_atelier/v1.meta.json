@@ -1,0 +1,11 @@
+{
+  "template_key": "dual_atelier",
+  "version": "1",
+  "content_hash": "684c6236d22bb96cad51f253beaf58b47d440d0cf05735f60c23046d7aba4784",
+  "preview_input_fingerprint": "6cbd0df4859d3ab184e3523777edae24ff7bb253e238845958f6b1f737d8d79e",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

@@ -1,0 +1,101 @@
+{% extends "storefront_shell.html" %}
+{% load static persian %}
+
+{% block title %}پرداخت کارت‌به‌کارت | {{ SHOP_NAME }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/cart.css' %}">
+<link rel="stylesheet" href="{% static 'css/checkout.css' %}">
+<link rel="stylesheet" href="{% static 'css/card_transfer.css' %}">
+{% endblock %}
+
+{% block header %}
+<div class="top"><div class="wrap">
+  <a class="logo" href="/"><span><b>{{ SHOP_NAME }}</b><small>تسویه‌حساب امن</small></span></a>
+</div></div>
+<div class="stepper-bar"><div class="steps">
+  <div class="step done"><span class="num">۱</span>سبد خرید</div><span class="line done"></span>
+  <div class="step active"><span class="num">۲</span>پرداخت</div><span class="line"></span>
+  <div class="step"><span class="num">۳</span>پایان</div>
+</div></div>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="content"><div class="wrap"><div class="res-wrap"><div class="res c2c">
+  <div class="c2c-head">
+    <h1>پرداخت کارت‌به‌کارت</h1>
+    <p>سفارش <b dir="ltr">{{ order.code }}</b> ثبت شد. مبلغ را به کارتِ زیر واریز کنید، سپس اطلاعاتِ واریز را همین‌جا ثبت کنید. سفارش پس از بررسی و تأییدِ فروشگاه نهایی می‌شود.</p>
+    {% for message in messages %}<p class="c2c-msg" role="status">{{ message }}</p>{% endfor %}
+    {% if error %}<p class="c2c-msg c2c-msg--err" role="alert">{{ error }}</p>{% endif %}
+  </div>
+  <div class="res-b">
+    <div class="c2c-amount" data-testid="c2c-amount">
+      <span>مبلغِ قابل پرداخت</span>
+      <b>{{ order.grand_total|toman }}</b>
+    </div>
+
+    {% if destination %}
+    <div class="c2c-card" aria-label="کارت مقصد" data-testid="c2c-destination">
+      <div class="c2c-card__top"><span>کارتِ مقصد</span>{% if destination.bank %}<span class="c2c-card__bank">{{ destination.bank }}</span>{% endif %}</div>
+      <bdi dir="ltr" class="c2c-num" id="c2cNumber" data-raw="{{ destination.card }}" data-testid="c2c-number">{{ destination.card_grouped }}</bdi>
+      <div class="c2c-card__bottom">
+        <span>به نامِ <b>{{ destination.holder }}</b></span>
+        <button type="button" class="c2c-copy" id="c2cCopy" aria-describedby="c2cCopyMsg">کپی شماره کارت</button>
+      </div>
+      {% if destination.sheba %}<div class="c2c-card__sheba"><span>شبا:</span> <bdi dir="ltr">{{ destination.sheba }}</bdi></div>{% endif %}
+      <p class="c2c-copymsg" id="c2cCopyMsg" role="status" aria-live="polite"></p>
+    </div>
+    {% else %}
+    <p class="c2c-warn">پرداختِ کارت‌به‌کارت در حالِ حاضر برایِ این فروشگاه فعال نیست. لطفاً با فروشگاه تماس بگیرید.</p>
+    {% endif %}
+
+    {% if state == "under_review" %}
+    <div class="c2c-state c2c-state--review" role="status">در انتظار بررسی پرداخت — اطلاعاتِ شما ثبت شد (۴ رقم آخر کارت: <bdi class="c2c-ltr">{{ latest.source_last4 }}</bdi> · پیگیری: <bdi class="c2c-ltr">{{ latest.tracking_number }}</bdi>). پس از تأییدِ فروشگاه، سفارش پرداخت‌شده می‌شود.</div>
+    {% elif state == "rejected" %}
+    <div class="c2c-state c2c-state--rejected" role="alert">پرداختِ ثبت‌شده تأیید نشد{% if latest.review_note %}: {{ latest.review_note }}{% endif %}. در صورتِ واریز، اطلاعاتِ درست را دوباره ثبت کنید.</div>
+    {% endif %}
+
+    {% if can_submit %}
+    <form method="post" class="c2c-form" novalidate>
+      {% csrf_token %}
+      <div class="c2c-warn">فقط <b>۴ رقمِ آخرِ</b> کارتی را که از آن واریز کرده‌اید بنویسید. شماره‌ی کاملِ کارت، CVV2، تاریخِ انقضا و رمزِ دوم را <b>هرگز</b> وارد نکنید؛ فروشگاه هیچ‌وقت آن‌ها را نمی‌خواهد.</div>
+      <label for="id_source_last4">۴ رقمِ آخرِ کارتِ پرداخت‌کننده</label>
+      <input type="text" id="id_source_last4" name="source_last4" inputmode="numeric" pattern="[0-9۰-۹]{4}" maxlength="4" autocomplete="off" dir="ltr" required>
+      <label for="id_tracking_number">شماره‌ی پیگیریِ رسیدِ بانکی</label>
+      <input type="text" id="id_tracking_number" name="tracking_number" maxlength="40" autocomplete="off" dir="ltr" required>
+      <div class="c2c-actions"><button type="submit" class="btn btn-primary" data-submit-once>ثبتِ اطلاعاتِ واریز</button></div>
+    </form>
+    {% endif %}
+    <div class="c2c-actions c2c-actions--secondary">
+      <a class="btn btn-ghost" href="{% url 'customers:account-order-detail' order.code %}">پیگیریِ سفارش</a>
+    </div>
+  </div>
+</div></div></div></div>
+<script>
+(function () {
+  var btn = document.getElementById("c2cCopy"), num = document.getElementById("c2cNumber"), msg = document.getElementById("c2cCopyMsg");
+  if (btn && num) {
+    var say = function (t) { msg.textContent = t; };
+    btn.addEventListener("click", function () {
+      var raw = num.getAttribute("data-raw") || "";
+      var fallback = function () {
+        var r = document.createRange(); r.selectNodeContents(num);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+        say(ok ? "شماره کارت کپی شد." : "کپی خودکار انجام نشد؛ شماره انتخاب شد، آن را به‌صورت دستی کپی کنید.");
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(raw).then(function () { say("شماره کارت کپی شد."); }, fallback);
+      } else { fallback(); }
+    });
+  }
+  document.querySelectorAll("form.c2c-form").forEach(function (f) {
+    f.addEventListener("submit", function () {
+      f.querySelectorAll("[data-submit-once]").forEach(function (b) { setTimeout(function () { b.disabled = true; }, 0); });
+    });
+  });
+})();
+</script>
+{% endblock %}

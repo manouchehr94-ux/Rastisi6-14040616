@@ -5,7 +5,9 @@
 {% comment %}Search results and price-filtered permutations are noindex,follow to avoid
    indexing infinite filter combinations; a plain or category-only list stays
    indexable (ADR-90).{% endcomment %}
-{% block robots_meta %}{% if query or min_price or max_price or discounted_only %}<meta name="robots" content="noindex,follow">{% endif %}{% endblock %}
+{% block robots_meta %}{% if SEO_NOINDEX %}<meta name="robots" content="noindex,nofollow">{% elif query or min_price or max_price or discounted_only or selected_brand or request.GET.sort %}<meta name="robots" content="noindex,follow">{% endif %}{% endblock %}
+{% comment %}Canonical of a listing = path + the category (a real, indexable page) + the page number; filters/sort never enter it.{% endcomment %}
+{% block canonical %}{{ SEO_ORIGIN }}{{ request.path }}{% if selected_category %}?category={{ selected_category|urlencode }}{% endif %}{% if page_obj.number > 1 %}{% if selected_category %}&amp;{% else %}?{% endif %}page={{ page_obj.number }}{% endif %}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/product_card.css' %}">

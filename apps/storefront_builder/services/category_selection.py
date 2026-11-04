@@ -10,7 +10,8 @@ Modes
 ``top_level``             top-level categories only (the historical behaviour, the default);
 ``top_then_descendants``  every top-level category first, then descendants breadth-first;
 ``all``                   the whole tree depth-first (each parent followed by its descendants);
-``leaf``                  only categories without an active child, in depth-first order.
+``leaf``                  only categories without an active child, in depth-first order;
+``subcategories``         the active children of the FIRST top-level category that has any (a "browse inside this category" rail).
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from collections import defaultdict, deque
 
 from apps.catalog.models import Category
 
-CATEGORY_SOURCE_MODES = ("top_level", "top_then_descendants", "all", "leaf")
+CATEGORY_SOURCE_MODES = ("top_level", "top_then_descendants", "all", "leaf", "subcategories")
 
 
 def select_categories(store, mode: str = "top_level") -> list[Category]:
@@ -32,6 +33,8 @@ def select_categories(store, mode: str = "top_level") -> list[Category]:
     roots = children.get(None, [])
     if mode == "top_level":
         return list(roots)
+    if mode == "subcategories":
+        return next((list(children[root.pk]) for root in roots if children.get(root.pk)), [])
 
     def depth_first() -> list[Category]:
         out: list[Category] = []

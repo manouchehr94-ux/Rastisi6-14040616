@@ -1,0 +1,13 @@
+{% comment %}
+V5-UI-014 — builder-only stand-in for an announcement strip that is switched OFF but still has its content/settings stored: the strip is
+selectable (like a hidden Section's «نمایش دوباره» placeholder) so it can be switched on again from the standard toolbar / editor. Never
+rendered in Published (is_builder_preview only). Nothing is stored here; the data stays in header_config.
+Required context: ``hc`` (header_config).
+{% endcomment %}
+{% if not hc.announcement_enabled %}{% if hc.announcement_text or hc.announcement_image_asset_id or hc.announcement_links %}
+<div class="gh-announce sfb-builder-announcement sfb-builder-announcement--off" data-builder-announcement data-builder-announcement-off
+     data-section-id="announcement" data-section-key="header_announcement" aria-label="نوار اطلاعیه (غیرفعال)">
+  <div class="wrap"><span class="ann-off-note">نوار اطلاعیه غیرفعال است — برای فعال‌سازی و ویرایش کلیک کنید. در سایت منتشرشده نمایش داده نمی‌شود.</span></div>
+</div>
+{% endif %}
+{% endif %}

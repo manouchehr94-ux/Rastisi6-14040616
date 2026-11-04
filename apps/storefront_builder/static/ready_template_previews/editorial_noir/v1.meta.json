@@ -1,0 +1,11 @@
+{
+  "template_key": "editorial_noir",
+  "version": "1",
+  "content_hash": "66e194c298b4297f4671e36d2031a23271b545881886dda87a07aaaf1e1f1588",
+  "preview_input_fingerprint": "50cf57b21549046d0dd2b52d5422cc0cddcbbef3c202fc604a688578e75fb8fa",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

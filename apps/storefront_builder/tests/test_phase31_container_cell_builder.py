@@ -36,7 +36,7 @@ class Phase31ContainerCellBuilderTests(StorefrontBuilderViewsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-layout="half"')
         self.assertContains(response, 'class="rcontainer-cell', count=2)
-        self.assertContains(response, "افزودن محتوا", count=2)
+        self.assertContains(response, "افزودن بخش به این خانه", count=2)
         self.assertContains(response, "data-empty-cell=", count=2)
 
 

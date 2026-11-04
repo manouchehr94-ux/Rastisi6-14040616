@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from apps.notifications.services import context_builders as cb
+from apps.notifications.services import admin_events
 from apps.notifications.services.dispatcher import safe_dispatch
 
 _STATUS_EVENTS = {
@@ -20,6 +21,7 @@ def order_created(order) -> None:
     ctx = cb.order_context(store, order)
     safe_dispatch("order.created", store=store, customer=order.customer, order=order, context=ctx,
                   dedupe_key=f"order:{order.pk}")
+    admin_events.order_created(order)
     gift = order.items.filter(gift_wrap_selected=True).exists()
     safe_dispatch(
         "staff.order_created", store=store, order=order, dedupe_key=f"order:{order.pk}",
@@ -29,6 +31,8 @@ def order_created(order) -> None:
 
 def order_status_changed(order, to_status: str) -> None:
     event = _STATUS_EVENTS.get(to_status)
+    if to_status == "canceled":
+        admin_events.order_canceled(order)
     if event:
         safe_dispatch(event, store=order.store, customer=order.customer, order=order,
                       context=cb.order_context(order.store, order), dedupe_key=f"order:{order.pk}:{to_status}")
@@ -40,6 +44,7 @@ def payment_result(order, *, success: bool) -> None:
         safe_dispatch("payment.succeeded", store=order.store, customer=order.customer, order=order, context=ctx,
                       dedupe_key=f"order:{order.pk}")
     else:
+        admin_events.payment_failed(order)
         attempts = order.transactions.count() if hasattr(order, "transactions") else 0
         safe_dispatch("payment.failed", store=order.store, customer=order.customer, order=order, context=ctx,
                       dedupe_key=f"order:{order.pk}:{attempts}")
@@ -62,6 +67,7 @@ def return_event(return_request, kind: str, *, reason: str = "") -> None:
     safe_dispatch(f"return.{kind}", store=store, customer=return_request.customer, order=order, context=ctx,
                   dedupe_key=f"return:{return_request.pk}")
     if kind == "requested":
+        admin_events.return_requested(return_request)
         safe_dispatch("staff.return_requested", store=store, order=order, context=ctx,
                       dedupe_key=f"return:{return_request.pk}")
 
@@ -71,6 +77,7 @@ def refund_completed(refund) -> None:
 
     order = refund.order
     ctx = {**cb.order_context(refund.store, order), "refund_amount": format_toman(refund.approved_amount, with_unit=False)}
+    admin_events.refund_completed(refund)
     safe_dispatch("refund.completed", store=refund.store, customer=order.customer, order=order, context=ctx,
                   dedupe_key=f"refund:{refund.pk}")
 
@@ -91,6 +98,7 @@ def account_sensitive_changed(customer, store, changed_field: str) -> None:
 
 
 def review_created(review, store) -> None:
+    admin_events.review_pending(review, store)
     safe_dispatch(
         "staff.review_created", store=store, customer=review.customer,
         context={"product_title": review.product.name, "rating": str(review.rating),
@@ -114,5 +122,6 @@ def late_payment(record, *, upgraded: bool = False) -> None:
         "order_total": format_toman(record.amount, with_unit=False),
         "reconciliation_reason": reason,
     }
+    admin_events.suspicious_payment(record, upgraded=upgraded)
     key = f"reconcile:{record.pk}" + (":confirmed" if upgraded else "")
     safe_dispatch("staff.late_payment", store=record.store, order=order, context=ctx, dedupe_key=key)

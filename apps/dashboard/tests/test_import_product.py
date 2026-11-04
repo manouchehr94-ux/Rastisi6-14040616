@@ -380,7 +380,8 @@ class XlsxProductImportTests(ProductImportTestCase):
         self.assertFalse(Product.objects.filter(store=self.store, sku="XL-1").exists())
         result = job.row_results.get()
         self.assertEqual(result.row_number, 2)  # Excel row number (header is row 1)
-        self.assertEqual(result.normalized_data_summary, {"action": "create"})
+        self.assertEqual(result.normalized_data_summary["action"], "create")
+        self.assertTrue(result.normalized_data_summary["product_name"])        # the product NAME travels with the row (shown as the main column)
         self.assertEqual(import_service.job_preview_summary(job)["will_create"], 1)
 
         import_service.run_execution(job, actor=self.actor)
@@ -578,10 +579,10 @@ class XlsxProductImportTests(ProductImportTestCase):
         self.assertEqual(wb.sheetnames, ["خطاها", "راهنما"])
         ws = wb["خطاها"]
         rows_out = sheet_values(ws)
-        self.assertEqual(rows_out[0][:4], ["ردیف در اکسل", "وضعیت", "خطاها", "هشدارها"])
+        self.assertEqual(rows_out[0][:5], ["ردیف در اکسل", "نام کالا", "وضعیت", "خطاها", "هشدارها"])
         self.assertEqual(rows_out[1][0], 3)
-        self.assertEqual(rows_out[1][1], "نامعتبر")
-        self.assertIn("برند", rows_out[1][2])
+        self.assertEqual(rows_out[1][2], "نامعتبر")
+        self.assertIn("برند", rows_out[1][3])
         self.assertIn("ERR-1", rows_out[1])  # the original SKU
         self.assertIn("نامعلوم", rows_out[1])  # the original (wrong) brand text
         # the failing column's original cell is highlighted

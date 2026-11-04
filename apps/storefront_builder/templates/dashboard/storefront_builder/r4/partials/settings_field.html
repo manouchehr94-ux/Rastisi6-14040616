@@ -224,18 +224,23 @@ must never silently fall back to a plain text input for an unsupported type.
   </div>
 
   {% elif field.field_type == "media" %}
-  {# Store-scoped Media Library picker: scalar value = MediaAsset id ("" = none); hydrated and saved by the generic scalar path. #}
+  {% comment %}
+  Store-scoped Media Library picker. The native select stays the data carrier (scalar value = MediaAsset id, "" = none; hydrated, saved, undone
+  and redone by the generic scalar path); r4_media_picker.js dresses it with thumbnails, the file name, upload / replace / remove and
+  size guidance. Without JS it is still a working select, now showing file names instead of «رسانه #12».
+  {% endcomment %}
   <select id="r4Field-{{ field.key }}"
           class="r4-control"
           data-r4-field-key="{{ field.key }}"
-          data-r4-field-type="media">
+          data-r4-field-type="media"
+          data-r4-media-picker>
     <option value="">— بدون تصویر —</option>
     {% for asset in media_assets %}
-    <option value="{{ asset.pk }}">{{ asset }}</option>
+    <option value="{{ asset.pk }}" data-url="{{ asset.image.url }}" data-name="{{ asset.image.name|cut:'media-assets/' }}">{{ asset.image.name|cut:"media-assets/" }}</option>
     {% endfor %}
   </select>
   {% if not media_assets %}
-  <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — از بخش رسانه‌ها یک تصویر بارگذاری کنید.</p>
+  <p class="r4-field-sublabel">هنوز تصویری در کتابخانه رسانه ندارید — با «بارگذاری تصویر جدید» یکی اضافه کنید.</p>
   {% endif %}
 
   {% elif field.field_type == "color" %}

@@ -22,6 +22,10 @@ _ICONS: dict[str, tuple[str, str]] = {
     "percent": ("درصد تخفیف", '<circle cx="19" cy="19" r="8"/><circle cx="45" cy="45" r="8"/><path d="M49 13L15 51"/>'),
     "truck": ("ارسال", '<path d="M5 16h35v28H5z"/><path d="M40 26h12l8 10v8H40z"/><circle cx="18" cy="48" r="5"/><circle cx="48" cy="48" r="5"/>'),
     "fire": ("داغ", '<path d="M32 5c2 11 15 15 15 29a15 15 0 01-30 0c0-6 3-10 7-13 0 5 3 8 5 8 0-8-2-15 3-24z"/>'),
+    "award": ("مدال کیفیت", '<circle cx="32" cy="26" r="16"/><path d="M22 40l-6 20 16-8 16 8-6-20"/><path d="M26 26l4 4 8-8"/>'),
+    "headset": ("پشتیبانی", '<path d="M10 36V30a22 22 0 0144 0v6"/><rect x="6" y="34" width="9" height="16" rx="3"/><rect x="49" y="34" width="9" height="16" rx="3"/><path d="M53 50c0 6-6 9-14 9"/>'),
+    "shield_check": ("تضمین", '<path d="M32 6l22 8v16c0 14-9 24-22 28C19 54 10 44 10 30V14z"/><path d="M22 32l7 7 13-14"/>'),
+    "refresh": ("نوآوری", '<path d="M52 24A22 22 0 0014 18"/><path d="M12 8v12h12"/><path d="M12 40a22 22 0 0038 6"/><path d="M52 56V44H40"/>'),
     "crown": ("تاج", '<path d="M7 46l4-27 15 14 6-19 6 19 15-14 4 27z"/><path d="M7 55h50"/>'),
 }
 

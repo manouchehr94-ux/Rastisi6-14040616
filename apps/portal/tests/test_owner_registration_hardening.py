@@ -1,3 +1,4 @@
+from apps.portal.tests._industry import choose_other_industry
 """Owner registration / signup hardening (audit/owner-registration-v1).
 
 Covers: required & normalized registration name, registration vs. login form
@@ -1675,7 +1676,7 @@ class OnboardingHandoffTests(_OtpTestMixin, TestCase):
             self.client.post(f"{base}/identity/", {"name": "فروشگاه سارا"}, HTTP_HOST=_HOST), f"{base}/industry/",
         )
         self.assertRedirects(
-            self.client.post(f"{base}/industry/", {"action": "skip"}, HTTP_HOST=_HOST), f"{base}/template/",
+            choose_other_industry(self.client, f"{base}/industry/", _HOST), f"{base}/template/",
         )
         self.assertRedirects(
             select_template(self.client, f"{base}/template/"), f"{base}/branding/",

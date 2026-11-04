@@ -6,6 +6,10 @@
 <title>{% block title %}پنل مدیریت پلتفرم | راستیسی{% endblock %}</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="{% static 'portal/css/platform-admin-panel.css' %}">
+<link rel="stylesheet" href="{% static 'notifications/inbox.css' %}?v=20261101-1">
+<script src="{% static 'notifications/inbox.js' %}?v=20261101-1" defer></script>
+<link rel="stylesheet" href="{% static 'core/password_toggle.css' %}?v=20261029-2">
+<script src="{% static 'core/password_toggle.js' %}?v=20261029-2" defer></script>
 <link rel="stylesheet" href="{% static 'core/jalali_picker.css' %}">
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
 <script src="{% static 'core/jalali_picker.js' %}" defer></script>
@@ -75,6 +79,7 @@
         </form>
       </div>
       <div class="pa-left">
+        {% include "notifications/partials/bell.html" %}
         <div class="pa-avatar">{{ request.user.get_username|first|upper }}</div>
         <div>
           <b style="font-size:12px">{{ request.user.get_full_name|default:request.user.get_username }}</b>

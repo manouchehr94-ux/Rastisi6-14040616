@@ -24,6 +24,7 @@ from apps.core.color_utils import (
 from apps.storefront_builder import appearance_registry as ar
 from apps.storefront_builder import layout_preset_registry as lpr
 from apps.storefront_builder.accessible_colors import TARGET, accessible_pairs, build_accessible_theme, failing_pairs
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 
 def _resolved(palette_slug, overrides=None, theme_overrides=None):
@@ -36,7 +37,7 @@ class ReadyTemplateContrastTests(SimpleTestCase):
     def test_every_ready_template_palette_satisfies_the_contrast_contract(self):
         templates = lpr.list_ready_templates()
         # 50 token-built A8 identities + the three reference-fidelity templates (51-53)
-        self.assertEqual(len(templates), 53, "the canonical catalog is exactly 53 Ready Templates")
+        self.assertEqual(len(templates), READY_TEMPLATE_COUNT, "the canonical catalog is exactly 53 Ready Templates")
         failures = []
         for template in templates:
             _cfg, colors, roles, tones = _resolved(template.default_palette_slug)

@@ -1,0 +1,32 @@
+{% load content_tags %}
+{% comment %}
+V5 «عکس لینک‌دار» — ONE picture of THIS section (its own section-scoped PromotionalBanner row; never the store-wide banner pool), optionally
+linked through that row's destination. Nothing else: no title, no copy, no button, no promo frame. The whole picture is the click target.
+The link is a real <a href> around the picture in the PUBLISHED page only when a destination resolves (no link -> a plain block: ordinary cursor,
+nothing clickable); it is never nested in another link. Inside the BUILDER preview the same frame carries the destination as ``data-linked-href``
+and has NO href: the Studio never treats an anchor-with-href as a selectable surface (a click on a link is the storefront's own), so a fully linked
+picture would otherwise be impossible to select / edit by clicking it — geometry and markup are otherwise identical. (No ``data-admin-edit-*`` hooks
+on purpose: they would hand the click to the legacy entity editor in a refreshed preview; the picture is edited from the section's «رسانه» panel.) The builder preview loads the picture eagerly (a lazy picture below the fold has no height yet, so a refreshed preview would first lay the section out collapsed and the Resize handles would jump); Published keeps lazy loading. Without a picture: nothing in Published, a clear in-flow placeholder in the builder (is_builder_preview).
+Picture sizing: natural aspect ratio by default; the frame fills a manually sized / stretched section with the design block's
+«نحوه جاگیری تصویر» (--img-fit: contain = whole picture, cover = fill the frame) and «کانون تصویر» (--img-pos).
+{% endcomment %}
+{% with banner=banners.0 %}
+{% if banner and banner.desktop_image_url %}
+{% resolve_destination banner as bdest %}
+<section class="section linked-image">
+  {% if bdest.url %}<a class="linked-image-frame"{% if is_builder_preview %} data-linked-href="{{ bdest.url }}" title="لینک به: {{ bdest.url }} (در پیش‌نمایش باز نمی‌شود؛ برای انتخاب بخش کلیک کنید)"{% else %} href="{{ bdest.url }}"{% if bdest.open_new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}{% endif %}>{% else %}<div class="linked-image-frame"{% if is_builder_preview %}{% endif %}>{% endif %}
+    <picture>
+      {% if banner.mobile_image_url %}<source media="(max-width:680px)" srcset="{{ banner.mobile_image_url }}">{% endif %}
+      <img class="linked-image-img" src="{{ banner.desktop_image_url }}" data-img-role="banner" alt="{{ banner.title }}" loading="{% if is_builder_preview %}eager{% else %}lazy{% endif %}">
+    </picture>
+  {% if bdest.url %}</a>{% else %}</div>{% endif %}
+</section>
+{% elif is_builder_preview %}
+<section class="section linked-image linked-image--empty">
+  <div class="linked-image-placeholder" role="note">
+    <strong>تصویری انتخاب نشده است</strong>
+    <span>از پنل «رسانه» در تنظیمات همین بخش، تصویر را بارگذاری کنید. تا آن زمان چیزی در سایت نمایش داده نمی‌شود.</span>
+  </div>
+</section>
+{% endif %}
+{% endwith %}

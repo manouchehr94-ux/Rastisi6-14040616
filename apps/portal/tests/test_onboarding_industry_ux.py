@@ -1,3 +1,4 @@
+from apps.portal.tests._industry import choose_other_industry
 """Onboarding «صنف» step — a clean single-flow card grid (no split master/detail, no feature dump).
 
 The detailed ``template_summary_service`` stays available for other surfaces; onboarding renders only: icon, Persian
@@ -27,6 +28,7 @@ JS = (_STATIC / "js/onboarding.js").read_text(encoding="utf-8")
 
 
 class IndustryPageIsSingleFlowTests(JourneyBase):
+    with_industry = False
     def setUp(self):
         super().setUp()
         self.template = make_rich_template()
@@ -112,6 +114,7 @@ class IndustryPageIsSingleFlowTests(JourneyBase):
 
 
 class IndustryResponsiveCssTests(JourneyBase):
+    with_industry = False
     def test_desktop_is_a_4_column_grid_then_3_then_2_then_1_without_a_scroll_box(self):
         self.assertRegex(CSS, r"\.ob-industry-list\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)")
         self.assertRegex(CSS, r"@media\(max-width:1100px\)\{\.ob-industry-list\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)\}\}")
@@ -131,6 +134,7 @@ class IndustryResponsiveCssTests(JourneyBase):
 
 
 class IndustryServerSideInvariantsTests(JourneyBase):
+    with_industry = False
     def setUp(self):
         super().setUp()
         self.template = make_rich_template()
@@ -169,13 +173,13 @@ class IndustryServerSideInvariantsTests(JourneyBase):
         self.assertEqual(StoreIndustryInstallation.objects.filter(store=self.store).count(), 1)
         self.assertEqual(Category.objects.filter(store=self.store).count(), count)
 
-    def test_skip_still_works_and_installs_nothing(self):
+    def test_skip_is_refused_and_installs_nothing(self):
         response = self.client.post(self.url("industry"), {"action": "skip"}, HTTP_HOST=_HOST)
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/onboarding/template/", response["Location"])
+        self.assertIn("/onboarding/industry/", response["Location"])
         self.assertNothingInstalled()
         self.store.refresh_from_db()
-        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.TEMPLATE)
+        self.assertEqual(self.store.onboarding_stage, Store.OnboardingStage.IDENTITY)
 
     def test_a_forged_unknown_or_non_offerable_id_cannot_install(self):
         skeletal = make_skeletal_template()

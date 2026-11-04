@@ -83,6 +83,10 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         checks = collect()
         worst = max((_RANK[c["level"]] for c in checks), default=0)
+        if worst >= 2:                                    # CRITICAL ⇒ اعلانِ فوریِ مدیرانِ پلتفرم (یک‌بار در ساعت)
+            from apps.notifications.services import admin_events
+
+            admin_events.platform_jobs_unhealthy([c["check"] for c in checks if c["level"] == CRIT])
         if opts["json"]:
             self.stdout.write(json.dumps({"status": [OK, WARN, CRIT][worst], "checks": checks}, ensure_ascii=False))
         else:

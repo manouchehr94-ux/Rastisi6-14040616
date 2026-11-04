@@ -1,15 +1,23 @@
 {% comment %}چکپوینتِ ۱۲: نظرات مشتریان.{% endcomment %}
 {% if settings.items %}
-<section class="section{% if settings.style == 'avatar_grid' %} testimonials--avatar-grid{% endif %}">
+<section class="section{% if settings.style == 'avatar_grid' %} testimonials--avatar-grid{% elif settings.style == 'card_row' %} testimonials--card-row{% endif %}">
   <div class="sec-head"><h2><span class="bar"></span>{{ settings.title|default:"نظرات مشتریان" }}</h2></div>
   <div class="testimonial-list">
     {% for item in settings.items %}
     <div class="testimonial-card">
       {% if settings.style == 'avatar_grid' %}<span class="testimonial-avatar" aria-hidden="true"></span>{% endif %}
+      {% if settings.style == 'card_row' %}
+      <div class="testimonial-head">
+        <span class="testimonial-avatar" aria-hidden="true">{{ item.name|slice:":1" }}</span>
+        <div class="who"><strong>{{ item.name }}</strong>{% if item.role %}<span>{{ item.role }}</span>{% endif %}{% if item.rating %}<span class="testimonial-stars" role="img" aria-label="امتیاز {{ item.rating }} از ۵">{% for _ in "12345" %}<i{% if forloop.counter > item.rating %} class="off"{% endif %}>★</i>{% endfor %}</span>{% endif %}</div>
+      </div>
+      <p class="quote">{{ item.quote }}</p>
+      {% else %}
       <div class="testimonial-body">
         <p class="quote">«{{ item.quote }}»</p>
-        <div class="who"><strong>{{ item.name }}</strong>{% if item.role %}<span>{{ item.role }}</span>{% endif %}</div>
+        <div class="who"><strong>{{ item.name }}</strong>{% if item.role %}<span>{{ item.role }}</span>{% endif %}{% if item.rating %}<span class="testimonial-stars" role="img" aria-label="امتیاز {{ item.rating }} از ۵">{% for _ in "12345" %}<i{% if forloop.counter > item.rating %} class="off"{% endif %}>★</i>{% endfor %}</span>{% endif %}</div>
       </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

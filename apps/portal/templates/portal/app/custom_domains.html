@@ -3,121 +3,202 @@
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block content %}
 <div class="p-wrap">
-<div class="p-form-card" style="max-width:640px">
-  <h2 style="text-align:center;margin-bottom:8px">دامنه‌ی اختصاصی</h2>
-  <p style="text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:20px">
-    دامنه‌ی اختصاصی شما (مثلِ shop.example.com) تنها پس از تأییدِ واقعیِ مالکیت از طریقِ DNS فعال می‌شود.
-  </p>
+<div class="p-form-card dm" style="max-width:760px">
+  <h2 style="text-align:center;margin-bottom:8px">اتصال دامنه‌ی اختصاصی</h2>
+  <p class="dm-lead">دامنه‌ی خودتان (مثل <bdi dir="ltr">shop.example.com</bdi> یا <bdi dir="ltr">example.com</bdi>) فقط پس از تأییدِ واقعیِ مالکیت از طریق DNS و آماده‌بودنِ اتصال و HTTPS فعال می‌شود. هیچ تغییری روی DNS شما از طرف راستی‌سی انجام نمی‌شود؛ رکوردها را خودتان در پنل دامنه ثبت می‌کنید.</p>
 
   {% if messages %}{% for message in messages %}
-    <div class="p-alert {% if message.tags == 'error' %}p-alert-error{% elif message.tags == 'warning' %}p-alert-warning{% else %}p-alert-success{% endif %}">{{ message }}</div>
+    <div class="p-alert {% if message.tags == 'error' %}p-alert-error{% elif message.tags == 'warning' %}p-alert-warning{% else %}p-alert-success{% endif %}" role="status">{{ message }}</div>
   {% endfor %}{% endif %}
+  {% if not targets_configured %}
+  <div class="dm-note" role="status" data-testid="targets-missing">مقصد اتصال دامنه‌های اختصاصی هنوز در زیرساخت راستی‌سی تنظیم نشده است؛ ثبت دامنه و تأیید مالکیت ممکن است، اما مرحله‌ی «اتصال» و فعال‌سازی تا تکمیل این تنظیم باز نمی‌شود.</div>
+  {% endif %}
+  {% if not can_manage_domains %}
+  <div class="dm-note" role="status">فقط مالک فروشگاه می‌تواند دامنه اضافه یا فعال کند. شما فقط وضعیت را می‌بینید.</div>
+  {% endif %}
 
-  <form method="post" style="margin-bottom:24px">
+  <details class="dm-guide" open>
+    <summary>راهنمای شش‌مرحله‌ای</summary>
+    <ol class="dm-guide-list">
+      <li><b>دامنه را تهیه کنید.</b> دامنه باید به نام خودتان ثبت شده باشد و به پنل مدیریت DNS آن دسترسی داشته باشید (ثبت‌کننده‌ی دامنه یا سرویس DNS).</li>
+      <li><b>دامنه را اینجا ثبت کنید.</b> فقط نام دامنه، بدون <bdi dir="ltr">http://</bdi> و بدون مسیر.</li>
+      <li><b>مالکیت را تأیید کنید.</b> یک رکورد TXT با نام و مقدار نشان‌داده‌شده (با دکمه‌ی کپی) در DNS اضافه کنید و «بررسی مجدد» را بزنید.</li>
+      <li><b>دامنه را به راستی‌سی وصل کنید.</b> رکورد A (دامنه‌ی ریشه) یا CNAME (زیردامنه) را مطابق جدول بسازید.</li>
+      <li><b>اتصال و HTTPS را بررسی کنید.</b> دکمه‌ی «بررسی اتصال DNS و SSL» وضعیت را از اینترنت می‌خواند؛ هر مرحله پیام راهنما دارد.</li>
+      <li><b>فعال‌سازی.</b> فقط وقتی همه‌چیز تازه‌بررسی و آماده باشد باز می‌شود و با تأیید هویت دومرحله‌ای انجام می‌شود؛ بعد، لینک مشاهده‌ی فروشگاه نمایش داده می‌شود.</li>
+    </ol>
+  </details>
+
+  {% if can_manage_domains %}
+  <form method="post" class="dm-add">
     {% csrf_token %}
     <input type="hidden" name="action" value="add">
     <div class="p-field">
       <label for="id_hostname">دامنه (بدونِ http:// و بدونِ مسیر)</label>
-      <input type="text" id="id_hostname" name="hostname" required style="direction:ltr;text-align:left">
+      <input type="text" id="id_hostname" name="hostname" required dir="ltr" autocomplete="off" placeholder="shop.example.com" inputmode="url" style="text-align:left">
+      <small class="dm-hint">نمونه: <bdi dir="ltr">shop.example.com</bdi> یا <bdi dir="ltr">example.com</bdi>. دامنه‌ای که برای فروشگاه دیگری ثبت شده پذیرفته نمی‌شود.</small>
     </div>
     <button type="submit" class="p-btn p-btn-primary" style="width:100%">افزودنِ دامنه</button>
   </form>
+  {% endif %}
+
+  <div id="dmCopyStatus" class="dm-sr" role="status" aria-live="polite"></div>
 
   {% for row in rows %}
-  <div style="border:1px solid var(--p-line);border-radius:12px;padding:14px;margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;direction:ltr">
-      <span style="font-weight:600">{{ row.domain.hostname }}</span>
-      <span style="display:flex;align-items:center;gap:8px">
-        {% if row.domain.verification_status == "failed" %}
-        <span class="p-status-pill p-status-attention">نیاز به بررسی</span>
-        {% elif row.domain.verification_status == "verified" %}
-        <span class="p-status-pill p-status-done">{% if row.domain.is_primary %}تکمیل‌شده و فعال{% else %}تکمیل‌شده{% endif %}</span>
-        {% else %}
-        <span class="p-status-pill p-status-pending">در انتظار</span>
-        {% endif %}
-      </span>
-    </div>
+  <section class="dm-card dm-{{ row.overall }}" data-testid="domain-card" data-domain="{{ row.domain.hostname }}">
+    <header class="dm-head">
+      <b dir="ltr">{{ row.domain.hostname }}</b>
+      {% if row.domain.is_primary and row.domain.verification_status == "verified" %}<span class="p-status-pill p-status-done">فعال</span>
+      {% elif row.domain.verification_status == "failed" %}<span class="p-status-pill p-status-attention">نیاز به بررسی</span>
+      {% elif row.domain.verification_status == "verified" %}<span class="p-status-pill p-status-pending">تأییدشده — در انتظار اتصال/فعال‌سازی</span>
+      {% else %}<span class="p-status-pill p-status-pending">در انتظار</span>{% endif %}
+    </header>
 
-    {% if row.domain.verification_status == "unverified" %}
-    <form method="post" action="{% url 'portal:custom-domain-begin-verify' store.public_id row.domain.pk %}" style="margin-top:10px">
-      {% csrf_token %}
-      <button type="submit" class="p-btn p-btn-ghost" style="width:100%">شروعِ تأییدِ DNS</button>
-    </form>
-    {% elif row.domain.verification_status == "pending" %}
-    <div style="font-size:12px;color:var(--p-muted);margin-top:10px;direction:ltr;text-align:left;background:var(--p-surface);padding:8px;border-radius:8px">
-      رکوردِ TXT به نامِ <b>{{ row.record_name }}</b> با مقدارِ <b>{{ row.expected_value }}</b> اضافه کنید.
-    </div>
-    <form method="post" action="{% url 'portal:custom-domain-check' store.public_id row.domain.pk %}" style="margin-top:8px">
-      {% csrf_token %}
-      <button type="submit" class="p-btn p-btn-ghost" style="width:100%">بررسیِ DNS</button>
-    </form>
-    {% elif row.domain.verification_status == "verified" %}
-    <div style="margin-top:10px;padding:10px;border-radius:10px;background:var(--p-surface);font-size:12px;line-height:1.9">
-      <div><b>۱) مالکیت دامنه:</b> <span class="p-status-pill p-status-done">تأیید شده</span></div>
-      <div style="margin-top:6px"><b>۲) اتصال DNS به RastiSi:</b>
-        {% if row.domain.routing_status == "connected" %}
-          <span class="p-status-pill p-status-done">متصل</span>
-        {% elif row.domain.routing_status == "not_connected" %}
-          <span class="p-status-pill p-status-attention">هنوز متصل نیست</span>
-        {% else %}
-          <span class="p-status-pill p-status-pending">بررسی نشده</span>
-        {% endif %}
-      </div>
-      <div style="margin-top:6px"><b>۳) HTTPS / TLS:</b>
-        {% if row.domain.tls_status == "ready" %}
-          <span class="p-status-pill p-status-done">آماده</span>
-        {% elif row.domain.tls_status == "not_ready" %}
-          <span class="p-status-pill p-status-attention">هنوز آماده نیست</span>
-        {% else %}
-          <span class="p-status-pill p-status-pending">بررسی نشده</span>
-        {% endif %}
-      </div>
-    </div>
+    <ol class="dm-steps" aria-label="مراحل اتصال">
+      {% for st in row.steps %}
+      <li class="dm-step dm-step--{{ st.state }}"{% if st.state == "current" %} aria-current="step"{% endif %}>
+        <span class="dm-dot" aria-hidden="true">{% if st.state == "done" %}✓{% else %}{{ st.n }}{% endif %}</span>
+        <span class="dm-st-title">{{ st.title }}</span>
+        <span class="dm-sr">{% if st.state == "done" %}(انجام شد){% elif st.state == "current" %}(مرحله‌ی فعلی){% elif st.state == "blocked" %}(مسدود){% else %}(در انتظار){% endif %}</span>
+        {% if st.hint %}<span class="dm-st-hint">{{ st.hint }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
 
-    <div style="font-size:12px;color:var(--p-muted);margin-top:10px;direction:ltr;text-align:left;background:var(--p-surface);padding:10px;border-radius:8px;line-height:1.9">
-      <div style="direction:rtl;text-align:right;color:var(--p-text);font-weight:600">رکورد اتصال دامنه</div>
-      {% if row.connection.configured %}
-        {% if row.connection.a_targets %}
-          <div style="margin-top:6px">A record → Host/Name: <b>@</b></div>
-          {% for target in row.connection.a_targets %}
-            <div>Value/IP: <b>{{ target }}</b></div>
+    {% if row.domain.verification_status != "verified" %}
+      {% if row.domain.verification_status == "unverified" %}
+      {% if can_manage_domains %}
+      <form method="post" action="{% url 'portal:custom-domain-begin-verify' store.public_id row.domain.pk %}">
+        {% csrf_token %}<button type="submit" class="p-btn p-btn-primary" style="width:100%">شروعِ تأییدِ مالکیت (دریافت رکورد TXT)</button>
+      </form>
+      {% endif %}
+      {% else %}
+      {% if row.txt %}
+      <div class="dm-rec" data-testid="txt-record">
+        <div class="dm-rec-title">رکورد تأیید مالکیت (TXT)</div>
+        <table class="dm-table" dir="ltr">
+          <tr><th>Type</th><td><code>TXT</code></td><td></td></tr>
+          <tr><th>Host / Name</th><td><code id="txtHost{{ row.domain.pk }}">{{ row.txt.host }}</code></td><td><button type="button" class="dm-copy" data-copy-target="txtHost{{ row.domain.pk }}" aria-label="کپی نام رکورد TXT">Copy</button></td></tr>
+          <tr><th>Value</th><td><code id="txtVal{{ row.domain.pk }}">{{ row.txt.value }}</code></td><td><button type="button" class="dm-copy" data-copy-target="txtVal{{ row.domain.pk }}" aria-label="کپی مقدار رکورد TXT">Copy</button></td></tr>
+        </table>
+        <p class="dm-hint">نام کامل: <bdi dir="ltr">{{ row.txt.host_full }}</bdi>. اگر پنل دامنه‌ی شما نام کامل را می‌خواهد همین را وارد کنید؛ اگر فقط بخش پیش از دامنه‌ی اصلی را می‌خواهد، مقدار بالا را بزنید.</p>
+      </div>
+      {% endif %}
+      {% if can_manage_domains %}
+      <form method="post" action="{% url 'portal:custom-domain-check' store.public_id row.domain.pk %}" style="margin-top:8px">
+        {% csrf_token %}<button type="submit" class="p-btn p-btn-ghost" style="width:100%">بررسی مجدد رکورد TXT</button>
+      </form>
+      {% endif %}
+      {% endif %}
+    {% else %}
+      <div class="dm-rec" data-testid="routing-records">
+        <div class="dm-rec-title">رکورد اتصال دامنه</div>
+        {% if row.routing.configured %}
+        <table class="dm-table" dir="ltr">
+          <tr><th>Type</th><th>Host / Name</th><th>Value / Target</th><th></th></tr>
+          {% for rec in row.routing.rows %}
+          <tr{% if rec.recommended %} class="dm-reco"{% endif %}>
+            <td><code>{{ rec.type }}</code>{% if rec.recommended %} <small>(پیشنهادی)</small>{% endif %}</td>
+            <td><code>{{ rec.host }}</code></td>
+            <td><code id="rt{{ row.domain.pk }}{{ forloop.counter }}">{{ rec.value }}</code></td>
+            <td><button type="button" class="dm-copy" data-copy-target="rt{{ row.domain.pk }}{{ forloop.counter }}" aria-label="کپی {{ rec.type }}">Copy</button></td>
+          </tr>
           {% endfor %}
-          <div style="direction:rtl;text-align:right">برای دامنه‌ی ریشه (مثل example.com) از A استفاده کنید.</div>
+        </table>
+        <p class="dm-hint">{% if row.routing.is_root %}این یک دامنه‌ی ریشه است؛ از رکورد <b>A</b> استفاده کنید ({{ "@" }} یعنی خودِ دامنه).{% else %}این یک زیردامنه است؛ <b>CNAME</b> معمولاً بهترین انتخاب است.{% endif %} فقط یکی از رکوردها را برای این Host نگه دارید.</p>
+        {% else %}
+        <div class="dm-note" style="margin:6px 0 0">مقصد اتصال هنوز آماده نیست؛ مدیر زیرساخت راستی‌سی باید آن را تنظیم کند. تا آن زمان مقداری نشان داده نمی‌شود.</div>
         {% endif %}
-        {% if row.connection.cname_target %}
-          <div style="margin-top:6px">CNAME → Value/Target: <b>{{ row.connection.cname_target }}</b></div>
-          <div style="direction:rtl;text-align:right">برای زیردامنه (مثل shop.example.com) CNAME گزینه‌ی پیشنهادی است.</div>
+      </div>
+
+      <div class="dm-status" aria-label="وضعیت بررسی‌ها">
+        <div><b>مالکیت دامنه:</b> <span class="p-status-pill p-status-done">تأیید شده</span></div>
+        <div><b>اتصال DNS:</b>
+          {% if row.domain.routing_status == "connected" %}<span class="p-status-pill p-status-done">متصل</span>
+          {% elif row.domain.routing_status == "not_connected" %}<span class="p-status-pill p-status-attention">هنوز متصل نیست</span>
+          {% else %}<span class="p-status-pill p-status-pending">بررسی نشده</span>{% endif %}</div>
+        <div><b>HTTPS / SSL:</b>
+          {% if row.domain.tls_status == "ready" %}<span class="p-status-pill p-status-done">آماده</span>
+          {% elif row.domain.tls_status == "not_ready" %}<span class="p-status-pill p-status-attention">هنوز آماده نیست</span>
+          {% else %}<span class="p-status-pill p-status-pending">بررسی نشده</span>{% endif %}</div>
+      </div>
+
+      {% if not row.domain.is_primary %}
+        {% if can_manage_domains %}
+        <form method="post" action="{% url 'portal:custom-domain-final-check' store.public_id row.domain.pk %}" style="margin-top:10px">
+          {% csrf_token %}<button type="submit" class="p-btn p-btn-ghost" style="width:100%">بررسی اتصال DNS و SSL</button>
+        </form>
+        {% if row.fresh_ready %}
+        <form method="post" action="{% url 'portal:custom-domain-activate' store.public_id row.domain.pk %}" style="margin-top:8px">
+          {% csrf_token %}
+          <p class="dm-hint" style="margin:0 0 6px">با فعال‌سازی، این دامنه آدرس اصلی فروشگاه می‌شود. برای ایمنی، یک کد تأیید به موبایل مالک ارسال می‌شود.</p>
+          <button type="submit" class="p-btn p-btn-primary" style="width:100%" data-testid="activate">فعال‌سازی به‌عنوانِ دامنه‌ی اصلی</button>
+        </form>
+        {% else %}
+        <div class="dm-note" style="margin-top:8px">فعال‌سازی فقط بعد از موفق‌شدنِ تازه‌ی هر دو مرحله‌ی «اتصال DNS» و «HTTPS/SSL» باز می‌شود (نتیجه‌ی بررسی نباید قدیمی باشد).</div>
+        {% endif %}
         {% endif %}
       {% else %}
-        <div style="direction:rtl;text-align:right;color:var(--p-danger)">
-          مقصد اتصال هنوز توسط زیرساخت RastiSi پیکربندی نشده است.
-        </div>
+        <div class="p-alert p-alert-success" style="margin-top:10px">دامنه فعال است و آدرس اصلی فروشگاه شماست.
+          <a href="{{ row.live_url }}" target="_blank" rel="noopener" data-testid="live-link" style="font-weight:700">مشاهده‌ی فروشگاه ←</a></div>
       {% endif %}
-    </div>
-
-    {% if not row.domain.is_primary %}
-    <form method="post" action="{% url 'portal:custom-domain-final-check' store.public_id row.domain.pk %}" style="margin-top:10px">
-      {% csrf_token %}
-      <button type="submit" class="p-btn p-btn-ghost" style="width:100%">بررسی اتصال DNS و SSL</button>
-    </form>
-
-    {% if row.domain.routing_status == "connected" and row.domain.tls_status == "ready" %}
-    <form method="post" action="{% url 'portal:custom-domain-activate' store.public_id row.domain.pk %}" style="margin-top:8px">
-      {% csrf_token %}
-      <button type="submit" class="p-btn p-btn-primary" style="width:100%">فعال‌سازی به‌عنوانِ دامنه‌ی اصلی</button>
-    </form>
-    {% else %}
-    <div class="p-alert p-alert-warning" style="margin-top:8px">
-      فعال‌سازی بعد از موفق‌شدن هر دو مرحله‌ی «اتصال DNS» و «HTTPS/TLS» باز می‌شود.
-    </div>
     {% endif %}
-    {% endif %}
-    {% endif %}
-  </div>
+  </section>
   {% empty %}
   <p style="text-align:center;font-size:13px;color:var(--p-muted)">هنوز دامنه‌ی اختصاصی‌ای اضافه نکرده‌اید.</p>
   {% endfor %}
 </div>
 </div>
+<script>
+(function () {
+  var status = document.getElementById('dmCopyStatus');
+  function say(t) { if (status) status.textContent = t; }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-copy-target]'); if (!b) return;
+    var el = document.getElementById(b.getAttribute('data-copy-target')); if (!el) return;
+    var text = el.textContent.trim();
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(el); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      var ok = false; try { ok = document.execCommand('copy'); } catch (err) {}
+      say(ok ? 'کپی شد.' : 'کپی خودکار انجام نشد؛ متن انتخاب شد، آن را دستی کپی کنید.');
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { say('کپی شد.'); b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); }, fallback);
+    else fallback();
+  });
+})();
+</script>
 {% endblock %}
-{% block extra_css %}<style>.p-field input{width:100%;padding:10px 14px;border:1px solid var(--p-line);border-radius:10px;font-family:inherit;font-size:14px}</style>{% endblock %}
+{% block extra_css %}<style>
+.p-field input{width:100%;padding:10px 14px;border:1px solid var(--p-line);border-radius:10px;font-family:inherit;font-size:14px}
+.dm *{box-sizing:border-box}
+.dm-lead{text-align:center;font-size:13px;color:var(--p-muted);margin-bottom:16px;line-height:1.9}
+.dm-guide{border:1px solid var(--p-line);border-radius:12px;padding:10px 14px;margin-bottom:16px;background:var(--p-surface)}
+.dm-guide summary{cursor:pointer;font-weight:700;min-height:32px}
+.dm-guide-list{margin:8px 0 0;padding-inline-start:20px;font-size:13px;line-height:2}
+.dm-add{margin-bottom:22px}
+.dm-note{padding:10px 12px;border-radius:10px;background:rgba(217,119,6,.1);color:#92400e;font-size:12.5px;line-height:1.9;margin-bottom:12px}
+.dm-hint{display:block;font-size:12px;color:var(--p-muted);line-height:1.9;margin:6px 0 0}
+.dm-card{border:1px solid var(--p-line);border-radius:14px;padding:14px;margin-bottom:14px}
+.dm-card.dm-active{border-color:#1f9d55}
+.dm-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.dm-steps{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.dm-step{display:grid;grid-template-columns:28px 1fr;gap:2px 10px;align-items:center;font-size:13px}
+.dm-dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;border:2px solid var(--p-line);font-size:12px;font-weight:800}
+.dm-step--done .dm-dot{background:#1f9d55;border-color:#1f9d55;color:#fff}
+.dm-step--current .dm-dot{border-color:var(--p-primary,#6d28d9);color:var(--p-primary,#6d28d9)}
+.dm-step--current .dm-st-title{font-weight:800}
+.dm-step--blocked .dm-dot{border-color:#d97706;color:#d97706}
+.dm-step--todo{color:var(--p-muted)}
+.dm-st-hint{grid-column:2;font-size:12px;color:var(--p-muted);line-height:1.8}
+.dm-rec{border:1px solid var(--p-line);border-radius:10px;padding:10px;margin-top:8px;background:var(--p-surface)}
+.dm-rec-title{font-weight:700;font-size:13px;margin-bottom:6px}
+.dm-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.dm-table th,.dm-table td{padding:6px 8px;border-bottom:1px solid var(--p-line);text-align:left;vertical-align:middle;word-break:break-all}
+.dm-table th{color:var(--p-muted);font-weight:700;white-space:nowrap}
+.dm-reco{background:rgba(31,157,85,.08)}
+.dm-copy{border:1px solid var(--p-line);background:var(--p-card,#fff);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;min-height:32px}
+.dm-copy:focus-visible{outline:3px solid var(--p-primary,#6d28d9);outline-offset:2px}
+.dm-status{display:grid;gap:6px;margin-top:10px;font-size:12.5px}
+.dm-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:560px){.dm-table th:first-child{display:none}.dm-table td{display:block;border:0;padding:3px 0}.dm-table tr{display:block;border-bottom:1px solid var(--p-line);padding:6px 0}.dm-table tr:first-child{display:none}.dm-table td:first-child::before{content:attr(data-l)}}
+</style>{% endblock %}

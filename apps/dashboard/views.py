@@ -113,7 +113,12 @@ from apps.core.services.audit_service import list_audit_events, record_audit_eve
 from apps.core.services.export_service import ExportError, generate_export
 from apps.subscriptions.services.entitlement_service import EntitlementError
 from apps.subscriptions.services import enforcement as subscription_enforcement
-from apps.dashboard.services import import_service, import_xlsx
+from apps.stores.services import tracking_service
+from apps.dashboard.services import (
+    channel_readiness_service, domain_settings_service, import_proposals, import_service, import_xlsx, search_presence_service,
+    search_visibility_service,
+)
+from apps.stores.services import enamad_verification_service
 from apps.dashboard.services.import_service import ImportServiceError
 from apps.cart.models import Coupon
 from apps.cart.services.coupon_service import (
@@ -194,7 +199,7 @@ from apps.catalog.services.variant_service import (
 )
 from apps.core.color_utils import safe_hex
 from apps.core.utils import normalize_digits
-from apps.core.models import ExportJob, ImportJob, ImportRowResult, ShopSettings
+from apps.core.models import ExportJob, ImportJob, ImportProposal, ImportRowResult, ShopSettings
 from apps.core.services.xlsx_utils import XLSX_CONTENT_TYPE, safe_download_filename
 from apps.core.theme_presets import THEME_PRESETS, matching_preset_key
 from apps.customers.models import (
@@ -217,6 +222,7 @@ from apps.orders.models import (
     TaxRate,
     Transaction,
 )
+from apps.orders.services import tax_service
 from apps.orders.services.order_service import change_order_status
 from apps.orders.services.shipping_service import ensure_default_shipping_methods
 from apps.orders.services.refund_service import (
@@ -282,6 +288,7 @@ from apps.stores.authorization import (
     CATEGORY_MANAGE,
     COLLECTION_MANAGE,
     CONTENT_MANAGE,
+    DOMAIN_MANAGE,
     CUSTOMER_EXPORT,
     CUSTOMER_NOTE_MANAGE,
     CUSTOMER_SEGMENT_MANAGE,
@@ -336,6 +343,7 @@ from .forms import (
     CategoryEditForm,
     CollectionForm,
     FinanceSettingsForm,
+    TaxGeneralRateForm,
     GiftWrapSettingsForm,
     OrderExpirySettingsForm,
     MainCategoryForm,
@@ -531,6 +539,10 @@ def dashboard_home(request):
     context = dashboard_service.build_dashboard_context(store)
     context["active_page"] = "dashboard"
     context["setup_checklist"] = checklist_service.build_setup_checklist(store, request)
+    # the checklist is never removed: once the required steps are done it is folded into a summary card that can be reopened.
+    # ``?checklist=all`` opens it server-side (works without JS); the per-store key only namespaces the browser's remembered choice.
+    context["setup_checklist_open"] = request.GET.get("checklist") == "all"
+    context["setup_checklist_key"] = str(store.public_id)
     context["industry_summary"] = checklist_service.build_industry_summary(store)
     return render(request, "dashboard/dashboard.html", context)
 
@@ -3733,6 +3745,17 @@ def order_detail(request, code):
         (m, dict(order.transactions.model.Method.choices)[m]) for m in cod_payment_service.METHODS
     ]
     context["payment_transactions"] = order.transactions.filter(status="ok").select_related("confirmed_by")
+    from apps.orders.services import card_transfer_service as c2c
+    from apps.stores.authorization import ORDER_REVIEW_CARD_TRANSFER
+
+    if c2c.is_card_transfer_order(order):
+        state = c2c.review_state(order)
+        context["c2c_state"], context["c2c_state_label"] = state, c2c.REVIEW_LABELS.get(state, "")
+        context["c2c_submissions"] = list(order.card_transfers.select_related("reviewed_by"))
+        context["can_review_c2c"] = (
+            membership_has_permission(request.store_membership, ORDER_REVIEW_CARD_TRANSFER)
+            and order.status != "canceled" and order.payment_status == "pending"
+        )
     return render(request, "dashboard/order_detail.html", context)
 
 
@@ -4279,13 +4302,18 @@ def _settings_context(
             "description": shop.description,
         }),
         "finance_form": finance_form or FinanceSettingsForm(initial={
-            "tax_percent": shop.tax_percent, "free_shipping_threshold": shop.free_shipping_threshold,
+            "free_shipping_threshold": shop.free_shipping_threshold,
         }),
+        "tax_has_granular_rates": SimpleLazyObject(lambda: tax_service.store_has_granular_tax_rates(store)),  # lazy: only the finance section reads it
+        "can_view_tax_page": membership_has_permission(request.store_membership, TAX_SETTINGS_VIEW),
         "order_expiry_form": OrderExpirySettingsForm(initial={
-            "unpaid_online_order_ttl_minutes": shop.unpaid_online_order_ttl_minutes,
+            "expiry_enabled": shop.unpaid_online_order_ttl_minutes > 0,
+            # خاموش ⇒ مهلتِ ذخیره‌شده ۰ است؛ فرم عددِ پیشنهادی را نشان می‌دهد تا با روشن‌کردن آماده باشد.
+            "unpaid_online_order_ttl_minutes": shop.unpaid_online_order_ttl_minutes or OrderExpirySettingsForm.DEFAULT_TTL_MINUTES,
             "unpaid_online_order_grace_minutes": shop.unpaid_online_order_grace_minutes,
             "unpaid_expiry_notify_sms": shop.unpaid_expiry_notify_sms,
         }),
+        "expiry_enabled": shop.unpaid_online_order_ttl_minutes > 0,
         "gift_wrap_form": gift_wrap_form or GiftWrapSettingsForm(initial={
             "gift_wrap_available": shop.gift_wrap_available, "gift_wrap_price": shop.gift_wrap_price,
             "gift_wrap_pricing_scope": shop.gift_wrap_pricing_scope, "gift_wrap_title": shop.gift_wrap_title,
@@ -4318,9 +4346,68 @@ def _settings_context(
         "industry_templates": _latest_active_industry_templates(),
         "industry_sector_tabs": industry_catalog_service.SECTOR_TABS,
         "industry_installation": _industry_installation_context(store),
-        "integration_rows": integration_service.connections_context(store=store),
+        "integration_rows": SimpleLazyObject(lambda: _integration_rows_with_effect(store, request)),
+        "search_presence": SimpleLazyObject(lambda: _search_presence(store, request)),
+        "channel_readiness": SimpleLazyObject(lambda: channel_readiness_service.readiness(store)),
+        "visibility_not_available": search_visibility_service.NOT_AVAILABLE,
+        "tracking_consent_note": search_visibility_service.TRACKING_CONSENT_NOTE,
+        "integration_overview": SimpleLazyObject(lambda: search_visibility_service.integration_overview(
+            _search_presence(store, request), _integration_rows_with_effect(store, request),
+        )),
+        "domain_overview": SimpleLazyObject(lambda: domain_settings_service.domain_overview(
+            store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE),
+        )),
+        "integration_open": (integration_open := request.session.pop("integration_open", "")),
+        "integration_open_group": search_visibility_service.group_of(integration_open),
+        "integration_view": search_visibility_service.normalize_view(request.GET.get("view")),
+        "integration_views": search_visibility_service.VIEWS,
         "active_page": "settings",
     }
+
+
+def _search_presence(store, request):
+    """Section A's facts, computed once per request (the summary and the cards read the same dict)."""
+    cached = getattr(request, "_rs_search_presence", None)
+    if cached is None:
+        domain = domain_settings_service.domain_overview(store, request, can_manage=membership_has_permission(request.store_membership, DOMAIN_MANAGE))
+        cached = request._rs_search_presence = search_presence_service.presence(store, request, domain)
+    return cached
+
+
+def _integration_rows_with_effect(store, request):
+    """Integration rows + the honest status of each saved identifier: saved / format-valid / enabled / live — never «connected»."""
+    live = search_visibility_service.store_live(store, request)
+    tracking_on = tracking_service.tracking_enabled()
+    rows = integration_service.connections_context(store=store)
+    form_error = getattr(request, "_rs_integration_form_error", None)
+    if form_error is None:                                   # one-shot flash: the failed attempt is shown once, next to its fields
+        form_error = request._rs_integration_form_error = request.session.pop("integration_form_error", None) or {}
+    for row in rows:
+        provider, code = row["provider"], row["provider"].code
+        row["group"] = "live" if code in search_visibility_service.LIVE_ON_PUBLIC_PAGES else "stored"
+        row["effect"] = search_visibility_service.provider_effect(
+            code, connected=row["is_connected"], store_live=live, tracking_enabled=tracking_on, has_saved=row["has_saved_credentials"])
+        row["validation"] = search_visibility_service.validation_of(provider, row["credentials"], has_saved=row["has_saved_credentials"])
+        row["field_groups"] = [{"title": "", "hint": "", "fields": provider.fields, "state": "", "text": ""}]
+        if code == "enamad":
+            flow = enamad_verification_service.enamad_flow(store, row["credentials"], connected=row["is_connected"])
+            row["enamad"] = flow
+            by_key = {"meta": ("verification_meta_tag",), "badge": ("enamad_id", "enamad_auth_code", "enamad_show_badge")}
+            fields = {f.key: f for f in provider.fields}
+            row["field_groups"] = [
+                {"title": st["title"], "hint": st["hint"], "state": st["state"], "text": st["text"],
+                 "fields": [fields[k] for k in by_key[st["key"]]]}
+                for st in flow["stages"]
+            ]
+    for row in rows:
+        row["guide"] = search_visibility_service.service_guide(row)
+        row["status"] = search_visibility_service.status_axes(row, store_live=live, tracking_enabled=tracking_on)
+        row["view"] = search_visibility_service.view_for_provider(row["provider"].code)
+        failed = form_error if form_error.get("code") == row["provider"].code else {}
+        # a rejected attempt: show what was typed and the message beside its field; the STORED value is untouched (the service raised before saving)
+        row["form_values"] = {**row["credentials"], **(failed.get("values") or {})}
+        row["field_error"] = {"field": failed.get("field", ""), "message": failed.get("message", "")} if failed else None
+    return rows
 
 
 def _latest_active_industry_templates():
@@ -4346,7 +4433,9 @@ def _industry_installation_context(store):
 
 SETTINGS_SECTIONS = [
     ("general", "اطلاعات فروشگاه", "🏪", "نام، شعار و اطلاعات تماس فروشگاه"),
-    ("finance", "مالی و مالیات", "💰", "نرخ مالیات و آستانه‌ی ارسال رایگان"),
+    ("domain", "دامنه و آدرس", "🌐", "نشانی فروشگاه، دامنه‌ی اختصاصی و وضعیت اتصال"),
+    ("finance", "مالی و مالیات", "💰", "وضعیتِ مالیات، آستانه‌ی ارسال رایگان و کادوپیچی"),
+    ("unpaid-orders", "مدیریت سفارش‌های پرداخت‌نشده", "⏱", "لغوِ خودکارِ سفارش‌های آنلاینی که پرداخت‌شان کامل نشده"),
     ("delivery-payment", "ارسال و درگاه", "🚚", "روش‌های ارسال و درگاه‌های پرداخت"),
     ("payment-config", "پیکربندی درگاه", "🔐", "تنظیمات اعتبارنامه و فعال‌سازی درگاه‌های پرداخت"),
     ("sms", "پیامک", "📲", "اتصال و قالب‌های پیامک"),
@@ -4494,9 +4583,9 @@ def settings_finance(request):
     form = FinanceSettingsForm(request.POST)
     if form.is_valid():
         shop = ShopSettings.load(store=request.store)
-        shop.tax_percent = form.cleaned_data["tax_percent"]
+        # نرخِ مالیات فقط در «تنظیماتِ مالیات» ویرایش می‌شود؛ هر ``tax_percent``ِ رسیده از فرمِ قدیمی نادیده است.
         shop.free_shipping_threshold = form.cleaned_data["free_shipping_threshold"]
-        shop.save()
+        shop.save(update_fields=["free_shipping_threshold", "updated_at"])
         messages.success(request, "تنظیمات مالی ذخیره شد")
         return redirect("/admin-portal/settings/?section=finance")
     context = _settings_context(request, finance_form=form)
@@ -4515,8 +4604,9 @@ def settings_order_expiry(request):
         shop = ShopSettings.load(store=request.store)
         before = shop.unpaid_online_order_ttl_minutes
         cd = form.cleaned_data
-        shop.unpaid_online_order_ttl_minutes = cd["unpaid_online_order_ttl_minutes"]
-        shop.unpaid_online_order_grace_minutes = cd["unpaid_online_order_grace_minutes"]
+        shop.unpaid_online_order_ttl_minutes = cd["effective_ttl"]
+        if cd.get("unpaid_online_order_grace_minutes") is not None:
+            shop.unpaid_online_order_grace_minutes = cd["unpaid_online_order_grace_minutes"]
         shop.unpaid_expiry_notify_sms = cd["unpaid_expiry_notify_sms"]
         shop.save(update_fields=["unpaid_online_order_ttl_minutes", "unpaid_online_order_grace_minutes", "unpaid_expiry_notify_sms", "updated_at"])
         record_audit_event(
@@ -4525,10 +4615,13 @@ def settings_order_expiry(request):
             before={"ttl_minutes": before}, after={"ttl_minutes": shop.unpaid_online_order_ttl_minutes,
                                                    "grace_minutes": shop.unpaid_online_order_grace_minutes},
         )
-        messages.success(request, "تنظیمات انقضای سفارش ذخیره شد")
+        messages.success(request, (
+            "لغوِ خودکارِ سفارش‌های پرداخت‌نشده فعال شد." if shop.unpaid_online_order_ttl_minutes
+            else "لغوِ خودکارِ سفارش‌های پرداخت‌نشده غیرفعال شد."
+        ))
     else:
         messages.error(request, "؛ ".join(sum((list(v) for v in form.errors.values()), [])) or "مقدار نامعتبر است")
-    return redirect("/admin-portal/settings/?section=finance")
+    return redirect("/admin-portal/settings/?section=unpaid-orders")
 
 
 @require_POST
@@ -4890,6 +4983,11 @@ def sms_outbox_retry(request, pk):
 # --------------------------------------------------------------- یکپارچه‌سازی‌ها
 
 
+def _integrations_redirect(provider_code: str):
+    """Back to the tab that holds this service (never to a different category)."""
+    return redirect(f"/admin-portal/settings/?section=integrations&view={search_visibility_service.view_for_provider(provider_code)}")
+
+
 @require_POST
 @staff_required
 @permission_required(SETTINGS_MANAGE)
@@ -4899,14 +4997,19 @@ def settings_integration_connect(request, provider_code):
     if provider is None:
         return HttpResponse(status=404)
 
-    values = {f.key: request.POST.get(f.key, "").strip() for f in provider.fields}
+    values = {f.key: ("1" if request.POST.get(f.key) else "0") if f.kind == "checkbox" else request.POST.get(f.key, "").strip() for f in provider.fields}
     try:
         integration_service.connect(store=store, provider_code=provider_code, values=values, actor=request.user)
     except integration_service.IntegrationError as exc:
         messages.error(request, str(exc))
+        request.session["integration_open"] = provider_code      # the drawer reopens so the error is seen next to the field
+        request.session["integration_form_error"] = {
+            "code": provider_code, "field": exc.field, "message": str(exc),
+            "values": {f.key: values[f.key] for f in provider.fields if not f.is_secret},
+        }
     else:
-        messages.success(request, f"{provider.display_name} با موفقیت متصل شد")
-    return redirect("/admin-portal/settings/?section=integrations")
+        messages.success(request, f"شناسهٔ {provider.display_name} ذخیره شد. این فقط ذخیرهٔ شناسه است؛ به‌معنی فعال‌شدن ردیابی، اتصال یا تأییدشدن توسط سرویس بیرونی نیست.")
+    return _integrations_redirect(provider_code)
 
 
 @require_POST
@@ -4919,8 +5022,8 @@ def settings_integration_disconnect(request, provider_code):
         return HttpResponse(status=404)
 
     integration_service.disconnect(store=store, provider_code=provider_code, actor=request.user)
-    messages.success(request, f"اتصالِ {provider.display_name} قطع شد")
-    return redirect("/admin-portal/settings/?section=integrations")
+    messages.success(request, f"استفاده از شناسهٔ {provider.display_name} خاموش شد؛ شناسه ذخیره می‌ماند.")
+    return _integrations_redirect(provider_code)
 
 
 @require_POST
@@ -4937,7 +5040,34 @@ def settings_integration_test(request, provider_code):
         messages.success(request, f"{provider.display_name}: {connection.last_test_message}")
     else:
         messages.error(request, f"{provider.display_name}: {connection.last_test_message}")
-    return redirect("/admin-portal/settings/?section=integrations")
+        request.session["integration_open"] = provider_code
+    return _integrations_redirect(provider_code)
+
+
+@require_POST
+@staff_required
+@permission_required(SETTINGS_MANAGE)
+def settings_integration_toggle(request, provider_code):
+    """کلیدِ فعال/غیرفعال: خاموش = همان «قطع اتصال» (اطلاعات می‌ماند)؛ روشن = اتصال دوباره با اطلاعاتِ ذخیره‌شده (با اعتبارسنجیِ قالب)."""
+    store = _resolve_dashboard_store(request)
+    provider = get_integration_provider(provider_code)
+    if provider is None:
+        return HttpResponse(status=404)
+    from apps.stores.models import StoreIntegrationConnection
+
+    connection = StoreIntegrationConnection.objects.filter(store=store, provider_code=provider_code).first()
+    if connection is not None and connection.is_active:
+        integration_service.disconnect(store=store, provider_code=provider_code, actor=request.user)
+        messages.success(request, f"{provider.display_name} غیرفعال شد؛ اطلاعات ذخیره‌شده حفظ شد.")
+    else:
+        try:
+            integration_service.reconnect_with_saved(store=store, provider_code=provider_code, actor=request.user)
+        except integration_service.IntegrationError as exc:
+            messages.error(request, str(exc))
+            request.session["integration_open"] = provider_code
+        else:
+            messages.success(request, f"استفاده از شناسهٔ {provider.display_name} دوباره روشن شد.")
+    return _integrations_redirect(provider_code)
 
 
 # ---------------------------------------------------------------- صفحات محتوایی
@@ -5938,96 +6068,147 @@ def footer_payment_logo_toggle(request, pk):
 # ===========================================================================
 
 
+#: روش‌هایی که ردیفِ ``PaymentGateway``‌شان را جایِ دیگری مدیریت می‌کنند (رفتارِ قدیمی دست‌نخورده می‌ماند).
+_LEGACY_ROW_UNMANAGED = ("zibal", "cod")
+
+
+def _sync_legacy_gateway_row(store, config, adapter):
+    """ردیفِ ``PaymentGateway`` که تسویه‌حساب فهرست می‌کند همیشه با پیکربندیِ واقعیِ همین فروشگاه هم‌وضعیت است (یک کلیدِ مدیر).
+
+    کارت‌به‌کارت و هر درگاهِ تازه (زرین‌پال، پاسارگاد، اسنپ‌پی، تربپی، …) بدونِ این ردیف هیچ‌وقت در تسویه‌حساب فهرست نمی‌شد. فهرستِ
+    نهایی همچنان از ``checkout_service.active_payment_gateways`` (فیلترِ آمادگی ``is_selectable_at_checkout``) می‌گذرد؛ این تابع فهرستِ
+    دومی نمی‌سازد، فقط ردیفِ پایه را هم‌وضعیت نگه می‌دارد. زیبال و پرداخت در محل مسیرِ قدیمیِ خودشان را دارند."""
+    if config.gateway_code in _LEGACY_ROW_UNMANAGED:
+        return
+    from apps.orders.models import PaymentGateway
+
+    if adapter.requires_manual_confirmation:
+        description, icon = "واریز به کارت و ثبتِ رسید؛ پس از تأییدِ فروشگاه نهایی می‌شود", "💳"
+    else:
+        category = getattr(getattr(adapter, "category", None), "value", "")
+        description, icon = (adapter.display_name, "🛍️" if category == "bnpl" else "💳")
+    PaymentGateway.objects.update_or_create(
+        store=store, slug=config.gateway_code,
+        defaults={"name": config.effective_title, "description": description, "icon": icon, "is_active": bool(config.is_active)},
+    )
+
+
+def _gateway_card_response(request, store, gateway_code, *, toast, toast_type, posted=None, errors=None, open_card=False):
+    """یک کارتِ درگاه را از وضعیتِ واقعیِ پایگاه‌داده دوباره رندر می‌کند؛ کلیدِ فعال/غیرفعال فقط پس از موفقیتِ سرور تغییر می‌کند."""
+    gateways = settings_admin_service.gateway_configs_context(
+        store=store, only=gateway_code, posted=posted, errors=errors, open_code=gateway_code if open_card else "",
+    )
+    response = render(request, "dashboard/partials/settings_gateway_card.html", {"gw": gateways[0]})
+    response["HX-Trigger"] = json.dumps({"toast": {"message": toast, "type": toast_type}})
+    return response
+
+
 @require_POST
 @staff_required
 @permission_required(PAYMENT_SETTINGS_MANAGE)
 def settings_gateway_config_save(request, gateway_code):
-    """ذخیره‌ی پیکربندی یک درگاه پرداخت (Zibal/COD) برای فروشگاه فعلی."""
-    from apps.orders.encryption import CredentialEncryptionError, mask_credential
+    """ذخیره‌ی پیکربندی یک درگاه پرداخت (Zibal/COD/کارت‌به‌کارت) برای فروشگاه فعلی؛ خطاها کنارِ همان فیلد برمی‌گردند."""
+    from apps.orders.encryption import CredentialEncryptionError
     from apps.orders.gateways import get_adapter, GATEWAY_CHOICES
     from apps.orders.models import PaymentGatewayConfig
 
     store = _resolve_dashboard_store(request)
 
-    # Validate gateway code
     valid_codes = [code for code, _ in GATEWAY_CHOICES]
     if gateway_code not in valid_codes:
         return HttpResponse(status=404)
 
-    # Get or create config for this store+gateway
     config, _created = PaymentGatewayConfig.objects.get_or_create(
-        store=store,
-        gateway_code=gateway_code,
-        defaults={"display_order": len(valid_codes)},
+        store=store, gateway_code=gateway_code, defaults={"display_order": len(valid_codes)},
     )
-
     adapter = get_adapter(gateway_code)
 
-    # Process form data
-    is_active = request.POST.get("is_active") == "on"
+    wants_active = request.POST.get("is_active") == "on"
+    is_active = wants_active
     is_sandbox = request.POST.get("is_sandbox") == "on"
     display_title = request.POST.get("display_title", "").strip()
-    display_order = request.POST.get("display_order", "0")
     try:
-        display_order = int(display_order)
+        display_order = int(request.POST.get("display_order", "0"))
     except (TypeError, ValueError):
         display_order = 0
 
-    # Process credentials (only for gateways that need them)
-    credentials = config.get_credentials()  # Start with existing
-    credential_errors = []
-
-    for field_name in adapter.required_credentials:
+    credentials = config.get_credentials()
+    for field in adapter.credential_fields:
+        field_name = field["name"]
         new_value = request.POST.get(f"credential_{field_name}", "").strip()
         if new_value:
-            # New value provided — update
             credentials[field_name] = new_value
-        # If empty and existing value exists, keep existing (don't clear on blank)
+        elif not field.get("secret", True) and f"credential_{field_name}" in request.POST:
+            credentials.pop(field_name, None)   # non-secret fields are shown prefilled: an emptied box means "remove"
+        # Secret field left empty with an existing value: keep existing (don't clear on blank)
 
-    # Validate credentials before activation
-    if is_active and adapter.required_credentials:
-        validation_errors = adapter.validate_credentials(credentials)
-        if validation_errors:
-            credential_errors = validation_errors
-            is_active = False  # Cannot activate with invalid credentials
+    field_errors: dict[str, str] = {}
+    if adapter.required_credentials:
+        # Incomplete / invalid data is always reported next to the field when it is typed or when activation is asked for.
+        problems = adapter.field_errors(credentials)
+        typed_any = any(request.POST.get(f"credential_{f['name']}", "").strip() for f in adapter.credential_fields)
+        if problems and (wants_active or typed_any):
+            field_errors = problems
+        if problems and wants_active:
+            is_active = False   # cannot be activated with invalid / incomplete credentials
 
-    # Update config
+    if wants_active and getattr(adapter, "documentation_blocked", False):
+        # A provider whose official contract is unverified is never activatable — say so explicitly (not only «incomplete fields»).
+        is_active = False
+        config.is_active = True  # evaluate readiness as if active (DOCUMENTATION_BLOCKED takes precedence)
+        field_errors[""] = settings_admin_service.gateway_activation_error(config) or field_errors.get("", "")
+        config.is_active = False
+
     config.display_title = display_title
     config.display_order = display_order
     config.is_sandbox = is_sandbox
 
+    for alias in getattr(adapter, "credential_aliases", {}):
+        credentials.pop(alias, None)        # the form always writes canonical keys; the legacy alias copy is dropped on save
+
     if credentials and adapter.required_credentials:
+        if adapter.requires_manual_confirmation:
+            from apps.orders.gateways.card_to_card import clean_card_number, clean_sheba
+
+            if credentials.get("destination_card"):
+                credentials["destination_card"] = clean_card_number(credentials["destination_card"])   # digits only, never the display grouping
+            if credentials.get("sheba"):
+                credentials["sheba"] = clean_sheba(credentials["sheba"])
         try:
             config.set_credentials(credentials)
-        except CredentialEncryptionError as exc:
-            credential_errors.append("خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید.")
+        except CredentialEncryptionError:
+            field_errors[""] = "خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید."
+            is_active = False
+
+    # Readiness enforcement (single source of truth, no per-gateway conditionals):
+    # a DOCUMENTATION_BLOCKED / NEEDS_CREDENTIALS / NOT_CONFIGURED / UNAVAILABLE /
+    # ERROR provider must NOT be activatable for real (non-sandbox) checkout. The
+    # check runs against the config *as it will be saved* (credentials + sandbox
+    # already applied above).
+    if is_active:
+        config.is_active = True  # evaluate readiness as if active
+        activation_error = settings_admin_service.gateway_activation_error(config)
+        if activation_error:
+            field_errors[""] = activation_error
             is_active = False
 
     config.is_active = is_active
     config.save()
+    _sync_legacy_gateway_row(store, config, adapter)
 
-    # Build response
-    if credential_errors:
-        toast_msg = " | ".join(credential_errors)
-        toast_type = "err"
-    else:
-        state = "فعال" if config.is_active else "ذخیره"
-        toast_msg = f"پیکربندی {adapter.display_name} با موفقیت {state} شد"
-        toast_type = "ok"
-
-    response = HttpResponse(status=204)
-    response["HX-Trigger"] = json.dumps({
-        "toast": {"message": toast_msg, "type": toast_type},
-        "settings-reload": {},
-    })
-    return response
+    if field_errors:
+        message = "ذخیره انجام شد، اما «%s» فعال نشد؛ خطاهای زیر را اصلاح کنید." % adapter.display_name if wants_active else \
+            "برخی مقدارها نامعتبرند؛ خطاهای زیر را اصلاح کنید."
+        return _gateway_card_response(request, store, gateway_code, toast=message, toast_type="err", posted=request.POST.dict(), errors=field_errors, open_card=True)
+    state = "فعال" if config.is_active else "ذخیره"
+    return _gateway_card_response(request, store, gateway_code, toast=f"پیکربندی {adapter.display_name} با موفقیت {state} شد", toast_type="ok", open_card=True)
 
 
 @require_POST
 @staff_required
 @permission_required(PAYMENT_SETTINGS_MANAGE)
 def settings_gateway_config_toggle(request, gateway_code):
-    """فعال/غیرفعال کردن سریع یک درگاه پیکربندی‌شده."""
+    """فعال/غیرفعال کردن سریع یک درگاه. فعال‌سازیِ درگاهِ ناقص رد می‌شود و دلیلِ آن کنارِ فیلدها نشان داده می‌شود."""
     from apps.orders.gateways import get_adapter, GATEWAY_CHOICES
     from apps.orders.models import PaymentGatewayConfig
 
@@ -6037,40 +6218,36 @@ def settings_gateway_config_toggle(request, gateway_code):
     if gateway_code not in valid_codes:
         return HttpResponse(status=404)
 
-    config = PaymentGatewayConfig.objects.filter(
-        store=store, gateway_code=gateway_code
-    ).first()
-
-    if config is None:
-        return HttpResponse(status=404)
-
+    config, _created = PaymentGatewayConfig.objects.get_or_create(
+        store=store, gateway_code=gateway_code, defaults={"display_order": len(valid_codes)},
+    )
     adapter = get_adapter(gateway_code)
+    keep_open = request.POST.get("open") == "1"
 
     if config.is_active:
-        # Deactivate — always allowed
         config.is_active = False
         config.save(update_fields=["is_active", "updated_at"])
-        toast_msg = f"{adapter.display_name} غیرفعال شد"
-    else:
-        # Activate — only if configured
-        if adapter.required_credentials:
-            errors = adapter.validate_credentials(config.get_credentials())
-            if errors:
-                response = HttpResponse(status=204)
-                response["HX-Trigger"] = json.dumps({
-                    "toast": {"message": "پیکربندی ناقص — ابتدا اعتبارنامه را وارد کنید", "type": "err"},
-                })
-                return response
-        config.is_active = True
-        config.save(update_fields=["is_active", "updated_at"])
-        toast_msg = f"{adapter.display_name} فعال شد"
+        _sync_legacy_gateway_row(store, config, adapter)
+        return _gateway_card_response(request, store, gateway_code, toast=f"{adapter.display_name} غیرفعال شد", toast_type="info", open_card=keep_open)
 
-    response = HttpResponse(status=204)
-    response["HX-Trigger"] = json.dumps({
-        "toast": {"message": toast_msg, "type": "info"},
-        "settings-reload": {},
-    })
-    return response
+    if adapter.required_credentials:
+        problems = adapter.field_errors(config.get_credentials())
+        if problems:
+            return _gateway_card_response(
+                request, store, gateway_code, toast=f"{adapter.display_name} فعال نشد: ابتدا اطلاعات ناقص را کامل کنید.",
+                toast_type="err", errors=problems, open_card=True,
+            )
+    # Readiness is the single source of truth: a DOCUMENTATION_BLOCKED / not-ready provider is never activatable for real checkout.
+    config.is_active = True  # evaluate readiness as if active
+    activation_error = settings_admin_service.gateway_activation_error(config)
+    if activation_error:
+        config.is_active = False
+        return _gateway_card_response(
+            request, store, gateway_code, toast=activation_error, toast_type="err", errors={"": activation_error}, open_card=True,
+        )
+    config.save(update_fields=["is_active", "updated_at"])
+    _sync_legacy_gateway_row(store, config, adapter)
+    return _gateway_card_response(request, store, gateway_code, toast=f"{adapter.display_name} فعال شد", toast_type="ok", open_card=keep_open)
 
 
 # ---------------------------------------------------------------- اعضای تیم (Staff / Membership)
@@ -6731,8 +6908,22 @@ def _import_detail_context(request, job):
         row.described_errors = import_xlsx.describe_errors(job.import_type, row.errors)
     source_format = import_service.job_source_format(job)
     summary = import_service.job_preview_summary(job)
+    proposals = []
+    if job.import_type == ImportJob.ImportType.PRODUCTS:
+        proposals = list(job.proposals.select_related("requested_by", "decided_by").order_by("status", "kind", "name"))
+        for proposal in proposals:
+            proposal.can_decide = membership_has_permission(
+                request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind],
+            ) and membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE)
+    names = import_service.row_display_names(job, list(page_obj))
+    for row in page_obj:
+        row.is_awaiting = bool((row.normalized_data_summary or {}).get("awaiting"))
+        row.shown = names.get(row.row_number, {})
     return {
-        "job": job, "active_page": "imports",
+        "job": job, "active_page": "imports", "proposals": proposals,
+        "item_label": {"products": "کالا", "variants": "تنوع", "inventory": "ردیفِ موجودی"}.get(job.import_type, "ردیف"),
+        "item_plural": {"products": "کالاها", "variants": "تنوع‌ها", "inventory": "ردیف‌هایِ موجودی"}.get(job.import_type, "ردیف‌ها"),
+        "can_decide_any": any(p.can_decide and p.status == "pending" for p in proposals),
         "row_results": page_obj, "page_obj": page_obj, "paginator": paginator,
         "can_manage_imports": membership_has_permission(request.store_membership, IMPORT_EXPORT_MANAGE),
         "summary": summary,
@@ -6781,6 +6972,76 @@ def import_execute(request, pk):
             )
         else:
             messages.error(request, job.error_summary or "ورودِ اطلاعات انجام نشد؛ هیچ تغییری اعمال نشد.")
+    return redirect("dashboard:import-detail", pk=job.pk)
+
+
+def _refresh_import_preview(request, job):
+    """پس از تصمیم‌گیریِ پیشنهادها، پیش‌نمایش با همان فایل دوباره ساخته می‌شود تا ردیف‌هایِ وابسته به‌روز شوند (بدونِ نوشتنِ کاتالوگ)."""
+    if job.status != ImportJob.Status.PREVIEW_READY:
+        return
+    try:
+        import_service.run_preview(job, actor=request.user)
+    except ImportServiceError as exc:
+        messages.error(request, str(exc))
+
+
+@require_POST
+@staff_required
+@permission_required(IMPORT_EXPORT_MANAGE)
+def import_proposal_decide(request, pk, proposal_pk, action):
+    """تأیید/ردِ یک موردِ مرجعِ پیشنهادی (برند/دسته/ویژگی). مجوزِ لازم همان مجوزِ ساختنِ آن موجودیت است؛ همه چیز Store-scoped."""
+    store = _resolve_dashboard_store(request)
+    job = get_object_or_404(ImportJob, pk=pk, store=store)
+    proposal = get_object_or_404(ImportProposal, pk=proposal_pk, job=job, store=store)
+    if action not in ("approve", "reject"):
+        raise Http404
+    if not membership_has_permission(request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind]):
+        return render(request, "dashboard/403.html", status=403)
+    try:
+        if action == "approve":
+            done = import_proposals.approve(proposal.pk, store=store, actor=request.user)
+            messages.success(request, f"«{done.path_label}» تأیید شد و در فروشگاه ساخته شد (یا با مورد موجود یکی شد).")
+        else:
+            done = import_proposals.reject(proposal.pk, store=store, actor=request.user, note=request.POST.get("note", ""))
+            messages.info(request, f"«{done.path_label}» رد شد. ردیف‌هایِ وابسته تا اصلاحِ فایل اجرا نمی‌شوند.")
+    except import_proposals.ProposalAlreadyDecided as exc:
+        messages.info(request, str(exc))
+    except import_proposals.ProposalError as exc:
+        messages.error(request, str(exc))
+    _refresh_import_preview(request, job)
+    return redirect("dashboard:import-detail", pk=job.pk)
+
+
+@require_POST
+@staff_required
+@permission_required(IMPORT_EXPORT_MANAGE)
+def import_proposals_approve_all(request, pk):
+    """همه‌یِ پیشنهادهایِ در انتظارِ این فایل را که کاربر مجوزِ تأییدشان را دارد تأیید می‌کند (هر مورد یک تراکنشِ جدا)."""
+    store = _resolve_dashboard_store(request)
+    job = get_object_or_404(ImportJob, pk=pk, store=store)
+    # دسته‌یِ اصلی پیش از زیردسته (ترتیبِ الفبایِ مقدارِ kind: attribute, attribute_value, brand, category, subcategory)
+    pending = sorted(
+        job.proposals.filter(status=ImportProposal.Status.PENDING),
+        key=lambda p: (p.kind == ImportProposal.Kind.SUBCATEGORY, p.kind, p.name),
+    )
+    approved = skipped = 0
+    for proposal in pending:
+        if not membership_has_permission(request.store_membership, import_proposals.KIND_PERMISSION[proposal.kind]):
+            skipped += 1
+            continue
+        try:
+            import_proposals.approve(proposal.pk, store=store, actor=request.user)
+            approved += 1
+        except import_proposals.ProposalAlreadyDecided:
+            continue
+        except import_proposals.ProposalError as exc:
+            messages.error(request, f"«{proposal.path_label}»: {exc}")
+            skipped += 1
+    if approved:
+        messages.success(request, f"{approved} مورد تأیید شد و در فروشگاه ساخته شد.")
+    if skipped:
+        messages.warning(request, f"{skipped} مورد تأیید نشد (مجوز یا خطا).")
+    _refresh_import_preview(request, job)
     return redirect("dashboard:import-detail", pk=job.pk)
 
 
@@ -7570,8 +7831,11 @@ def shipping_setup(request):
     دارند دست‌نخورده و همچنان در دسترس می‌ماند."""
     store = _resolve_dashboard_store(request)
     ensure_default_shipping_methods(store)
+    # فعال‌ها اول نمایش داده می‌شوند؛ ترتیبِ واقعیِ ذخیره‌شده (display_order) و اولویتِ روش‌ها تغییر نمی‌کند (مرتب‌سازیِ پایدار).
+    methods = sorted(ShippingMethod.objects.filter(store=store).order_by("display_order", "name"), key=lambda m: not m.is_active)
     return render(request, "dashboard/shipping_setup.html", {
-        "methods": ShippingMethod.objects.filter(store=store).order_by("display_order", "name"),
+        "methods": methods,
+        "open_method": request.session.pop("shipping_open", None),
         "active_page": "shipping",
         "can_manage_shipping": membership_has_permission(request.store_membership, SHIPPING_SETTINGS_MANAGE),
     })
@@ -7580,9 +7844,27 @@ def shipping_setup(request):
 @require_POST
 @staff_required
 @permission_required(SHIPPING_SETTINGS_MANAGE)
+def shipping_method_toggle(request, pk):
+    """کلیدِ فعال/غیرفعالِ ردیفِ روشِ ارسال — همان ``toggle_shipping_method`` (اعتبارسنجی + ثبت حسابرسی) و همان فیلدِ ``is_active``."""
+    store = _resolve_dashboard_store(request)
+    get_object_or_404(ShippingMethod, pk=pk, store=store)
+    try:
+        method = settings_admin_service.toggle_shipping_method(pk, store=store)
+    except settings_admin_service.ShippingMethodIncomplete as exc:
+        messages.error(request, f"روشِ ارسال فعال نشد: {exc}")
+        request.session["shipping_open"] = pk
+    else:
+        messages.success(request, f"روشِ ارسالِ «{method.name}» {'فعال' if method.is_active else 'غیرفعال'} شد")
+    return redirect("dashboard:shipping-setup")
+
+
+@require_POST
+@staff_required
+@permission_required(SHIPPING_SETTINGS_MANAGE)
 def shipping_method_simple_update(request, pk):
     store = _resolve_dashboard_store(request)
     method = get_object_or_404(ShippingMethod, pk=pk, store=store)
+    request.session["shipping_open"] = method.pk          # the edited row stays open after the redirect (success or error message)
 
     method.is_active = request.POST.get("is_active") == "on"
     method.cod_eligible = request.POST.get("cod_eligible") == "on" and not method.is_pickup
@@ -7713,10 +7995,19 @@ def tax_settings(request):
     if request.method == "POST" and not membership_has_permission(request.store_membership, TAX_SETTINGS_MANAGE):
         return render(request, "dashboard/403.html", status=403)
 
-    if request.method == "POST":
+    rate_form = TaxGeneralRateForm(request.POST or None, initial={"tax_percent": settings_row.tax_percent})
+
+    if request.method == "POST" and rate_form.is_valid():
         from django.utils import timezone
 
+        before = {
+            "enabled": settings_row.tax_enabled, "rate": str(settings_row.tax_percent),
+            "prices_include_tax": settings_row.prices_include_tax, "shipping_taxable": settings_row.shipping_taxable,
+        }
         settings_row.tax_enabled = request.POST.get("tax_enabled") == "on"
+        new_rate = rate_form.cleaned_data["tax_percent"]
+        if new_rate is not None:
+            settings_row.tax_percent = new_rate
         settings_row.prices_include_tax = request.POST.get("prices_include_tax") == "on"
         settings_row.shipping_taxable = request.POST.get("shipping_taxable") == "on"
         settings_row.tax_rounding_policy = request.POST.get(
@@ -7733,20 +8024,30 @@ def tax_settings(request):
         # از «صراحتاً روشن نگه‌داشته شده» تشخیص دهد).
         settings_row.tax_setup_confirmed_at = timezone.now()
         settings_row.save(update_fields=[
-            "tax_enabled", "prices_include_tax", "shipping_taxable", "tax_rounding_policy", "default_tax_class",
-            "tax_setup_confirmed_at",
+            "tax_enabled", "tax_percent", "prices_include_tax", "shipping_taxable", "tax_rounding_policy",
+            "default_tax_class", "tax_setup_confirmed_at",
         ])
         record_audit_event(
             store=store, actor=request.user, action_code="tax_settings.updated",
             object_type="ShopSettings", object_id=settings_row.pk, object_label="تنظیماتِ مالیات",
+            before=before, after={
+                "enabled": settings_row.tax_enabled, "rate": str(settings_row.tax_percent),
+                "prices_include_tax": settings_row.prices_include_tax, "shipping_taxable": settings_row.shipping_taxable,
+            },
         )
         messages.success(request, "تنظیماتِ مالیات ذخیره شد")
         return redirect("dashboard:tax-settings")
 
+    has_granular = tax_service.store_has_granular_tax_rates(store)
+    sample_base = Decimal("1000000")
     return render(request, "dashboard/tax_settings.html", {
-        "settings": settings_row, "active_page": "tax",
+        "settings": settings_row, "active_page": "tax", "rate_form": rate_form,
         "tax_classes": TaxClass.objects.filter(store=store, is_active=True),
         "rounding_choices": ShopSettings.TaxRoundingPolicy.choices,
+        "has_granular": has_granular,
+        "sample_base": sample_base,
+        "sample_tax": (sample_base * settings_row.tax_percent / Decimal("100")).quantize(Decimal("1")) if not has_granular else None,
+        "can_manage_tax": membership_has_permission(request.store_membership, TAX_SETTINGS_MANAGE),
     })
 
 

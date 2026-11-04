@@ -41,7 +41,7 @@ OWNER_PROPS = {
     "colors": {"text_color", "heading_color", "accent_color", "price_color", "button_fill", "button_text", "button_border"},
     "cards": {"surface_color", "border_color", "border_width", "radius", "shadow", "shadow_color", "shadow_blur"},
     "layout": {"padding_top", "padding_bottom", "margin_top", "margin_bottom", "min_height", "align", "gap",
-               "columns_desktop", "columns_tablet", "columns_mobile", "item_width"},
+               "columns_desktop", "columns_tablet", "columns_mobile", "item_width", "valign", "mobile_layout"},
     "images": {"image_ratio", "image_fit", "image_position", "image_zoom", "hide_desktop", "hide_tablet", "hide_mobile"},
 }
 
@@ -182,7 +182,7 @@ class DesignSubsectionMarkupTests(_Base):
         self.assertIn('data-r4-ws-card="background"', newsletter)
 
     def test_a_section_without_a_design_block_never_renders_a_design_property(self):
-        html = self._html("trust_features", order=3)
+        html = self._html("faq", order=3)
         self.assertNotIn("data-r4-design-prop", html)
 
     def test_r408_zero_and_auto_survive_the_split(self):

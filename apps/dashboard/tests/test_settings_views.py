@@ -41,7 +41,7 @@ class SettingsHomeViewTests(SettingsViewsTestCase):
     def test_finance_section(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=finance")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "مالی و مالیات")
+        self.assertContains(response, "مالی و پرداخت")
 
     def test_delivery_payment_section(self):
         response = self.client.get(reverse("dashboard:settings") + "?section=delivery-payment")
@@ -76,8 +76,9 @@ class SettingsHomeViewTests(SettingsViewsTestCase):
     def test_navigation_shows_all_sections(self):
         response = self.client.get(reverse("dashboard:settings"))
         self.assertContains(response, "اطلاعات فروشگاه")
-        self.assertContains(response, "مالی و مالیات")
-        self.assertContains(response, "ارسال و درگاه")
+        self.assertContains(response, "مالی و پرداخت")
+        self.assertContains(response, "ارسال و تحویل")
+        self.assertContains(response, "دامنه و آدرس")
         self.assertContains(response, "پیامک")
         self.assertNotContains(response, "تم رنگی")  # RS-13: retired tab — design lives in the Studio
 
@@ -158,14 +159,22 @@ class SettingsShopInfoViewTests(SettingsViewsTestCase):
 
 
 class SettingsFinanceViewTests(SettingsViewsTestCase):
-    def test_valid_post_updates_tax_and_threshold(self):
+    def test_valid_post_updates_threshold_only_and_never_the_tax_rate(self):
+        """نرخِ مالیات یک ویرایشگرِ واحد دارد («تنظیماتِ مالیات»): ``tax_percent``ِ فرمِ قدیمی نادیده گرفته می‌شود."""
+        before = ShopSettings.load().tax_percent
         response = self.client.post(reverse("dashboard:settings-finance"), {
             "tax_percent": "۷", "free_shipping_threshold": "۷۰۰۰۰۰",
         })
         self.assertRedirects(response, "/admin-portal/settings/?section=finance")
         shop = ShopSettings.load()
-        self.assertEqual(shop.tax_percent, Decimal("7"))
+        self.assertEqual(shop.tax_percent, before)
         self.assertEqual(shop.free_shipping_threshold, Decimal("700000"))
+
+    def test_finance_section_is_a_summary_with_a_link_to_the_tax_page(self):
+        page = self.client.get(reverse("dashboard:settings") + "?section=finance")
+        self.assertContains(page, "مدیریت مالیات")
+        self.assertContains(page, reverse("dashboard:tax-settings"))
+        self.assertNotContains(page, 'name="tax_percent"')          # no second rate editor
 
     def test_updated_tax_percent_affects_pricing_service(self):
         from decimal import Decimal as D
@@ -175,9 +184,7 @@ class SettingsFinanceViewTests(SettingsViewsTestCase):
         from apps.catalog.models import Category, Product, Vendor
         from apps.stores.models import Store
 
-        self.client.post(reverse("dashboard:settings-finance"), {
-            "tax_percent": "5", "free_shipping_threshold": "1000000",
-        })
+        self.client.post(reverse("dashboard:tax-settings"), {"tax_enabled": "on", "tax_percent": "5"})
         store = Store.objects.get(slug="akhlaghi")
         vendor = Vendor.objects.create(store=store, name="فروشگاه", slug="shop-sf")
         category = Category.objects.create(store=store, name="دسته", slug="cat-sf")
@@ -190,12 +197,18 @@ class SettingsFinanceViewTests(SettingsViewsTestCase):
         totals = cart_totals(cart, store=store, shipping_method=self.shipping)
         self.assertEqual(totals["tax"], D("5000"))
 
-    def test_out_of_range_tax_percent_rejected(self):
-        response = self.client.post(reverse("dashboard:settings-finance"), {
-            "tax_percent": "150", "free_shipping_threshold": "500000",
-        })
+    def test_out_of_range_tax_percent_rejected_on_the_tax_page(self):
+        before = ShopSettings.load().tax_percent
+        response = self.client.post(reverse("dashboard:tax-settings"), {"tax_enabled": "on", "tax_percent": "150"})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "تنظیمات مالی و مالیات")  # Stays on finance section
+        self.assertContains(response, "نرخ مالیات باید بین ۰ تا ۱۰۰ باشد")
+        self.assertEqual(ShopSettings.load().tax_percent, before)        # nothing was saved
+
+    def test_invalid_threshold_stays_on_finance_section(self):
+        response = self.client.post(reverse("dashboard:settings-finance"), {"free_shipping_threshold": "abc"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["active_section"], "finance")
+        self.assertContains(response, "آستانه‌ی ارسال رایگان")
 
 
 class SettingsGiftWrapViewTests(SettingsViewsTestCase):
@@ -450,7 +463,16 @@ import shutil
 
 from django.test import override_settings
 
-_TEMP_MEDIA_DIR = tempfile.mkdtemp()
+class IsolatedMediaMixin:
+    """Every TEST gets its own empty MEDIA_ROOT (a fresh temp dir, removed afterwards). The previous module-level ``mkdtemp()`` ran at import — before ``--parallel`` forked —
+    so all workers shared ONE directory and a sibling's cleanup could delete a file another worker had just saved (FaviconUploadTests.test_replacement_saves_new flake).
+    Test-only: the real upload/storage logic is unchanged."""
+
+    def setUp(self):
+        super().setUp()
+        media_root = tempfile.mkdtemp(prefix=f"rs-media-{os.getpid()}-")
+        self.addCleanup(shutil.rmtree, media_root, ignore_errors=True)
+        self.enterContext(override_settings(MEDIA_ROOT=media_root))
 
 
 def _make_image(fmt='PNG', size=(100, 100)):
@@ -465,18 +487,8 @@ def _make_image(fmt='PNG', size=(100, 100)):
     return SimpleUploadedFile(f'test.{ext}', buf.getvalue(), content_type=ct)
 
 
-@override_settings(MEDIA_ROOT=_TEMP_MEDIA_DIR)
-class LogoUploadTests(SettingsViewsTestCase):
+class LogoUploadTests(IsolatedMediaMixin, SettingsViewsTestCase):
     """Complete logo upload lifecycle tests with isolated media."""
-
-    def tearDown(self):
-        # Clean temp files after each test
-        for f in os.listdir(_TEMP_MEDIA_DIR):
-            path = os.path.join(_TEMP_MEDIA_DIR, f)
-            if os.path.isdir(path):
-                shutil.rmtree(path)
-            else:
-                os.remove(path)
 
     def test_valid_png_saves(self):
         resp = self.client.post(reverse("dashboard:settings-appearance"), {
@@ -564,17 +576,34 @@ class LogoUploadTests(SettingsViewsTestCase):
         self.assertTrue(ShopSettings.load().logo)
 
 
-@override_settings(MEDIA_ROOT=_TEMP_MEDIA_DIR)
-class FaviconUploadTests(SettingsViewsTestCase):
-    """Complete favicon upload lifecycle tests with isolated media."""
+class IsolatedMediaTests(IsolatedMediaMixin, SettingsViewsTestCase):
+    """The fixture itself: a private, initially-empty MEDIA_ROOT per test, so no other worker's cleanup can remove what this test saved."""
 
-    def tearDown(self):
-        for f in os.listdir(_TEMP_MEDIA_DIR):
-            path = os.path.join(_TEMP_MEDIA_DIR, f)
-            if os.path.isdir(path):
-                shutil.rmtree(path)
-            else:
-                os.remove(path)
+    seen = set()
+
+    def test_media_root_is_private_empty_and_unique_per_test(self):
+        from django.conf import settings
+
+        root = settings.MEDIA_ROOT
+        self.assertTrue(os.path.isdir(root))
+        self.assertEqual(os.listdir(root), [])
+        self.assertNotIn(root, type(self).seen)
+        type(self).seen.add(root)
+
+    def test_a_second_test_gets_another_directory_and_a_wipe_elsewhere_cannot_touch_it(self):
+        from django.conf import settings
+
+        root = settings.MEDIA_ROOT
+        self.assertNotIn(root, type(self).seen)
+        type(self).seen.add(root)
+        marker = os.path.join(root, "kept.txt")
+        open(marker, "w").write("x")
+        shutil.rmtree(tempfile.gettempdir() + "/does-not-exist-rs", ignore_errors=True)       # a sibling's cleanup targets ITS directory only
+        self.assertTrue(os.path.exists(marker))
+
+
+class FaviconUploadTests(IsolatedMediaMixin, SettingsViewsTestCase):
+    """Complete favicon upload lifecycle tests with isolated media."""
 
     def _fav(self):
         from io import BytesIO
@@ -752,9 +781,7 @@ class ThemeSectionNavigationTests(SettingsViewsTestCase):
             self.assertContains(response, 'aria-current="page"')
 
     def test_finance_validation_error_stays_on_finance_section(self):
-        response = self.client.post(reverse("dashboard:settings-finance"), {
-            "tax_percent": "150", "free_shipping_threshold": "500000",
-        })
+        response = self.client.post(reverse("dashboard:settings-finance"), {"free_shipping_threshold": "-5"})
         self.assertEqual(response.context["active_section"], "finance")
 
     def test_appearance_validation_error_keeps_active_section_appearance(self):

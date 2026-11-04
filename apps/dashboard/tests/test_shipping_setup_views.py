@@ -211,3 +211,63 @@ class ShippingChecklistCompletionTests(ShippingSetupTestCase):
         result = build_setup_checklist(self.store, RequestFactory().get("/"))
         step = next(s for s in result["steps"] if s["key"] == "shipping")
         self.assertTrue(step["is_complete"])
+
+
+class ShippingAccordionTests(ShippingSetupTestCase):
+    """Accordion rows: closed by default, active first without touching the real order, switch = the real is_active flag."""
+
+    def setUp(self):
+        super().setUp()
+        ensure_default_shipping_methods(self.store)
+        self.page_url = reverse("dashboard:shipping-setup")
+
+    def methods(self):
+        return list(ShippingMethod.objects.filter(store=self.store).order_by("display_order", "name"))
+
+    def test_rows_are_closed_by_default_with_accessible_switches_and_round_trip_links(self):
+        html = self.client.get(self.page_url).content.decode()
+        self.assertNotIn("au-acc is-open", html)
+        self.assertEqual(html.count('role="switch"'), len(self.methods()))
+        self.assertIn("section=delivery-payment", html)
+
+    def test_active_methods_come_first_but_stored_order_is_untouched(self):
+        before = [(m.pk, m.display_order) for m in self.methods()]
+        last = self.methods()[-1]
+        ShippingMethod.objects.filter(pk=last.pk).update(is_active=True)
+        response = self.client.get(self.page_url)
+        shown = [m.pk for m in response.context["methods"]]
+        self.assertEqual(shown[0], last.pk)
+        self.assertEqual([(m.pk, m.display_order) for m in self.methods()], before)
+
+    def test_toggle_flips_only_the_active_flag_and_keeps_cost_cod_and_threshold(self):
+        method = next(m for m in self.methods() if not m.is_pickup)
+        ShippingMethod.objects.filter(pk=method.pk).update(cost=Decimal("45000"), free_over=Decimal("900000"), cod_eligible=False, is_active=False)
+        self.client.post(reverse("dashboard:shipping-method-toggle", args=[method.pk]))
+        method.refresh_from_db()
+        self.assertTrue(method.is_active)
+        self.assertEqual((method.cost, method.free_over, method.cod_eligible), (Decimal("45000"), Decimal("900000"), False))
+        self.client.post(reverse("dashboard:shipping-method-toggle", args=[method.pk]))
+        method.refresh_from_db()
+        self.assertFalse(method.is_active)
+
+    def test_pickup_row_keeps_zero_cost_and_no_cost_field(self):
+        pickup = ShippingMethod.objects.get(store=self.store, slug="pickup")
+        html = self.client.get(self.page_url).content.decode()
+        self.assertNotIn(f'id="ship-cost-{pickup.pk}"', html)
+        self.client.post(reverse("dashboard:shipping-method-simple-update", args=[pickup.pk]), {"is_active": "on", "cost": "9999"})
+        pickup.refresh_from_db()
+        self.assertEqual(pickup.cost, 0)
+
+    def test_saving_a_row_keeps_it_open_and_shows_the_message(self):
+        method = next(m for m in self.methods() if not m.is_pickup)
+        self.client.post(reverse("dashboard:shipping-method-simple-update", args=[method.pk]), {"is_active": "on", "cost": "-5"})
+        html = self.client.get(self.page_url).content.decode()
+        self.assertIn(f'id="ship-{method.pk}"', html)
+        self.assertRegex(html, rf'class="au-acc is-open"[^>]*id="ship-{method.pk}"')
+
+    def test_toggle_is_store_scoped(self):
+        other = Store.objects.create(name="دیگر", slug="ship-acc-other", status=Store.Status.ACTIVE)
+        foreign = ensure_default_shipping_methods(other)[0]
+        self.assertEqual(self.client.post(reverse("dashboard:shipping-method-toggle", args=[foreign.pk])).status_code, 404)
+        foreign.refresh_from_db()
+        self.assertFalse(foreign.is_active)

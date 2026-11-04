@@ -1,0 +1,39 @@
+{% load storefront_builder_extras %}
+{% comment %}
+Centered contact footer (key: centered_contact).
+Structure: ONE centred column on a tinted surface — the Store's real phone (pill), social icons, trust badges / payment logos and the
+legal line. Optional about text / links appear above when their toggles are on. Shared merchant/footer data partials only.
+{% endcomment %}
+{% with fc=footer_config rc=footer_config.responsive %}
+<footer class="gf gf--centered-contact"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
+  <div class="wrap gf-cc-main">
+    {% if fc.show_about %}
+    <div data-gf-block="about" class="gf-cc-about" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
+    </div>
+    {% endif %}
+    {% if fc.show_quick_links and NAV_FOOTER_1 %}
+    <nav class="gf-cc-links" aria-label="پیوندهای فوتر" {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% for item in NAV_FOOTER_1.items|slice:":8" %}{% if item.url %}<a href="{{ item.url }}" {% if item.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}{% endfor %}
+    </nav>
+    {% endif %}
+    {% if fc.show_contact and FOOTER_SETTINGS.phone %}
+    <a class="gf-cc-phone" href="tel:{{ FOOTER_SETTINGS.phone }}" dir="ltr" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      <span>{{ FOOTER_SETTINGS.phone }}</span>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.6a1 1 0 01-.25 1z"/></svg>
+    </a>
+    {% endif %}
+    {% if fc.show_social %}
+    <div class="gf-cc-social" {% if rc.show_social.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_social.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% include "storefront_builder/partials/global_footer/_shared/social_links.html" %}
+    </div>
+    {% endif %}
+    {% include "storefront_builder/partials/global_footer/_shared/trust_payment.html" %}
+    {% if fc.show_copyright %}
+    <div class="gf-cc-legal" {% if rc.show_copyright.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_copyright.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      {% include "storefront_builder/partials/global_footer/_shared/legal_row.html" %}
+    </div>
+    {% endif %}
+  </div>
+</footer>
+{% endwith %}

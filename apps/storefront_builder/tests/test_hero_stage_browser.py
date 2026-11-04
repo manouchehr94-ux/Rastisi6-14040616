@@ -1,0 +1,462 @@
+"""Real-browser (Chromium) acceptance of the Hero Stage templates (opt-in: ``SFB_BROWSER_TESTS=1``).
+
+On a throw-away Store/database (the parity fixture): the real Studio → «قالب‌ها» gallery → «اعمال» on each of the four templates → the
+stage's real Inspector (controls changed through the actual inputs, auto-saved) → reload (values persist) → Undo / Redo buttons → the
+customer-view Draft preview → «انتشار» → the live storefront of the same Store at 320 / 390 / 768 / 1440: the header is inside the
+stage, no horizontal scroll, the slot hide flags really hide, the picture is the Store's own. Firefox is not available in this
+environment (Chromium only) — see the report for the Windows scenario."""
+
+import os
+import unittest
+
+from apps.catalog.models import Category
+from apps.content.models import MediaAsset
+from apps.storefront_builder.models import StorefrontLayout
+
+from . import test_engine_parity_browser as _parity
+from .test_hero_stage_templates import TEMPLATES, _png
+
+WIDTHS = (320, 390, 768, 1440)
+LABELS = {  # the Persian gallery titles (registry label_fa) the tiles show
+    "dual_atelier": "آتلیه دوپنل", "editorial_noir": "نشریهٔ نوآر", "glass_commerce": "تجارت شیشه‌ای",
+    "asymmetric_canvas": "بوم نامتقارن",
+}
+
+STAGE_AUDIT = """()=>{
+  const s=document.querySelector('.hs-stage'); if(!s) return null;
+  const q=sel=>s.querySelector(sel); const vis=e=>!!e&&e.getBoundingClientRect().width>0&&getComputedStyle(e).display!=='none';
+  const r=s.getBoundingClientRect(); const bg=s.querySelector('.hs-bg').getBoundingClientRect();
+  return {header:!!q('.hs-header header'), headers:document.querySelectorAll('header').length, title:vis(q('.hs-title')),
+    subtitle:vis(q('.hs-subtitle')), cta:vis(q('.hs-cta')), mode:s.dataset.hsHeader, layout:s.dataset.hsLayout, scrim:getComputedStyle(s).getPropertyValue('--hs-scrim').trim(),
+    top:Math.round(r.top), width:Math.round(r.width), bgWidth:Math.round(bg.width), vw:innerWidth, scrollW:document.documentElement.scrollWidth, clientW:document.documentElement.clientWidth,
+    imgs:[...s.querySelectorAll('.hs-panel img')].map(i=>i.getAttribute('src')), titleBox:q('.hs-title')?(({left,right})=>({left,right}))(q('.hs-title').getBoundingClientRect()):null}
+}"""
+
+
+@unittest.skipUnless(os.environ.get("SFB_BROWSER_TESTS") == "1", "browser test is opt-in: SFB_BROWSER_TESTS=1")
+class HeroStageBrowserTests(_parity.EngineGeometryParityBrowserTests):
+    # run with -k (the parity fixture's own tests are inherited): SFB_BROWSER_TESTS=1 DATABASE_URL=<throw-away PostgreSQL> … -k test_every_template
+    # (the Studio fires parallel autosave requests, which an in-memory SQLite test database cannot serve)
+    def setUp(self):
+        super().setUp()
+        self.asset = MediaAsset.objects.create(store=self.store, image=_png("browser-stage.png", (30, 110, 160)))
+        self.asset2 = MediaAsset.objects.create(store=self.store, image=_png("browser-stage-2.png", (160, 80, 30)))
+
+    # -------------------------------------------------------------------------------------------- helpers
+    def _studio(self, width=1440):
+        context = self.browser.new_context(viewport={"width": width, "height": 1000}, locale="fa-IR")
+        context.add_cookies([self.cookie])
+        page = context.new_page()
+        self.errors = []
+        page.on("pageerror", lambda e: self.errors.append(str(e)))
+        page.goto(f"{self.base}/admin-portal/storefront-builder/r4/", wait_until="networkidle")
+        page.wait_for_selector("#r4PreviewFrame")
+        page.wait_for_timeout(1500)
+        return context, page
+
+    def _frame(self, page):
+        for _ in range(40):                                                # the Preview iframe is re-created by every full-frame refresh
+            found = next((f for f in page.frames if f != page.main_frame and "/preview/" in f.url), None)
+            if found is not None:
+                return found
+            page.wait_for_timeout(250)
+        raise AssertionError("the Studio Preview iframe never appeared")
+
+    def _stage_audit(self, page):
+        """The Preview iframe is swapped by an atomic full-frame refresh after a stage edit (the header lives in the stage): re-acquire the frame
+        and retry until the new document has settled."""
+        last = None
+        for _ in range(12):
+            try:
+                frame = self._frame(page)
+                frame.wait_for_selector(".hs-stage", timeout=4000)
+                return frame.evaluate(STAGE_AUDIT)
+            except Exception as exc:                                       # the frame is being replaced
+                last = exc
+                page.wait_for_timeout(500)
+        raise last
+
+    def _apply_through_the_gallery(self, page, key):
+        page.locator('[data-rastisi-action="templates"]').first.click()
+        page.wait_for_selector("[data-rs-gallery-grid]")
+        tile = page.locator(f'[data-rs-gallery-grid] button[data-rastisi-action="switch-template"][data-key="{key}"]')
+        self.assertEqual(tile.count(), 1, f"the gallery must list {key}")
+        title = page.locator(f'[data-rs-gallery-grid] article.template-tile:has(button[data-key="{key}"]) strong').first.inner_text()
+        self.assertIn(LABELS[key], title)
+        self.assertTrue(page.evaluate(
+            "k=>!!document.querySelector(`[data-rs-gallery-grid] article:has(button[data-key=\"${k}\"]) .rs-real-thumb svg`)", key),
+            "the tile shows the registry thumbnail")
+        tile.click()
+        confirm = page.locator('[data-rastisi-action="confirm-template-replace"]')
+        try:
+            confirm.wait_for(state="visible", timeout=2500)
+            confirm.click()
+        except Exception:
+            pass                                                            # nothing to confirm on an empty Draft
+        page.wait_for_load_state("networkidle")
+        page.wait_for_selector("#r4PreviewFrame")
+        page.wait_for_timeout(1500)
+
+    def _open_stage_inspector(self, page):
+        section_id = None
+        for _ in range(12):                                                # a template apply reloads the Studio: the frame may be replaced mid-wait
+            try:
+                frame = self._frame(page)
+                frame.wait_for_selector(".hs-stage", timeout=4000)
+                section_id = frame.evaluate("document.querySelector('.rsec[data-section-key=hero_stage]').dataset.sectionId")
+                frame.locator(f'[data-section-id="{section_id}"]').first.dblclick(position={"x": 40, "y": 300})
+                break
+            except Exception:                                              # noqa: BLE001 - the frame is being replaced; re-acquire it
+                page.wait_for_timeout(500)
+        self.assertIsNotNone(section_id, "the Preview never showed the stage")
+        page.wait_for_selector('[data-rs-workspace]:not([hidden]) [data-r4-section-inspector]', timeout=10000)
+        page.wait_for_timeout(600)
+        return section_id
+
+    def _set(self, page, key, value):
+        control = page.locator(f'[data-rs-workspace] [data-r4-section-inspector] :is(select,input,textarea)[data-r4-field-key="{key}"]').first
+        tag = control.evaluate("e=>e.tagName")
+        if tag == "SELECT":
+            control.select_option(value)
+        else:
+            control.fill(str(value))
+            control.dispatch_event("change")
+        page.wait_for_timeout(700)                                         # the Studio auto-saves each change
+
+    def _value(self, page, key):
+        return page.locator(f'[data-rs-workspace] [data-r4-section-inspector] :is(select,input,textarea)[data-r4-field-key="{key}"]').first.input_value()
+
+    def _tab(self, page, name):
+        page.locator("[data-rs-workspace] button", has_text=name).first.click()
+        page.wait_for_timeout(300)
+
+    def _live_audit(self, width):
+        context, page = self._page(width, "/")
+        try:
+            return page.evaluate(STAGE_AUDIT), page
+        finally:
+            context.close()
+
+    # -------------------------------------------------------------------------------------------- the acceptance chain
+    def test_every_template_from_the_gallery_to_the_published_storefront(self):
+        published_before = StorefrontLayout.objects.get(store=self.store).published_version_id
+        for key in TEMPLATES:
+            with self.subTest(template=key):
+                context, page = self._studio()
+                try:
+                    self._apply_through_the_gallery(page, key)
+                    # only the Draft changed: the published page is still the old design
+                    self.assertEqual(StorefrontLayout.objects.get(store=self.store).published_version_id, published_before)
+                    section_id = self._open_stage_inspector(page)
+                    before = {k: self._value(page, k) for k in ("header_mode", "bg_layout", "scrim_strength", "content_valign", "button_label")}
+
+                    new_mode = "overlay" if before["header_mode"] != "overlay" else "merged"
+                    new_layout = "dual" if before["bg_layout"] != "dual" else "single"
+                    new_valign = "top" if before["content_valign"] != "top" else "bottom"
+                    # six controls through the real inputs: header mode, background panels, overlay strength, position, typography, CTA
+                    self._set(page, "header_mode", new_mode)
+                    self._set(page, "bg_layout", new_layout)
+                    self._set(page, "scrim_strength", "73")
+                    self._set(page, "content_valign", new_valign)
+                    self._set(page, "button_label", "دکمهٔ مرورگر")
+                    self._tab(page, "طراحی")                                # typography lives under طراحی ← چیدمان و فاصله‌ها
+                    self._tab(page, "چیدمان و فاصله")
+                    self._set(page, "title_size", "sm")
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(800)
+
+                    # the Preview iframe (the Studio canvas) shows the change at once
+                    stage = self._stage_audit(page)
+                    self.assertEqual((stage["mode"], stage["layout"], stage["scrim"]), (new_mode, new_layout, "0.73"))
+                    self.assertTrue(stage["header"] and stage["headers"] == 1, "one header, inside the stage")
+
+                    # reload: nothing is lost
+                    page.reload(wait_until="networkidle")
+                    page.wait_for_selector("#r4PreviewFrame")
+                    page.wait_for_timeout(1500)
+                    self._open_stage_inspector(page)
+                    self.assertEqual(self._value(page, "header_mode"), new_mode)
+                    self.assertEqual(self._value(page, "scrim_strength"), "73")
+                    self.assertEqual(self._value(page, "button_label"), "دکمهٔ مرورگر")
+                    page.keyboard.press("Escape")
+
+                    # Undo / Redo (the real buttons): six edits above = six history steps; Undo walks back to the template's own values
+                    for _ in range(6):
+                        page.locator('[data-rastisi-action="undo"]').first.click()
+                        page.wait_for_timeout(900)
+                    undone = self._stage_audit(page)
+                    self.assertEqual((undone["mode"], undone["layout"]), (before["header_mode"], before["bg_layout"]))
+                    for _ in range(6):
+                        page.locator('[data-rastisi-action="redo"]').first.click()
+                        page.wait_for_timeout(900)
+                    redone = self._stage_audit(page)
+                    self.assertEqual((redone["mode"], redone["layout"], redone["scrim"]), (new_mode, new_layout, "0.73"))
+
+                    # make the final state deterministic regardless of how many history steps Undo/Redo walked
+                    self._open_stage_inspector(page)
+                    self._set(page, "header_mode", new_mode)
+                    self._set(page, "bg_layout", new_layout)
+                    self._set(page, "scrim_strength", "73")
+                    self._set(page, "button_label", "دکمهٔ مرورگر")
+                    self._set(page, "bg_a_media_asset_id", str(self.asset.pk))
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(800)
+
+                    # «پیش‌نمایش»: the customer view of the saved Draft
+                    context.close()
+                    context, draft_page = self._page(1440, "/admin-portal/storefront-builder/draft-preview/?page=home", authed=True)
+                    draft = draft_page.evaluate(STAGE_AUDIT)
+                    self.assertEqual((draft["mode"], draft["layout"]), (new_mode, new_layout))
+                    self.assertEqual(draft["headers"], 1)
+
+                    # publish through the Studio
+                    context.close()
+                    context, page = self._studio()
+                    page.locator('[data-rastisi-action="publish"]').first.click()
+                    page.wait_for_timeout(1500)
+                    for confirm in page.locator('[data-rastisi-action^="confirm"], [data-rastisi-action="publish-confirm"]').all():
+                        if confirm.is_visible():
+                            confirm.click()
+                            page.wait_for_timeout(1500)
+                            break
+                    page.wait_for_load_state("networkidle")
+                    self.assertNotEqual(StorefrontLayout.objects.get(store=self.store).published_version_id, published_before)
+                    published_before = StorefrontLayout.objects.get(store=self.store).published_version_id
+                finally:
+                    context.close()
+
+                for width in WIDTHS:                                       # the live Storefront of the same Store
+                    live, _ = self._live_audit(width)
+                    self.assertIsNotNone(live, f"{key}@{width}: the stage must be live")
+                    self.assertEqual((live["mode"], live["layout"], live["scrim"]), (new_mode, new_layout, "0.73"), f"{key}@{width}")
+                    self.assertTrue(live["header"] and live["headers"] == 1, f"{key}@{width}: header inside the stage")
+                    self.assertEqual(live["scrollW"], live["clientW"], f"{key}@{width}: no horizontal scroll")
+                    self.assertTrue(live["title"], f"{key}@{width}: the headline is visible")
+                    self.assertTrue(any(src and self.asset.image.url in src for src in live["imgs"]), f"{key}@{width}: the Store's own picture")
+                    self.assertLessEqual(live["bgWidth"], live["vw"] + 1)
+                    self.assertGreaterEqual(live["titleBox"]["left"], -1)
+                    self.assertLessEqual(live["titleBox"]["right"], live["vw"] + 1)
+                self.assertEqual(self.errors, [], key)
+
+    def test_the_stage_hides_what_the_merchant_hides_on_each_device(self):
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "editorial_noir")
+        finally:
+            context.close()
+        from apps.storefront_builder.services import layout_service as svc
+        draft = svc.get_or_create_draft(self.store, user=self.user)
+        stage = draft.get_page("home").sections.get(section_key="hero_stage")
+        stage.settings = {**stage.settings, "slots": [
+            {"key": "title"}, {"key": "subtitle", "hide_mobile": True}, {"key": "cta", "hide_tablet": True}]}
+        stage.save(update_fields=["settings"])
+        svc.publish(self.store, user=self.user)
+        shown = {}
+        for width in (390, 768, 1440):
+            context, page = self._page(width, "/")
+            try:
+                shown[width] = page.evaluate(STAGE_AUDIT)
+            finally:
+                context.close()
+        self.assertEqual((shown[390]["subtitle"], shown[390]["cta"]), (False, True))
+        self.assertEqual((shown[768]["subtitle"], shown[768]["cta"]), (True, False))
+        self.assertEqual((shown[1440]["subtitle"], shown[1440]["cta"]), (True, True))
+
+    # ------------------------------------------------------------------------------------------ Studio canvas: no accidental navigation
+    NAV_VECTORS = (
+        ("category link", ".hs-cats a", "click"), ("category link (double)", ".hs-cats a", "dblclick"), ("category link (middle)", ".hs-cats a", "middle"),
+        ("category link (Enter)", ".hs-cats a", "enter"), ("CTA", ".hs-cta-wrap a", "click"), ("header menu link", ".hs-header header nav a", "click"),
+        ("header search (Enter)", ".hs-header input[type=search], .hs-header input[name=q]", "search"),
+        ("stage product card", ".hs-card", "click"),
+        ("shelf product link", ".rsec[data-section-key=product_section] a[href*='/product']", "click"),
+        ("shelf product link (middle)", ".rsec[data-section-key=product_section] a[href*='/product']", "middle"),
+    )
+
+    def _assert_canvas_is_navigation_safe(self, page, label, minimum=5):
+        """Every link-like gesture the merchant can make on the Studio canvas must leave the Studio AND the preview document where they are."""
+        popups = []
+        page.context.on("page", lambda q: popups.append(q.url))
+        checked = 0
+        for name, selector, gesture in self.NAV_VECTORS:
+            frame = self._frame(page)
+            target = frame.locator(selector).first
+            if target.count() == 0 or not target.is_visible():             # e.g. a collapsed menu: nothing a merchant could click
+                continue
+            main_before, frame_before = page.url, frame.url
+            if gesture == "click":
+                target.click(force=True)
+            elif gesture == "dblclick":
+                target.dblclick(force=True)
+            elif gesture == "middle":
+                target.click(button="middle", force=True)
+            elif gesture == "enter":
+                target.focus()
+                page.keyboard.press("Enter")
+            elif gesture == "search":
+                target.fill("x", force=True)
+                target.press("Enter")
+            page.wait_for_timeout(700)
+            frame_after = self._frame(page)
+            self.assertEqual(page.url, main_before, f"{label}: {name} must not move the Studio")
+            self.assertEqual(frame_after.url, frame_before, f"{label}: {name} must not navigate the preview")
+            checked += 1
+            page.keyboard.press("Escape")                                  # an opened inspector must not block the next gesture
+        self.assertEqual(popups, [], f"{label}: no gesture may open a window")
+        self.assertGreaterEqual(checked, minimum, f"{label}: the vectors must actually have been exercised")
+
+    def test_clicks_inside_the_studio_canvas_never_navigate_for_every_template(self):
+        for key in TEMPLATES:
+            with self.subTest(template=key):
+                context, page = self._studio()
+                try:
+                    self._apply_through_the_gallery(page, key)
+                    self._assert_canvas_is_navigation_safe(page, key, minimum=4)
+                finally:
+                    context.close()
+
+    def test_clicks_inside_the_studio_canvas_never_navigate_on_an_existing_template(self):
+        context, page = self._studio()                                     # the fixture store runs a pre-existing template
+        try:
+            self._assert_canvas_is_navigation_safe(page, "existing template", minimum=2)
+        finally:
+            context.close()
+
+    def test_a_click_on_the_header_inside_the_stage_opens_the_header_settings_like_the_shell_header(self):
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "dual_atelier")
+            page.evaluate("()=>{window.__sfbMsgs=[];window.addEventListener('message',e=>window.__sfbMsgs.push(e.data&&e.data.type))}")
+            frame = self._frame(page)
+            frame.wait_for_selector(".hs-header")
+            frame.locator(".hs-header").first.click(position={"x": 2, "y": 2}, force=True)
+            page.wait_for_timeout(600)
+            self.assertIn("sfb:openHeaderSettings", page.evaluate("()=>window.__sfbMsgs"))
+        finally:
+            context.close()
+
+    def test_the_gallery_offers_a_whole_template_or_only_the_hero_never_a_header_only_button(self):
+        from apps.storefront_builder.services import layout_service as svc
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "dual_atelier")
+            page.locator('[data-rastisi-action="templates"]').first.click()
+            page.wait_for_selector("[data-rs-gallery-grid]")
+            # the header is changed on its own from the canvas / Global Design (see test_studio_header_footer); the gallery has no «فقط هدر»
+            self.assertEqual(page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-header"]').count(), 0)
+            self.assertNotIn("فقط هدرِ این قالب", page.locator("[data-rs-gallery-grid]").inner_text())
+            draft = svc.get_or_create_draft(self.store, user=self.user)
+            header_before = draft.effective_header_config()["header_variant"]
+            self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "dual")
+            # no «فقط هیرو» button either (the hero is chosen / edited from the Studio); the hero-only backend mutation is covered in test_template_parts_apply
+            self.assertEqual(page.locator('[data-rs-gallery-grid] [data-rastisi-action="apply-template-hero"]').count(), 0)
+            self.assertNotIn("فقط هیرو", page.locator("[data-rs-gallery-grid]").inner_text())
+            draft = svc.get_or_create_draft(self.store, user=self.user)
+            self.assertEqual(draft.get_page("home").sections.get(section_key="hero_stage").settings["bg_layout"], "dual")
+            self.assertEqual(draft.effective_header_config()["header_variant"], header_before)
+            self.assertEqual(draft.template_provenance["template"]["key"], "dual_atelier")
+            audit = self._stage_audit(page)
+            self.assertEqual((audit["headers"], audit["header"]), (1, True), "one header, inside the stage")
+        finally:
+            context.close()
+
+    # ------------------------------------------------------------------------------------------------- picture picker (Inspector)
+    @staticmethod
+    def _fa(number):
+        return str(number).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+
+    def _picker(self, page, key):
+        return page.locator(f'[data-rs-workspace] .r4-mp:has(select[data-r4-field-key="{key}"])').first
+
+    def test_the_picture_picker_uploads_replaces_removes_warns_and_guides_per_slot(self):
+        from apps.storefront_builder.services import layout_service as svc
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "dual_atelier")                # dual panels, equal split, 88 vh
+            self._open_stage_inspector(page)
+            first, second = self._picker(page, "bg_a_media_asset_id"), self._picker(page, "bg_b_media_asset_id")
+            self.assertEqual(first.count(), 1)
+            self.assertEqual(second.count(), 1)
+
+            # 1. guide of THIS composition: equal split of 1920 px, 88 % of 1080 px
+            guide = first.locator(".r4-mp-guide").inner_text()
+            self.assertIn("پنل اول", guide)
+            self.assertIn(f"{self._fa(960)}×{self._fa(950)}", guide)
+            self.assertIn("حداقل قابل‌قبول", guide)
+            self.assertIn("موبایل", guide)
+            self.assertIn("منطقهٔ امن", guide)
+            self.assertIn("پنل دوم", second.locator(".r4-mp-guide").inner_text())
+
+            # 2. upload a NEW (deliberately small) picture in place: selected, named, thumbnailed, warned, saved
+            import io
+            from PIL import Image
+            buf = io.BytesIO()
+            Image.new("RGB", (400, 250), (200, 60, 60)).save(buf, "PNG")
+            first.locator("input.r4-mp-file").set_input_files({"name": "my-first-hero.png", "mimeType": "image/png", "buffer": buf.getvalue()})
+            page.wait_for_function(
+                "k=>{const s=document.querySelector(`[data-rs-workspace] select[data-r4-field-key=\"${k}\"]`);return s&&s.value!==''}",
+                arg="bg_a_media_asset_id", timeout=15000)
+            page.wait_for_timeout(1500)                                         # autosave
+            self.assertIn("my-first-hero", first.locator(".r4-mp-name").inner_text())
+            self.assertTrue(first.locator(".r4-mp-thumb img").is_visible())
+            self.assertIn(f"{self._fa(400)}×{self._fa(250)}", first.locator(".r4-mp-dims").inner_text())
+            self.assertIn("کوچک‌تر", first.locator(".r4-mp-warn").inner_text())
+            self.assertIn("is-warn", first.locator(".r4-mp-warn").get_attribute("class"))
+            stage = svc.get_or_create_draft(self.store, user=self.user).get_page("home").sections.get(section_key="hero_stage")
+            uploaded_id = int(stage.settings["bg_a_media_asset_id"])
+            from apps.content.models import MediaAsset
+            self.assertEqual(MediaAsset.objects.get(pk=uploaded_id).store_id, self.store.pk)
+
+            # 3. the guide follows the composition: single panel -> the full 1920 px width
+            self._set(page, "bg_layout", "single")
+            self.assertIn(f"{self._fa(1920)}×{self._fa(950)}", first.locator(".r4-mp-guide").inner_text())
+            self.assertIn("تصویر اصلی", first.locator(".r4-mp-guide").inner_text())
+            self.assertIn("فقط در حالتِ", second.locator(".r4-mp-guide").inner_text())
+
+            # 4. choose another picture from the library, thumbnails + names visible
+            first.locator(".r4-mp-actions button", has_text="انتخاب از کتابخانه").click()
+            tiles = first.locator(".r4-mp-tile")
+            self.assertGreaterEqual(tiles.count(), 2)
+            self.assertIn("browser-stage", " ".join(tiles.locator(".r4-mp-tile-name").all_inner_texts()))
+            first.locator(f'.r4-mp-tile[data-id="{self.asset.pk}"]').click()
+            page.wait_for_timeout(1500)
+            stage = svc.get_or_create_draft(self.store, user=self.user).get_page("home").sections.get(section_key="hero_stage")
+            self.assertEqual(int(stage.settings["bg_a_media_asset_id"]), self.asset.pk)
+
+            # 5. Undo walks back to the uploaded picture; the picker repaints from the programmatic value
+            page.keyboard.press("Escape")                                      # the settings dialog covers the toolbar
+            page.wait_for_timeout(800)
+            page.locator('[data-rastisi-action="undo"]').first.click()
+            page.wait_for_timeout(2500)
+            self._open_stage_inspector(page)
+            self.assertIn("my-first-hero", self._picker(page, "bg_a_media_asset_id").locator(".r4-mp-name").inner_text())
+
+            # 6. remove the picture: the field clears and the picker says so
+            self._picker(page, "bg_a_media_asset_id").locator(".r4-mp-remove").click()
+            page.wait_for_timeout(1500)
+            stage = svc.get_or_create_draft(self.store, user=self.user).get_page("home").sections.get(section_key="hero_stage")
+            self.assertFalse(stage.settings.get("bg_a_media_asset_id"))
+            self.assertIn("بدون تصویر", self._picker(page, "bg_a_media_asset_id").locator(".r4-mp-name").inner_text())
+            self.assertEqual(self.errors, [])
+        finally:
+            context.close()
+
+    def test_the_picture_picker_refuses_a_non_image_with_a_readable_message(self):
+        context, page = self._studio()
+        try:
+            self._apply_through_the_gallery(page, "editorial_noir")
+            self._open_stage_inspector(page)
+            first = self._picker(page, "bg_a_media_asset_id")
+            first.locator("input.r4-mp-file").set_input_files({"name": "fake.png", "mimeType": "image/png", "buffer": b"<script>1</script>"})
+            page.wait_for_selector('[data-rs-workspace] .r4-mp-status.is-error', timeout=10000)
+            self.assertEqual(page.locator('[data-rs-workspace] select[data-r4-field-key="bg_a_media_asset_id"]').first.input_value(), "")
+        finally:
+            context.close()
+
+    def test_an_existing_template_keeps_its_independent_header(self):
+        context, page = self._page(1440, "/")                         # the fixture store runs a pre-existing template
+        try:
+            audit = page.evaluate("()=>({stage:!!document.querySelector('.hs-stage'),headers:document.querySelectorAll('header').length,"
+                                  "first:document.querySelector('header').closest('main')===null})")
+        finally:
+            context.close()
+        self.assertEqual(audit, {"stage": False, "headers": 1, "first": True})

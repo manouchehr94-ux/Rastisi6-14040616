@@ -19,6 +19,7 @@ urlpatterns = [
     path("order/<str:code>/start/", views.payment_start, name="payment-start"),
     path("order/<str:code>/callback/<str:status>/", views.payment_callback, name="payment-callback"),
     path("order/<str:code>/result/", views.payment_result, name="payment-result"),
+    path("order/<str:code>/card-transfer/", views.card_transfer, name="card-transfer"),
 
     # --- Real payment gateway routes (PR1) ---
     path("order/<str:code>/initiate/", views.payment_initiate, name="payment-initiate"),

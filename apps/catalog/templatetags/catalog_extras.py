@@ -77,3 +77,13 @@ def metafield_json(product_metafield_value):
         except (json.JSONDecodeError, ValueError):
             return {}
     return product_metafield_value
+
+
+#: Card styles that render the cart action as a regular block BELOW the card body (``.pcard-cta``) instead of the hover add-bar over the
+#: picture. Presentation vocabulary only (see ``section_registry.CARD_STYLE_CHOICES``); the action itself is the canonical ``cart:add``.
+_CARD_STYLES_WITH_FOOTER_CTA = frozenset({"lifestyle_cart", "cocoa_gift"})
+
+
+@register.filter
+def card_cta_below(style):
+    return str(style) in _CARD_STYLES_WITH_FOOTER_CTA

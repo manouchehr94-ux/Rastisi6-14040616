@@ -1,0 +1,63 @@
+{% extends base_template %}
+{% load persian %}
+{% block title %}تنظیمات اعلان‌ها{% endblock %}
+{% block page_title %}تنظیمات اعلان‌ها{% endblock %}
+{% block page_sub %}{{ scope_label }}{% endblock %}
+{% block content %}
+<div class="nt-page" data-testid="inbox-preferences">
+  <div class="nt-head">
+    <div><h2>تنظیمات اعلان‌ها</h2><p>این تنظیمات فقط برای حساب شما در «{{ scope_label }}» است؛ پیش‌فرض‌ها معقول‌اند و لازم نیست همه‌چیز را تنظیم کنید.</p></div>
+    <a class="nt-btn" href="{{ inbox_url }}">صندوق اعلان‌ها</a>
+  </div>
+  {% if messages %}{% for m in messages %}<p class="nt-note" role="status">{{ m }}</p>{% endfor %}{% endif %}
+
+  <form method="post" class="nt-page" data-testid="prefs-form">{% csrf_token %}
+    <section class="nt-card" aria-labelledby="nt-p1">
+      <h3 id="nt-p1">نمایش در پنل</h3>
+      <label class="nt-switch"><input type="checkbox" name="toast_enabled" value="1"{% if pref.toast_enabled %} checked{% endif %}><span>اعلان فوری هنگام کار در پنل<small>هر اعلانِ مهم، بدون بارگذاری مجددِ صفحه، کوتاه نمایش داده می‌شود. خاموش‌کردن، صندوق را تغییر نمی‌دهد.</small></span></label>
+      <label class="nt-switch"><input type="checkbox" name="mute_low" value="1"{% if pref.mute_low %} checked{% endif %}><span>بی‌صداکردنِ اعلان‌های کم‌اهمیت<small>اعلان‌های اطلاعاتی و معمولی فقط در صندوق ثبت می‌شوند (مگر رویدادهای فوری مثل سفارش جدید).</small></span></label>
+      <label>حداقل اهمیت برای اعلان فوری <select class="nt-select" name="min_toast_severity">{% for v, l in severities %}<option value="{{ v }}"{% if pref.min_toast_severity == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+    </section>
+
+    <section class="nt-card" aria-labelledby="nt-p2">
+      <h3 id="nt-p2">موضوع‌هایی که می‌خواهم دریافت کنم</h3>
+      <div class="nt-cats">
+        {% for key, label, hint in categories %}
+        <label class="nt-switch nt-cat"><input type="checkbox" name="categories" value="{{ key }}"{% if key not in disabled %} checked{% endif %}{% if key in always %} disabled checked{% endif %} data-cat="{{ key }}"><span>{{ label }}<small>{{ hint }}</small></span></label>
+        {% endfor %}
+      </div>
+      <p class="nt-note">اعلان‌های امنیتی و بحرانی (مثل پرداخت مشکوک یا تعلیق اشتراک) همیشه در صندوق ثبت می‌شوند، حتی اگر موضوعشان را خاموش کنید.</p>
+    </section>
+
+    <section class="nt-card" aria-labelledby="nt-p3">
+      <h3 id="nt-p3">اعلان سیستمِ مرورگر</h3>
+      <label class="nt-switch"><input type="checkbox" name="browser_enabled" value="1"{% if pref.browser_enabled %} checked{% endif %}><span>دریافتِ اعلان سیستم (Web Push)<small>فقط برای دستگاه‌هایی که پایین ثبت کرده‌اید و فقط وقتی سرور آن را فعال کرده باشد.</small></span></label>
+      <label>حداقل اهمیت <select class="nt-select" name="min_browser_severity">{% for v, l in severities %}<option value="{{ v }}"{% if pref.min_browser_severity == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+    </section>
+    <div class="nt-actions"><button type="submit" class="nt-btn nt-btn--primary" data-testid="prefs-save">ذخیره تنظیمات</button></div>
+  </form>
+
+  <section class="nt-card" aria-labelledby="nt-p4" data-nt-push data-csrf="{{ csrf_token }}" data-public-key="{{ push.public_key }}" data-sw-url="{{ push.sw_url }}"
+           data-subscribe-url="{{ push.subscribe_url }}" data-unsubscribe-url="{{ push.unsubscribe_url }}" data-server-ready="{% if push.enabled and push.configured %}1{% else %}0{% endif %}" data-testid="push-box">
+    <h3 id="nt-p4">این مرورگر</h3>
+    <p data-nt-push-status role="status" data-testid="push-status">در حال بررسی…</p>
+    <div class="nt-actions"><button type="button" class="nt-btn nt-btn--primary" data-nt-push-enable hidden>فعال‌سازی اعلان در این مرورگر</button><button type="button" class="nt-btn" data-nt-push-disable hidden>غیرفعال‌سازی در این مرورگر</button></div>
+    <p class="nt-note">اعلان سیستم روی HTTPS (و localhost) و در مرورگرهای پشتیبان کار می‌کند؛ برای رسیدنِ اعلان پس از بسته‌شدنِ مرورگر، ارسالِ Web Push باید توسط مدیر سرور فعال و آزموده شده باشد. در مرورگرهای موبایل/iOS پشتیبانی محدود است؛ در هر حال صندوق و اعلان درون‌برنامه‌ای مستقل کار می‌کنند.</p>
+    {% if devices %}<h4>دستگاه‌های ثبت‌شده</h4><ul class="nt-devices" data-testid="devices">
+      {% for d in devices %}<li><span>{{ d.device_label|default:"مرورگر" }} · از {{ d.created_at|jalali_dt }}</span>
+        <form method="post" action="{{ push.unsubscribe_url }}">{% csrf_token %}<input type="hidden" name="device" value="{{ d.pk }}"><button class="nt-btn nt-btn--sm" type="submit">حذف</button></form></li>{% endfor %}</ul>{% endif %}
+  </section>
+
+  <section class="nt-card" aria-labelledby="nt-p5">
+    <h3 id="nt-p5">ایمیل و موبایل <span class="nt-chip">به‌زودی</span></h3>
+    <label class="nt-switch is-off"><input type="checkbox" disabled><span>اعلان از طریق ایمیل<small>زیرساخت آماده است؛ ارسالِ واقعی هنوز متصل نشده.</small></span></label>
+    <label class="nt-switch is-off"><input type="checkbox" disabled><span>اعلان در اپلیکیشن موبایل<small>پس از انتشار اپلیکیشن فعال می‌شود.</small></span></label>
+  </section>
+
+  <section class="nt-card" aria-labelledby="nt-p6">
+    <h3 id="nt-p6">اعلان آزمایشی</h3>
+    <p>یک اعلان به خودتان می‌فرستد تا زنگ، شمارنده و اعلان فوری را بیازمایید. هیچ سرویس خارجی صدا زده نمی‌شود.</p>
+    <form method="post" action="{{ test_url }}">{% csrf_token %}<button class="nt-btn" type="submit" data-testid="send-test">ارسال اعلان آزمایشی</button></form>
+  </section>
+</div>
+{% endblock %}

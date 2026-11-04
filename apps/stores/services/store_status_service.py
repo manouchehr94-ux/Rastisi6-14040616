@@ -33,6 +33,9 @@ def suspend_store(store: Store, *, actor, reason: str, note: str = "") -> Store:
         before={"status": before_status}, after={"status": store.status},
         metadata={"reason": reason.strip(), "note": note.strip()} if note.strip() else {"reason": reason.strip()},
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.platform_store_status(store, "تعلیق شد")
     return store
 
 
@@ -48,4 +51,7 @@ def activate_store(store: Store, *, actor) -> Store:
         object_type="Store", object_id=store.pk, object_label=store.name,
         before={"status": Store.Status.SUSPENDED}, after={"status": store.status},
     )
+    from apps.notifications.services import admin_events
+
+    admin_events.platform_store_status(store, "فعال شد")
     return store

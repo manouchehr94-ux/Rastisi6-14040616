@@ -1,0 +1,41 @@
+{% extends "storefront_shell.html" %}
+{% load static storefront_builder_extras %}
+{% comment %}
+«پیش‌نمایش» — the customer view of the Store's current DRAFT. It extends the SAME public shell (storefront_shell.html) and renders the page body
+through the SAME partial as the live storefront; the context comes from storefront_context_service.build_draft_preview_context (public assembly,
+Draft source). No builder markers, no overlays, no editor script. The only addition is a small status chip (the page is not published) and a link
+guard: a click that would leave this page is mapped to the matching Draft page type or refused with a visible note — it never silently opens
+the published storefront.
+{% endcomment %}
+
+{% block title %}پیش‌نمایش پیش‌نویس — {{ SHOP_NAME }}{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex,nofollow,noarchive">{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% sfb_static 'css/product_card.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/home.css' %}">
+<link rel="stylesheet" href="{% sfb_static 'css/storefront_builder.css' %}">
+<style>
+.sfb-draft-chip{position:fixed;inset-inline-start:12px;bottom:12px;z-index:2147483000;max-width:min(92vw,420px);display:flex;gap:8px;align-items:center;padding:8px 12px;border-radius:999px;background:#1f2937;color:#fff;font:600 12px/1.5 inherit;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.sfb-draft-chip b{background:#f59e0b;color:#1f2937;border-radius:999px;padding:1px 8px;font-size:11px}
+.sfb-draft-chip[data-published="1"] b{background:#34d399}
+.sfb-draft-note{position:fixed;inset-inline:12px;bottom:56px;z-index:2147483000;margin-inline:auto;width:fit-content;max-width:min(92vw,520px);padding:10px 14px;border-radius:10px;background:#fff;color:#1f2937;border:1px solid #f59e0b;font:600 13px/1.6 inherit;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.sfb-draft-note[hidden]{display:none}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if page_type != "home" %}<div class="storefront-page-title"><div class="wrap"><h1>{{ SHOP_NAME }}</h1></div></div>{% endif %}
+<div class="wrap sfb-preview-sections">
+  {% include "storefront_builder/partials/render_rows.html" %}
+</div>
+<div class="sfb-draft-chip" data-sfb-draft-chip{% if not draft_preview_is_draft %} data-published="1"{% endif %} role="status">
+  {% if draft_preview_is_draft %}<b>پیش‌نویس</b><span>پیش‌نمایش تغییرات ذخیره‌شده — هنوز منتشر نشده است</span>
+  {% else %}<b>بدون تغییر</b><span>پیش‌نویسی با تغییر منتشرنشده وجود ندارد؛ نسخهٔ منتشرشدهٔ فعلی دیده می‌شود</span>{% endif %}
+</div>
+<div class="sfb-draft-note" data-sfb-draft-note role="alert" hidden></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'storefront_builder/draft_preview.js' %}" data-page-url="{% url 'dashboard:storefront-builder-draft-preview' %}" data-page-type="{{ page_type }}"></script>
+{% endblock %}

@@ -1,0 +1,11 @@
+{
+  "template_key": "asymmetric_canvas",
+  "version": "1",
+  "content_hash": "192262dab28d2c5aad022498af081f381c26dd6cc0ffa8384d7b86df90581daf",
+  "preview_input_fingerprint": "d8bc66fc44399ed767ab2b31f3b7048fba0737e0c8b98f4c41c4f3010efe0e77",
+  "capture_source": "rasti-mode-demo",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  }
+}

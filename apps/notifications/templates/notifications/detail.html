@@ -1,0 +1,20 @@
+{% extends base_template %}
+{% load persian %}
+{% block title %}{{ event.title }}{% endblock %}
+{% block page_title %}جزئیات اعلان{% endblock %}
+{% block page_sub %}{{ category_label }}{% endblock %}
+{% block content %}
+<div class="nt-page" data-testid="inbox-detail">
+  <p><a class="nt-link" href="{{ inbox_url }}">← بازگشت به صندوق</a></p>
+  {% if messages %}{% for m in messages %}<p class="nt-note" role="status">{{ m }}</p>{% endfor %}{% endif %}
+  <article class="nt-card nt-row--{{ tone }}">
+    <div class="nt-row__meta"><span class="nt-chip nt-chip--{{ tone }}">{{ severity_label }}</span><span>{{ category_label }}</span><span>{{ event.occurred_at|jalali_dt }}</span>{% if event.occurrence_count > 1 %}<span>{{ event.occurrence_count|fa_number }} بار رخ داده</span>{% endif %}</div>
+    <h3>{{ event.title }}</h3>
+    {% if event.summary %}<p>{{ event.summary }}</p>{% endif %}
+    {% if event.details %}<p data-testid="detail-text">{{ event.details|linebreaksbr }}</p>{% endif %}
+    <div class="nt-actions">
+      {% if link %}<a class="nt-btn nt-btn--primary" href="{{ go_url }}" data-testid="detail-go">رفتن به موجودیت مرتبط</a>{% elif event.link_name %}<span class="nt-note">برای مشاهده‌ی صفحه‌ی مرتبط، مجوزِ لازم را ندارید.</span>{% endif %}
+    </div>
+  </article>
+</div>
+{% endblock %}

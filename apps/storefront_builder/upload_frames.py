@@ -25,7 +25,7 @@ _DESIGN_RATIO = {"square": (1, 1), "portrait": (3, 4), "landscape": (4, 3)}
 _DEFAULT_RATIO = {SQUARE: (1, 1), PORTRAIT: (3, 4), LANDSCAPE: (4, 3)}
 _STYLE_FIXED = {
     "compact": (1, 1.03), "editorial_minimal": (4, 5), "shelf_editorial": (3, 4), "beauty_glass": (1, 1), "paper_frame": (4, 5),
-    "portrait_round": (1, 1), "catalog_index": (4, 3), "chocolate_retail": (1, 1), "pastel_flat": (1, 1),
+    "portrait_round": (1, 1), "catalog_index": (4, 3), "chocolate_retail": (1, 1), "pastel_flat": (1, 1), "lifestyle_cart": (3, 4), "outline_plain": (3, 4),
 }
 _STYLE_BY_RATIO = {
     "beauty_retail": {SQUARE: (1.12, 1), PORTRAIT: (4, 5), LANDSCAPE: (1.12, 1)},
@@ -38,7 +38,7 @@ PRODUCT_SECTIONS = ("product_section", "newest_products", "best_sellers", "disco
 #: category_grid display modes → (ratio, shape, approx) of the picture frame (storefront_builder.css)
 _CATEGORY_CIRCLE = {"fashion_flat", "chocolate_story", "luxury_shortcuts", "grey_circles", "circular", "icon_tiles"}
 _CATEGORY_SQUARE = {"fashion_mosaic", "beauty_icons", "pastel_tiles"}
-_CATEGORY_RECT = {"chocolate_badges": (124, 98), "image_strip": (3, 2), "atelier_mosaic": (4, 5), "gradient_tiles": (1, 1)}
+_CATEGORY_RECT = {"chocolate_badges": (124, 98), "image_strip": (3, 2), "atelier_mosaic": (4, 5), "gradient_tiles": (1, 1), "label_tiles": (3, 2), "icon_rail": (1, 1), "ring_circles": (1, 1), "photo_cards": (1, 1)}
 
 #: hero / banner frames: (label, ratio, approx)
 HERO_DESKTOP = (1053, 420)
@@ -269,6 +269,93 @@ def _story_frames(sections):
     return out
 
 
+# --------------------------------------------------------------------------------------------- real placement (V5)
+_POS_FA = {"center": "وسط", "top": "بالا", "bottom": "پایین", "left": "چپ", "right": "راست"}
+
+
+def _px(value) -> str:
+    from apps.core.utils import to_fa_digits
+
+    return to_fa_digits(int(value + 0.5))
+
+
+def _placement_frame(section, *, mobile: bool):
+    """The frame a linked image's picture gets in ITS Cell — width/height from the real Draft layout (``upload_placement``), phone separately."""
+    from . import upload_placement as up
+
+    placement = up.resolve_placement(section)
+    if placement is None:
+        return None
+    side = placement["phone"] if mobile else placement["desktop"]
+    width, height, kind = side["section_w"], side["h"], side["kind"]
+    free = height is None or height < 24
+    device = "موبایل" if mobile else "دسکتاپ"
+    ref = f"صفحهٔ {_px(side['viewport'])} پیکسلی"
+    ratio = (width, height) if not free else (4, 3)
+    files = up.recommended_file(width, None if free else width / height)
+    approx = not free and not side["exact"]
+    fit = placement["fit"]
+    if free:
+        size_text = f"عرض حدود {_px(width)} پیکسل؛ ارتفاع را خودِ تصویر تعیین می‌کند"
+        crop_note = "بریده نمی‌شود: ارتفاعِ این بخش از نسبتِ طبیعیِ تصویر می‌آید و هر نسبتی کامل دیده می‌شود."
+        if side["kind"] == "shared":
+            crop_note = "بریده نمی‌شود: چند بخش زیر هم در یک خانه‌اند و ارتفاعِ هر کدام از نسبتِ طبیعیِ تصویرِ خودش می‌آید."
+        elif side["kind"] == "equal":
+            crop_note += " (چیدمان «ارتفاع برابر» است؛ اگر خانهٔ کناری بلندتر باشد، قاب کشیده و حاشیه خالی می‌ماند.)"
+    else:
+        size_text = f"حدود {_px(width)}×{_px(height)} پیکسل" + (" (تقریبی)" if approx else "")
+        where = {"manual": "ارتفاع را دستی تنظیم کرده‌اید", "siblings": "ارتفاع از تصویر واقعیِ خانه‌های کناری محاسبه شد",
+                 "assumed": "ارتفاع به محتوای خانه‌های کناری و نسبت‌هایی که کشیده‌اید بستگی دارد؛ فرض: دو خانهٔ کوچکِ مربع"}.get(kind, "")
+        pos = _POS_FA.get(placement["pos"], "وسط")
+        if fit == "cover":
+            crop_note = (f"«پر کردن قاب»: اگر نسبتِ فایل با {_ratio_text(width / height)} فرق کند لبه‌ها بریده می‌شود (کانون: {pos}). {where}.").strip()
+        else:
+            crop_note = (f"«نمایش کامل»: بریده نمی‌شود؛ اگر نسبتِ فایل با {_ratio_text(width / height)} فرق کند حاشیهٔ خالی می‌ماند. {where}.").strip()
+    if side.get("manual_ignored"):
+        crop_note += " (ارتفاع دستیِ این بخش در چیدمان «بزرگ + دو کوچک» اثری ندارد؛ ارتفاع را ردیف‌های چیدمان تعیین می‌کنند.)"
+    note = f"{size_text} · {ref}"
+    frame = _frame(f"{placement['name']} — {device}", ratio, fit=fit, pos=placement["pos"], approx=approx,
+                   section=_section_label(section), can=(placement["fit_capable"], placement["pos_capable"], False), note=note)
+    frame.update({
+        "free": free, "w_px": int(width + 0.5), "h_px": None if free else int(height + 0.5), "rec": list(files["rec"]), "min": list(files["min"]),
+        "placement": True, "size_text": size_text, "crop_note": crop_note, "layout_label": placement["layout_label"], "kind": kind,
+        "slot_name": placement["name"], "ref_viewport": side["viewport"],
+    })
+    frame.pop("section", None)
+    frame["used_by"] = []
+    return frame
+
+
+def _augment_with_placement(frames, slot, target):
+    """Hero / banner frames keep their resolver's ratio; the target Section's real width in its Cell is added so the guide can state the displayed
+    size and a retina-sharp file size. A frame whose ratio is only approximate stays flagged approximate."""
+    from . import upload_placement as up
+
+    placement = up.resolve_placement(target)
+    if placement is None:
+        return frames
+    mobile = slot.endswith("_mobile")
+    side = placement["phone"] if mobile else placement["desktop"]
+    width = side["section_w"]
+    for fr in frames:
+        files = up.recommended_file(width, fr["ratio"] or None)
+        height = width / fr["ratio"] if fr["ratio"] else None
+        fr.update({
+            "placement": True, "slot_name": placement["name"], "layout_label": placement["layout_label"], "w_px": int(width + 0.5),
+            "h_px": int(height + 0.5) if height else None, "rec": list(files["rec"]), "min": list(files["min"]), "free": False,
+            "ref_viewport": side["viewport"], "kind": "ratio",
+            "size_text": f"حدود {_px(width)}×{_px(height)} پیکسل" + (" (تقریبی)" if fr["approx"] else "") if height else f"عرض حدود {_px(width)} پیکسل",
+            "crop_note": fr.get("note") or "",
+        })
+    return frames
+
+
+def _ratio_text(value: float) -> str:
+    from apps.core.utils import to_fa_digits
+
+    return to_fa_digits(f"{value:.2f}".rstrip("0").rstrip(".")).replace(".", "٫") + ":۱"
+
+
 _RESOLVERS = {
     "product_image": _product_frames, "category_image": _category_frames, "brand_logo": _brand_frames, "collection_image": _collection_frames,
     "journal_cover": _journal_frames, "hero_desktop": _hero_frames, "banner_desktop": _banner_frames, "story_item": _story_frames,
@@ -279,12 +366,19 @@ def slot_has_frames(slot: str) -> bool:
     return slot in _RESOLVERS or slot in ("hero_mobile", "banner_mobile")
 
 
-def resolve_frames(slot: str, store=None, sections=None) -> list[dict]:
-    """The frames a picture uploaded to ``slot`` is shown in for this store (empty list: the guide falls back to its static ratio)."""
+def resolve_frames(slot: str, store=None, sections=None, target=None) -> list[dict]:
+    """The frames a picture uploaded to ``slot`` is shown in for this store (empty list: the guide falls back to its static ratio).
+
+    ``target`` — the Section the picture is being added to (media form). A linked image is shown in the real frame of ITS Cell; every other
+    slot keeps its resolver (the placement only adds the real width of the target Section where the frame depends on it)."""
     if store is None and sections is None:
         return []
     if not slot_has_frames(slot):
         return []
+    if target is not None and getattr(target, "section_key", "") == "linked_image" and slot in ("banner_desktop", "banner_mobile"):
+        frame = _placement_frame(target, mobile=(slot == "banner_mobile"))
+        if frame is not None:
+            return [frame]
     sections = _store_sections(store) if sections is None else sections
     if slot in ("hero_mobile", "banner_mobile"):
         frames = _hero_frames(sections, mobile=True) if slot == "hero_mobile" else _banner_frames(sections, mobile=True)
@@ -294,4 +388,7 @@ def resolve_frames(slot: str, store=None, sections=None) -> list[dict]:
     if slot == "product_image":
         frames.append(_frame("صفحهٔ کالا (گالری)", (1, 1), fit="contain", approx=False, note="در طرحِ «مد» ۳:۴ است"))
     merged = _merge(frames)
+    if target is not None and slot in ("hero_desktop", "hero_mobile", "banner_desktop", "banner_mobile") \
+            and getattr(target, "section_key", "") in ("hero_banner", "image_slider", "single_banner", "multi_banner"):
+        merged = _augment_with_placement(merged, slot, target)
     return merged

@@ -14,6 +14,7 @@ STUDIO_ICON_PATHS = {
     "plus": "M12 5v14M5 12h14",
     "grid": "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
     "layers": "m12 3 10 5-10 5L2 8zM2 12l10 5 10-5M2 16l10 5 10-5",
+    "megaphone": "M3 10v4h3l7 4V6L6 10zM16 9a4 4 0 0 1 0 6",
     "sliders": "M4 5h16M4 12h16M4 19h16M8 3v4M16 10v4M9 17v4",
     "spark": "m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7zM20 2v4M18 4h4",
     "desktop": "M3 4h18v13H3zM12 17v4M8 21h8",
@@ -33,6 +34,7 @@ STUDIO_ICON_PATHS = {
     "tag": "m3 3 9 0 9 9-9 9-9-9zM7 7h.01",
     "trash": "M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7",
     "copy": "M9 8h11v13H9zM15 8V3H4v13h5",
+    "edit": "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
     "up": "m6 14 6-6 6 6",
     "down": "m6 10 6 6 6-6",
     "history": "M3 10a9 9 0 1 1 1 8M3 3v7h7M12 7v5l3 2",
@@ -44,6 +46,9 @@ STUDIO_ICON_PATHS = {
     "external": "M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7",
     "globe": "M22 12A10 10 0 1 1 2 12a10 10 0 0 1 20 0M2 12h20M12 2c-6 6-6 14 0 20 6-6 6-14 0-20",
     "dots": "M5 12h.01M12 12h.01M19 12h.01",
+    "columns": "M3 5h18v14H3zM12 5v14",
+    "rows": "M3 5h18v14H3zM3 12h18",
+    "palette": "M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.5-1.5-1.5-1-3 .5-1.4 2-1 4-1a3 3 0 0 0 3-3c0-5-3.6-9-8-9M7.5 11h.01M10 7.5h.01M14.5 7.5h.01",
 }
 
 #: Icon per Design Lab family (presentation only; family keys/labels come from

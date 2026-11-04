@@ -35,6 +35,25 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+def new_store_tax_enabled() -> bool:
+    """پیش‌فرضِ «مالیات فعال است؟» برای Storeِ تازه — از ``settings.SHOP_NEW_STORE_TAX_ENABLED`` (پیش‌فرض: خاموش)."""
+    from django.conf import settings as django_settings
+
+    return bool(getattr(django_settings, "SHOP_NEW_STORE_TAX_ENABLED", False))
+
+
+def new_store_tax_percent():
+    """نرخِ پیشنهادیِ مالیات برای Storeِ تازه — از ``settings.SHOP_NEW_STORE_TAX_PERCENT`` (پیش‌فرض ۱۰٫۰۰)."""
+    from decimal import Decimal, InvalidOperation
+    from django.conf import settings as django_settings
+
+    try:
+        value = Decimal(str(getattr(django_settings, "SHOP_NEW_STORE_TAX_PERCENT", "10.00")))
+    except InvalidOperation:
+        return Decimal("10.00")
+    return value if Decimal("0") <= value <= Decimal("100") else Decimal("10.00")
+
+
 class ShopSettings(TimeStampedModel):
     """تنظیمات هر فروشگاه — دقیقاً یک رکورد به‌ازای هر Store.
 
@@ -76,7 +95,9 @@ class ShopSettings(TimeStampedModel):
     contact_email = models.EmailField("ایمیل فروشگاه", blank=True)
     contact_address = models.CharField("آدرس", max_length=300, blank=True)
 
-    tax_percent = models.DecimalField("نرخ مالیات (٪)", max_digits=5, decimal_places=2, default=9)
+    # نرخِ کلی (وقتی هیچ نرخِ دسته‌ای ثبت نشده). پیش‌فرضِ Storeِ تازه از settings.SHOP_NEW_STORE_TAX_PERCENT می‌آید؛
+    # ردیف‌هایِ موجود دست‌نخورده‌اند (تغییرِ default هیچ دیتایی را به‌روز نمی‌کند).
+    tax_percent = models.DecimalField("نرخ مالیات (٪)", max_digits=5, decimal_places=2, default=new_store_tax_percent)
     free_shipping_threshold = models.DecimalField(
         "آستانه‌ی ارسال رایگان (تومان)", max_digits=12, decimal_places=0, default=500_000
     )
@@ -85,11 +106,10 @@ class ShopSettings(TimeStampedModel):
         ON_TOTAL = "on_total", "گردکردنِ مجموع"
         PER_LINE = "per_line", "گردکردنِ هر ردیف"
 
-    # ``tax_enabled`` پیش‌فرضش True است — نه یک انتخابِ دلخواه، بلکه بازتابِ
-    # رفتارِ همیشگیِ این کدبیس پیش از checkpoint 3B: tax_percent همیشه و
-    # بدونِ قید روی هر سبدی اعمال می‌شد (نگاه کنید به ADR-44). خاموش‌کردنِ
-    # آن اکنون یک اقدامِ صریحِ مدیر است، نه رفتارِ پیش‌فرضِ جدید.
-    tax_enabled = models.BooleanField("فعال‌سازیِ مالیات", default=True)
+    # Storeِ تازه بدونِ مالیات شروع می‌کند (``settings.SHOP_NEW_STORE_TAX_ENABLED``، پیش‌فرض False)؛ مدیر در
+    # «تنظیماتِ مالیات» صراحتاً روشنش می‌کند. Storeهایِ موجود پیش‌تر با True ساخته شده بودند (رفتارِ پیش از checkpoint 3B،
+    # ADR-44) و همان‌طور می‌مانند — این default فقط ردیف‌هایِ *تازه* را تعیین می‌کند.
+    tax_enabled = models.BooleanField("فعال‌سازیِ مالیات", default=new_store_tax_enabled)
     # False یعنی قیمت‌ها بدونِ مالیات‌اند و مالیات جداگانه افزوده می‌شود —
     # دقیقاً همان محاسبه‌ی قبلیِ ``cart_totals`` (مالیات روی after_coupon
     # افزوده می‌شد، نه جزئی از آن).
@@ -264,9 +284,9 @@ class ShopSettings(TimeStampedModel):
         تنظیمات — تا مرچنت هیچ‌گاه محتوایِ مثالی را به‌اشتباه به‌عنوانِ دادهٔ
         واقعیِ خودش ذخیره نکند (ویزاردِ آنبوردینگ، ``OnboardingIdentityForm``،
         این مقادیرِ خالی را به‌عنوانِ placeholder نشان می‌دهد، نه value).
-        مقادیرِ عددیِ کسب‌وکار (``tax_percent``/``free_shipping_threshold``)
-        همچنان از settings.py می‌آیند — آن‌ها پیش‌فرضِ کسب‌وکاری‌اند، نه متنِ
-        هویتی/مثالی.
+        مقادیرِ عددیِ کسب‌وکار از settings.py می‌آیند — آن‌ها پیش‌فرضِ کسب‌وکاری‌اند، نه متنِ
+        هویتی/مثالی: ``free_shipping_threshold`` از ``SHOP_FREE_SHIPPING_THRESHOLD`` و مالیاتِ Storeِ تازه از
+        ``SHOP_NEW_STORE_TAX_ENABLED`` (پیش‌فرض خاموش) / ``SHOP_NEW_STORE_TAX_PERCENT`` (پیش‌فرض ۱۰٫۰۰).
         """
         from django.conf import settings as django_settings
 
@@ -278,7 +298,8 @@ class ShopSettings(TimeStampedModel):
                 "contact_phone": "",
                 "contact_email": "",
                 "contact_address": "",
-                "tax_percent": getattr(django_settings, "SHOP_TAX_PERCENT", 9),
+                "tax_enabled": new_store_tax_enabled(),
+                "tax_percent": new_store_tax_percent(),
                 "free_shipping_threshold": getattr(
                     django_settings, "SHOP_FREE_SHIPPING_THRESHOLD", 500_000
                 ),
@@ -563,3 +584,98 @@ class ImportRowResult(models.Model):
 
     def __str__(self):
         return f"ردیفِ {self.row_number} — {self.get_status_display()}"
+
+
+class ImportProposal(models.Model):
+    """مورد مرجعِ *پیشنهادی* در یک فایلِ ورودِ اطلاعات (برند/دسته/ویژگی/مقدارِ ویژگیِ تازه).
+
+    فایلِ اکسل هیچ‌وقت مستقیم برند یا دسته نمی‌سازد: نامِ ناشناخته به‌صورتِ یک پیشنهادِ ``pending`` ثبت می‌شود و فقط پس از
+    تأییدِ مدیرِ دارایِ مجوزِ همان موجودیت (برند/دسته/ویژگی) در جدولِ واقعیِ همان Store ساخته می‌شود. رد‌شدن هیچ رکوردی نمی‌سازد
+    و ردیف‌هایِ وابسته خطایِ قابل‌اصلاح می‌مانند. به‌ازایِ هر (job، نوع، والد، نامِ نرمال‌شده) فقط یک پیشنهاد وجود دارد؛ ردیف‌هایِ
+    فایل که یک نام را تکرار می‌کنند در ``source_rows`` جمع می‌شوند. هم‌ارزی نام‌ها با ``import_proposals.entity_key`` (فارسی/نیم‌فاصله/
+    شکلِ حروف) سنجیده می‌شود، پس «میشود»، «می‌شود» و «می شود» یک مورد هستند."""
+
+    class Kind(models.TextChoices):
+        BRAND = "brand", "برند"
+        CATEGORY = "category", "دسته‌بندیِ اصلی"
+        SUBCATEGORY = "subcategory", "زیردسته‌بندی"
+        ATTRIBUTE = "attribute", "ویژگی"
+        ATTRIBUTE_VALUE = "attribute_value", "مقدارِ ویژگی"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "در انتظارِ تأیید"
+        APPROVED = "approved", "تأییدشده"
+        REJECTED = "rejected", "ردشده"
+
+    store = models.ForeignKey(
+        "stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="import_proposals",
+    )
+    job = models.ForeignKey(
+        ImportJob, verbose_name="درخواستِ ورودِ اطلاعات", on_delete=models.CASCADE, related_name="proposals",
+    )
+    kind = models.CharField("نوع", max_length=20, choices=Kind.choices)
+    name = models.CharField("نامِ پیشنهادی", max_length=150)
+    name_key = models.CharField("کلیدِ نرمال‌شده", max_length=160, db_index=True)
+    parent_name = models.CharField("نامِ والد", max_length=150, blank=True, default="")
+    parent_key = models.CharField("کلیدِ والد", max_length=160, blank=True, default="")
+    source_rows = models.JSONField("ردیف‌هایِ منبع در فایل", blank=True, default=list)
+    source_filename = models.CharField("نامِ فایلِ منبع", max_length=255, blank=True, default="")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="درخواست‌دهنده", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="import_proposals_requested",
+    )
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="تصمیم‌گیرنده", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="import_proposals_decided",
+    )
+    decided_at = models.DateTimeField("زمانِ تصمیم", null=True, blank=True)
+    decision_note = models.CharField("یادداشتِ تصمیم", max_length=300, blank=True, default="")
+    created_object_type = models.CharField("نوعِ رکوردِ ساخته‌شده", max_length=30, blank=True, default="")
+    created_object_id = models.PositiveBigIntegerField("شناسه‌ی رکوردِ ساخته‌شده", null=True, blank=True)
+    created_at = models.DateTimeField("زمانِ ایجاد", auto_now_add=True)
+    updated_at = models.DateTimeField("زمانِ به‌روزرسانی", auto_now=True)
+
+    class Meta:
+        verbose_name = "پیشنهادِ موردِ مرجع در ورودِ اطلاعات"
+        verbose_name_plural = "پیشنهادهایِ مواردِ مرجع در ورودِ اطلاعات"
+        ordering = ["job_id", "kind", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["job", "kind", "parent_key", "name_key"], name="uniq_import_proposal_per_job"),
+        ]
+        indexes = [models.Index(fields=["store", "status"], name="idx_importprop_store_status")]
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.name} ({self.get_status_display()})"
+
+    @property
+    def path_label(self) -> str:
+        """مسیرِ نمایشی: «والد > نام» برایِ زیردسته/مقدارِ ویژگی، وگرنه فقط نام."""
+        return f"{self.parent_name} > {self.name}" if self.parent_name else self.name
+
+
+class TrackingEmission(models.Model):
+    """«ادعای چاپِ» رویدادِ Purchase: ردیفی یکتا به‌ازای هر سفارش که لحظه‌ی چاپِ رویداد برای مرورگرِ رضایت‌داده ساخته می‌شود.
+
+    معنا (دقیق، نه بیشتر): *سرور* رویدادِ این سفارش را **حداکثر یک‌بار** برای یک مرورگرِ رضایت‌داده چاپ کرد. این ردیف نه «تحویلِ موفق»،
+    نه «پذیرشِ GA4/Meta/GTM» و نه «رضایتِ ذخیره‌شده» را ثابت می‌کند (رضایت ویژگیِ بازدیدکننده است و در هر چاپ از کوکی/GPC دوباره سنجیده می‌شود).
+    ردیف در تراکنشِ مالی (``apply_payment_success``) ساخته **نمی‌شود**؛ فقط هنگامِ نمایشِ صفحه‌ی نتیجه‌ی پرداختِ همان مشتری، پس از احرازِ
+    شرایط و رضایت. بدون PII؛ با حذفِ سفارش حذف می‌شود."""
+
+    CHANNEL_BROWSER = "browser"
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="tracking_emissions")
+    order = models.ForeignKey("orders.Order", verbose_name="سفارش", on_delete=models.CASCADE, related_name="tracking_emissions")
+    event_name = models.CharField("رویداد", max_length=32)
+    event_id = models.CharField("شناسه‌ی رویداد", max_length=120)
+    channel = models.CharField("کانال", max_length=16, default=CHANNEL_BROWSER)
+    claimed_at = models.DateTimeField("زمانِ ادعای چاپ", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "ادعای چاپِ رویدادِ ردیابی"
+        verbose_name_plural = "ادعاهای چاپِ رویدادِ ردیابی"
+        constraints = [models.UniqueConstraint(fields=["order", "event_name", "channel"], name="uniq_tracking_emission")]
+        indexes = [models.Index(fields=["store", "claimed_at"], name="idx_trackemission_store_time")]
+
+    def __str__(self):
+        return f"{self.event_name}:{self.order_id} ({self.channel})"

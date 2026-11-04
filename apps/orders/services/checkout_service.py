@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from apps.cart.models import Coupon
+from apps.cart.models import Cart, Coupon
 from apps.cart.services.cart_service import reprice_cart_items
 from apps.cart.services.pricing import cart_totals, coupon_is_applicable
 from apps.catalog.services.pricing_service import resolve_regular_price
@@ -122,8 +122,58 @@ def active_shipping_methods(*, store, address: dict | None = None):
     )
 
 
+MANUAL_GATEWAY_SLUGS = ("card_to_card",)
+#: روش‌هایِ legacy که بدونِ ``PaymentGatewayConfig`` هم (رفتارِ قدیمیِ فروشگاه) در تسویه‌حساب فهرست می‌شوند.
+LEGACY_LISTED_WITHOUT_CONFIG = ("zibal", "cod")
+
+
 def active_payment_gateways(*, store):
-    return list(PaymentGateway.objects.filter(is_active=True, store=store))
+    """روش‌های پرداختِ قابل‌نمایش در تسویه‌حسابِ این فروشگاه.
+
+    مبنا همان رکوردهای legacy ``PaymentGateway`` فعالِ همین ``store`` است
+    (سازگاریِ عقب‌رو با جریانِ موجودِ تسویه‌حساب/ثبتِ سفارش). روی آن یک فیلترِ
+    آگاه از آمادگی اعمال می‌شود: اگر برای کدِ یک درگاه، یک
+    ``PaymentGatewayConfig`` در همین فروشگاه وجود داشته باشد اما برای
+    پرداختِ واقعی انتخاب‌پذیر نباشد (``is_selectable_at_checkout`` نادرست —
+    مثلاً غیرفعال، مسدودِ مستندات، یا ناقص)، آن روش از فهرست حذف می‌شود.
+    درگاه‌هایی که هیچ پیکربندیِ متناظری ندارند (مسیرِ legacy/شبیه‌سازی) دست
+    نمی‌خورند. ایزوله‌سازیِ tenant حفظ می‌شود: تنها پیکربندی‌های همین
+    ``store`` دیده می‌شوند، پس پیکربندیِ فروشگاهِ دیگر هرگز یک روش را
+    انتخاب‌پذیر/غیرانتخاب‌پذیر نمی‌کند.
+
+    روشِ کارت‌به‌کارت (گردشِ کاریِ کانونیِ ``CardTransferSubmission``) علاوه بر این فقط وقتی نمایش داده می‌شود که پیکربندیِ واقعیِ آن
+    فعال و کامل باشد (``card_transfer_service.active_config``)."""
+    from apps.orders.models import PaymentGatewayConfig
+
+    from apps.orders.services import card_transfer_service
+
+    gateways = list(PaymentGateway.objects.filter(is_active=True, store=store))
+    if any(g.slug in MANUAL_GATEWAY_SLUGS for g in gateways) and card_transfer_service.active_config(store) is None:
+        gateways = [g for g in gateways if g.slug not in MANUAL_GATEWAY_SLUGS]
+    if not gateways:
+        return gateways
+
+    from apps.orders.gateways import GATEWAY_CHOICES
+
+    configs = {
+        c.gateway_code: c
+        for c in PaymentGatewayConfig.objects.filter(store=store)
+    }
+    registered = {code for code, _label in GATEWAY_CHOICES}
+
+    result = []
+    for gateway in gateways:
+        config = configs.get(gateway.slug)
+        if config is None:
+            # بدونِ پیکربندی: فقط ردیف‌هایِ واقعاً legacy (زیبال/پرداخت در محل/مسیرِ شبیه‌سازی و slugهایِ نامرتبط) نمایش داده می‌شوند.
+            # ردیفی که slugِ آن یکی از درگاه‌هایِ ثبت‌شده‌ی جدید است (مثلاً mellat یا snappay) بدونِ پیکربندیِ آماده هرگز عرضه نمی‌شود —
+            # وگرنه مشتری روشی را انتخاب می‌کرد که پس از ثبتِ سفارش هیچ مسیرِ پرداختی ندارد.
+            if gateway.slug in registered and gateway.slug not in LEGACY_LISTED_WITHOUT_CONFIG:
+                continue
+            result.append(gateway)
+        elif config.is_selectable_at_checkout:
+            result.append(gateway)
+    return result
 
 
 def get_selected_shipping_method(request):
@@ -164,9 +214,11 @@ def get_selected_payment_gateway(request):
 
 def set_payment_gateway(request, gateway_id) -> None:
     """یک POST دستکاری‌شده هرگز نمی‌تواند درگاه پرداخت متعلق به Store دیگری
-    را انتخاب کند — استخر گزینه‌های مجاز همیشه با ``store`` فعلی فیلتر می‌شود."""
+    یا یک درگاهِ آماده‌نشده/غیرقابلِ‌انتخاب را انتخاب کند — استخر گزینه‌های
+    مجاز همیشه همان فهرستِ آگاه از آمادگیِ ``active_payment_gateways`` است
+    (فیلترشده با ``store`` و ``is_selectable_at_checkout``)."""
     store = resolve_store_for_service(request)
-    gateway = PaymentGateway.objects.filter(pk=gateway_id, is_active=True, store=store).first()
+    gateway = next((g for g in active_payment_gateways(store=store) if g.pk == gateway_id), None)
     if gateway:
         _state(request)["payment_gateway_id"] = gateway.pk
         request.session.modified = True
@@ -177,11 +229,29 @@ def get_or_create_checkout_token(cart) -> str:
     مشارکت کاربر (نه فیلد مخفی فرم، نه ورودی جدا). چون هر درخواست تسویه‌حساب
     (اعم از کلیک دوم/retry شبکه) همان Cart را دوباره resolve می‌کند
     (``apps.cart.services.cart_service.get_cart``)، همین یک کلید ذخیره‌شده
-    روی خودِ Cart برای تمام تلاش‌های متوالی/هم‌زمانِ همان کاربر یکسان
-    می‌ماند — بدون این‌که کلاینت هیچ مقداری بفرستد یا کنترل کند."""
-    if not cart.checkout_token:
-        cart.checkout_token = secrets.token_urlsafe(CHECKOUT_TOKEN_BYTES)
-        cart.save(update_fields=["checkout_token", "updated_at"])
+    روی خودِ Cart برای تمام تلاش‌های متوالی/هم‌زمانِ همان چرخه‌ی خرید یکسان
+    می‌ماند — بدون این‌که کلاینت هیچ مقداری بفرستد یا کنترل کند.
+
+    چرخه‌ی خرید: کلید تا وقتی سبد پس از سفارش خالی است می‌ماند (replay همان سفارش را برمی‌گرداند)؛ با افزودنِ نخستین قلمِ خریدِ بعدی
+    پاک می‌شود (``cart_service.start_new_checkout_cycle_if_empty``) و این تابع کلیدِ تازه می‌سازد.
+
+    ساخت/خواندنِ کلید زیرِ قفلِ ردیفِ Cart انجام می‌شود تا دو درخواستِ هم‌زمانِ «اولین تسویه‌حساب» دو کلیدِ متفاوت نسازند
+    (قفل فقط درونِ این تراکنشِ کوتاه گرفته و رها می‌شود؛ ترتیبِ قفلِ Product/Variant → Cart → CartItem دست‌نخورده است)."""
+    with transaction.atomic():
+        locked = Cart.objects.select_for_update().get(pk=cart.pk)
+        if not locked.checkout_token:
+            locked.checkout_token = secrets.token_urlsafe(CHECKOUT_TOKEN_BYTES)
+            locked.save(update_fields=["checkout_token", "updated_at"])
+        cart.checkout_token = locked.checkout_token
+    return cart.checkout_token
+
+
+def _rotate_checkout_token(cart) -> str:
+    with transaction.atomic():
+        locked = Cart.objects.select_for_update().get(pk=cart.pk)
+        locked.checkout_token = secrets.token_urlsafe(CHECKOUT_TOKEN_BYTES)
+        locked.save(update_fields=["checkout_token", "updated_at"])
+        cart.checkout_token = locked.checkout_token
     return cart.checkout_token
 
 
@@ -308,9 +378,14 @@ def finalize_order(request, cart, customer):
         raise CheckoutError("سبد خرید شما خالی است")
 
     token = get_or_create_checkout_token(cart)
+    store = resolve_store_for_service(request)
     existing_order = Order.objects.filter(idempotency_key=token).first()
     if existing_order is not None:
-        return existing_order
+        if existing_order.customer_id == customer.pk and existing_order.store_id == store.pk:
+            return existing_order
+        # کلیدی که به سفارشِ مشتری/فروشگاهِ دیگری تعلق دارد replay نیست (برخوردِ تقریباً ناممکن، ولی هرگز سفارشِ دیگران برنمی‌گردد).
+        logger.warning("checkout token of cart %s matched an order of another customer/store; rotating it", cart.pk)
+        token = _rotate_checkout_token(cart)
 
     if not cart.items.exists():
         raise CheckoutError("سبد خرید شما خالی است")
@@ -339,7 +414,6 @@ def finalize_order(request, cart, customer):
         raise CheckoutError("هیچ درگاه پرداخت فعالی موجود نیست")
 
     coupon = get_applied_coupon(request, cart, customer)
-    store = resolve_store_for_service(request)
     birth_date_raw = _state(request).get("birth_date", "")
     expected_total = _state(request).get("expected_total")
     promo_consent = dict(_state(request).get("promo_consent") or {})

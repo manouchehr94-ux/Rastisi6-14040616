@@ -21,7 +21,9 @@ class BuiltInPresetsValidateTests(SimpleTestCase):
         # Phase 3 (Universal Storefront — V5 Golden Homepage) added a
         # fifth built-in preset ("v5_golden_homepage"). U10 added the 8
         # required Ready Template recipe keys on top of that (5 + 8 = 13).
-        self.assertEqual(len(lpr.LAYOUT_PRESET_REGISTRY), 58)
+        from apps.storefront_builder.tests._catalog_count import LAYOUT_PRESET_COUNT
+
+        self.assertEqual(len(lpr.LAYOUT_PRESET_REGISTRY), LAYOUT_PRESET_COUNT)
 
     def test_all_built_in_presets_have_unique_keys(self):
         keys = [p.key for p in lpr.list_layout_presets()]

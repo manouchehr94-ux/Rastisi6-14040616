@@ -38,9 +38,11 @@ from apps.stores.models import Store, StoreMembership
 # these constants encode. -------------------------------------------------
 W4C_MATRIX_SCHEMA_VERSION = "w4c-matrix-v1"
 W4C_CERTIFIED_BASE_SHA = "3a4fe9070584655548bae5a9bb574f3415bbf580"
-# 704 cells for the certified 50 A8 identities + 13 cells for each of the three
-# reference-fidelity templates (51-53) = 743.
-W4C_TOTAL_CELLS_EXPECTED = 743
+# 704 cells for the certified 50 A8 identities + 13 cells for every later reference-fidelity template (51-53: 743; with the V5
+# six-site kit 54-59 the catalogue holds 59 Ready Templates: 821). Derived from the real catalogue so adding a template cannot drift.
+from apps.storefront_builder import layout_preset_registry as _lpr  # noqa: E402
+
+W4C_TOTAL_CELLS_EXPECTED = 704 + 13 * (len(_lpr.list_ready_templates()) - 50)
 W4C_PAGE_CLASSES = ("home", "listing", "pdp", "cart")
 W4C_VIEWPORTS = ("desktop", "tablet", "mobile")
 W4C_TIER1_OCCASION_CYCLE = ("nowruz", "ramadan", "muharram")

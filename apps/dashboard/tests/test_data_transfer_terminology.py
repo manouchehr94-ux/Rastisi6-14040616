@@ -230,15 +230,17 @@ class PageAndMessageTerminologyTests(TerminologyTestCase):
 class StaticLabelTerminologyTests(TerminologyTestCase):
     def test_navigation_tabs_use_the_new_names(self):
         labels = {tab.key: tab.label for section in navigation.SECTIONS for tab in section.tabs}
-        self.assertEqual(labels["imports"], "ورود اطلاعات")
+        labels.update({child.key: child.label for section in navigation.SECTIONS for tab in section.tabs for child in tab.children})
+        self.assertEqual(labels["data-transfer"], "ورود و خروج اطلاعات")
+        self.assertEqual(labels["imports"], "ورود اطلاعات")          # now Level-3 screens of «ورود و خروج اطلاعات»
         self.assertEqual(labels["exports"], "خروج اطلاعات")
         self.assertClean([section.label for section in navigation.SECTIONS] + list(labels.values()), "navigation labels")
 
     def test_command_palette_path_labels(self):
         response = self.client.get(reverse("dashboard:import-list"))
         html = response.content.decode()
-        self.assertIn("تنظیمات ← ورود اطلاعات", html)
-        self.assertIn("تنظیمات ← خروج اطلاعات", html)
+        self.assertIn("تنظیمات ← ورود و خروج اطلاعات", html)
+        self.assertIn("تنظیمات ← ورود و خروج اطلاعات ← خروج اطلاعات", html)
         self.assertClean(html, "palette markup of the import page")
 
     def test_entitlement_and_usage_labels(self):

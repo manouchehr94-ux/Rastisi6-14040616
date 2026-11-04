@@ -7,6 +7,7 @@ from django.contrib.auth import login as auth_login
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.cart.models import CartItem
@@ -15,7 +16,7 @@ from apps.core.services.client_ip import get_client_ip_bucket
 from apps.customers.models import Customer
 from apps.customers.services import auth_service
 from apps.sms.services import otp_service
-from apps.stores.resolution import resolve_store_for_service
+from apps.stores.resolution import CompatibilityFallbackUnavailableError, resolve_store_for_service
 
 from .forms import CheckoutAddressForm
 from .models import Order
@@ -33,7 +34,12 @@ def _get_own_order(request, code, queryset=None):
     if not (request.user.is_authenticated and hasattr(request.user, "customer_profile")):
         raise Http404
     queryset = Order.objects.all() if queryset is None else queryset
-    order = queryset.filter(code=code, customer=request.user.customer_profile).first()
+    # Store isolation: سفارشِ فروشگاهِ دیگر (حتی از همان مشتریِ سراسری) هرگز از این میزبان در دسترس نیست.
+    try:
+        store = resolve_store_for_service(request)
+    except CompatibilityFallbackUnavailableError as exc:
+        raise Http404 from exc
+    order = queryset.filter(code=code, customer=request.user.customer_profile, store=store).first()
     if order is None:
         raise Http404
     return order
@@ -59,6 +65,10 @@ def checkout_step1(request):
     context = checkout_service.build_context(request, cart)
     context["address_form"] = CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = ""
+    # Tracking: begin_checkout at the real checkout ENTRY (this full-page GET only — HTMX re-renders / failed validation / payment never reach it). The identity is
+    # the cart's completed-cycle count (tracking_events.checkout_cycle): same on every render of an open checkout, new after an order closes it.
+    from apps.core import tracking_events
+    tracking_events.queue(request, tracking_events.build_begin_checkout, resolve_store_for_service(request), cart)
     return render_domain_page(request, "orders/checkout_step1.html", context, page_type="checkout")
 
 
@@ -246,6 +256,42 @@ def payment_callback(request, code, status):
     return redirect("orders:payment-result", code=order.code)
 
 
+def card_transfer(request, code):
+    """صفحه‌ی کارت‌به‌کارت: مبلغ و کارتِ مقصد را نشان می‌دهد و ۴ رقمِ آخرِ کارتِ مبدأ + شماره‌ی پیگیری را می‌گیرد.
+    فقط مالکِ سفارش (همان Store)؛ ثبتِ اطلاعات سفارش را پرداخت‌شده نمی‌کند — تأییدِ مدیر لازم است."""
+    from .services import card_transfer_service as c2c
+
+    order = _get_own_order(request, code, queryset=Order.objects.select_related("payment_gateway", "store"))
+    store = resolve_store_for_service(request)
+    if order.store_id != store.pk or not c2c.is_card_transfer_order(order):
+        raise Http404
+    if order.payment_status == Order.PaymentStatus.PAID:
+        return redirect("orders:payment-result", code=order.code)
+    error = ""
+    if request.method == "POST" and order.status != Order.Status.CANCELED:
+        try:
+            c2c.submit(
+                order.pk, store=store, customer=request.user.customer_profile,
+                source_last4=request.POST.get("source_last4", ""), tracking_number=request.POST.get("tracking_number", ""),
+            )
+        except c2c.CardTransferError as exc:
+            error = str(exc)
+        else:
+            messages.success(request, "اطلاعاتِ واریزِ شما ثبت شد و در انتظارِ بررسیِ پرداخت است.")
+            return redirect("orders:card-transfer", code=order.code)
+    config = c2c.active_config(store)
+    state = c2c.review_state(order)
+    latest = order.card_transfers.order_by("-created_at", "-pk").first()
+    return render_domain_page(request, "orders/card_transfer.html", {
+        "order": order, "error": error, "state": state, "state_label": c2c.REVIEW_LABELS.get(state, ""),
+        "destination": c2c.destination_for(config) if config is not None else None,
+        "latest": latest, "can_submit": (
+            config is not None and order.status != Order.Status.CANCELED and state in ("awaiting_transfer", "rejected")
+            and order.card_transfers.count() < c2c.MAX_SUBMISSIONS_PER_ORDER
+        ),
+    })
+
+
 def payment_result(request, code):
     order = _get_own_order(
         request, code,
@@ -253,6 +299,9 @@ def payment_result(request, code):
             "items", "transactions"
         ),
     )
+    # Tracking: Purchase for a verified online payment, only for this customer's own result page (consent verified server-side, unique print-claim).
+    from apps.core import tracking_events
+    tracking_events.queue_purchase(request, order)
     return render_domain_page(request, "orders/payment_result.html", {"order": order})
 
 
@@ -359,7 +408,11 @@ def payment_initiate(request, code):
         PaymentAlreadyPaidError,
         PaymentConfigError,
         PaymentInitiationError,
+        PaymentInitiationInProgress,
+        PaymentSettlementUnresolved,
         initiate_payment,
+        is_attempt_in_flight,
+        is_safe_gateway_redirect,
     )
     from apps.orders.gateways import get_adapter
 
@@ -385,12 +438,29 @@ def payment_initiate(request, code):
             is_active=True,
         ).first()
 
-    # If no matching config, try any active online config for this store
+    # The customer chose a SPECIFIC provider. If it is no longer available, never silently switch them to another provider
+    # (different fees / BNPL vs card): tell them and let them pick again. The generic fallback below only serves legacy orders
+    # whose payment-method row does not correspond to any registered provider.
+    from apps.orders.gateways import GATEWAY_CHOICES
+
+    chosen_code = order.payment_gateway.slug if order.payment_gateway else ""
+    if gateway_config is None and chosen_code in {code for code, _ in GATEWAY_CHOICES} and chosen_code != "cod":
+        return render_domain_page(request, "orders/payment_result.html", {
+            "order": order,
+            "error": "روش پرداختِ انتخاب‌شده در حال حاضر در دسترس نیست؛ لطفاً با فروشگاه تماس بگیرید یا روش دیگری انتخاب کنید.",
+        })
+
+    # If no matching config, try any active online config for this store that is
+    # genuinely selectable at real checkout (readiness-aware; never picks a
+    # documentation-blocked / not-ready provider as a fallback).
     if gateway_config is None:
-        gateway_config = PaymentGatewayConfig.objects.filter(
+        candidates = PaymentGatewayConfig.objects.filter(
             store=store,
             is_active=True,
-        ).exclude(gateway_code="cod").first()
+        ).exclude(gateway_code="cod")
+        gateway_config = next(
+            (c for c in candidates if c.is_selectable_at_checkout), None
+        )
 
     # Still nothing — fall back to simulation if enabled
     if gateway_config is None:
@@ -401,11 +471,17 @@ def payment_initiate(request, code):
             "error": "هیچ درگاه پرداخت فعالی پیکربندی نشده است",
         })
 
-    # Generate idempotency key — uses a server-side nonce to avoid races.
-    # The gateway_payment_service checks this key BEFORE creating a new attempt,
-    # so concurrent requests with the same key return the existing attempt.
+    # Generate a DETERMINISTIC idempotency key derived from the payment
+    # operation identity: (store, order.code, gateway_config.pk, amount). A
+    # legitimate retry of the SAME operation (same store/order/gateway/amount)
+    # produces the SAME key, so the service dedupes it to the existing attempt
+    # instead of charging again. A different order/gateway/amount produces a
+    # different key, so unrelated operations never collide. The composite is
+    # hashed to stay within PaymentAttempt.idempotency_key max_length=64.
+    import hashlib
     import secrets as _secrets
-    idem_key = f"pay-{order.code}-{gateway_config.pk}-{_secrets.token_hex(8)}"
+    idem_seed = f"{store.pk}:{order.code}:{gateway_config.pk}:{order.grand_total}"
+    idem_key = f"pay-{hashlib.sha256(idem_seed.encode('utf-8')).hexdigest()[:48]}"
 
     # Initiate payment — attempt is created FIRST, then we build the callback URL
     # using the attempt's public_id. For online gateways the callback_url passed here
@@ -449,6 +525,21 @@ def payment_initiate(request, code):
         return redirect("orders:payment-result", code=order.code)
     except OrderNotPayableError as exc:
         return render_domain_page(request, "orders/payment_result.html", {"order": order, "error": str(exc)})
+    except PaymentSettlementUnresolved as exc:
+        # A previous attempt verified at the provider but its settlement is unproven: no new chargeable operation.
+        resp = render_domain_page(request, "orders/payment_result.html", {"order": order, "error": str(exc), "pending": True})
+        resp.status_code = 409
+        resp["Retry-After"] = "30"
+        return resp
+    except PaymentInitiationInProgress as exc:
+        # Another request is still preparing this exact payment: never
+        # redirect (no URL yet) and never call the gateway a second time.
+        resp = render_domain_page(request, "orders/payment_result.html", {
+            "order": order, "error": str(exc), "pending": True,
+        })
+        resp.status_code = 409
+        resp["Retry-After"] = "2"
+        return resp
     except (PaymentConfigError, PaymentInitiationError) as exc:
         logger.warning("Payment initiation failed for order %s: %s", order.code, exc)
         return render_domain_page(request, "orders/payment_result.html", {
@@ -456,38 +547,76 @@ def payment_initiate(request, code):
             "error": str(exc),
         })
 
-    # For online gateways, redirect to gateway payment page
+    # For online gateways, redirect to gateway payment page.
+    # Prefer the authoritative payment-page URL that create_payment returned
+    # and the service persisted on the attempt (pasargad/snappay/torobpay).
+    # Fall back to adapter.build_redirect_url only when no URL was persisted,
+    # so adapters that derive the URL from the track_id (zibal/zarinpal) keep
+    # working. No URL is ever hardcoded or fabricated here.
     if gateway_config.is_online:
-        adapter = get_adapter(gateway_config.gateway_code)
-        redirect_url = adapter.build_redirect_url(
-            attempt.gateway_track_id,
-            sandbox=gateway_config.is_sandbox,
-        )
+        def _pending_page():
+            resp = render_domain_page(request, "orders/payment_result.html", {
+                "order": order,
+                "error": "پرداخت در حال آمادهسازی است؛ چند لحظه بعد دوباره تلاش کنید.",
+                "pending": True,
+            })
+            resp.status_code = 409
+            resp["Retry-After"] = "2"
+            return resp
+
+        # Defensive guard: an attempt that is still in flight (or has no URL
+        # and no track id) must never produce a redirect.
+        if is_attempt_in_flight(attempt):
+            return _pending_page()
+        if attempt.status in (
+            PaymentAttempt.Status.SUCCEEDED,
+            PaymentAttempt.Status.VERIFIED,
+            PaymentAttempt.Status.FINALIZED,
+        ):
+            return redirect("orders:payment-result", code=order.code)
+        redirect_url = (attempt.gateway_redirect_url or "").strip()
+        if not redirect_url:
+            adapter = get_adapter(gateway_config.gateway_code)
+            redirect_url = (adapter.build_redirect_url(
+                attempt.gateway_track_id,
+                sandbox=gateway_config.is_sandbox,
+            ) or "").strip()
+        if not is_safe_gateway_redirect(redirect_url, get_adapter(gateway_config.gateway_code), sandbox=gateway_config.is_sandbox):
+            logger.error("Refusing empty/malformed payment redirect: order=%s attempt=%s", order.code, attempt.public_id)
+            return _pending_page()
         return redirect(redirect_url)
+
+    # Card-to-card: the customer reports the transfer; an admin confirms it (the order stays unpaid until then)
+    if get_adapter(gateway_config.gateway_code).requires_manual_confirmation:
+        return redirect("orders:card-transfer", code=order.code)
 
     # COD — go straight to result
     return redirect("orders:payment-result", code=order.code)
 
 
+@csrf_exempt
 def gateway_callback(request, attempt_id):
     """Public callback endpoint for payment gateways.
 
     This view:
     - Does NOT require authentication (gateway redirects the customer here)
-    - Accepts GET only (Zibal redirects with query params)
-    - Processes the callback server-to-server verification
-    - Redirects to payment result page
+    - Accepts GET and POST. Classic PSPs (Zibal/Zarinpal) redirect back with
+      GET query params; BNPL providers (SnappPay/TorobPay) POST their callback
+      to the returnURL with a form/body carrying {transactionId, state, amount}.
+    - Processes the callback with server-to-server verification
+    - Redirects to the payment result page
 
     Security:
-    - Never trusts callback params alone for payment confirmation
-    - Always verifies server-to-server with gateway
-    - Idempotent — duplicate callbacks are safe
-    - Does not expose sensitive information in the result page
+    - ``@csrf_exempt`` is applied ONLY to this public callback. It is safe
+      because callback fields are NEVER trusted to confirm a payment: the
+      authoritative server-to-server ``verify_payment`` (and capability-gated
+      ``settle_payment`` for BNPL) inside ``process_callback_and_verify`` is the
+      sole authority that finalizes an order. A forged-success POST cannot
+      finalize anything. No other view relaxes CSRF.
+    - Tenant + attempt resolution stays scoped to (public_id, store).
+    - Idempotent — duplicate callbacks are safe.
+    - Does not expose sensitive information in the result page.
     """
-    if request.method != "GET":
-        from django.http import HttpResponseNotAllowed
-        return HttpResponseNotAllowed(["GET"])
-
     from apps.orders.models import PaymentAttempt
     from apps.orders.services.gateway_payment_service import (
         PaymentAmountMismatch,
@@ -508,8 +637,10 @@ def gateway_callback(request, attempt_id):
 
     order = attempt.order
 
-    # Collect callback data from query params
-    callback_data = dict(request.GET.items())
+    # Merge GET and POST params so GET-based providers and POST-based BNPL
+    # providers both work. These are passed through only as callback_data and
+    # are never trusted to confirm payment.
+    callback_data = {**request.GET.dict(), **request.POST.dict()}
 
     try:
         attempt = process_callback_and_verify(
@@ -529,6 +660,12 @@ def gateway_callback(request, attempt_id):
             "پردازش پرداخت با خطا مواجه شد. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.",
         )
     else:
+        if attempt.status == PaymentAttempt.Status.UNKNOWN:
+            # Verified at the provider, settlement not yet proven: not a failure and not a paid order — tell the customer honestly.
+            messages.warning(
+                request,
+                "پرداخت شما در درگاه تأیید شد اما نهایی‌سازی آن هنوز قطعی نشده است. لطفاً دوباره پرداخت نکنید؛ نتیجه بررسی و به‌زودی اعلام می‌شود.",
+            )
         reconciliation = getattr(attempt, "reconciliation", None) if attempt.is_successful else None
         if reconciliation is not None:
             messages.warning(

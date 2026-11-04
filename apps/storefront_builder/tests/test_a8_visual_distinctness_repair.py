@@ -12,6 +12,7 @@ stays at exactly 50 with no duplicate registration.
 from django.test import SimpleTestCase
 
 from apps.storefront_builder import layout_preset_registry as lpr
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 _REPAIR_PAIRS = (
     ("green_workshop", "pine_eco"),
@@ -175,7 +176,7 @@ class AboveFoldIdentityNoLongerMatchesAnchorTests(SimpleTestCase):
 
 class CatalogIntegrityAfterRepairTests(SimpleTestCase):
     def test_canonical_ready_template_count_is_fifty_plus_three_reference_templates(self):
-        self.assertEqual(len(lpr.list_ready_templates()), 53)
+        self.assertEqual(len(lpr.list_ready_templates()), READY_TEMPLATE_COUNT)
 
     def test_canonical_keys_are_still_exactly_the_same_fifty(self):
         keys = sorted(preset.key for preset in lpr.list_ready_templates())

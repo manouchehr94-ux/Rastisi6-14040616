@@ -12,7 +12,7 @@
 {% endblock %}
 
 {% block header %}
-{% include header_variant_template with header_config=version.effective_header_config is_live_storefront=False is_builder_preview=True %}
+{% if not header_embedded %}{% include header_variant_template with header_config=version.effective_header_config is_live_storefront=False is_builder_preview=True %}{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -32,6 +32,7 @@
 
 {% block footer %}
 {% include footer_variant_template with footer_config=version.effective_footer_config is_live_storefront=False is_builder_preview=True %}
+{% include "storefront_builder/partials/global_footer/_shared/floating_actions.html" with footer_config=version.effective_footer_config %}
 {% if mobile_bottom_nav_template %}{% include mobile_bottom_nav_template with footer_config=version.effective_footer_config is_live_storefront=False is_builder_preview=True %}{% endif %}
 {% endblock %}
 
@@ -257,6 +258,18 @@
       return;
     }
 
+    // The Store header embedded INSIDE a Hero Stage is still «the header» for the merchant: ANY click on it opens the header settings
+    // (as a click on the shell header does) instead of selecting the whole stage.
+    // Links/buttons inside it (logo, menu, search, cart…) belong to the HEADER too: in the editor they must not navigate, and selecting the whole
+    // stage because the click landed on a menu link would hide the header picker from the merchant (menu-item editing is handled above).
+    var embeddedHeader = target.closest('.hs-header');
+    if (embeddedHeader) {
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      window.parent.postMessage({ type: 'sfb:openHeaderSettings' }, window.location.origin);
+      return;
+    }
+
     var section = target.closest('[data-section-id]');
     if (section) {
       // a real storefront control (button, quantity, carousel arrow, add-to-cart, link …) keeps working: not hijacked
@@ -294,9 +307,11 @@
 
   function blockEmbeddedNavigation(evt) {
     if (!inParentFrame) return;
-    var target = evt.target && evt.target.closest ? evt.target : null;
+    var target = evt.target && evt.target.nodeType === 3 ? evt.target.parentElement : evt.target;   // a text node (Firefox) has no .closest
+    target = target && target.closest ? target : null;
     if (!target) return;
-    var navigationTarget = target.closest('a[href], [role="link"]');
+    // any link-like element: <a href>, <area href>, an SVG <a>, role=link — whichever section / header / stage it sits in
+    var navigationTarget = target.closest('a[href], [role="link"]') || target.closest('a, area[href]');
     if (!navigationTarget) return;
     evt.preventDefault();
     evt.stopPropagation();

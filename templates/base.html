@@ -11,9 +11,11 @@
       data-sfb-button-style="{{ SHOP_BUTTON_STYLE|default:'filled' }}"
       data-sfb-image-fit="{{ SHOP_IMAGE_FIT|default:'cover' }}"
       data-sfb-image-hover="{{ SHOP_IMAGE_HOVER|default:'zoom' }}"
+      {% if SHOP_HEADING_STYLE and SHOP_HEADING_STYLE != 'default' %}data-sfb-heading="{{ SHOP_HEADING_STYLE }}"{% endif %}
+      {% if SHOP_PAGE_WIDTH_MODE and SHOP_PAGE_WIDTH_MODE != 'standard' %}data-sfb-page-width="{{ SHOP_PAGE_WIDTH_MODE }}"{% endif %}
       data-sfb-card-crossfade="{{ SHOP_CARD_IMAGE_CROSSFADE|default:'' }}"
       data-sfb-card-zoom="{{ SHOP_CARD_IMAGE_ZOOM|default:'1' }}"
-      style="--brand-primary:{{ SHOP_PRIMARY_COLOR }};--brand-accent:{{ SHOP_ACCENT_COLOR }};--brand-primary-fg:{{ SHOP_PRIMARY_FG }};--brand-accent-fg:{{ SHOP_ACCENT_FG }};--brand-secondary:{{ SHOP_SECONDARY_COLOR }};--brand-secondary-fg:{{ SHOP_SECONDARY_FG }};--brand-background:{{ SHOP_BACKGROUND_COLOR }};--brand-surface:{{ SHOP_SURFACE_COLOR }};--brand-text:{{ SHOP_TEXT_COLOR }};--brand-muted:{{ SHOP_MUTED_TEXT_COLOR }};--brand-primary-hover:{{ SHOP_PRIMARY_HOVER }};--brand-primary-hover-fg:{{ SHOP_PRIMARY_HOVER_FG }};--brand-gradient-fg:{{ SHOP_GRADIENT_FG }};--brand-gradient-end:{{ SHOP_GRADIENT_END }};--brand-muted-fg:{{ SHOP_MUTED_FG }};{% for tone_fg in SHOP_PALETTE_TONE_FGS %}--brand-tone-{{ forloop.counter }}-fg:{{ tone_fg }};{% endfor %}--brand-primary-text:{{ SHOP_PRIMARY_TEXT }};--brand-primary-text-dark:{{ SHOP_PRIMARY_TEXT_ON_DARK }};--brand-accent-text:{{ SHOP_ACCENT_TEXT }};--brand-secondary-text:{{ SHOP_SECONDARY_TEXT }};--theme-price-text:{{ SHOP_PRICE_TEXT }};--theme-success-text:{{ SHOP_SUCCESS_TEXT }};--theme-warning-text:{{ SHOP_WARNING_TEXT }};--theme-danger-text:{{ SHOP_DANGER_TEXT }};--theme-footer-muted-text:{{ SHOP_FOOTER_MUTED_TEXT }};--brand-border:{{ SHOP_BORDER_COLOR }};--brand-tone-1:{{ SHOP_PALETTE_TONE_1 }};--brand-tone-2:{{ SHOP_PALETTE_TONE_2 }};--brand-tone-3:{{ SHOP_PALETTE_TONE_3 }};--brand-tone-4:{{ SHOP_PALETTE_TONE_4 }};--brand-tone-5:{{ SHOP_PALETTE_TONE_5 }};--theme-header-bg:{{ SHOP_THEME_HEADER_BG }};--theme-header-text:{{ SHOP_THEME_HEADER_TEXT }};--theme-header-muted-text:{{ SHOP_THEME_HEADER_MUTED_TEXT }};--theme-nav-bg:{{ SHOP_THEME_NAV_BG }};--theme-nav-text:{{ SHOP_THEME_NAV_TEXT }};--theme-card-bg:{{ SHOP_THEME_CARD_BG }};--theme-footer-bg:{{ SHOP_THEME_FOOTER_BG }};--theme-footer-text:{{ SHOP_THEME_FOOTER_TEXT }};--theme-price:{{ SHOP_THEME_PRICE }};--sfb-font:'{{ SHOP_FONT|default:"Vazirmatn" }}';--sfb-radius:{{ SHOP_RADIUS|default:18 }}px;--sfb-button-radius:{{ SHOP_BUTTON_RADIUS|default:12 }}px;--sfb-content-width:{{ SHOP_CONTENT_WIDTH|default:1200 }}px;--sfb-grid-density:{{ SHOP_GRID_DENSITY|default:4 }};--sfb-heading-size:{{ SHOP_HEADING_SIZE|default:19 }}px;--sfb-body-size:{{ SHOP_BODY_SIZE|default:14 }}px;--sfb-product-name-size:{{ SHOP_PRODUCT_NAME_SIZE|default:13 }}px;--sfb-price-size:{{ SHOP_PRICE_SIZE|default:15 }}px;--sfb-muted-size:{{ SHOP_MUTED_TEXT_SIZE|default:11 }}px;--sfb-image-fit:{{ SHOP_IMAGE_FIT|default:'cover' }}{% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %};--occasion-accent:{{ SHOP_OCCASION_ACCENT }};--occasion-accent-soft:{{ SHOP_OCCASION_ACCENT_SOFT }};--occasion-motif-opacity:{{ SHOP_OCCASION_MOTIF_OPACITY }};--occasion-accent-mix:{{ SHOP_OCCASION_ACCENT_MIX }}{% endif %}">
+      style="--brand-primary:{{ SHOP_PRIMARY_COLOR }};--brand-accent:{{ SHOP_ACCENT_COLOR }};--brand-primary-fg:{{ SHOP_PRIMARY_FG }};--brand-accent-fg:{{ SHOP_ACCENT_FG }};--brand-secondary:{{ SHOP_SECONDARY_COLOR }};--brand-secondary-fg:{{ SHOP_SECONDARY_FG }};--brand-background:{{ SHOP_BACKGROUND_COLOR }};--brand-surface:{{ SHOP_SURFACE_COLOR }};--brand-text:{{ SHOP_TEXT_COLOR }};--brand-muted:{{ SHOP_MUTED_TEXT_COLOR }};--brand-primary-hover:{{ SHOP_PRIMARY_HOVER }};--brand-primary-hover-fg:{{ SHOP_PRIMARY_HOVER_FG }};--brand-gradient-fg:{{ SHOP_GRADIENT_FG }};--brand-gradient-end:{{ SHOP_GRADIENT_END }};--brand-muted-fg:{{ SHOP_MUTED_FG }};{% for tone_fg in SHOP_PALETTE_TONE_FGS %}--brand-tone-{{ forloop.counter }}-fg:{{ tone_fg }};{% endfor %}--brand-primary-text:{{ SHOP_PRIMARY_TEXT }};--brand-primary-text-dark:{{ SHOP_PRIMARY_TEXT_ON_DARK }};--brand-accent-text:{{ SHOP_ACCENT_TEXT }};--brand-secondary-text:{{ SHOP_SECONDARY_TEXT }};--theme-price-text:{{ SHOP_PRICE_TEXT }};--theme-success-text:{{ SHOP_SUCCESS_TEXT }};--theme-warning-text:{{ SHOP_WARNING_TEXT }};--theme-danger-text:{{ SHOP_DANGER_TEXT }};--theme-footer-muted-text:{{ SHOP_FOOTER_MUTED_TEXT }};--brand-border:{{ SHOP_BORDER_COLOR }};--brand-tone-1:{{ SHOP_PALETTE_TONE_1 }};--brand-tone-2:{{ SHOP_PALETTE_TONE_2 }};--brand-tone-3:{{ SHOP_PALETTE_TONE_3 }};--brand-tone-4:{{ SHOP_PALETTE_TONE_4 }};--brand-tone-5:{{ SHOP_PALETTE_TONE_5 }};--theme-header-bg:{{ SHOP_THEME_HEADER_BG }};--theme-header-text:{{ SHOP_THEME_HEADER_TEXT }};--theme-header-muted-text:{{ SHOP_THEME_HEADER_MUTED_TEXT }};--theme-nav-bg:{{ SHOP_THEME_NAV_BG }};--theme-nav-text:{{ SHOP_THEME_NAV_TEXT }};--theme-card-bg:{{ SHOP_THEME_CARD_BG }};--theme-footer-bg:{{ SHOP_THEME_FOOTER_BG }};--theme-footer-text:{{ SHOP_THEME_FOOTER_TEXT }};--theme-price:{{ SHOP_THEME_PRICE }};--sfb-font:'{{ SHOP_FONT|default:"Vazirmatn" }}';--sfb-radius:{{ SHOP_RADIUS|default:18 }}px;--sfb-button-radius:{{ SHOP_BUTTON_RADIUS|default:12 }}px;--sfb-content-width:{{ SHOP_CONTENT_WIDTH|default:1200 }}px;{% if SHOP_PAGE_WIDTH_MODE == 'custom' %}--sfb-page-width-custom:{{ SHOP_PAGE_MAX_WIDTH }}px;--sfb-gutter-custom:{{ SHOP_PAGE_GUTTER }}px;{% endif %}--sfb-grid-density:{{ SHOP_GRID_DENSITY|default:4 }};--sfb-heading-size:{{ SHOP_HEADING_SIZE|default:19 }}px;--sfb-body-size:{{ SHOP_BODY_SIZE|default:14 }}px;--sfb-product-name-size:{{ SHOP_PRODUCT_NAME_SIZE|default:13 }}px;--sfb-price-size:{{ SHOP_PRICE_SIZE|default:15 }}px;--sfb-muted-size:{{ SHOP_MUTED_TEXT_SIZE|default:11 }}px;--sfb-image-fit:{{ SHOP_IMAGE_FIT|default:'cover' }}{% if SHOP_OCCASION_THEME and SHOP_OCCASION_THEME != 'none' %};--occasion-accent:{{ SHOP_OCCASION_ACCENT }};--occasion-accent-soft:{{ SHOP_OCCASION_ACCENT_SOFT }};--occasion-motif-opacity:{{ SHOP_OCCASION_MOTIF_OPACITY }};--occasion-accent-mix:{{ SHOP_OCCASION_ACCENT_MIX }}{% endif %}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,19 +23,20 @@
 {% block meta_description %}{% endblock %}
 {% comment %}SEO: canonical/robots/OG on the tenant's own Host (ADR-90). Private pages
    override robots_meta with noindex; product/category pages override canonical.{% endcomment %}
-{% block robots_meta %}{% endblock %}
+{% block robots_meta %}{% if SEO_NOINDEX %}<meta name="robots" content="noindex,nofollow">{% endif %}{% endblock %}
 {% if SHOP_ENAMAD_VERIFICATION_META_NAME and SHOP_ENAMAD_VERIFICATION_META_CONTENT %}
 <meta name="{{ SHOP_ENAMAD_VERIFICATION_META_NAME }}" content="{{ SHOP_ENAMAD_VERIFICATION_META_CONTENT }}">
 {% endif %}
-<link rel="canonical" href="{% block canonical %}{{ request.scheme }}://{{ request.get_host }}{{ request.path }}{% endblock %}">
+<link rel="canonical" href="{% block canonical %}{{ SEO_ORIGIN }}{{ request.path }}{% endblock %}">
 {% block og_tags %}<meta property="og:site_name" content="{{ SHOP_NAME }}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{% block og_title %}{{ SHOP_NAME }}{% endblock %}">
-<meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">{% endblock %}
+<meta property="og:url" content="{{ SEO_ORIGIN }}{{ request.path }}">{% endblock %}
 {% if SHOP_FAVICON %}<link rel="icon" href="{{ SHOP_FAVICON.url }}">{% else %}<link rel="icon" href="{% static 'favicon.ico' %}">{% endif %}
 <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
 <link rel="stylesheet" href="{% static 'css/layout.css' %}">
+<link rel="stylesheet" href="{% static 'core/password_toggle.css' %}?v=20261029-2">
 {% block extra_css %}{% endblock %}
 {% comment %}Loaded AFTER page CSS so a selected full-site palette can consistently
 theme every storefront page without per-page forks.{% endcomment %}
@@ -49,9 +52,13 @@ registered before Alpine initializes. Reused by the mobile nav drawer (MDR) and
 the product quick view (MODAL).{% endcomment %}
 <script src="{% static 'js/storefront_overlay.js' %}" defer></script>
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
+{% comment %}Shared password visibility toggle (eye button in its own gutter) — also covers the htmx-loaded customer login/signup modal.{% endcomment %}
+<script src="{% static 'core/password_toggle.js' %}?v=20261029-2" defer></script>
 {% block structured_data %}{% endblock %}
+{% include "partials/tracking_head.html" %}
 </head>
 <body x-data="{ loginOpen: false, mobileNavOpen: true, catMenuOpen: false, mobileDrawerOpen: false }" @open-login.window="loginOpen = true">
+{% include "partials/tracking_body.html" %}
 {% csrf_token %}
 
 {% block header %}{% endblock %}

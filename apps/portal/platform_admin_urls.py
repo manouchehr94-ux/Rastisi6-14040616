@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.notifications.inbox_views import VIEWS_PLAT, url_patterns as _inbox_patterns
 from . import platform_admin_views as views
 from . import platform_admin_photo_views as photo_views
 from . import platform_admin_site_views as site_views
@@ -7,6 +8,7 @@ from . import platform_admin_site_views as site_views
 app_name = "portal_platform_admin"
 
 urlpatterns = [
+    *_inbox_patterns(VIEWS_PLAT),     # صندوقِ اعلانِ مدیرانِ پلتفرم (همان پیاده‌سازیِ مشترک)
     path("", views.home, name="home"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),

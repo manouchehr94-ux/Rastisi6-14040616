@@ -1,0 +1,52 @@
+{% load persian %}
+{# ردیابِ سفارش: دو مسیرِ مستقلِ «پرداخت» و «اجرای سفارش»؛ همه‌چیز از دادهٔ واقعیِ سفارش (apps/orders/services/order_tracker.py). #}
+<section class="otk" aria-labelledby="otk-title" data-testid="order-tracker" data-payment-state="{{ tracker.payment.state_key }}" data-fulfillment-state="{{ tracker.fulfillment.state_key }}">
+  <h2 class="otk__title" id="otk-title">پیگیری سفارش</h2>
+  <p class="otk__summary" data-testid="tracker-summary">{{ tracker.summary }}</p>
+
+  {% if tracker.rejection %}
+  <div class="otk__reject" role="alert" data-testid="tracker-rejection">
+    <b>پرداخت تأیید نشد</b>
+    {% if tracker.rejection.review_note %}<p>دلیل: {{ tracker.rejection.review_note }}</p>{% endif %}
+    {% if tracker.can_resubmit %}<a class="btn btn-primary" href="{% url 'orders:card-transfer' order.code %}" data-testid="tracker-resubmit">اصلاح و ثبت مجدد اطلاعات پرداخت</a>{% endif %}
+  </div>
+  {% elif tracker.can_resubmit %}
+  <div class="otk__reject otk__reject--todo">
+    <a class="btn btn-primary" href="{% url 'orders:card-transfer' order.code %}" data-testid="tracker-submit">ثبت اطلاعات واریز</a>
+  </div>
+  {% endif %}
+
+  <div class="otk__tracks">
+    {% for track in tracker_tracks %}
+    <div class="otk__track otk__track--{{ track.tone }}" data-track="{{ forloop.counter0 }}">
+      <div class="otk__track-h"><h3>{{ track.title }}</h3><span class="otk__tag otk__tag--{{ track.tone }}">{{ track.headline }}</span></div>
+      <p class="otk__desc">{{ track.description }}</p>
+      <ol class="otk__steps">
+        {% for s in track.steps %}
+        <li class="otk__step otk__step--{{ s.state }}"{% if s.state == "current" %} aria-current="step"{% endif %} data-step="{{ s.key }}" data-state="{{ s.state }}">
+          <span class="otk__dot" aria-hidden="true">{% if s.state == "done" %}✓{% elif s.state == "failed" %}✕{% endif %}</span>
+          <span class="otk__label">{{ s.label }}</span>
+          {% if s.at and s.state != "todo" %}<time class="otk__time">{{ s.at|jalali_dt }}</time>{% endif %}
+          <span class="otk__sr">{% if s.state == "done" %}(انجام شد){% elif s.state == "current" %}(مرحله‌ی فعلی){% elif s.state == "failed" %}(ناموفق){% else %}(در انتظار){% endif %}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if tracker.submissions %}
+  <details class="otk__hist">
+    <summary>سوابق ثبت اطلاعات واریز ({{ tracker.submissions|length|fa_number }})</summary>
+    <ul>
+      {% for sub in tracker.submissions %}
+      <li data-testid="tracker-submission" data-status="{{ sub.status }}">
+        <span>{{ sub.created_at|jalali_dt }}</span>
+        <b>{{ sub.get_status_display }}</b>
+        {% if sub.status == "rejected" and sub.review_note %}<span class="otk__note">{{ sub.review_note }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>

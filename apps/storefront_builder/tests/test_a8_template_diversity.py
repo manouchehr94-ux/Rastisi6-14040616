@@ -5,6 +5,7 @@ import dataclasses
 from django.test import SimpleTestCase
 
 from apps.storefront_builder import layout_preset_registry as lpr
+from apps.storefront_builder.tests._catalog_count import READY_TEMPLATE_COUNT
 
 try:
     from apps.storefront_builder.storefront_appearance.inventory import recipe_signature
@@ -17,8 +18,8 @@ class A8TemplateDiversityTests(SimpleTestCase):
         self.assertIsNotNone(recipe_signature)
         signatures = [recipe_signature(preset) for preset in lpr.list_ready_templates()]
 
-        self.assertEqual(len(signatures), 53)
-        self.assertEqual(len(set(signatures)), 53)
+        self.assertEqual(len(signatures), READY_TEMPLATE_COUNT)
+        self.assertEqual(len(set(signatures)), READY_TEMPLATE_COUNT)
 
     def test_signature_ignores_palette_and_font_only_changes(self):
         self.assertIsNotNone(recipe_signature)

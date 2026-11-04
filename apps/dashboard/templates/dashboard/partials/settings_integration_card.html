@@ -1,0 +1,32 @@
+{% load persian dashboard_extras %}
+{% comment %}One summary card per service: name + real status + ONE short sentence + next action + manage button. The long guide and the technical facts live in the drawer
+   (settings_integration_drawer.html). Four SEPARATE yes/no answers (saved / use enabled / ready / live) — never one vague «روشن است؟ بله».
+   Context: ``row`` (integration row), ``link_mode`` (True = «مدیریت» is a link that opens the tab with the drawer; False = a button that opens the drawer here).{% endcomment %}
+{% with code=row.provider.code %}
+<article class="rs-svc" id="int-{{ code }}" data-testid="integration-{{ code }}" data-status="{{ row.guide.status }}" data-live="{% if row.status.live %}1{% else %}0{% endif %}">
+  <div class="rs-svc__sym" aria-hidden="true">{% if code == "enamad" %}🛡️{% elif code == "torob" %}🔎{% elif code == "google_analytics" %}📊{% elif code == "google_tag_manager" %}🏷️{% else %}📣{% endif %}</div>
+  <div class="rs-svc__main">
+    <h3 class="rs-svc__title">{{ row.provider.display_name }}
+      <span class="int-chip int-chip--{{ row.guide.tone }}" data-status="{{ row.guide.status }}" data-testid="int-guide-status">{{ row.guide.label }}</span>
+    </h3>
+    <p class="rs-svc__sentence" data-testid="int-sentence">{{ row.guide.does }}</p>
+    <p class="rs-svc__next" data-testid="int-next"><b>قدم بعدی:</b> {{ row.guide.next|default:"کاری از شما لازم نیست." }}</p>
+    <ul class="rs-axes" data-testid="int-facts" aria-label="وضعیت {{ row.provider.display_name }}">
+      {% for ax in row.status.axes %}
+      <li class="rs-axis rs-axis--{% if ax.on %}on{% else %}off{% endif %}" data-testid="int-axis-{{ ax.key }}" data-on="{% if ax.on %}1{% else %}0{% endif %}" title="{{ ax.label }}">
+        <span class="rs-axis__mark" aria-hidden="true">{% if ax.on %}✓{% else %}✕{% endif %}</span>
+        <span class="rs-axis__label">{{ ax.short }}</span><span class="au-sr">{{ ax.label }} {% if ax.on %}بله{% else %}خیر{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if row.status.reason %}<p class="rs-svc__reason" data-testid="int-reason">{{ row.status.reason }}</p>{% endif %}
+  </div>
+  <div class="rs-svc__actions">
+    {% if link_mode %}
+    <a class="au-btn au-btn--primary au-btn--sm" href="?section=integrations&amp;view={{ row.view }}&amp;manage={{ code }}" data-testid="int-manage">مدیریت</a>
+    {% else %}
+    <button type="button" class="au-btn au-btn--primary au-btn--sm" data-drawer-open="drawer-{{ code }}" aria-haspopup="dialog" data-testid="int-manage">مدیریت</button>
+    {% endif %}
+  </div>
+</article>
+{% endwith %}

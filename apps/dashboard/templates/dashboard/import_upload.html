@@ -32,6 +32,11 @@
 .imp-submit{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
 .imp-callout{margin:0;padding:12px 14px;border-radius:12px;background:var(--blue-soft);font-size:12.5px;line-height:1.9}
 .imp-callout-safe{margin-top:12px;background:var(--green-soft)}
+.imp-quick{margin:0 0 16px;border:1px solid var(--border);border-radius:14px;background:var(--card);padding:4px 16px}
+.imp-quick>summary{cursor:pointer;font-weight:800;font-size:14px;min-height:44px;display:flex;align-items:center}
+.imp-quick ol{margin:0 0 12px;padding-inline-start:22px;display:grid;gap:8px;font-size:13px;line-height:1.95}
+.imp-quick li b{color:var(--text)}
+.imp-quick .imp-quick-links{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 </style>
 {% endblock %}
 
@@ -46,6 +51,19 @@
   <li class="is-later">بررسیِ کاملِ فایل (پیش‌نمایش)</li>
   <li class="is-later">تأیید و اعمال (فقط اگر خطایی نباشد)</li>
 </ol>
+
+<details class="imp-quick" open data-testid="import-quick-guide">
+  <summary>راهنمای سریع ورود گروهی کالاها</summary>
+  <ol>
+    <li><b>قالب را بگیرید.</b> نوع اطلاعات را انتخاب و قالبِ همان نوع را دانلود کنید (برای کالا، تنوع یا موجودی قالبِ جدا دارد). قالبِ «تنوع» و «کالا» یک شیتِ «نمونه» برایِ آموزش دارند؛ آن شیت وارد نمی‌شود.</li>
+    <li><b>فایل را پر و بارگذاری کنید.</b> «بارگذاری و بررسی» فقط فایل را می‌خواند و می‌سنجد؛ در این مرحله هیچ چیزی در فروشگاه تغییر نمی‌کند و خطاها همراهِ شماره‌ی ردیفِ اکسل نشان داده می‌شوند.</li>
+    <li><b>مواردِ جدید را تأیید کنید (فقط ورودِ کالا).</b> اگر برند، دسته، زیردسته یا ویژگی/مقدارِ تازه نوشته باشید، به‌صورتِ «پیشنهاد» ثبت می‌شود و فقط با تأییدِ مدیرِ دارایِ مجوز ساخته می‌شود؛ تا آن زمان فایل اجرا نمی‌شود.</li>
+    <li><b>تعداد را ببینید و تأیید نهایی بزنید.</b> در پیش‌نمایش تعدادِ موردهایِ ساخته‌شده و بروزرسانی‌شده نمایش داده می‌شود؛ با «ورود نهایی» یا همه‌ی ردیف‌ها اعمال می‌شود یا هیچ‌کدام (قبل از اجرا یک‌بار دیگر بررسی می‌شود).</li>
+  </ol>
+  <div class="imp-quick-links">
+    {% for spec in import_type_specs %}<a class="btn btn-sm" href="{% url 'dashboard:import-template' spec.value %}">دانلودِ قالب {{ spec.label }}{% if spec.value == "variants" %} (با نمونه‌یِ آموزشی){% endif %}</a>{% endfor %}
+  </div>
+</details>
 
 <form method="post" action="{% url 'dashboard:import-upload' %}" enctype="multipart/form-data" data-import-form>
   {% csrf_token %}

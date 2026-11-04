@@ -449,6 +449,16 @@ class Order(TimeStampedModel):
     def __str__(self):
         return self.code
 
+    @property
+    def payment_review_label(self) -> str:
+        """«در انتظار بررسی پرداخت» و … برایِ سفارش‌هایِ کارت‌به‌کارت (مشتق از ثبت‌هایِ واریز؛ ``payment_status`` دست‌نخورده است).
+        برایِ هر روشِ دیگر ``""``."""
+        if not self.payment_gateway_id or self.payment_gateway.slug != "card_to_card":
+            return ""
+        from apps.orders.services import card_transfer_service
+
+        return card_transfer_service.REVIEW_LABELS.get(card_transfer_service.review_state(self), "")
+
     def clean(self):
         """سفارش باید دقیقاً هم‌راستا با Store فروشنده‌اش باشد.
 
@@ -579,6 +589,7 @@ class Transaction(TimeStampedModel):
         GATEWAY = "gateway", "درگاه پرداخت"
         COD_CASH = "cod_cash", "نقدیِ پرداخت در محل"
         COD_POS = "cod_pos", "کارتخوانِ پرداخت در محل"
+        CARD_TRANSFER = "card_xfer", "کارت‌به‌کارت (تأییدِ دستی)"
 
     method = models.CharField("روش دریافت", max_length=10, choices=Method.choices, default=Method.GATEWAY)
     confirmed_by = models.ForeignKey(
@@ -624,6 +635,36 @@ class PaymentGatewayConfig(TimeStampedModel):
     class GatewayCode(models.TextChoices):
         ZIBAL = "zibal", "زیبال"
         COD = "cod", "پرداخت در محل"
+        ZARINPAL = "zarinpal", "زرین‌پال"
+        CARD_TO_CARD = "card_to_card", "کارت‌به‌کارت"
+        # M4 PSPs (documentation-blocked skeletons until each contract is verified)
+        PASARGAD = "pasargad", "بانک پاسارگاد"
+        SAMAN = "saman", "بانک سامان (سپ)"
+        PARSIAN = "parsian", "بانک پارسیان"
+        MELLAT = "mellat", "بانک ملت (به‌پرداخت)"
+        SADAD = "sadad", "بانک ملی (سداد)"
+        TEJARAT = "tejarat", "بانک تجارت"
+        # M5 BNPL (documentation-blocked skeletons)
+        SNAPPAY = "snappay", "اسنپ‌پی"
+        TOROBPAY = "torobpay", "تربپی"
+
+    class ReadinessStatus(models.TextChoices):
+        """Derived operational readiness of a gateway configuration.
+
+        These are DERIVED (see :attr:`readiness_status`) from verified
+        conditions, not stored as the source of truth. They exist as a
+        TextChoices to avoid magic strings across admin/checkout code.
+        """
+
+        NOT_CONFIGURED = "not_configured", "پیکربندی‌نشده"
+        NEEDS_CREDENTIALS = "needs_credentials", "نیازمند اعتبارنامه"
+        READY_FOR_TEST = "ready_for_test", "آماده‌ی آزمایش (Sandbox)"
+        # «پیکربندی کامل» = همه‌ی اعتبارنامه‌ها وارد و معتبرِ شکلی است و حالتِ واقعی (غیرِ Sandbox) انتخاب شده. این به‌معنیِ «اتصالِ تأییدشده»
+        # نیست: اتصال به درگاه فقط با یک تماسِ مجازِ زنده/Sandbox ثابت می‌شود (هنوز وجود ندارد) و جدا از این وضعیت نمایش داده می‌شود.
+        CONNECTED = "connected", "پیکربندی کامل"
+        DOCUMENTATION_BLOCKED = "documentation_blocked", "مسدود به‌دلیل مستندات"
+        UNAVAILABLE = "unavailable", "در دسترس نیست"
+        ERROR = "error", "خطا"
 
     store = models.ForeignKey(
         "stores.Store",
@@ -692,9 +733,17 @@ class PaymentGatewayConfig(TimeStampedModel):
         if not plaintext:
             return {}
         try:
-            return json.loads(plaintext)
+            credentials = json.loads(plaintext)
         except (json.JSONDecodeError, TypeError):
             return {}
+        if not isinstance(credentials, dict):
+            return {}
+        try:
+            from .gateways import get_adapter
+
+            return get_adapter(self.gateway_code).normalize_credentials(credentials)
+        except KeyError:
+            return credentials
 
     def set_credentials(self, credentials: dict) -> None:
         """Encrypt and store a credentials dict."""
@@ -748,6 +797,73 @@ class PaymentGatewayConfig(TimeStampedModel):
         except KeyError:
             return False
 
+    @property
+    def readiness_status(self) -> "PaymentGatewayConfig.ReadinessStatus":
+        """Derive the operational readiness state from verified conditions.
+
+        The derivation is intentionally ordered so that a *registered adapter
+        alone* never resolves to CONNECTED — real credentials (or the offline
+        contract) are required first. Precedence:
+
+        1. UNAVAILABLE  — no adapter registered for this code (unknown gateway).
+        2. DOCUMENTATION_BLOCKED — adapter exists but its official contract is
+           unverifiable; must NOT be selectable at real (non-sandbox) checkout.
+        3. NOT_CONFIGURED — online adapter with no credentials stored at all.
+        4. NEEDS_CREDENTIALS — some but not all required credentials present,
+           or validation still fails.
+        5. READY_FOR_TEST — fully configured AND running in sandbox mode.
+        6. CONNECTED — fully configured for real (non-sandbox) operation.
+
+        ERROR is reserved for unexpected failures while deriving state.
+        Offline adapters (COD) need no credentials, so they short-circuit to
+        READY_FOR_TEST (sandbox) / CONNECTED once an adapter is present.
+        """
+        R = self.ReadinessStatus
+        from .gateways import get_adapter
+
+        try:
+            try:
+                adapter = get_adapter(self.gateway_code)
+            except KeyError:
+                return R.UNAVAILABLE
+
+            if getattr(adapter, "documentation_blocked", False):
+                return R.DOCUMENTATION_BLOCKED
+
+            required = adapter.required_credentials
+            if required:
+                creds = self.get_credentials()
+                present = [key for key in required if creds.get(key)]
+                if not present:
+                    return R.NOT_CONFIGURED
+                if len(present) < len(required) or not self.can_activate:
+                    return R.NEEDS_CREDENTIALS
+
+            # Fully configured (or an offline adapter that needs no credentials).
+            if self.is_sandbox:
+                return R.READY_FOR_TEST
+            return R.CONNECTED
+        except Exception:  # pragma: no cover - defensive derivation guard
+            return R.ERROR
+
+    @property
+    def is_selectable_at_checkout(self) -> bool:
+        """Whether this config may be offered at a REAL (non-sandbox) checkout.
+
+        A DOCUMENTATION_BLOCKED or otherwise not-ready provider is never
+        selectable at real checkout. Sandbox-only readiness (READY_FOR_TEST)
+        is selectable only while the config itself is in sandbox mode.
+        """
+        if not self.is_active:
+            return False
+        status = self.readiness_status
+        R = self.ReadinessStatus
+        if status == R.CONNECTED:
+            return True
+        if status == R.READY_FOR_TEST and self.is_sandbox:
+            return True
+        return False
+
 
 class PaymentAttempt(TimeStampedModel):
     """A single payment attempt for an order.
@@ -756,13 +872,25 @@ class PaymentAttempt(TimeStampedModel):
     Each attempt is an independent, immutable record of what was sent to
     the gateway and what came back.
 
-    State machine:
+    State machine (existing core, unchanged):
         CREATED → REQUESTING → REDIRECT_READY → PENDING → SUCCEEDED
                                                         → FAILED
                                                         → CANCELED
                                                         → EXPIRED
 
     Once in SUCCEEDED, FAILED, CANCELED, or EXPIRED, the attempt is final.
+
+    M1 additive extension — new OPTIONAL status members used by later
+    provider/refund features. They are added WITHOUT renaming or removing any
+    existing member, and WITHOUT changing FINAL_STATUSES semantics for the
+    original terminal states:
+
+        VERIFIED            — gateway verification confirmed (pre-finalize).
+        FINALIZED           — order-side finalization applied (additional final).
+        UNKNOWN             — ambiguous verify result awaiting reconciliation.
+        REFUND_PENDING      — a refund has been requested but not confirmed.
+        REFUNDED            — full refund confirmed (additional final).
+        PARTIALLY_REFUNDED  — partial refund confirmed (additional final).
     """
 
     class Status(models.TextChoices):
@@ -774,12 +902,30 @@ class PaymentAttempt(TimeStampedModel):
         FAILED = "failed", "ناموفق"
         CANCELED = "canceled", "لغوشده"
         EXPIRED = "expired", "منقضی‌شده"
+        # --- M1 additive members (optional; no existing member changed) ---
+        VERIFIED = "verified", "تأییدشده"
+        FINALIZED = "finalized", "نهایی‌شده"
+        UNKNOWN = "unknown", "نامشخص"
+        REFUND_PENDING = "refund_pending", "در انتظار استرداد"
+        REFUNDED = "refunded", "مستردشده"
+        PARTIALLY_REFUNDED = "partially_refunded", "استرداد جزئی"
 
+    #: Original terminal states — semantics preserved exactly for backward
+    #: compatibility (existing tests assert on this set unchanged).
     FINAL_STATUSES = frozenset({
         Status.SUCCEEDED,
         Status.FAILED,
         Status.CANCELED,
         Status.EXPIRED,
+    })
+
+    #: Additional terminal states introduced by the M1 extension. Kept as a
+    #: SEPARATE set so FINAL_STATUSES semantics (and anything asserting on it)
+    #: stay unchanged. Use ``is_final`` for the full terminal check.
+    EXTENDED_FINAL_STATUSES = frozenset({
+        Status.FINALIZED,
+        Status.REFUNDED,
+        Status.PARTIALLY_REFUNDED,
     })
 
     # --- Relationships ---
@@ -826,7 +972,7 @@ class PaymentAttempt(TimeStampedModel):
     # --- Status ---
     status = models.CharField(
         "وضعیت",
-        max_length=15,
+        max_length=20,
         choices=Status.choices,
         default=Status.CREATED,
     )
@@ -844,6 +990,17 @@ class PaymentAttempt(TimeStampedModel):
         max_length=100,
         blank=True,
         default="",
+    )
+    gateway_redirect_url = models.TextField(
+        "نشانی صفحه‌ی پرداخت درگاه",
+        blank=True,
+        default="",
+        help_text=(
+            "نشانی معتبرِ صفحه‌ی پرداخت که درگاه در پاسخِ create بازمی‌گرداند. "
+            "این نشانی با شناسه‌ی پیگیری (gateway_track_id) یکی نیست؛ برای درگاه‌هایی "
+            "که نشانی را مستقیماً برمی‌گردانند (مثل پاسارگاد/اسنپ‌پی/توروب‌پی) ذخیره می‌شود "
+            "و درگاه‌هایی که نشانی را از trackId می‌سازند (زیبال/زرین‌پال) این فیلد را خالی می‌گذارند."
+        ),
     )
     idempotency_key = models.CharField(
         "کلید یکتایی",
@@ -917,12 +1074,142 @@ class PaymentAttempt(TimeStampedModel):
 
     @property
     def is_final(self) -> bool:
-        """Whether this attempt has reached a terminal state."""
-        return self.status in self.FINAL_STATUSES
+        """Whether this attempt has reached a terminal state.
+
+        Covers the original FINAL_STATUSES plus the additive
+        EXTENDED_FINAL_STATUSES (finalized/refunded/partially_refunded). The
+        original set is unchanged; this property simply recognizes the new
+        terminal states too.
+        """
+        return self.status in self.FINAL_STATUSES or self.status in self.EXTENDED_FINAL_STATUSES
 
     @property
     def is_successful(self) -> bool:
         return self.status == self.Status.SUCCEEDED
+
+
+class CardTransferSubmission(TimeStampedModel):
+    """اطلاعاتِ واریزِ کارت‌به‌کارت که مشتری ثبت کرده و منتظرِ بررسیِ مدیر است (یا بررسی شده).
+
+    فقط ۴ رقمِ آخرِ کارتِ *مبدأ* و شماره‌ی پیگیری نگه داشته می‌شود — شماره‌ی کاملِ کارتِ مشتری، CVV2 و رمز هرگز. مقصد (کارتِ خودِ
+    فروشگاه) به‌صورتِ اسنپ‌شاتِ برچسب و ۴ رقمِ آخر ذخیره می‌شود تا تغییرِ بعدیِ تنظیمات تاریخچه را عوض نکند. ثبتِ اطلاعات سفارش را
+    پرداخت‌شده نمی‌کند؛ فقط تأییدِ مدیر (``card_transfer_service.approve``) از مسیرِ ``lifecycle.apply_payment_success`` این کار را می‌کند."""
+
+    class Status(models.TextChoices):
+        SUBMITTED = "submitted", "در انتظار بررسی"
+        APPROVED = "approved", "تأییدشده"
+        REJECTED = "rejected", "ردشده"
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="card_transfer_submissions")
+    order = models.ForeignKey(Order, verbose_name="سفارش", on_delete=models.PROTECT, related_name="card_transfers")
+    attempt = models.ForeignKey(PaymentAttempt, verbose_name="تلاش پرداخت", on_delete=models.PROTECT, related_name="card_transfers")
+    amount = models.DecimalField("مبلغِ سفارش (اسنپ‌شات)", max_digits=14, decimal_places=0)
+    destination_last4 = models.CharField("۴ رقمِ آخرِ کارتِ مقصد (اسنپ‌شات)", max_length=4)
+    destination_label = models.CharField("بانک/صاحبِ کارتِ مقصد (اسنپ‌شات)", max_length=160, blank=True, default="")
+    source_last4 = models.CharField("۴ رقمِ آخرِ کارتِ مبدأ", max_length=4)
+    tracking_number = models.CharField("شماره‌ی پیگیری", max_length=40)
+    submitted_by = models.ForeignKey("customers.Customer", verbose_name="ثبت‌کننده", on_delete=models.SET_NULL, null=True, blank=True, related_name="card_transfer_submissions")
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.SUBMITTED, db_index=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="بررسی‌کننده", on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_card_transfers")
+    reviewed_at = models.DateTimeField("زمانِ بررسی", null=True, blank=True)
+    review_note = models.CharField("دلیلِ رد / یادداشت", max_length=300, blank=True, default="")
+    transaction = models.OneToOneField(Transaction, verbose_name="تراکنشِ تأیید", on_delete=models.SET_NULL, null=True, blank=True, related_name="card_transfer")
+
+    class Meta:
+        verbose_name = "ثبتِ پرداختِ کارت‌به‌کارت"
+        verbose_name_plural = "ثبت‌هایِ پرداختِ کارت‌به‌کارت"
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["order"], condition=models.Q(status="submitted"), name="uniq_open_card_transfer_per_order"),
+            models.UniqueConstraint(fields=["order"], condition=models.Q(status="approved"), name="uniq_approved_card_transfer_per_order"),
+        ]
+        indexes = [models.Index(fields=["store", "status", "-created_at"], name="idx_c2c_store_status")]
+
+    def __str__(self):
+        return f"{self.order.code} — {self.get_status_display()}"
+class PaymentTransactionEvent(TimeStampedModel):
+    """Append-only audit trail of payment lifecycle events (M1 additive).
+
+    Each row records ONE event in a payment's life (status transition,
+    verification, inquiry result, refund request/confirmation, cancel, …).
+    The model is deliberately append-only: it is written, never updated or
+    deleted, so it can serve as evidence for later provider/refund features
+    and reconciliation.
+
+    Scoping: every event is scoped by BOTH ``store`` and ``order`` (and, when
+    available, the originating ``attempt``) to preserve tenant isolation. The
+    ``amount`` is stored in the attempt/order currency unit (Toman) and is
+    nullable because not every event carries an amount (e.g. a status change).
+
+    ``payload`` holds safe, non-sensitive gateway evidence only — never
+    credentials, full card numbers, or customer PII.
+    """
+
+    class EventType(models.TextChoices):
+        STATUS_CHANGE = "status_change", "تغییر وضعیت"
+        CREATED = "created", "ایجاد تلاش"
+        REDIRECTED = "redirected", "هدایت به درگاه"
+        CALLBACK = "callback", "بازگشت از درگاه"
+        VERIFIED = "verified", "تأیید پرداخت"
+        VERIFY_FAILED = "verify_failed", "ناموفق در تأیید"
+        VERIFY_AMBIGUOUS = "verify_ambiguous", "تأیید نامشخص"
+        FINALIZED = "finalized", "نهایی‌سازی سفارش"
+        INQUIRY = "inquiry", "استعلام وضعیت"
+        CANCEL_REQUESTED = "cancel_requested", "درخواست لغو"
+        CANCELED = "canceled", "لغوشده"
+        REFUND_REQUESTED = "refund_requested", "درخواست استرداد"
+        REFUND_PENDING = "refund_pending", "استرداد در انتظار"
+        REFUNDED = "refunded", "استرداد انجام شد"
+        PARTIALLY_REFUNDED = "partially_refunded", "استرداد جزئی"
+        SETTLED = "settled", "تسویه‌شده"
+        NOTE = "note", "یادداشت"
+
+    store = models.ForeignKey(
+        "stores.Store",
+        verbose_name="فروشگاه",
+        on_delete=models.PROTECT,
+        related_name="payment_transaction_events",
+    )
+    order = models.ForeignKey(
+        Order,
+        verbose_name="سفارش",
+        on_delete=models.PROTECT,
+        related_name="payment_transaction_events",
+    )
+    attempt = models.ForeignKey(
+        "PaymentAttempt",
+        verbose_name="تلاش پرداخت",
+        on_delete=models.PROTECT,
+        related_name="transaction_events",
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(
+        "نوع رویداد",
+        max_length=20,
+        choices=EventType.choices,
+    )
+    from_status = models.CharField("وضعیت قبلی", max_length=20, blank=True, default="")
+    to_status = models.CharField("وضعیت جدید", max_length=20, blank=True, default="")
+    amount = models.DecimalField(
+        "مبلغ (تومان)", max_digits=14, decimal_places=0, null=True, blank=True,
+    )
+    currency = models.CharField("واحد پول", max_length=10, blank=True, default="TOMAN")
+    gateway_ref_id = models.CharField("شماره ارجاع درگاه", max_length=100, blank=True, default="")
+    message = models.CharField("پیام (امن)", max_length=300, blank=True, default="")
+    payload = models.JSONField("شواهد امن درگاه", default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "رویداد تراکنش پرداخت"
+        verbose_name_plural = "رویدادهای تراکنش پرداخت"
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["store", "order", "created_at"], name="idx_pte_store_order_date"),
+            models.Index(fields=["attempt", "created_at"], name="idx_pte_attempt_date"),
+        ]
+
+    def __str__(self):
+        return f"PaymentTransactionEvent {self.get_event_type_display()} — order={self.order_id}"
 
 
 class PaymentReconciliation(TimeStampedModel):
@@ -941,6 +1228,7 @@ class PaymentReconciliation(TimeStampedModel):
         PROCESSING_ERROR = "processing_error", "خطا در پردازشِ پرداختِ تأییدشده"
         AMOUNT_MISMATCH = "amount_mismatch", "مبلغِ تأییدشده با سفارش مغایرت دارد"
         VERIFY_AMBIGUOUS = "verify_ambiguous", "نتیجه‌ی تأییدِ درگاه نامشخص (نیازمند بررسی)"
+        SETTLEMENT_UNCERTAIN = "settlement_uncertain", "تأییدِ درگاه موفق بود ولی نتیجه‌ی تسویه نامشخص است (نیازمند بررسی)"
 
     class EvidenceLevel(models.TextChoices):
         #: خودِ درگاه پرداختِ موفق را تأیید کرده (پول جابه‌جا شده).

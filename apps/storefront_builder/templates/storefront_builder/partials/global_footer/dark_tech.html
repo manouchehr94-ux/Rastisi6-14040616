@@ -22,27 +22,27 @@ Required context: same three keys every variant renderer receives.
 {% load storefront_builder_extras %}
 {% has_real_footer_contact_data FOOTER_SETTINGS SHOP_CONTACT_PHONE SHOP_CONTACT_EMAIL as gf_has_contact_data %}
 {% with fc=footer_config rc=footer_config.responsive %}
-<footer class="gf gf--dark">
+<footer class="gf gf--dark"{% with gstyle=footer_config.geometry|shell_geometry_style:"footer" %}{% if gstyle %} style="{{ gstyle }}"{% endif %}{% endwith %}>
   <div class="wrap">
     {% if fc.show_about or fc.show_quick_links and NAV_FOOTER_1 or fc.show_categories and top_level_categories or fc.show_contact and gf_has_contact_data or fc.extra_blocks|has_renderable_footer_extra_block:SOCIAL_LINKS_FOOTER %}
     <div class="gf-dark-grid">
       {% if fc.show_about %}
-      <div class="gf-col gf-col-brand" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      <div data-gf-block="about" class="gf-col gf-col-brand" {% if rc.show_about.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_about.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
         {% include "storefront_builder/partials/global_footer/_shared/brand.html" %}
       </div>
       {% endif %}
       {% if fc.show_quick_links %}
-      <div {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      <div data-gf-block="links" {% if rc.show_quick_links.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_quick_links.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
         {% include "storefront_builder/partials/global_footer/_shared/nav_column.html" %}
       </div>
       {% endif %}
       {% if fc.show_categories %}
-      <div {% if rc.show_categories.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_categories.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      <div data-gf-block="categories" {% if rc.show_categories.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_categories.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
         {% include "storefront_builder/partials/global_footer/_shared/categories_column.html" %}
       </div>
       {% endif %}
       {% if fc.show_contact %}
-      <div class="gf-col gf-col-contact" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
+      <div data-gf-block="contact" class="gf-col gf-col-contact" {% if rc.show_contact.hide_on_tablet %}data-shell-hide-tablet{% endif %} {% if rc.show_contact.hide_on_mobile %}data-shell-hide-mobile{% endif %}>
         {% include "storefront_builder/partials/global_footer/_shared/contact_column.html" %}
       </div>
       {% endif %}

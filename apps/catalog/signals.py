@@ -8,7 +8,8 @@
 وجود ندارد.
 """
 
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db import transaction
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
 from .models import Category, MerchantCollection, MerchantCollectionItem, PriceMode, Product
@@ -82,3 +83,37 @@ def sync_collection_item_inquiry(sender, instance, **kwargs):
             pricing_mode_service.recompute_product(instance.product)
         except ObjectDoesNotExist:
             return  # the product itself is being deleted (cascade)
+
+
+# ---- a HARD-deleted product must still be announced as «gone» (IndexNow) ----------------------------------------------------------------------------------------
+#: the audit action ``apps.core.indexnow_sync`` reads to find URLs that were public and no longer have a row (no new table: the existing audit ledger carries it)
+PRODUCT_HARD_DELETED = "product.hard_deleted"
+
+
+@receiver(pre_delete, sender=Product)
+def remember_if_the_product_was_publicly_listed(sender, instance, **kwargs):
+    """Decided BEFORE the row disappears: only a product that was really listed on the storefront had a public URL worth retiring (a draft never did)."""
+    from .services.product_publish_service import storefront_listing_products
+
+    try:
+        instance._rs_was_public = storefront_listing_products(instance.store).filter(pk=instance.pk).exists()
+    except Exception:                                                               # noqa: BLE001 — never block a delete on bookkeeping
+        instance._rs_was_public = False
+
+
+@receiver(post_delete, sender=Product)
+def record_the_retired_public_url(sender, instance, **kwargs):
+    """Write one audit row (store, slug) once the delete has COMMITTED — and only if the store itself still exists (a whole-store removal cascades everything)."""
+    if not getattr(instance, "_rs_was_public", False) or not instance.slug:
+        return
+    store_id, slug, pk = instance.store_id, instance.slug, instance.pk
+
+    def _record():
+        from apps.core.services.audit_service import record_audit_event
+        from apps.stores.models import Store
+
+        store = Store.objects.filter(pk=store_id).first()
+        if store is not None:
+            record_audit_event(store=store, action_code=PRODUCT_HARD_DELETED, object_type="Product", object_id=pk, object_label=slug[:200], metadata={"slug": slug})
+
+    transaction.on_commit(_record)

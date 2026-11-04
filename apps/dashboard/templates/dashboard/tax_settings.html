@@ -1,67 +1,89 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}تنظیماتِ مالیات | پنل مدیریت{% endblock %}
 {% block page_title %}تنظیماتِ مالیات{% endblock %}
+{% block page_sub %}تنها محلِ ویرایشِ وضعیت و نرخِ مالیاتِ فروشگاه{% endblock %}
 {% block content %}
-<div class="card" style="margin-bottom:16px;padding:14px 18px;background:var(--surface-2,#f7f5fc)">
-  <p style="margin:0;font-size:13px;color:var(--muted)">راستیسی مالیات را طبقِ قواعدِ پیکربندی‌شده‌ی شما محاسبه می‌کند و هیچ مشاوره‌ی حقوقی/مالیاتی‌ای ارائه نمی‌دهد.</p>
-</div>
-<div class="form-card" x-data="{ hasTax: {{ settings.tax_enabled|yesno:'true,false' }} }">
-  <form method="post">
+<div class="au-page" x-data="{ hasTax: {{ settings.tax_enabled|yesno:'true,false' }} }">
+  <div class="au-intro">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <p>راستی‌سی مالیات را طبقِ قواعدِ پیکربندی‌شده‌ی شما محاسبه می‌کند و هیچ مشاوره‌ی حقوقی/مالیاتی‌ای ارائه نمی‌دهد. فروشگاه‌های تازه بدونِ مالیات شروع می‌کنند؛ اگر کسب‌وکارتان مالیات دارد، پایین روشنش کنید.</p>
+  </div>
+
+  <form method="post" class="au-card" novalidate>
     {% csrf_token %}
-    <div class="field-group">
-      <label class="field-label">آیا فروشگاهِ شما مالیات دارد؟</label>
-      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
-        <label style="flex:1;min-width:180px;display:flex;align-items:center;gap:8px;padding:14px;border:2px solid var(--line,#e5e4e7);border-radius:10px;cursor:pointer"
-               :style="!hasTax ? 'border-color:var(--violet,#6D28D9);background:var(--surface-2,#f7f5fc)' : ''">
+    <div class="au-card__head">
+      <h2>آیا فروشگاهِ شما مالیات دارد؟</h2>
+      <span class="au-badge {% if settings.tax_enabled %}au-badge--ok{% endif %}">{% if settings.tax_enabled %}مالیات فعال — {{ settings.tax_percent|floatformat:"-2" }}٪{% else %}مالیات غیرفعال — مبلغِ مالیات صفر{% endif %}</span>
+    </div>
+    <div class="au-card__body">
+      <div class="au-choices" role="radiogroup" aria-label="وضعیت مالیات">
+        <label class="au-choice" :class="!hasTax ? 'is-on' : ''">
           <input type="radio" name="tax_enabled" value="off" {% if not settings.tax_enabled %}checked{% endif %} @change="hasTax = false">
-          <div><b>مالیات ندارم</b></div>
+          <span><b>مالیات ندارم</b><small>مالیات برای همه‌ی کالاها و ارسال صفر می‌شود.</small></span>
         </label>
-        <label style="flex:1;min-width:180px;display:flex;align-items:center;gap:8px;padding:14px;border:2px solid var(--line,#e5e4e7);border-radius:10px;cursor:pointer"
-               :style="hasTax ? 'border-color:var(--violet,#6D28D9);background:var(--surface-2,#f7f5fc)' : ''">
+        <label class="au-choice" :class="hasTax ? 'is-on' : ''">
           <input type="radio" name="tax_enabled" value="on" {% if settings.tax_enabled %}checked{% endif %} @change="hasTax = true">
-          <div><b>مالیات دارم</b></div>
+          <span><b>مالیات دارم</b><small>مالیات طبقِ نرخ و قواعدِ زیر به سبد و سفارش افزوده می‌شود.</small></span>
         </label>
       </div>
-    </div>
 
-    <div x-show="!hasTax" class="card" style="margin-top:10px;padding:12px 16px">
-      <p style="margin:0;font-size:12.5px;color:var(--muted)">
-        با انتخابِ «مالیات ندارم»، مالیات برای تمامِ کالاها و ارسال صفر در نظر گرفته می‌شود و هیچ فیلدِ مالیاتیِ دیگری لازم نیست.
-      </p>
-    </div>
+      <div class="au-note" x-show="!hasTax" x-cloak>با انتخابِ «مالیات ندارم»، هیچ مالیاتی محاسبه نمی‌شود و فیلدِ مالیاتیِ دیگری لازم نیست. سفارش‌هایی که قبلاً ثبت شده‌اند تغییری نمی‌کنند.</div>
 
-    <div x-show="hasTax">
-      <label class="toggle-field">
-        <input type="checkbox" name="prices_include_tax" {% if settings.prices_include_tax %}checked{% endif %}>
-        <div class="toggle-content"><span class="toggle-title">قیمت‌ها شاملِ مالیات‌اند</span></div>
-      </label>
-      <label class="toggle-field">
-        <input type="checkbox" name="shipping_taxable" {% if settings.shipping_taxable %}checked{% endif %}>
-        <div class="toggle-content"><span class="toggle-title">هزینه‌ی ارسال مشمولِ مالیات است</span></div>
-      </label>
-      <div class="field-group">
-        <label class="field-label">سیاستِ گردکردن</label>
-        <select name="tax_rounding_policy" class="form-select">
-          {% for val, label in rounding_choices %}
-          <option value="{{ val }}" {% if settings.tax_rounding_policy == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
+      <div x-show="hasTax" x-cloak style="display:grid;gap:18px">
+        <div class="au-field">
+          <label for="id_tax_percent">نرخ کلی مالیات</label>
+          <div class="au-unit">
+            <input type="text" name="tax_percent" id="id_tax_percent" class="au-input au-input--ltr" dir="ltr" inputmode="decimal" autocomplete="off"
+                   value="{{ rate_form.tax_percent.value|default_if_none:settings.tax_percent|stringformat:'s' }}" {% if rate_form.tax_percent.errors %}aria-invalid="true"{% endif %}>
+            <span>درصد (٪)</span>
+          </div>
+          {% for error in rate_form.tax_percent.errors %}<span class="au-error">{{ error }}</span>{% endfor %}
+          {% if has_granular %}
+          <span class="au-hint">شما برای دسته‌های مالیاتی نرخِ جداگانه ثبت کرده‌اید؛ پس نرخِ هر کالا از «دسته‌ی مالیاتی» خودش گرفته می‌شود و این نرخِ کلی فقط وقتی استفاده می‌شود که هیچ نرخِ دسته‌ای باقی نماند.</span>
+          {% else %}
+          <span class="au-hint">این نرخ روی همه‌ی کالاها اعمال می‌شود. مثال: برای سبدِ {{ sample_base|toman }}، مالیات {{ sample_tax|toman }} می‌شود. اگر کالاهایتان نرخ‌های متفاوت دارند، از «مدیریتِ دسته‌های مالیاتی» نرخِ جداگانه تعریف کنید.</span>
+          {% endif %}
+        </div>
+
+        <label class="au-switch">
+          <input type="checkbox" name="prices_include_tax" role="switch" {% if settings.prices_include_tax %}checked{% endif %}>
+          <span class="au-switch__track"></span>
+          <span class="au-switch__text" data-on="بله" data-off="خیر"></span>
+          <span class="au-switch__label">قیمت‌ها شاملِ مالیات‌اند<small>روشن: مالیات از دلِ قیمتِ کالا استخراج می‌شود و به مبلغ اضافه نمی‌شود.</small></span>
+        </label>
+        <label class="au-switch">
+          <input type="checkbox" name="shipping_taxable" role="switch" {% if settings.shipping_taxable %}checked{% endif %}>
+          <span class="au-switch__track"></span>
+          <span class="au-switch__text" data-on="بله" data-off="خیر"></span>
+          <span class="au-switch__label">هزینه‌ی ارسال مشمولِ مالیات است</span>
+        </label>
+
+        <div class="au-grid">
+          <div class="au-field">
+            <label for="id_tax_rounding_policy">سیاستِ گردکردن</label>
+            <select name="tax_rounding_policy" id="id_tax_rounding_policy" class="au-select">
+              {% for val, label in rounding_choices %}
+              <option value="{{ val }}" {% if settings.tax_rounding_policy == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="au-field">
+            <label for="id_default_tax_class">دسته‌ی مالیاتیِ پیش‌فرض</label>
+            <select name="default_tax_class" id="id_default_tax_class" class="au-select">
+              <option value="">— هیچ‌کدام —</option>
+              {% for tax_class in tax_classes %}
+              <option value="{{ tax_class.pk }}" {% if settings.default_tax_class_id == tax_class.pk %}selected{% endif %}>{{ tax_class.name }}</option>
+              {% endfor %}
+            </select>
+            <span class="au-hint">برای کالاهایی که دسته‌ی مالیاتیِ خودشان را ندارند. اگر هیچ نرخِ دسته‌ای ثبت نکنید، «نرخ کلی» بالا اعمال می‌شود.</span>
+          </div>
+        </div>
       </div>
-      <div class="field-group">
-        <label class="field-label">دسته‌ی مالیاتیِ پیش‌فرض</label>
-        <select name="default_tax_class" class="form-select">
-          <option value="">— هیچ‌کدام —</option>
-          {% for tax_class in tax_classes %}
-          <option value="{{ tax_class.pk }}" {% if settings.default_tax_class_id == tax_class.pk %}selected{% endif %}>{{ tax_class.name }}</option>
-          {% endfor %}
-        </select>
-        <span class="field-help">اگر هیچ دسته‌ی مالیاتی/نرخی ثبت نکنید، نرخِ ثابتِ «{{ settings.tax_percent }}٪» (تنظیماتِ مالی) همچنان اعمال می‌شود.</span>
-      </div>
     </div>
-
-    <div class="btn-row">
-      <button type="submit" class="btn btn-primary">ذخیره</button>
-      <a href="{% url 'dashboard:tax-class-list' %}" class="btn btn-secondary">مدیریتِ دسته‌های مالیاتی</a>
+    <div class="au-card__foot">
+      {% if can_manage_tax %}<button type="submit" class="au-btn au-btn--primary">ذخیره</button>{% endif %}
+      <a href="{% url 'dashboard:tax-class-list' %}" class="au-btn au-btn--ghost">مدیریتِ دسته‌های مالیاتی</a>
     </div>
   </form>
 </div>

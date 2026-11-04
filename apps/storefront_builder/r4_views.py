@@ -13,7 +13,7 @@ from apps.catalog.models import Brand, Category, MerchantCollection
 from apps.catalog.services.collection_service import searchable_products
 from apps.catalog.services.search_service import apply_text_search
 from apps.content.models import Menu
-from apps.core.services.rate_limit import RateLimitExceeded
+from apps.core.services.rate_limit import RateLimitExceeded, enforce_rate_limit
 from apps.dashboard.decorators import permission_required, staff_required
 from apps.stores.authorization import STOREFRONT_LAYOUT_MANAGE
 from apps.stores.resolution import resolve_store_for_service
@@ -22,7 +22,9 @@ from . import (
     appearance_registry,
     design_block,
     global_region_registry,
+    group_style,
     layout_preset_registry,
+    media_guide,
     media_views,
     resource_source,
     section_registry,
@@ -37,6 +39,7 @@ from .models import (
     FOOTER_TOGGLE_FIELDS,
     HEADER_RESPONSIVE_AWARE_KEYS,
     HEADER_TOGGLE_FIELDS,
+    StorefrontContainer,
     StorefrontLayoutVersion,
     StorefrontPage,
     StorefrontSection,
@@ -415,6 +418,7 @@ _HEADER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "cta": "دکمه فراخوان (متن + لینک)",
     "spacer": "فاصله‌گذار",
     "tagline": "شعار/تگ‌لاین",
+    "category_menu": "دکمهٔ منوی دسته‌بندی کالاها",
 }
 _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "custom_text": "متن دلخواه (عنوان + متن)",
@@ -422,6 +426,40 @@ _FOOTER_EXTRA_BLOCK_TYPE_LABELS_FA = {
     "social": "شبکه‌های اجتماعی",
     "badge_slots": "جایگاه نشان‌های اعتماد (فقط نشان‌های واقعیِ بارگذاری‌شده نمایش داده می‌شوند)",
 }
+
+
+def _announcement_image_url(draft, header) -> str:
+    """Thumbnail of the announcement picture for the Studio panel (store-scoped MediaAsset only; empty when unset / foreign)."""
+    asset_id = (header or {}).get("announcement_image_asset_id")
+    if not asset_id:
+        return ""
+    from apps.content.models import MediaAsset
+
+    asset = MediaAsset.objects.filter(pk=asset_id, store_id=draft.layout.store_id).first()
+    try:
+        return asset.image.url if asset is not None and asset.image else ""
+    except ValueError:
+        return ""
+
+
+def _header_placement_context(draft: StorefrontLayoutVersion, header: dict) -> dict:
+    from . import header_placement
+
+    state = header_placement.describe(draft)
+    variant_labels = {
+        v.key: v.label_fa for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_HEADER_REGION)
+    }
+    placement_labels = dict(header_placement.PLACEMENTS)
+    recipes = []
+    for recipe in header_placement.list_recipes():
+        recipes.append({
+            **recipe,
+            "variant_label": variant_labels.get(recipe["variant"], recipe["variant"]),
+            "placement_label": placement_labels.get(recipe["placement"], recipe["placement"]),
+            "current": recipe["variant"] == header.get("header_variant") and recipe["placement"] == state["mode"],
+            "placement_applies": state["available"],
+        })
+    return {**state, "recipes": recipes}
 
 
 def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
@@ -465,6 +503,9 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
             {"key": v.key, "label_fa": v.label_fa}
             for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_HEADER_REGION)
         ],
+        # Header placement + the Header Recipes (model + placement pairs read off the Ready Template registry): the Inspector offers them next to
+        # the model cards; the availability is the production embedding decision, never a guess.
+        "header_placement": _header_placement_context(draft, header),
         "footer_variants": [
             {"key": v.key, "label_fa": v.label_fa}
             for v in global_region_registry.list_global_variants(global_region_registry.GLOBAL_FOOTER_REGION)
@@ -479,7 +520,16 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         "density_choices": appearance_registry.DENSITY_CHOICES,
         "image_fit_choices": appearance_registry.IMAGE_FIT_CHOICES,
         "image_hover_choices": appearance_registry.IMAGE_HOVER_CHOICES,
+        "site_heading_style_choices": appearance_registry.SITE_HEADING_STYLE_CHOICES,
         "site_content_width_choices": appearance_registry.SITE_CONTENT_WIDTH_CHOICES,
+        # «چیدمان و عرض صفحات»: vocabulary + bounds from the registry, current value from the ONE resolver (same one the storefront reads)
+        "page_width_modes": appearance_registry.PAGE_WIDTH_MODES,
+        "page_layout": {
+            **appearance_registry.resolve_page_layout(appearance),
+            "max_width_range": appearance_registry.PAGE_MAX_WIDTH_RANGE,
+            "gutter_range": appearance_registry.PAGE_GUTTER_RANGE,
+            "defaults": appearance_registry.PAGE_CUSTOM_DEFAULTS,
+        },
         "site_grid_density_choices": appearance_registry.SITE_GRID_DENSITY_CHOICES,
         "site_card_shadow_choices": appearance_registry.SITE_CARD_SHADOW_CHOICES,
         "site_card_hover_choices": appearance_registry.SITE_CARD_HOVER_CHOICES,
@@ -497,9 +547,16 @@ def _build_global_design_context(draft: StorefrontLayoutVersion) -> dict:
         ),
         # Merchant-editable geometry/colour of the SELECTED header/footer variant (only the properties that
         # variant actually draws — shell_geometry.SHELL_GEOMETRY).
-        "header_geometry": shell_geometry.serialize_for_inspector(
-            "header", header.get("header_variant"), header.get("geometry"),
-        ),
+        "header_geometry": [
+            prop for prop in shell_geometry.serialize_for_inspector("header", header.get("header_variant"), header.get("geometry"))
+            if not prop["key"].startswith("announce_")
+        ],
+        # V5 — the announcement strip's own colour / picture-size controls (shown inside its block, not among the variant's geometry)
+        "header_announce_geometry": [
+            prop for prop in shell_geometry.serialize_for_inspector("header", header.get("header_variant"), header.get("geometry"))
+            if prop["key"].startswith("announce_")
+        ],
+        "announcement_image_url": _announcement_image_url(draft, header),
         "footer_geometry": shell_geometry.serialize_for_inspector(
             "footer", footer.get("footer_variant"), footer.get("geometry"),
         ),
@@ -610,9 +667,15 @@ def _build_design_lab_design_context(draft: StorefrontLayoutVersion) -> dict:
     }
 
 
+R4_EDITOR_TEMPLATE = "dashboard/storefront_builder/r4/editor.html"
+
+
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
-def storefront_r4_editor(request):
+def storefront_r4_editor(request, template_name=R4_EDITOR_TEMPLATE):
+    """The R4 Studio page. ``template_name`` lets a second presentation (RastiSi Vision Studio, route ``vision-studio``) render the very
+    same context - same Draft, same permission, same tenant resolution - through its own template; the URL conf is the only caller
+    that ever passes it."""
     store = resolve_store_for_service(request)
     layout = layout_service.get_or_create_layout(store)
 
@@ -701,12 +764,37 @@ def storefront_r4_editor(request):
     # A pure read, same "prefetch once, never re-query per Cell" shape as
     # ``build_structure_projection`` itself.
     empty_cells = []
-    for container_obj in page.containers.order_by("order", "id").prefetch_related("cells__section", "cells__blocks"):
+    # V5 Groups: nested Groups are walked too, and a Cell that HOSTS a nested Group is occupied, not empty.
+    hosting_cell_ids = set(
+        StorefrontContainer.all_objects.filter(page=page, parent_cell__isnull=False).values_list("parent_cell_id", flat=True)
+    )
+    for container_obj in StorefrontContainer.all_objects.filter(page=page).order_by("order", "id").prefetch_related("cells__section", "cells__blocks"):
         if container_obj.is_locked:
             continue
         for cell_obj in sorted(container_obj.cells.all(), key=lambda c: (c.order, c.id)):
+            if cell_obj.pk in hosting_cell_ids:
+                continue
             if not container_service.blocks_from_prefetched_cell(cell_obj):
                 empty_cells.append({"container_id": container_obj.pk, "cell_id": cell_obj.pk})
+
+    # V5-LAYOUT-011 — one row per REAL Container of the page (empty ones included). The «ردیف‌ها و ستون‌بندی» panel used to be built from
+    # the Sections' own container_id (a ``regroup``), so a Container with no Section had no row and therefore no way to be changed or
+    # removed. A pure read in the page's own visual order.
+    members_by_container: dict[int, list[str]] = {}
+    for member in structure_items:
+        if member["container_id"] is not None:
+            members_by_container.setdefault(member["container_id"], []).append(member["label"])
+    structure_containers = [
+        {
+            "container_id": container_obj.pk,
+            "layout_key": container_obj.layout_key,
+            "is_locked": bool(container_obj.is_locked),
+            "settings": container_service.effective_container_settings(container_obj.settings),
+            "members": members_by_container.get(container_obj.pk, []),
+            "is_empty": container_obj.pk not in members_by_container,
+        }
+        for container_obj in page.containers.order_by("order", "id")
+    ]
 
     # The shell has no <form>/{% csrf_token %} of its own, so the browser
     # mutation client (r4_editor.js) has no other trigger to guarantee a
@@ -715,7 +803,7 @@ def storefront_r4_editor(request):
 
     return render(
         request,
-        "dashboard/storefront_builder/r4/editor.html",
+        template_name,
         {
             "active_page": "storefront_builder",
             "layout": layout,
@@ -730,6 +818,7 @@ def storefront_r4_editor(request):
             "sections": sections,
             "r4_edit_revision": draft.edit_revision,
             "structure_items": structure_items,
+            "structure_containers": structure_containers,
             "structure_library": structure_library,
             # Phase 5 Task 6 — Storefront Showcase creation-facade choices
             # (see _build_showcase_choices): merchant-facing UX over the four
@@ -742,7 +831,7 @@ def storefront_r4_editor(request):
             # list/translation.
             "container_layout_presets": [
                 (key, container_service.LAYOUT_PRESET_LABELS_FA.get(key, key))
-                for key in container_service.LAYOUT_PRESETS
+                for key in (*container_service.LAYOUT_PRESETS, *container_service.STACKED_LAYOUT_PRESETS)
             ],
             # FOLLOWUP-12 — the 2-cell subset of the SAME registry, for the guided
             # "two-column row" dialog (no second preset list).
@@ -769,7 +858,7 @@ def storefront_r4_editor(request):
             # stale-definition-under-a-client reason.
             "ready_templates": [
                 {"key": preset.key, "version": preset.version, "label": preset.label_fa}
-                for preset in layout_preset_registry.list_ready_templates()
+                for preset in layout_preset_registry.list_selectable_templates()
             ],
             "current_template_key": variant_contract.validate_template_provenance(
                 draft.template_provenance,
@@ -810,7 +899,7 @@ def _build_studio_context(
 
     from . import appearance_registry, theme_catalog
     from .studio_icons import STUDIO_ICON_PATHS
-    from .services.ready_template_card_service import build_ready_template_cards, resolve_applied_template_card
+    from .services.ready_template_card_service import build_ready_template_cards, SCOPE_GALLERY, resolve_applied_template_card
 
     provenance = variant_contract.validate_template_provenance(draft.template_provenance)
     current_key = provenance["template"]["key"]
@@ -842,7 +931,7 @@ def _build_studio_context(
     )
 
     cards = build_ready_template_cards(
-        draft, current_template_key=current_key, current_template_version=current_version,
+        draft, current_template_key=current_key, current_template_version=current_version, scope=SCOPE_GALLERY,
     )
     # The exact applied template (key + version): the catalog card when the
     # Draft is on the latest version, else the exact historical version.
@@ -860,6 +949,10 @@ def _build_studio_context(
             "accent": colors.get("primary", "#2c6251"),
             "soft": colors.get("secondary", colors.get("accent", "#e9f1e9")),
             "bg": colors.get("background", "#ffffff"),
+            # additive (Vision Studio's colour cards): the palette's own registry colours, in display order; nothing reads them but the Vision template
+            "swatches": [
+                colors.get(key, "") for key in ("primary", "secondary", "accent", "background", "surface", "text")
+            ],
         })
 
     history_entries = [
@@ -898,6 +991,11 @@ def _build_studio_context(
         ),
         "live_preview_url": live_preview_url,
         "preview_url": reverse("dashboard:storefront-builder-preview"),
+        # «پیش‌نمایش»: the read-only customer view of the saved Draft (a different action from viewing the published store)
+        "draft_preview_url": reverse("dashboard:storefront-builder-draft-preview"),
+        "announcement_inspector_url": reverse("dashboard:storefront-builder-r4-announcement-inspector"),
+        "layout_tree_url": reverse("dashboard:storefront-builder-r4-layout-tree"),
+        "group_inspector": group_style.inspector_groups(),
         "templates": [
             {
                 "key": card["preset"].key,
@@ -911,6 +1009,7 @@ def _build_studio_context(
                 "palette_swatch": card["palette_swatch"],
                 "header_label": card["header_variant_label"],
                 "footer_label": card["footer_variant_label"],
+                "parts": r4_mutation_service.template_parts(card["preset"]),
             }
             for card in cards
         ],
@@ -954,6 +1053,81 @@ def _is_strict_int(value: object) -> bool:
     return type(value) is int
 
 
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_layout_tree(request):
+    """V5 Composer — the page's layout tree (rows -> cells -> Groups -> Blocks) of THIS store's active Draft, read-only. The on-canvas
+    toolbar, the layers tree and the Group inspector read it after every committed change; it writes nothing."""
+    store = resolve_store_for_service(request)
+    draft = layout_service.get_or_create_draft(store, user=request.user)
+    page_type = request.GET.get("page") or StorefrontPage.PageType.HOME
+    if page_type not in {choice for choice, _label in StorefrontPage.PageType.choices}:
+        return JsonResponse({"ok": False, "code": "unsupported_page"}, status=400)
+    page = draft.get_page(page_type)
+    from apps.content.models import MediaAsset
+
+    media = [
+        {"id": asset.pk, "url": asset.image.url if asset.image else "", "name": (asset.image.name or "").rsplit("/", 1)[-1]}
+        for asset in MediaAsset.objects.filter(store=store).order_by("-created_at", "-id")[:60]
+    ]
+    return JsonResponse({
+        "ok": True, "revision": draft.edit_revision, "page_type": page_type,
+        "tree": section_structure_service.build_layout_tree(page),
+        "media": media,
+        "patterns": [{"key": key, "label": label} for key, label in section_registry.PATTERN_REGISTRY.items()],
+        "palette": semantic_colors.token_hex_map(draft.effective_appearance_config()),
+        "palette_labels": semantic_colors.SEMANTIC_COLOR_TOKEN_LABELS_FA,
+        "limits": {"max_cells": container_service.MAX_GROUP_CELLS, "max_depth": container_service.MAX_GROUP_DEPTH, "page_cells": container_service.MAX_PAGE_CELLS},
+    })
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_announcement_image(request):
+    """V5 — upload the announcement strip's small picture into THIS store's MediaAsset library (the same model, size limit and Pillow content
+    check as every other storefront picture) and return its id. It writes NO design state: the Studio then sends the normal ``header.update``
+    mutation (``announcement_image_asset_id``) — the single write authority with Revision / Undo / Draft isolation. A failed upload leaves
+    nothing behind (validation runs before the row exists)."""
+    from django.core.exceptions import ValidationError
+
+    from apps.content.models import MediaAsset
+
+    store = resolve_store_for_service(request)
+    upload = request.FILES.get("image")
+    if upload is None or len(request.FILES) != 1:
+        return JsonResponse({"ok": False, "code": "invalid_upload", "message": "یک تصویر انتخاب کنید."}, status=400)
+    asset = MediaAsset(store=store, image=upload)
+    try:
+        asset.full_clean()
+    except ValidationError as exc:
+        messages = exc.messages or ["تصویر نامعتبر است."]
+        return JsonResponse({"ok": False, "code": "invalid_image", "message": "؛ ".join(messages)}, status=400)
+    asset.save()
+    return JsonResponse({"ok": True, "asset_id": asset.pk, "url": asset.image.url})
+
+
+@require_GET
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_announcement_inspector(request):
+    """V5-UI-014 — the standard R4 settings workspace (محتوا / طراحی / پیشرفته) for the ONE header announcement strip. Read-only: it only renders the
+    Draft's header_config; every change travels through the normal ``header.update`` mutation (the single write authority). Never creates a Draft
+    (the Studio always has one) and exposes nothing of another store (the Draft is resolved from the signed-in manager's own store)."""
+    store = resolve_store_for_service(request)
+    layout = layout_service.get_or_create_layout(store)
+    draft = layout.draft_version
+    if draft is None or draft.status != StorefrontLayoutVersion.Status.DRAFT:
+        raise Http404
+    design = _build_global_design_context(draft)
+    response = render(request, "dashboard/storefront_builder/r4/partials/announcement_inspector.html", {
+        "global_design": design, "announcement_image_url": design["announcement_image_url"],
+    })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @require_POST
 @staff_required
 @permission_required(STOREFRONT_LAYOUT_MANAGE)
@@ -981,6 +1155,8 @@ def storefront_r4_mutation(request):
         return JsonResponse({"ok": False, "code": "invalid_mutation_type"}, status=400)
 
     try:
+        if mutation_type == "appearance.template.apply":
+            r4_mutation_service.ensure_template_selectable(store=store, template_key=mutation.get("template_key"))
         new_revision = r4_mutation_service.apply_mutation(
             store=store, actor=request.user, base_revision=base_revision, mutation=mutation,
         )
@@ -1345,14 +1521,14 @@ def storefront_r4_section_inspector(request, pk):
             "dashboard:storefront-builder-section-media-list",
             kwargs={"pk": section.pk, "kind": media_kind},
         )
-        media_label_plural = media_views.media_label_for_kind(media_kind)
+        media_label_plural = media_views.media_config_for_kind(media_kind, section.section_key)["label_plural"]
         # Phase 5 Task 4 (remediation R1a) — R4-native media editing. Instead of
         # only linking out to the legacy screen, the Inspector embeds the
         # canonical media manager inline (the same media_views models/CRUD/
         # authority; never a second media system). The add/edit form and every
         # CRUD reswap happen through the existing media endpoints via htmx,
         # staying inside R4.
-        media_config = media_views.media_config_for_kind(media_kind)
+        media_config = media_views.media_config_for_kind(media_kind, section.section_key)
         media_items = list(
             media_config["model"].objects.filter(section=section).order_by("display_order", "id")
         )
@@ -1562,6 +1738,8 @@ def storefront_r4_section_inspector(request, pk):
             "color_choices": color_choices,
             "color_hex": semantic_colors.token_hex_map(global_appearance),
             "media_assets": media_assets,
+            "media_guide_spec": media_guide.spec_for_section(section.section_key) if media_assets is not None else None,
+            "media_upload_url": reverse("dashboard:storefront-builder-r4-media-upload") if media_assets is not None else "",
             "section": section,
             "definition": definition,
             "basic_fields": basic_fields,
@@ -1588,6 +1766,41 @@ def storefront_r4_section_inspector(request, pk):
             "background_context": background_context,
         },
     )
+
+
+#: a merchant uploading pictures from the Inspector: generous, but bounded per Store (the file validators still apply to every file)
+_MEDIA_UPLOAD_RATE_LIMIT = dict(max_attempts=60, window_seconds=3600, fail_open=True)
+
+
+@require_POST
+@staff_required
+@permission_required(STOREFRONT_LAYOUT_MANAGE)
+def storefront_r4_media_upload(request):
+    """Upload ONE picture into THIS Store's Media Library from the Inspector's picture picker (the same ``MediaAsset`` the section media
+    pickers and the Media Library use — no parallel store of files). The model's own validators run (size ≤ 5 MB, a real decodable image of an
+    allowed format). Store-scoped by ``resolve_store_for_service``; the file never leaves the Store's own library. Returns what the picker
+    needs: the new asset's id, URL and display name."""
+    import os
+
+    from django.core.exceptions import ValidationError
+
+    from apps.content.models import MediaAsset
+
+    store = resolve_store_for_service(request)
+    upload = request.FILES.get("image")
+    if upload is None:
+        return JsonResponse({"ok": False, "message": "فایلی برای بارگذاری انتخاب نشده است."}, status=400)
+    try:
+        enforce_rate_limit("storefront_layout.media_upload", str(store.pk), **_MEDIA_UPLOAD_RATE_LIMIT)
+    except RateLimitExceeded:
+        return JsonResponse({"ok": False, "message": "تعداد بارگذاری‌ها زیاد است؛ کمی بعد دوباره امتحان کنید."}, status=429)
+    asset = MediaAsset(store=store, image=upload)
+    try:
+        asset.full_clean()
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "message": " ".join(exc.messages) or "این فایل به‌عنوان تصویر پذیرفته نشد."}, status=400)
+    asset.save()
+    return JsonResponse({"ok": True, "id": asset.pk, "url": asset.image.url, "name": os.path.basename(asset.image.name)})
 
 
 @require_GET
@@ -2016,6 +2229,7 @@ def storefront_r4_switch_template(request):
     template_version = payload.get("template_version")
 
     try:
+        r4_mutation_service.ensure_template_selectable(store=store, template_key=template_key)
         r4_mutation_service.switch_template(
             store=store, actor=request.user, base_revision=base_revision,
             template_key=template_key, template_version=template_version,
