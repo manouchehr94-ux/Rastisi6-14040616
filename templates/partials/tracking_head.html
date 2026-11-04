@@ -2,6 +2,6 @@
 TRACKING_IDS comes from apps.core.context_processors.tracking: strictly validated ids of THIS store's active integrations, empty on localhost/QA hosts, for unpublished stores and
 whenever the platform switch RASTISI_STOREFRONT_TRACKING_ENABLED is off. CONSENT_CONFIG (apps.core.consent) is derived from those ids. This template prints NO tag at all: only the validated
 JSON config and consent.js, which loads a tag after the visitor accepted the matching category (Consent Mode v2 defaults are «denied»). No ids → nothing rendered, no banner, no script.{% endcomment %}
-{% if CONSENT_CONFIG %}{{ CONSENT_CONFIG|consent_json_script:"rs-consent-config" }}
+{% if CONSENT_CONFIG %}{{ CONSENT_CONFIG|consent_json_script:"rs-consent-config" }}{{ TRACKING_EVENTS|track_events_script:"rs-track-events" }}
 <link rel="stylesheet" href="{% static 'core/consent.css' %}">
 <script src="{% static 'core/consent.js' %}" defer></script>{% endif %}

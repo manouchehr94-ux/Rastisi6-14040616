@@ -31,7 +31,7 @@
     if (!m) return null;
     try {
       var c = JSON.parse(decodeURIComponent(m[1]));
-      if (c && c.v === cfg.version && (c.a === 0 || c.a === 1) && (c.m === 0 || c.m === 1)) return c;
+      if (c && c.v === cfg.version && (c.a === 0 || c.a === 1) && (c.m === 0 || c.m === 1)) { if (gpc) c.m = 0; return c; }   // Global Privacy Control overrides an older marketing grant
     } catch (e) { /* unreadable = no choice */ }
     return null;
   }
@@ -138,10 +138,92 @@
     document.body.appendChild(reopen);
   }
 
+  // ---- e-commerce events (view_item / add_to_cart / begin_checkout) -----------------------------------------------------------------
+  // The server hands over already-validated, server-priced events (#rs-track-events on page load, or an htmx «rsTrack» HX-Trigger after a successful cart add). They are
+  // re-validated here and dispatched ONLY to a provider whose tag is loaded under the visitor's CURRENT consent. There is no queue and no replay: an event that arrives while the
+  // visitor has not chosen (or has refused / withdrawn / has GPC on) is dropped for good and is never sent after a later choice. GA4 is sent directly only when it is NOT served by GTM.
+  var EVENTS = { view_item: 'ViewContent', add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout' };
+  var seen = {};
+  function isInt(v, min, max) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v && v >= min && v <= max; }
+  function isText(v, max) { return typeof v === 'string' && v.length > 0 && v.length <= max; }
+  function cleanEvent(raw) {
+    if (!raw || typeof raw !== 'object' || !EVENTS.hasOwnProperty(raw.name)) return null;
+    if (!isText(raw.id, 120) || !/^[A-Za-z0-9_.:-]+$/.test(raw.id)) return null;
+    if (raw.currency !== 'IRR' || !isInt(raw.value, 0, 1e15) || !Array.isArray(raw.items) || !raw.items.length || raw.items.length > 50) return null;
+    var items = [];
+    for (var i = 0; i < raw.items.length; i++) {
+      var it = raw.items[i];
+      if (!it || !isText(it.item_id, 64) || !isText(it.item_name, 100) || !isInt(it.price, 0, 1e15) || !isInt(it.quantity, 1, 9999)) return null;
+      var item = { item_id: it.item_id, item_name: it.item_name, price: it.price, quantity: it.quantity };
+      if (it.item_variant !== undefined) { if (!isText(it.item_variant, 64)) return null; item.item_variant = it.item_variant; }
+      items.push(item);
+    }
+    return { name: raw.name, id: raw.id, currency: 'IRR', value: raw.value, items: items, once: raw.once === true };
+  }
+  function allowed(tracker) {                                 // the visitor's choice RIGHT NOW (cookie is the source of truth), loaded tag, and GPC for marketing
+    var c = readChoice();
+    if (!c || !ids[tracker] || !loaded[tracker]) return false;
+    var meta = !!(c.m && !gpc), analytics = !!c.a;
+    var item = (cfg.load || []).filter(function (l) { return l.tracker === tracker; })[0];
+    var needs = item ? item.needs : 'analytics';
+    return needs === 'analytics' ? analytics : needs === 'marketing' ? meta : (analytics || meta);
+  }
+  function remember(key, ttlMs) {                              // returns true when it was already seen (in this page, or — for «once» events — in the last 24 h in this browser)
+    if (seen[key]) return true;
+    seen[key] = true;
+    if (!ttlMs) return false;
+    try {
+      // The key IS the event identity (a new checkout cycle has a new id), so this never hides a genuinely new checkout; the TTL only expires old keys.
+      var k = 'rs_trk_' + key, now = Date.now(), at = parseInt(window.localStorage.getItem(k), 10);
+      if (at && now - at < ttlMs) return true;
+      for (var i = window.localStorage.length - 1; i >= 0; i--) {            // drop expired identity keys (keeps storage bounded)
+        var name = window.localStorage.key(i);
+        if (name && name.indexOf('rs_trk_') === 0 && now - (parseInt(window.localStorage.getItem(name), 10) || 0) >= ttlMs) window.localStorage.removeItem(name);
+      }
+      window.localStorage.setItem(k, String(now));
+    } catch (e) { /* storage unavailable: in-memory dedupe only */ }
+    return false;
+  }
+  function send(ev) {
+    var ecommerce = { currency: ev.currency, value: ev.value, items: ev.items };
+    if (allowed('gtm')) {
+      window.dataLayer.push({ ecommerce: null });
+      window.dataLayer.push({ event: ev.name, event_id: ev.id, ecommerce: ecommerce });
+    } else if (!ids.gtm && allowed('ga4')) {
+      gtag('event', ev.name, { currency: ev.currency, value: ev.value, items: ev.items, event_id: ev.id });
+    }
+    if (allowed('meta_pixel') && window.fbq) {
+      window.fbq('track', EVENTS[ev.name], {
+        content_type: 'product', currency: ev.currency, value: ev.value, num_items: ev.items.reduce(function (n, i) { return n + i.quantity; }, 0),
+        content_ids: ev.items.map(function (i) { return i.item_id; }), content_name: ev.items[0].item_name,
+        contents: ev.items.map(function (i) { return { id: i.item_id, quantity: i.quantity, item_price: i.price }; })
+      }, { eventID: ev.id });
+    }
+  }
+  function track(raw) {
+    try {                                                     // tracking must never break the cart, the checkout or any other script on the page
+      var ev = cleanEvent(raw);
+      if (!ev) return;
+      if (!(allowed('gtm') || allowed('ga4') || allowed('meta_pixel'))) return;    // not consented: dropped, never queued
+      if (remember(ev.id, ev.once ? 86400000 : 0)) return;
+      send(ev);
+    } catch (e) { /* a provider/storage failure is swallowed: the event is lost, the page is not */ }
+  }
+  function readPageEvents() {
+    var n = document.getElementById('rs-track-events');
+    if (!n) return;
+    var list;
+    try { list = JSON.parse(n.textContent); } catch (e) { return; }
+    if (Array.isArray(list)) list.slice(0, 5).forEach(track);
+    n.remove();                                               // consumed exactly once per page
+  }
+  // htmx fires each HX-Trigger key as a DOM event on the triggering element (it bubbles); `detail` is the key's value (plus htmx's own `elt`, which cleanEvent ignores).
+  document.addEventListener('rsTrack', function (e) { track(e.detail); });
+
   function start() {
     mountReopen();
     var c = readChoice();
-    if (c) { applyChoice(c); } else { openBanner(); }
+    if (c) { applyChoice(c); readPageEvents(); } else { openBanner(); readPageEvents(); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 }());

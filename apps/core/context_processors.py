@@ -483,6 +483,11 @@ def _tracking_ids(request) -> dict:
         return cached
     ids: dict = {}
     store = getattr(request, "store", None)
+    match = getattr(request, "resolver_match", None)
+    if match is not None and getattr(match, "namespace", "") == "dashboard":
+        # پیش‌نمایش‌هایِ سازنده (draft / ready-template / builder) روی هاستِ مدیریت از همان پوسته‌ی عمومی رندر می‌شوند؛ آن‌ها «بازدید مشتری» نیستند:
+        # شناسه‌ها و consent.js چاپ نمی‌شود تا مالک با پیش‌نمایش، آمار یا پیکسلِ تبلیغاتیِ فروشگاه را آلوده نکند.
+        store = None
     if store is not None and not _seo_facts(request)["SEO_NOINDEX"]:
         try:
             from apps.stores.services.tracking_service import active_tracking_ids
@@ -492,6 +497,12 @@ def _tracking_ids(request) -> dict:
             ids = {}
     request._tracking_ids = ids
     return ids
+
+
+def tracking_active(request) -> bool:
+    """True only on a real public storefront request of a store that connected a provider (platform flag on, indexable host, not an admin preview) — the ONLY condition under which
+    any tracking payload is built or printed."""
+    return bool(_tracking_ids(request))
 
 
 def seo(request):
@@ -507,4 +518,9 @@ def tracking(request):
 
         return consent.build_config(_tracking_ids(request))
 
-    return {"TRACKING_IDS": SimpleLazyObject(lambda: _tracking_ids(request)), "CONSENT_CONFIG": SimpleLazyObject(_consent)}
+    def _events():
+        # events queued by the view of THIS request (apps.core.tracking_events.queue) — only when tracking is active for the request
+        return list(getattr(request, "rs_track_events", []) or []) if _tracking_ids(request) else []
+
+    return {"TRACKING_IDS": SimpleLazyObject(lambda: _tracking_ids(request)), "CONSENT_CONFIG": SimpleLazyObject(_consent),
+            "TRACKING_EVENTS": SimpleLazyObject(_events)}

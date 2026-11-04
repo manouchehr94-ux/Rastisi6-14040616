@@ -147,7 +147,7 @@ def cart_add(request, slug):
     gift_wrap_requested = request.POST.get("gift_wrap") in ("1", "true", "on", "yes")
 
     try:
-        add_item_to_cart(
+        cart_item = add_item_to_cart(
             cart, product, variant, quantity, gift_wrap_requested=gift_wrap_requested,
             gift_message=request.POST.get("gift_message", ""),
         )
@@ -157,9 +157,13 @@ def cart_add(request, slug):
         return _cart_add_error_response(request, exc.message)
 
     response = render(request, "cart/partials/header_counts_oob.html", _header_counts_context(request))
-    response["HX-Trigger"] = json.dumps(
-        {"toast": {"message": f"«{product.name}» به سبد خرید اضافه شد", "type": "ok"}}
-    )
+    trigger = {"toast": {"message": f"«{product.name}» به سبد خرید اضافه شد", "type": "ok"}}
+    # Tracking: only here — after the cart mutation succeeded — with the quantity just added and the SERVER-resolved unit price stored on the cart item.
+    from apps.core import tracking_events
+    event = tracking_events.queue(request, tracking_events.build_add_to_cart, store, product, variant, quantity, cart_item.unit_price)
+    if event:
+        trigger["rsTrack"] = event
+    response["HX-Trigger"] = json.dumps(trigger)
     return response
 
 
