@@ -57,6 +57,12 @@ class CardToCardAdapter(PaymentGatewayAdapter):
         return ["destination_card", "holder_name"]
 
     @property
+    def credential_aliases(self) -> dict[str, str]:
+        # An alternate field naming (card_number / cardholder_name / iban) used by another implementation of the same
+        # method: such stored configurations stay valid, readable and usable by the canonical card-transfer workflow.
+        return {"card_number": "destination_card", "cardholder_name": "holder_name", "iban": "sheba"}
+
+    @property
     def credential_fields(self) -> list[dict]:
         """Non-secret fields: shown (prefilled) to the merchant and to customers at checkout."""
         return [

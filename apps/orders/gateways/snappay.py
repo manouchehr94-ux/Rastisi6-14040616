@@ -139,9 +139,6 @@ class SnappPayAdapter(PaymentGatewayAdapter):
     # provisions for them without changing the module constant globally.
     api_base = SNAPPAY_API_BASE
 
-    @property
-    def redirect_host_suffixes(self) -> tuple[str, ...]:
-        return ("snapppay.ir",)
 
     @property
     def code(self) -> str:

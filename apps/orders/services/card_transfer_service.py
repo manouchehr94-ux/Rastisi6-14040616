@@ -194,6 +194,10 @@ def approve(submission_id: int, *, store, actor, allow_duplicate_tracking: bool 
         raise CardTransferError("پرداختِ این سفارش قبلاً نهایی شده است.")
     if order.grand_total != submission.amount:
         raise CardTransferError("مبلغِ سفارش پس از ثبتِ اطلاعات تغییر کرده است؛ ثبت را رد و از مشتری بخواهید دوباره ثبت کند.")
+    attempt = PaymentAttempt.objects.select_for_update().filter(pk=submission.attempt_id, store=store, order_id=order.pk).first()
+    # An explicit check (never ``assert``, which vanishes under ``python -O``): only an OPEN, unverified attempt of THIS order can be finalized.
+    if attempt is None or attempt.status != PaymentAttempt.Status.PENDING or attempt.verified_at is not None:
+        raise CardTransferError("تلاشِ پرداختِ این ثبت دیگر باز نیست؛ ثبت را رد و از مشتری بخواهید دوباره ثبت کند.")
     if not allow_duplicate_tracking and tracking_seen_elsewhere(submission):
         raise DuplicateTracking("این شماره‌ی پیگیری پیش‌تر برایِ سفارشِ دیگری تأیید شده است. اگر مطمئن هستید، با تأییدِ صریح ادامه دهید.")
     tx = apply_payment_success(

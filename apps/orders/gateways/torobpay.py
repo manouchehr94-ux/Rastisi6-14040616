@@ -122,9 +122,6 @@ class TorobPayAdapter(PaymentGatewayAdapter):
     # Overridable so a merchant can point at an alternate TorobPay host.
     api_base = TOROBPAY_API_BASE
 
-    @property
-    def redirect_host_suffixes(self) -> tuple[str, ...]:
-        return ("torobpay.com",)
 
     @property
     def code(self) -> str:

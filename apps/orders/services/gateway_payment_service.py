@@ -195,6 +195,10 @@ def is_safe_gateway_redirect(url: str, adapter, *, sandbox: bool = False) -> boo
     if parts.scheme != "https" or not host or parts.username is not None or parts.password is not None:
         return False
     suffixes = tuple(getattr(adapter, "redirect_host_suffixes", ()) or ())
+    # Ops override for providers whose payment-page domain the contract does not name (or that moved it): settings
+    # PAYMENT_REDIRECT_EXTRA_HOST_SUFFIXES = {"<gateway_code>": ("example.ir",)} widens (never replaces) the declared list.
+    extra = (getattr(settings, "PAYMENT_REDIRECT_EXTRA_HOST_SUFFIXES", {}) or {}).get(getattr(adapter, "code", ""), ())
+    suffixes = suffixes + tuple(s.lower() for s in extra)
     if suffixes and not sandbox:
         return any(host == s or host.endswith("." + s) for s in suffixes)
     return True
@@ -1035,10 +1039,14 @@ def _apply_verified_payment(attempt_pk: int, result, store) -> PaymentAttempt:
     return attempt
 
 
-def _callback_claims_success(callback_data: dict) -> bool:
-    """آیا پارامترهایِ بازگشت از درگاه ادعای پرداخت می‌کند؟ (فقط برای «مشکوک» ثبت‌کردن؛ هرگز مدرکِ پرداخت نیست)."""
-    cd = callback_data or {}
-    return str(cd.get("success", "")).strip() == "1" or str(cd.get("status", "")).strip() in ("1", "2")
+def _callback_claims_success(callback_data: dict, adapter=None) -> bool:
+    """آیا پارامترهایِ بازگشت از درگاه ادعای پرداخت می‌کند؟ (فقط برای «مشکوک» ثبت‌کردن؛ هرگز مدرکِ پرداخت نیست).
+    ادعا را خودِ آداپتور (``callback_claims_success``) می‌سنجد؛ بدونِ آداپتور همان قاعده‌ی عمومیِ پایه."""
+    if adapter is not None and hasattr(adapter, "callback_claims_success"):
+        return bool(adapter.callback_claims_success(callback_data))
+    from apps.orders.gateways.base import PaymentGatewayAdapter
+
+    return bool(PaymentGatewayAdapter.callback_claims_success(None, callback_data))
 
 
 def process_callback_and_verify(
@@ -1138,7 +1146,7 @@ def process_callback_and_verify(
         logger.warning("Verification failed: attempt=%s error=%s", attempt.public_id, exc)
         # نتیجه‌ی نامشخص (قطع/تایم‌اوت/پاسخِ نامعتبر/مبلغِ اعلام‌نشده) در حالی که مشتری با ادعای موفقیت از
         # درگاه برگشته ⇒ مورد «مشکوک» برایِ بررسی؛ هیچ ادعایی دربارهٔ موفقیتِ پرداخت نمی‌شود.
-        if isinstance(exc, (GatewayConnectionError, GatewayResponseError)) and _callback_claims_success(callback_data):
+        if isinstance(exc, (GatewayConnectionError, GatewayResponseError)) and _callback_claims_success(callback_data, adapter):
             ev = dict((exc.details or {}).get("evidence") or {})
             ev["error_code"] = getattr(exc, "code", "")
             ev["callback_claims_success"] = True
@@ -1148,12 +1156,28 @@ def process_callback_and_verify(
             )
         fail(getattr(exc, "code", "verify_error"), str(exc), str(exc))
 
+    settled_by_inquiry = False
+    verify_failure_confirmed = True
+    if not result.success and adapter.supports(PaymentOperation.SETTLE) and adapter.supports(PaymentOperation.INQUIRE):
+        # Verified-at-provider but locally unfinished (crash/retry) looks like a "verify failure" on a repeated verify call
+        # ("already verified"). For two-step providers the provider's own status decides before anything is called a failure.
+        try:
+            inquiry = _inquire_status(attempt, adapter, credentials, gateway_config.is_sandbox)
+        except GatewayAmountMismatchError:
+            inquiry = None
+        if inquiry is not None and inquiry.paid:
+            result = PaymentVerificationResult(success=True, ref_id=str(inquiry.ref_id or ""), status_code=100,
+                                               message="تأیید توسط استعلامِ وضعیتِ درگاه")
+            settled_by_inquiry = bool(inquiry.settled)
+        elif inquiry is None:
+            verify_failure_confirmed = False  # cannot tell "never paid" from "paid, unreadable": no definitive claim, no failure alert
+
     if not result.success:
         logger.info("Verification returned failure: attempt=%s final=%s", attempt.public_id, was_final)
         # «قطعی» = خودِ درگاه در تأییدِ server-to-server اعلامِ ناموفق کرد و callback ادعای موفقیت نداشت؛
         # قطع/تایم‌اوت/پاسخِ نامعتبر/مغایرتِ مبلغ/ادعای موفقیتِ callback هرگز اعلانِ «ناموفق» نمی‌سازند.
         fail(f"status_{result.status_code}", result.message or "تأیید پرداخت ناموفق", result.message or "تأیید پرداخت توسط درگاه ناموفق بود",
-             definitive=not _callback_claims_success(callback_data))
+             definitive=verify_failure_confirmed and not _callback_claims_success(callback_data, adapter))
 
     # Capability-gated BNPL settle/capture (no provider conditionals): a provider whose documented lifecycle separates verify
     # from settle declares the SETTLE capability; the money is NOT fully captured until settle is proven, so the order is never
@@ -1162,7 +1186,8 @@ def process_callback_and_verify(
     if adapter.supports(PaymentOperation.SETTLE):
         _record_event(attempt, PaymentTransactionEvent.EventType.VERIFIED, message="provider verification succeeded",
                       payload=_sanitized_evidence(result), from_status=attempt.status, to_status=attempt.status)
-        outcome = _settle_after_verify(attempt, adapter, credentials, gateway_config.is_sandbox)
+        outcome = SettleOutcome("ok", evidence={"stage": "settle", "already_settled": True}) if settled_by_inquiry else \
+            _settle_after_verify(attempt, adapter, credentials, gateway_config.is_sandbox)
         if outcome.kind == "uncertain":
             return _mark_settlement_uncertain(attempt.pk, result, outcome.evidence)
         if outcome.kind == "failed":

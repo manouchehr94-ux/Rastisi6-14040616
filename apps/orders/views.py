@@ -645,6 +645,12 @@ def gateway_callback(request, attempt_id):
             "پردازش پرداخت با خطا مواجه شد. اگر مبلغی از حساب شما کسر شده، با پشتیبانی تماس بگیرید؛ پرداخت شما ثبت و پیگیری می‌شود.",
         )
     else:
+        if attempt.status == PaymentAttempt.Status.UNKNOWN:
+            # Verified at the provider, settlement not yet proven: not a failure and not a paid order — tell the customer honestly.
+            messages.warning(
+                request,
+                "پرداخت شما در درگاه تأیید شد اما نهایی‌سازی آن هنوز قطعی نشده است. لطفاً دوباره پرداخت نکنید؛ نتیجه بررسی و به‌زودی اعلام می‌شود.",
+            )
         reconciliation = getattr(attempt, "reconciliation", None) if attempt.is_successful else None
         if reconciliation is not None:
             messages.warning(

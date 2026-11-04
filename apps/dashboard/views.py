@@ -6153,6 +6153,9 @@ def settings_gateway_config_save(request, gateway_code):
     config.display_order = display_order
     config.is_sandbox = is_sandbox
 
+    for alias in getattr(adapter, "credential_aliases", {}):
+        credentials.pop(alias, None)        # the form always writes canonical keys; the legacy alias copy is dropped on save
+
     if credentials and adapter.required_credentials:
         if adapter.requires_manual_confirmation:
             from apps.orders.gateways.card_to_card import clean_card_number

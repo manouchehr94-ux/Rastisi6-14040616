@@ -731,9 +731,17 @@ class PaymentGatewayConfig(TimeStampedModel):
         if not plaintext:
             return {}
         try:
-            return json.loads(plaintext)
+            credentials = json.loads(plaintext)
         except (json.JSONDecodeError, TypeError):
             return {}
+        if not isinstance(credentials, dict):
+            return {}
+        try:
+            from .gateways import get_adapter
+
+            return get_adapter(self.gateway_code).normalize_credentials(credentials)
+        except KeyError:
+            return credentials
 
     def set_credentials(self, credentials: dict) -> None:
         """Encrypt and store a credentials dict."""

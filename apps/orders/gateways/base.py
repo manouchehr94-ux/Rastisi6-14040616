@@ -255,6 +255,32 @@ class PaymentGatewayAdapter(ABC):
             return {required[0]: " ".join(errors)}
         return {"": " ".join(errors)}
 
+    def callback_claims_success(self, callback_data: dict) -> bool:
+        """Does the customer-return payload CLAIM a successful payment? (Evidence-classification only — never proof of payment.)
+
+        Deliberately generous across providers (``success=1``, ``status`` 1/2/OK/PAID, ``state``/``Status`` OK/SUCCESS): a callback
+        that merely claims success must never be filed as a definitive customer-side failure."""
+        cd = {str(k).lower(): str(v).strip().lower() for k, v in (callback_data or {}).items()}
+        return (
+            cd.get("success") in ("1", "true")
+            or cd.get("status") in ("1", "2", "ok", "success", "paid", "succeeded")
+            or cd.get("state") in ("ok", "success", "paid", "succeeded")
+        )
+
+    @property
+    def credential_aliases(self) -> dict[str, str]:
+        """Legacy / alternate credential key -> canonical key. Lets a configuration stored with an older or alternate field
+        naming stay readable and usable; nothing is discarded or rewritten until the merchant saves the form again."""
+        return {}
+
+    def normalize_credentials(self, credentials: dict) -> dict:
+        """Copy of ``credentials`` with every canonical key filled from its alias when the canonical key is missing/empty."""
+        out = dict(credentials or {})
+        for alias, canonical in self.credential_aliases.items():
+            if not out.get(canonical) and out.get(alias):
+                out[canonical] = out[alias]
+        return out
+
     @property
     def redirect_host_suffixes(self) -> tuple[str, ...]:
         """Registrable host suffixes the customer may be redirected to for this provider (live mode).
