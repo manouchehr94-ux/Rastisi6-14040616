@@ -3,6 +3,7 @@ from django.urls import path
 from . import platform_admin_views as views
 from . import platform_admin_photo_views as photo_views
 from . import platform_admin_site_views as site_views
+from . import notification_admin_views as notif_views
 
 app_name = "portal_platform_admin"
 
@@ -74,6 +75,16 @@ urlpatterns = [
     path("sms/credits/", views.sms_credits, name="sms-credits"),
     path("sms/credits/<uuid:store_public_id>/adjust/", views.sms_credit_adjust, name="sms-credit-adjust"),
     path("sms/logs/", views.sms_logs, name="sms-logs"),
+
+    # --- اعلان‌ها (SMS + ایمیل)
+    path("notifications/", notif_views.notification_catalog, name="notification-catalog"),
+    path("notifications/senders/", notif_views.notification_senders, name="notification-senders"),
+    path("notifications/senders/<int:pk>/toggle/", notif_views.notification_sender_toggle, name="notification-sender-toggle"),
+    path("notifications/delivery/", notif_views.notification_delivery, name="notification-delivery"),
+    path("notifications/audit/", notif_views.notification_audit, name="notification-audit"),
+    path("notifications/<str:event_key>/", notif_views.notification_platform_template, name="notification-platform-template"),
+    path("notifications/<str:event_key>/preview/", notif_views.notification_platform_template_preview, name="notification-platform-template-preview"),
+    path("notifications/<str:event_key>/test/", notif_views.notification_platform_template_test, name="notification-platform-template-test"),
 
     # --- صنف‌ها و قالب‌ها ---
     path("industries/", views.industries, name="industries"),

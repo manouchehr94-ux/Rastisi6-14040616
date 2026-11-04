@@ -1,0 +1,6 @@
+<nav aria-label="بخش‌های اعلان" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+  <a class="btn btn-sm {% if tab == 'templates' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-templates' %}" {% if tab == 'templates' %}aria-current="page"{% endif %}>قالب‌ها</a>
+  <a class="btn btn-sm {% if tab == 'channels' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-channels' %}" {% if tab == 'channels' %}aria-current="page"{% endif %}>تنظیمات کانال‌ها</a>
+  <a class="btn btn-sm {% if tab == 'sender' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-sender' %}" {% if tab == 'sender' %}aria-current="page"{% endif %}>هویتِ فرستنده‌ی ایمیل</a>
+  <a class="btn btn-sm {% if tab == 'history' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-history' %}" {% if tab == 'history' %}aria-current="page"{% endif %}>تاریخچه‌ی ارسال</a>
+</nav>

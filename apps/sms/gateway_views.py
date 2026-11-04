@@ -48,6 +48,28 @@ def _sync_history(item) -> None:
         logs.update(status=SmsLog.Status.SENT, error_message="", updated_at=timezone.now())
 
 
+def _queue_ttl() -> timedelta:
+    from django.conf import settings
+
+    return timedelta(hours=int(getattr(settings, "RASTISI_SMSRASTI_QUEUE_TTL_HOURS", 72)))
+
+
+def _expire_stale(shop, now) -> None:
+    """A message that waited in the device queue longer than its validity (phone off / offline for days) must not be
+    delivered late: the content (order status, coupon expiry, …) may no longer be true. It is marked failed with an
+    explicit reason (visible in the SMS history) and never handed to the device. One-time codes (OTP) never use this
+    queue at all — ``sms_service._dispatch`` always sends them through the central provider."""
+    stale = SmsOutboxItem.objects.filter(
+        store=shop.store, status__in=(SmsOutboxItem.Status.PENDING, SmsOutboxItem.Status.SENDING),
+        created_at__lt=now - _queue_ttl(),
+    )
+    for item in list(stale):
+        item.status = SmsOutboxItem.Status.FAILED
+        item.error_message = "منقضی شد؛ پیام مدت‌ها در صفِ گوشی ماند و برای جلوگیری از ارسالِ نامعتبر ارسال نشد"
+        item.save(update_fields=["status", "error_message", "updated_at"])
+        _sync_history(item)
+
+
 def _fail_unacknowledged(shop, cutoff) -> None:
     exhausted = SmsOutboxItem.objects.filter(
         store=shop.store, status=SmsOutboxItem.Status.SENDING, claimed_at__lt=cutoff, attempt_count__gte=MAX_CLAIMS,
@@ -70,6 +92,7 @@ def smsrasti_poll(request):
     ShopSettings.objects.filter(pk=shop.pk).update(smsrasti_last_seen_at=now)  # «دستگاه متصل است»
     stale_cutoff = now - timedelta(seconds=RECLAIM_AFTER_SECONDS)
     _fail_unacknowledged(shop, stale_cutoff)
+    _expire_stale(shop, now)
     with transaction.atomic():
         item = (
             SmsOutboxItem.objects

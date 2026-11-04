@@ -38,9 +38,19 @@ def _is_platform_staff(user):
     return user.is_authenticated and user.is_staff and user.is_superuser
 
 
+def _is_notification_team(user) -> bool:
+    """Platform team member with at least one granular notification permission (NOT a superuser): may sign in to
+    the platform host, but every non-notification page still requires ``_is_platform_staff``."""
+    from .notification_admin_views import is_notification_team
+
+    return bool(user.is_authenticated and not user.is_superuser and is_notification_team(user))
+
+
 def login_view(request):
     if _is_platform_staff(request.user):
         return redirect("portal_platform_admin:home")
+    if _is_notification_team(request.user):
+        return redirect("portal_platform_admin:notification-catalog")
 
     if request.method == "POST":
         form = OwnerLoginForm(request.POST)
@@ -65,13 +75,21 @@ def login_view(request):
             user = owner_auth_service.authenticate_owner_by_identifier(
                 request, identifier=identifier, password=form.cleaned_data["password"],
             )
-            if user is not None and _is_platform_staff(user):
+            if user is None:
+                # a platform TEAM member (is_staff + a granted notification permission, no store/owner profile)
+                user = owner_auth_service.authenticate_platform_team_by_identifier(
+                    request, identifier=identifier, password=form.cleaned_data["password"],
+                    is_team_member=_is_notification_team,
+                )
+            if user is not None and (_is_platform_staff(user) or _is_notification_team(user)):
                 auth_login(request, user)
                 session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))
                 record_platform_audit_event(
                     actor=user, action_code="platform_admin.login_succeeded",
                     object_type="User", object_id=user.pk, object_label=user.get_username(),
                 )
+                if not _is_platform_staff(user):
+                    return redirect("portal_platform_admin:notification-catalog")
                 return redirect("portal_platform_admin:home")
             record_platform_audit_event(
                 actor=user, action_code="platform_admin.login_failed",
@@ -87,6 +105,12 @@ def login_view(request):
 def logout_view(request):
     auth_logout(request)
     return redirect("portal_platform_admin:login")
+
+
+def permission_denied(request, exception=None):
+    """``handler403`` for ``shop_core.urls_platform_admin``: the shared storefront 403 page reverses ``catalog:`` URLs
+    that do not exist on the Platform Admin host, so it would crash; this one stays self-contained (like ``not_found``)."""
+    return render(request, "portal/platform_admin/403.html", status=403)
 
 
 def not_found(request, exception=None):

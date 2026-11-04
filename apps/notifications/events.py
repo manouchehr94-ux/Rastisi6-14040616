@@ -89,6 +89,12 @@ class EventDef:
     sample: dict = field(default_factory=dict)
     #: رویدادِ کارکنان: علاوه بر مالک، همه‌ی اعضایِ فعالِ دارایِ این مجوز هم گیرنده‌اند (مثلاً کارکنانِ مالی).
     staff_permission: str = ""
+    #: متغیرهایِ «محافظت‌شده»: هر قالب (پلتفرم یا فروشگاه) باید همه‌ی آن‌ها را در متنِ خود داشته باشد
+    #: (مثلاً اعلانِ امنیتی بدونِ ``{changed_field}`` بی‌معناست و نباید توسطِ ویرایش حذف شود).
+    required_variables: tuple = ()
+    #: ``"store"`` = از دامنه‌ی اختصاصیِ فروشگاه؛ ``"platform"`` = اعلانِ پلتفرم به مدیرِ فروشگاه (فرستنده‌ی
+    #: خودِ راستی‌سی، قالبِ قفل برایِ فروشگاه). هرگز جایگزینِ فرستنده‌ی فروشگاه نمی‌شود.
+    sender: str = "store"
 
 
 _SAMPLE = {
@@ -123,6 +129,7 @@ _register(
         default_sms="{customer_name} عزیز، {changed_field} حساب شما در {store_name} تغییر کرد. اگر شما نبودید با ما تماس بگیرید.",
         default_email_subject="تغییر اطلاعات حساب شما در {store_name}",
         default_email_body="{customer_name} عزیز،\n{changed_field} حساب شما در {store_name} تغییر کرد.\nاگر این تغییر را شما انجام نداده‌اید، فوراً با پشتیبانی تماس بگیرید.",
+        required_variables=("changed_field",),
     ),
     # ------------------------------------------------------------------ سفارش و پرداخت
     EventDef(
@@ -371,6 +378,26 @@ _register(
         default_email_body="پرداختی مرتبط با سفارش {order_number} ({customer_name}، مبلغِ سفارش {order_total} تومان) اعمال نشد.\nدلیل: {reconciliation_reason}\nسفارش به‌طور خودکار بازگشایی یا پرداخت‌شده نشد؛ مورد «مشکوک» یعنی درگاه نتیجه را قطعی نکرده و پرداخت موفق فرض نشده است. لطفاً از بخش «تطبیق پرداخت‌ها» در پنل مدیریت رسیدگی کنید (استردادِ دستی یا بازگشاییِ دستی).",
         sms_enabled_default=False, email_enabled_default=True,
         staff_permission="refund.manage",  # REFUND_MANAGE — همان مجوزِ رسیدگی در «تطبیق پرداخت‌ها»
+    ),
+    # ------------------------------------------------------------------ پلتفرم → مدیرِ فروشگاه
+    # فرستنده: خودِ راستی‌سی (نه دامنه‌ی فروشگاه)، چون وقتی هویتِ فرستنده‌ی فروشگاه مشکل دارد همین اعلان باید برسد.
+    # قالبِ این‌ها فقط توسطِ پلتفرم قابلِ ویرایش است. فقط ایمیل (پیامکِ پلتفرم‌به‌مدیر وجود ندارد).
+    EventDef(
+        "platform.email_sender_active", "فعال‌شدن ایمیلِ فروشگاه (اعلانِ پلتفرم)", TRANSACTIONAL,
+        {"store_name": "نام فروشگاه", "sender_address": "نشانیِ فرستنده"},
+        audience=AUDIENCE_STAFF, sender="platform",
+        default_email_subject="ایمیلِ فروشگاه «{store_name}» فعال شد",
+        default_email_body="ایمیل‌هایِ فروشگاه «{store_name}» از این پس از نشانیِ {sender_address} ارسال می‌شود.",
+        sms_enabled_default=False,
+    ),
+    EventDef(
+        "platform.email_sender_problem", "مشکل در ایمیلِ فروشگاه (اعلانِ پلتفرم)", TRANSACTIONAL,
+        {"store_name": "نام فروشگاه", "problem": "شرحِ مشکل", "action": "اقدامِ لازم", "panel_url": "پیوندِ پنل"},
+        audience=AUDIENCE_STAFF, sender="platform",
+        default_email_subject="ایمیلِ فروشگاه «{store_name}» نیازمندِ بررسی است",
+        default_email_body="ارسالِ ایمیلِ فروشگاه «{store_name}» متوقف است.\nمشکل: {problem}\nاقدامِ لازم: {action}\nجزئیات: {panel_url}\nپیامک و سایرِ بخش‌ها بدونِ تغییر کار می‌کنند.",
+        sms_enabled_default=False,
+        required_variables=("problem", "action"),
     ),
 )
 

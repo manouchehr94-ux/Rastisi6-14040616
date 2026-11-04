@@ -166,6 +166,37 @@ def _dispatch(*, event_key: str, phone: str, message: str, store, template=None,
     return log
 
 
+def _store_override(store, event_key: str):
+    """The store's own SMS text/switch for a customizable (legacy, non-OTP, non-platform-managed) event, or ``None``.
+    Looked up through the new-engine event wrapping this legacy key, so OTP and platform-managed texts can never match."""
+    if event_key in (SmsEvent.OTP, SmsEvent.PLATFORM_OWNER_OTP):
+        return None
+    try:
+        from apps.notifications import events as notif_events
+        from apps.notifications.models import NotificationTemplate
+
+        event = notif_events.event_for_legacy_sms(str(event_key))
+        if event is None:
+            return None
+        return NotificationTemplate.objects.filter(store=store, event_key=event.key, channel="sms").first()
+    except Exception:  # noqa: BLE001 — an override problem must never stop the platform SMS
+        logger.exception("store SMS override lookup failed (event=%s)", event_key)
+        return None
+
+
+def _override_as_template(override, event_key: str):
+    """Transient (unsaved) ``SmsTemplate`` carrying the override text in the legacy vocabulary, validated by the same
+    strict renderer; ``None`` when it cannot be converted/validated (the caller falls back to the platform text)."""
+    try:
+        from apps.notifications import legacy_sms
+
+        legacy_body = legacy_sms.body_to_legacy(str(event_key), override.body)
+        validate_template_body(event_key, legacy_body)
+        return SmsTemplate(event_key=event_key, body=legacy_body)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def send_event_sms(event_key: str, phone: str, context: dict | None = None, *, store) -> SmsLog | None:
     if store is None:
         logger.error("send_event_sms called with store=None for event=%s phone=%s", event_key, phone)
@@ -174,19 +205,34 @@ def send_event_sms(event_key: str, phone: str, context: dict | None = None, *, s
         shop = ShopSettings.load(store=store)
         if not shop.sms_enabled:
             return None
+        # ``is_active`` of the GLOBAL template is the platform kill-switch: once the platform switches an event off,
+        # no store override can switch it back on.
         template = SmsTemplate.objects.filter(event_key=event_key, is_active=True).first()
         if template is None:
             return None
+        override = _store_override(store, event_key)
+        if override is not None and not override.is_enabled:
+            return None  # THIS store switched the event off (tenant-specific; other stores are unaffected)
         effective_context = context or {}
         if event_key == SmsEvent.OTP:
             effective_context = {"expire_minutes": "2", **effective_context}
-        message = _render(template, effective_context, shop.name, fallback_unsafe=True)
+        provider_template = template
+        render_source = template
+        if override is not None:
+            render_source = _override_as_template(override, event_key)
+            if render_source is None:
+                logger.error("store SMS override %s for %s is not renderable; using the platform text", override.pk, event_key)
+                render_source = template
+            else:
+                # customized text no longer matches the provider-approved Pattern (BodyId): send as plain text
+                provider_template = None
+        message = _render(render_source, effective_context, shop.name, fallback_unsafe=True)
         # Provider Pattern باید همان مقادیر نهایی رندر را داشته باشد؛ نام فروشگاه
         # همیشه از ShopSettings می‌آید و ورودی caller نمی‌تواند آن را جعل کند.
         provider_context = {**effective_context, "shop_name": shop.name}
         log = _dispatch(
             event_key=event_key, phone=phone, message=message, store=store,
-            template=template, context=provider_context,
+            template=provider_template, context=provider_context,
         )
         _mirror_history(log, context=provider_context)
         return log

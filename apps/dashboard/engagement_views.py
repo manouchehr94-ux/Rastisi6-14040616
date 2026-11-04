@@ -422,6 +422,12 @@ def _sms_globally_enabled(store) -> bool:
         return False
 
 
+def _sender_diagnostics(store):
+    from apps.notifications.mail import provisioning_service
+
+    return provisioning_service.diagnostics(store)
+
+
 def _event_or_404(key):
     if key not in notif_events.EVENTS:
         raise Http404
@@ -447,13 +453,17 @@ def notification_template_edit(request, event_key):
             elif channel == "sms" and event.legacy_sms_event and not membership_has_permission(
                     request.store_membership, SMS_SETTINGS_MANAGE):
                 messages.error(request, "برایِ بازگشتِ قالبِ پیامک دسترسیِ «تنظیماتِ پیامک» لازم است.")
+            elif channel in notif_events.CHANNELS and template_service.is_store_locked(event_key, channel) and channel == "email":
+                messages.error(request, "این قالب را فقط راستی‌سی مدیریت می‌کند.")
             elif channel in notif_events.CHANNELS:
-                template_service.reset_template(store, event_key, channel)
+                template_service.reset_template(store, event_key, channel, actor=request.user)
                 messages.info(request, "قالب به حالتِ پیش‌فرض بازگشت")
             return redirect("dashboard:notification-template-edit", event_key=event_key)
         saved = False
         can_legacy = membership_has_permission(request.store_membership, SMS_SETTINGS_MANAGE)
         for channel in notif_events.CHANNELS:
+            if template_service.is_store_locked(event_key, channel) and not (channel == "sms" and event.legacy_sms_event):
+                continue  # قالبِ قفل‌شده‌ی پلتفرم: ورودیِ فروشنده کاملاً نادیده گرفته می‌شود
             if channel == "sms" and event.platform_sms_event:
                 continue  # متنِ پیامکِ کمپین/مناسبت فقط در اختیارِ پلتفرم است؛ ورودیِ فروشنده کاملاً نادیده گرفته می‌شود
             if channel == "sms" and event.legacy_sms_event and not can_legacy:
@@ -466,6 +476,7 @@ def notification_template_edit(request, event_key):
                     store, event_key, channel, enabled=request.POST.get(f"{channel}_enabled") == "on",
                     subject=request.POST.get("email_subject", "") if channel == "email" else "",
                     body=request.POST.get(f"{channel}_body", ""),
+                    body_html=request.POST.get("email_html", "") if channel == "email" else "", actor=request.user,
                     extra_recipients=request.POST.get("extra_recipients", "") if channel == "email" or event.audience == "staff" else "",
                 )
                 saved = True
@@ -486,12 +497,15 @@ def notification_template_edit(request, event_key):
             templates[channel] = {**templates[channel], "body": request.POST.get(f"{channel}_body", templates[channel]["body"]),
                                   "enabled": request.POST.get(f"{channel}_enabled") == "on"}
         templates["email"]["subject"] = request.POST.get("email_subject", templates["email"]["subject"])
+        templates["email"]["body_html"] = request.POST.get("email_html", templates["email"].get("body_html", ""))
     return render(request, "dashboard/notification_template_form.html", {
         "event": event, "templates": templates, "errors": errors, "active_page": "notifications",
         "variables": _variables_for_editor(event), "category_label": notif_events.CATEGORY_LABELS[event.category],
         "extra_recipients": templates["email"].get("extra_recipients", "") or templates["sms"].get("extra_recipients", ""),
         "sms_globally_enabled": _sms_globally_enabled(store),
         "can_edit_legacy_sms": membership_has_permission(request.store_membership, SMS_SETTINGS_MANAGE),
+        "revisions": template_service.list_revisions(scope="store", store=store, event_key=event_key, limit=15),
+        "sender": _sender_diagnostics(store),
     })
 
 
@@ -505,6 +519,7 @@ def notification_template_preview(request, event_key):
         result = template_service.preview(
             request.store, event_key, channel, body=request.POST.get(f"{channel}_body"),
             subject=request.POST.get("email_subject") if channel == "email" else None,
+            body_html=request.POST.get("email_html") if channel == "email" else None,
         )
     except template_service.TemplateError as exc:
         return render(request, "dashboard/partials/notification_preview.html", {"error": str(exc), "channel": channel})
@@ -543,6 +558,9 @@ def notification_template_test(request, event_key):
             row = deliver_single(row)
             if row.status == NotificationOutbox.Status.SENT:
                 messages.success(request, "پیامِ آزمایشی ارسال شد.")
+            elif row.status == NotificationOutbox.Status.PENDING and row.last_error == "sender_not_active":
+                messages.error(request, "ایمیلِ آزمایشی ارسال نشد: فرستنده‌ی ایمیلِ فروشگاه هنوز فعال نیست. "
+                                        "وضعیت و راهِ رفعِ آن در «هویتِ فرستنده» دیده می‌شود.")
             else:
                 messages.error(request, f"ارسالِ آزمایشی ناموفق بود: {row.last_error or row.get_status_display()}")
     return redirect("dashboard:notification-template-edit", event_key=event_key)
@@ -582,6 +600,15 @@ def notification_history(request):
             bound = _dt.datetime.combine(day + _dt.timedelta(days=1 if end else 0), _dt.time.min, tzinfo=tz)
             qs = qs.filter(**{f"created_at__{op}": bound})
     page = Paginator(qs.order_by("-created_at"), 30).get_page(g.get("page"))
+    from apps.notifications.services import expiry as _expiry
+
+    for n in page:  # actionable, plain-Persian explanation for rows that will not (or could not yet) be delivered
+        reason = n.skip_reason if n.skip_reason.startswith("stale:") else (n.last_error if n.status == "expired" else "")
+        n.reason_fa = _expiry.reason_text(reason) if reason else ""
+        if n.status == "pending" and n.last_error == "sender_not_active":
+            n.reason_fa = "فرستنده‌ی ایمیلِ فروشگاه فعال نیست؛ پیام نگه‌داری شده و پس از فعال‌شدن ارسال می‌شود (هویتِ فرستنده را بررسی کنید)."
+        elif n.status == "dead" and n.last_error.endswith("_expired"):
+            n.reason_fa = "مهلتِ نگه‌داری تمام شد و ارسال نشد؛ پس از رفعِ مشکل می‌توانید «تلاش دوباره» بزنید (تا پیش از پایانِ مهلتِ اعتبار)."
     query = g.copy()
     query.pop("page", None)
     return render(request, "dashboard/notification_history.html", {

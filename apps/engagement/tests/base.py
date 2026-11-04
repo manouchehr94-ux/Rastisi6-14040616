@@ -31,6 +31,9 @@ def jdt(year, month, day, hour=12, minute=0, second=0):
 class EngagementBase(TestCase):
     def setUp(self):
         self.store = Store.objects.get(slug="akhlaghi")
+        from apps.notifications.tests.helpers import give_active_sender
+
+        give_active_sender(self.store)  # mandatory-custom-domain policy: store email needs an ACTIVE verified sender
         self.vendor = Vendor.objects.create(store=self.store, name="ف", slug="v-eng2")
         self.cat_bag = Category.objects.create(store=self.store, name="کیف", slug="bag-e2")
         self.cat_shoe = Category.objects.create(store=self.store, name="کفش", slug="shoe-e2")
