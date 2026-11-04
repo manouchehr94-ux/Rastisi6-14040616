@@ -7,6 +7,7 @@ Subsections (spec order): events & templates, channels & delivery, email sender 
 delivery history & queue. Each links to an existing, working view — this is navigation only, no behaviour change.
 {% endcomment %}
 <nav aria-label="بخش‌های پیام‌رسانی" class="msg-subnav" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px">
+  <a class="btn btn-sm {% if tab == 'home' %}btn-primary{% endif %}" href="{% url 'dashboard:settings-messaging' %}" {% if tab == 'home' %}aria-current="page"{% endif %}>مرکزِ پیام‌رسانی</a>
   <a class="btn btn-sm {% if tab == 'templates' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-templates' %}" {% if tab == 'templates' %}aria-current="page"{% endif %}>رویدادها و قالب‌ها</a>
   <a class="btn btn-sm {% if tab == 'channels' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-channels' %}" {% if tab == 'channels' %}aria-current="page"{% endif %}>کانال‌های ارسال</a>
   <a class="btn btn-sm {% if tab == 'sender' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-sender' %}" {% if tab == 'sender' %}aria-current="page"{% endif %}>فرستنده‌ی ایمیل و دامنه</a>

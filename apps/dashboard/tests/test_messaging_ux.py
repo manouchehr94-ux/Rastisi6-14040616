@@ -99,9 +99,12 @@ class UnifiedEventEditorTests(CouponViewsTestCase):
         self._give_sender()
         r = self.client.get(reverse("dashboard:notification-template-edit", args=["order.created"]))
         self.assertEqual(r.status_code, 200)
-        # both channel cards
-        self.assertContains(r, "📱 پیامک")
-        self.assertContains(r, "📧 ایمیل")
+        # both channel cards present (labelled sections) and shown side by side via the two-column grid
+        self.assertContains(r, 'id="sms-h"')
+        self.assertContains(r, 'id="email-h"')
+        self.assertContains(r, "پیامک")
+        self.assertContains(r, "ایمیل")
+        self.assertContains(r, "ev-grid")   # the side-by-side layout
         # SMS controls
         self.assertContains(r, 'name="sms_enabled"')
         self.assertContains(r, 'name="sms_body"')

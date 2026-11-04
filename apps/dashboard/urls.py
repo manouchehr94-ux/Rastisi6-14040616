@@ -233,6 +233,8 @@ urlpatterns = [
     path("campaigns/<int:pk>/run/", engagement_views.campaign_run, name="campaign-run"),
     path("campaigns/<int:pk>/preview/", engagement_views.campaign_preview, name="campaign-preview"),
     path("campaigns/<int:pk>/delete/", engagement_views.campaign_delete, name="campaign-delete"),
+    # ---- پیام‌رسانی (Settings → Messaging): canonical landing + the five subsections
+    path("settings/messaging/", views.settings_messaging, name="settings-messaging"),
     # ---- اعلان‌ها
     *notification_inbox_urls(),     # صندوقِ اعلانِ مدیران (پیشوند inbox/ — با notifications/<event_key>/ برخورد نمی‌کند)
     path("notifications/", engagement_views.notification_templates, name="notification-templates"),

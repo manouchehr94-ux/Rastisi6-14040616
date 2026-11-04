@@ -217,13 +217,10 @@ SECTIONS: tuple = (
             Tab("coupons", "کدهای تخفیف", "coupon-list", perms=("can_view_coupons",),
                 matches=(_m(prefix="coupon-"),), pages=("coupons",),
                 keywords="تخفیف کوپن کد تخفیف جشنواره coupon"),
-            # Entry into the unified messaging experience (رویدادها و قالب‌ها + the shared 5-subsection sub-bar). It owns
-            # the notification-* routes; the SMS-provider screen is its sibling subsection under Settings. Same views, no
-            # second admin system. Label aligned with the «پیام‌رسانی» section name shown across the sub-navigation.
-            Tab("notifications", "پیام‌رسانی (اعلان‌ها و پیام‌ها)", "notification-templates",
-                perms=("can_manage_settings",),
-                matches=(_m(prefix="notification-"),), pages=("notifications",),
-                keywords="پیام‌رسانی اعلان پیام قالب پیام پیامک ایمیل اطلاع رسانی رویداد فرستنده دامنه اعتبار تاریخچه صف notification messaging"),
+            # NOTE: messaging/notifications management now lives in ONE canonical place — Settings → «پیام‌رسانی»
+            # (the ``messaging`` tab below). To avoid a second competing admin structure in the sidebar, the Marketing
+            # shortcut is a command-palette deep link (see PALETTE_EXTRAS: «پیام‌رسانی (اعلان‌ها و پیام‌ها)») rather than a
+            # duplicate sidebar tab. Merchants still reach it from campaigns via that shortcut and from Settings directly.
         ),
     ),
     Section(
@@ -338,15 +335,38 @@ SECTIONS: tuple = (
                            matches=(_m("settings", get={"section": ("delivery-payment",)}),),
                            keywords="خلاصه ارسال درگاه پرداخت"),
                 )),
-            # «سرویس پیامک و اعتبار» — one of the five subsections of the unified Messaging experience. The five
-            # subsections are tied together by the shared sub-navigation bar rendered inside the pages
-            # (dashboard/partials/notification_tabs.html); this Settings tab owns the SMS-provider/credits screen.
-            Tab("sms", "سرویس پیامک و اعتبار", "settings", perms=("can_manage_settings",), query="?section=sms",
+            # Canonical «پیام‌رسانی» — the single Messaging management center under Settings. Its landing is the real
+            # ``settings-messaging`` route; the five subsections are its Level-3 children (each an existing working view).
+            # The Marketing «اعلان‌ها و پیام‌ها» tab is only a shortcut into the same experience, not a second system.
+            Tab("messaging", "پیام‌رسانی", "settings-messaging", perms=("can_manage_settings",),
                 matches=(
+                    _m("settings-messaging"),
+                    _m(prefix="notification-"),
                     _m("settings", get={"section": ("sms",)}),
                     _m(prefix=("settings-sms", "settings-smsrasti", "sms-")),
                 ),
-                keywords="پیام‌رسانی پیامک sms اس ام اس اتصال پیامک پنل پیامکی ارسال آزمایشی اعتبار ارتباطات"),
+                keywords="پیام‌رسانی اعلان پیام قالب پیامک ایمیل sms اس ام اس اعتبار فرستنده دامنه تاریخچه صف ارسال messaging notification",
+                children=(
+                    SubTab("messaging-home", "مرکزِ پیام‌رسانی", "settings-messaging", perms=("can_manage_settings",),
+                           matches=(_m("settings-messaging"),),
+                           keywords="مرکز پیام‌رسانی نمای کلی خلاصه"),
+                    SubTab("messaging-templates", "رویدادها و قالب‌ها", "notification-templates", perms=("can_manage_settings",),
+                           matches=(_m("notification-templates", "notification-template-edit", "notification-template-preview",
+                                       "notification-template-test"),),
+                           keywords="رویداد قالب پیامک ایمیل متن ویرایش رویدادها"),
+                    SubTab("messaging-channels", "کانال‌های ارسال", "notification-channels", perms=("can_manage_settings",),
+                           matches=(_m("notification-channels"),),
+                           keywords="کانال روشن خاموش فعال غیرفعال پیامک ایمیل مستقل"),
+                    SubTab("messaging-sender", "فرستنده‌ی ایمیل و دامنه", "notification-sender", perms=("can_manage_settings",),
+                           matches=(_m("notification-sender", "notification-sender-retry"),),
+                           keywords="فرستنده ایمیل دامنه dkim تأیید فرستنده sender"),
+                    SubTab("messaging-sms", "سرویس پیامک و اعتبار", "settings", perms=("can_manage_settings",), query="?section=sms",
+                           matches=(_m("settings", get={"section": ("sms",)}), _m(prefix=("settings-sms", "settings-smsrasti", "sms-"))),
+                           keywords="پیامک sms اعتبار درگاه گیت‌وی اندروید روش ارسال اعتبار پیامکی"),
+                    SubTab("messaging-history", "تاریخچه و صف ارسال", "notification-history", perms=("can_manage_settings",),
+                           matches=(_m(prefix="notification-history"),),
+                           keywords="تاریخچه صف ارسال وضعیت تحویل برگشت خطا delivery history"),
+                )),
             Tab("integrations", "یکپارچه‌سازی‌ها", "settings", perms=("can_manage_settings",), query="?section=integrations",
                 matches=(_m("settings", get={"section": ("integrations",)}), _m(prefix="settings-integration")),
                 keywords="اینماد ترب گوگل آنالیتیکس تگ منیجر پیکسل یکپارچه‌سازی integrations",
@@ -413,14 +433,17 @@ PALETTE_EXTRAS: tuple = (
     PaletteExtra("فوتر فروشگاه", "فروشگاه ← ظاهر و طراحی ← فوتر", "storefront-builder-r4-editor",
                  "?panel=footer", ("can_manage_storefront_layout",),
                  "فوتر پایین صفحه شبکه اجتماعی footer", "⌄"),
-    PaletteExtra("گزارش پیامک‌ها", "تنظیمات ← پیامک ← گزارش ارسال", "sms-log-list", "",
+    PaletteExtra("گزارش پیامک‌ها", "پیام‌رسانی ← تاریخچه و صف ارسال ← گزارش پیامک", "sms-log-list", "",
                  ("can_manage_settings",),
                  "پیامک sms گزارش لاگ پیامک ارسال شده ناموفق retry", "≡"),
-    PaletteExtra("صندوق خروجی پیامک", "تنظیمات ← پیامک ← صندوق خروجی", "sms-outbox-list", "",
+    PaletteExtra("صندوق خروجی پیامک", "پیام‌رسانی ← تاریخچه و صف ارسال ← صندوق خروجی", "sms-outbox-list", "",
                  ("can_manage_settings",),
                  "پیامک sms صندوق خروجی صف ارسال outbox", "⇢"),
-    PaletteExtra("تاریخچه اعلان‌ها", "بازاریابی ← اعلان‌ها و پیام‌ها ← تاریخچه", "notification-history", "",
-                 ("can_manage_settings",), "اعلان تاریخچه پیام ارسال شده", "≡"),
+    # Marketing shortcut into the canonical Messaging center (kept as a shortcut, not a second sidebar tab).
+    PaletteExtra("پیام‌رسانی (اعلان‌ها و پیام‌ها)", "بازاریابی ← پیام‌رسانی", "settings-messaging", "",
+                 ("can_manage_settings",), "پیام‌رسانی اعلان پیام قالب پیامک ایمیل مرکز پیام messaging notification", "✉"),
+    PaletteExtra("تاریخچه اعلان‌ها", "پیام‌رسانی ← تاریخچه و صف ارسال", "notification-history", "",
+                 ("can_manage_settings",), "اعلان تاریخچه پیام ارسال شده صف", "≡"),
     PaletteExtra("کادوپیچی کالاها", "تنظیمات ← مالی و پرداخت ← کادوپیچی", "gift-wrap-products", "",
                  ("can_manage_settings",), "کادوپیچی کادو بسته بندی هدیه gift wrap", "🎁"),
     PaletteExtra("برچسب‌های مشتری", "مشتریان ← مشتریان ← برچسب‌ها", "customer-tag-list", "",

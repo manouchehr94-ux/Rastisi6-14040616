@@ -1,0 +1,91 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}پیام‌رسانی | تنظیمات{% endblock %}
+{% block page_title %}پیام‌رسانی{% endblock %}
+{% block page_sub %}مرکزِ یکپارچه‌ی مدیریتِ پیامک و ایمیلِ فروشگاه — رویدادها، کانال‌ها، فرستنده، سرویسِ پیامک و تاریخچه{% endblock %}
+
+{% block extra_css %}
+<style>
+.msg-home{max-width:1500px;margin-inline:auto}
+.msg-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.msg-kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.msg-kpi .k-label{font-size:11.5px;color:var(--muted)}
+.msg-kpi .k-value{font-size:22px;font-weight:800;margin-top:3px}
+.msg-kpi.ok{border-top:3px solid #15996a}.msg-kpi.warn{border-top:3px solid #c66b14}.msg-kpi.info{border-top:3px solid var(--primary)}
+.msg-cards{display:grid;grid-template-columns:1fr;gap:16px}
+@media (min-width:760px){.msg-cards{grid-template-columns:1fr 1fr}}
+@media (min-width:1200px){.msg-cards{grid-template-columns:1fr 1fr 1fr}}
+.msg-card{display:flex;flex-direction:column;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;text-decoration:none;color:inherit;transition:.16s}
+.msg-card:hover{border-color:var(--primary);box-shadow:0 10px 30px rgba(20,24,44,.08);transform:translateY(-1px)}
+.msg-card .mc-head{display:flex;align-items:center;gap:10px}
+.msg-card .mc-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--bg-soft,#f1eeff);color:var(--primary);flex:0 0 auto}
+.msg-card .mc-title{font-weight:800;font-size:15px}
+.msg-card .mc-desc{font-size:12.5px;color:var(--muted);line-height:1.8;flex:1}
+.msg-card .mc-status{display:flex;flex-wrap:wrap;gap:6px}
+.mc-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700}
+.mc-badge.ok{background:#e8f8f0;color:#117c56}.mc-badge.warn{background:#fff4e6;color:#a75a11}.mc-badge.off{background:#eceff6;color:#66708a}.mc-badge.info{background:#edf4ff;color:#2b67d6}.mc-badge.red{background:#fff0f0;color:#bb4444}
+.msg-card .mc-go{font-size:12.5px;color:var(--primary);font-weight:700;margin-top:2px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="msg-home">
+  {% include "dashboard/partials/notification_tabs.html" with tab="home" %}
+
+  <div class="msg-summary">
+    <div class="msg-kpi info"><div class="k-label">رویدادهای پیام‌رسانی</div><div class="k-value">{{ event_count|fa_number }}</div></div>
+    <div class="msg-kpi ok"><div class="k-label">پیامکِ فعال</div><div class="k-value">{{ sms_enabled_count|fa_number }}</div></div>
+    <div class="msg-kpi ok"><div class="k-label">ایمیلِ فعال</div><div class="k-value">{{ email_enabled_count|fa_number }}</div></div>
+    <div class="msg-kpi info"><div class="k-label">قالبِ سفارشی‌شده</div><div class="k-value">{{ customized_count|fa_number }}</div></div>
+    <div class="msg-kpi {% if recent_failed %}warn{% else %}ok{% endif %}"><div class="k-label">ارسالِ ناموفق</div><div class="k-value">{{ recent_failed|fa_number }}</div></div>
+  </div>
+
+  <div class="msg-cards">
+    <a class="msg-card" href="{% url 'dashboard:notification-templates' %}">
+      <div class="mc-head"><span class="mc-ico">✉️</span><span class="mc-title">رویدادها و قالب‌ها</span></div>
+      <div class="mc-desc">برای هر رویدادِ کسب‌وکار، پیامک و ایمیل را در یک ویرایشگرِ واحد فعال و تنظیم کنید.</div>
+      <div class="mc-status"><span class="mc-badge ok">پیامک {{ sms_enabled_count|fa_number }}</span><span class="mc-badge ok">ایمیل {{ email_enabled_count|fa_number }}</span>{% if customized_count %}<span class="mc-badge info">✎ {{ customized_count|fa_number }} سفارشی</span>{% endif %}</div>
+      <span class="mc-go">باز کردن ←</span>
+    </a>
+
+    <a class="msg-card" href="{% url 'dashboard:notification-channels' %}">
+      <div class="mc-head"><span class="mc-ico">🎚️</span><span class="mc-title">کانال‌های ارسال</span></div>
+      <div class="mc-desc">روشن/خاموش‌کردنِ مستقلِ پیامک و ایمیل برای هر رویداد، در یک نما.</div>
+      <div class="mc-status"><span class="mc-badge info">{{ event_count|fa_number }} رویداد</span></div>
+      <span class="mc-go">باز کردن ←</span>
+    </a>
+
+    <a class="msg-card" href="{% url 'dashboard:notification-sender' %}">
+      <div class="mc-head"><span class="mc-ico">🔐</span><span class="mc-title">فرستنده‌ی ایمیل و دامنه</span></div>
+      <div class="mc-desc">ایمیل‌ها فقط از دامنه‌ی اختصاصیِ خودِ فروشگاه ارسال می‌شوند. وضعیتِ تأیید و رکوردهای DNS.</div>
+      <div class="mc-status">
+        {% if sender.status == 'active' %}<span class="mc-badge ok">فعال · {{ sender.from_address }}</span>
+        {% elif sender.status == 'pending' %}<span class="mc-badge warn">در انتظارِ تأیید</span>
+        {% elif sender.status == 'error' %}<span class="mc-badge red">خطا</span>
+        {% else %}<span class="mc-badge off">غیرفعال</span>{% endif %}
+      </div>
+      <span class="mc-go">باز کردن ←</span>
+    </a>
+
+    <a class="msg-card" href="{% url 'dashboard:settings' %}?section=sms">
+      <div class="mc-head"><span class="mc-ico">📲</span><span class="mc-title">سرویس پیامک و اعتبار</span></div>
+      <div class="mc-desc">روشِ ارسال، وضعیتِ درگاه، اعتبارِ پیامک و گیت‌وی اندروید.</div>
+      <div class="mc-status">
+        {% if not sms_status.enabled %}<span class="mc-badge off">سامانه خاموش</span>
+        {% elif sms_status.health == 'ok' %}<span class="mc-badge ok">سالم</span>
+        {% elif sms_status.health == 'warning' %}<span class="mc-badge warn">هشدار</span>
+        {% else %}<span class="mc-badge red">نیازمندِ اقدام</span>{% endif %}
+        {% if sms_status.credits is not None %}<span class="mc-badge info">اعتبار {{ sms_status.credits|fa_number }}</span>{% endif %}
+      </div>
+      <span class="mc-go">باز کردن ←</span>
+    </a>
+
+    <a class="msg-card" href="{% url 'dashboard:notification-history' %}">
+      <div class="mc-head"><span class="mc-ico">🕑</span><span class="mc-title">تاریخچه و صف ارسال</span></div>
+      <div class="mc-desc">همه‌ی پیامک‌ها و ایمیل‌هایِ صف‌شده و ارسال‌شده با وضعیت، خطا و شناسه‌ی ارائه‌دهنده.</div>
+      <div class="mc-status"><span class="mc-badge ok">ارسال‌شده {{ recent_sent|fa_number }}</span>{% if recent_failed %}<span class="mc-badge red">ناموفق {{ recent_failed|fa_number }}</span>{% endif %}</div>
+      <span class="mc-go">باز کردن ←</span>
+    </a>
+  </div>
+</div>
+{% endblock %}

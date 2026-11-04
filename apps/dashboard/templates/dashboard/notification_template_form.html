@@ -1,89 +1,259 @@
 {% extends "dashboard/base_admin.html" %}
 {% load persian %}
-{% block title %}{{ event.label }} | قالب اعلان{% endblock %}
+{% block title %}{{ event.label }} | پیام‌رسانی{% endblock %}
 {% block page_title %}{{ event.label }}{% endblock %}
 {% block page_sub %}{{ category_label }} · {% if event.audience == 'staff' %}اعلان به کارکنان{% else %}اعلان به مشتری{% endif %} · <span dir="ltr">{{ event.key }}</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Unified event editor: full-width, side-by-side SMS + Email, compact, RTL ──────────────────────────────── */
+.ev-editor{--ev-gap:18px;max-width:1500px;margin-inline:auto}
+.ev-toolbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ev-breadcrumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.ev-breadcrumb a{color:var(--muted);text-decoration:none}.ev-breadcrumb a:hover{color:var(--primary)}
+.ev-meta-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ev-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--bg-soft,#f3f4f6);color:var(--muted)}
+.ev-chip.is-on{background:#e8f8f0;color:#117c56}.ev-chip.is-off{background:#fff4e6;color:#a75a11}.ev-chip.is-locked{background:#fdeaea;color:#bb4444}
+
+/* variable palette */
+.ev-vars{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 16px;margin-bottom:var(--ev-gap)}
+.ev-vars h4{margin:0 0 8px;font-size:12.5px}
+.ev-vars-list{display:flex;flex-wrap:wrap;gap:6px}
+.ev-var{cursor:pointer;border:1px solid var(--border);background:var(--bg-soft,#f7f7fb);border-radius:7px;padding:3px 9px;font-size:12px;display:inline-flex;align-items:center;gap:6px;transition:.15s}
+.ev-var:hover{border-color:var(--primary);background:var(--primary);color:#fff}
+.ev-var code{direction:ltr;font-family:monospace}.ev-var small{color:var(--muted)}.ev-var:hover small{color:#fff}
+
+/* the two-column grid — genuinely side-by-side where there is room */
+.ev-grid{display:grid;grid-template-columns:1fr;gap:var(--ev-gap);align-items:start}
+@media (min-width:1100px){.ev-grid{grid-template-columns:1fr 1fr}}
+.ev-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.ev-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border);background:var(--bg-soft,#fafbfe)}
+.ev-card-head .ev-title{display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px}
+.ev-card-head .ev-title .ev-ico{font-size:17px}
+.ev-card-body{padding:16px;display:flex;flex-direction:column;gap:12px;flex:1}
+.ev-field{display:flex;flex-direction:column;gap:5px}
+.ev-field label.ev-lbl{font-size:12.5px;font-weight:700}
+.ev-field .ev-hint{font-size:11px;color:var(--muted);line-height:1.6}
+.ev-inp{width:100%;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font:inherit;background:var(--card);color:var(--ink,inherit)}
+.ev-inp:focus{outline:2px solid var(--primary);outline-offset:1px}
+textarea.ev-inp{resize:vertical;line-height:1.9}
+textarea.ev-mono{font-family:monospace;direction:ltr;font-size:12.5px}
+/* switch */
+.ev-switch{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:600}
+.ev-switch input{position:absolute;opacity:0;width:0;height:0}
+.ev-switch .ev-track{width:42px;height:24px;border-radius:999px;background:#c9cedb;position:relative;transition:.18s;flex:0 0 auto}
+.ev-switch .ev-track::after{content:"";position:absolute;inset-block:3px;inset-inline-start:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.18s}
+.ev-switch input:checked + .ev-track{background:var(--primary)}
+.ev-switch input:checked + .ev-track::after{inset-inline-start:21px}
+.ev-switch input:disabled + .ev-track{opacity:.5}
+.ev-switch input:focus-visible + .ev-track{outline:2px solid var(--primary);outline-offset:2px}
+/* status line per channel */
+.ev-status{display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px}
+.ev-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-weight:700}
+.ev-badge.ok{background:#e8f8f0;color:#117c56}.ev-badge.warn{background:#fff4e6;color:#a75a11}.ev-badge.off{background:#eceff6;color:#66708a}.ev-badge.info{background:#edf4ff;color:#2b67d6}
+.ev-note{font-size:11.5px;line-height:1.7;border-radius:10px;padding:8px 11px}
+.ev-note.amber{background:#fff7ed;color:#9a5712}.ev-note.red{background:#fff0f0;color:#b42626}.ev-note.green{background:#eefaf3;color:#15724f}.ev-note.muted{background:var(--bg-soft,#f5f6fa);color:var(--muted)}
+.ev-charcount{font-size:11px;color:var(--muted);align-self:flex-end}
+.ev-charcount b{color:var(--ink,inherit)}.ev-charcount.over b{color:#b42626}
+.ev-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.ev-preview{border:1px dashed var(--border);border-radius:10px;min-height:0}
+.ev-preview:empty{display:none}
+/* sticky save bar */
+.ev-savebar{position:sticky;bottom:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 16px;margin-top:var(--ev-gap);box-shadow:0 -6px 20px rgba(20,24,44,.06)}
+.ev-savebar .ev-savehint{margin-inline-end:auto;font-size:12px;color:var(--muted)}
+.ev-aux{display:grid;grid-template-columns:1fr;gap:var(--ev-gap);margin-top:var(--ev-gap)}
+@media (min-width:1100px){.ev-aux{grid-template-columns:1fr 1fr}}
+.ev-aux .ev-card-body{gap:10px}
+.ev-revision{font-size:12px;padding:4px 0;border-bottom:1px dashed var(--border)}.ev-revision:last-child{border-bottom:0}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card" style="margin-bottom:14px"><div class="card-body">
-  <b>متغیرهای مجازِ این رویداد</b> (با آکولاد در متن بنویسید؛ متغیرِ دیگر پذیرفته نمی‌شود):
-  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-    {% for name, label in variables %}<code dir="ltr" title="{{ label }}" style="padding:2px 8px;background:var(--bg-soft,#f3f4f6);border-radius:6px">{{ '{' }}{{ name }}{{ '}' }}</code><small style="color:var(--muted);margin-inline-end:8px">{{ label }}</small>{% endfor %}
+<div class="ev-editor">
+  {% include "dashboard/partials/notification_tabs.html" with tab="templates" %}
+
+  <div class="ev-toolbar">
+    <nav class="ev-breadcrumb" aria-label="مسیر">
+      <a href="{% url 'dashboard:notification-templates' %}">رویدادها و قالب‌ها</a>
+      <span aria-hidden="true">←</span>
+      <b style="color:var(--ink,inherit)">{{ event.label }}</b>
+    </nav>
+    <div class="ev-meta-chips">
+      <span class="ev-chip">{{ category_label }}</span>
+      <span class="ev-chip">{% if event.audience == 'staff' %}کارکنان{% else %}مشتری{% endif %}</span>
+      <span class="ev-chip {% if templates.sms.enabled %}is-on{% else %}is-off{% endif %}">پیامک: {% if templates.sms.enabled %}روشن{% else %}خاموش{% endif %}</span>
+      <span class="ev-chip {% if templates.email.enabled %}is-on{% else %}is-off{% endif %}">ایمیل: {% if templates.email.enabled %}روشن{% else %}خاموش{% endif %}</span>
+    </div>
   </div>
-</div></div>
 
-<form method="post" class="form-card">
-  {% csrf_token %}
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">
-    <fieldset class="card"><legend class="card-head" style="padding:10px 18px"><b>📱 پیامک</b></legend><div class="card-body">
-      {% if not sms_globally_enabled %}<p class="badge b-red" style="white-space:normal">ارسالِ پیامک در تنظیماتِ این فروشگاه غیرفعال است؛ تا فعال‌شدنِ آن هیچ پیامکی (حتی با قالبِ فعال) ارسال نمی‌شود.</p>{% endif %}
-      {% if event.platform_sms_event %}
-        <p class="badge b-amber" style="white-space:normal">🔒 متنِ این پیامک را راستی‌سی تنظیم می‌کند و در سطحِ فروشگاه قابلِ ویرایش نیست. روشن/خاموش‌کردنِ ارسال از صفحه‌ی ساخت کمپین/مناسبت انجام می‌شود.</p>
-        <div class="inp" style="margin-top:8px;width:100%;white-space:pre-wrap;background:var(--bg-soft,#f3f4f6)" role="note" aria-label="متن فقط‌خواندنیِ پیامک">{{ templates.sms.body }}</div>
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="[name=csrfmiddlewaretoken]" hx-vals='{"channel":"sms"}' hx-target="#preview-sms">پیش‌نمایش</button>
-        </div>
-        <div id="preview-sms"></div>
-      {% else %}
-      {% if event.legacy_sms_event %}
-        {% if can_edit_legacy_sms %}<p class="badge b-green" id="sms-source" style="white-space:normal">{% if templates.sms.source == 'store' %}متنِ اختصاصیِ این فروشگاه (نسخه {{ templates.sms.version }}) — پیامکِ واقعیِ این رویداد با همین متن ارسال می‌شود. «بازگشت به پیش‌فرض» متنِ پلتفرم را برمی‌گرداند و روی فروشگاه‌های دیگر اثری ندارد.{% else %}اکنون متنِ پیش‌فرضِ پلتفرم استفاده می‌شود؛ با ذخیره، یک متنِ اختصاصیِ همین فروشگاه ساخته می‌شود و فروشگاه‌های دیگر تغییر نمی‌کنند.{% endif %}</p>
-        {% if not templates.sms.platform_active %}<p class="badge b-red" style="white-space:normal">راستی‌سی این پیامک را برای کلِ پلتفرم غیرفعال کرده است؛ تا فعال‌شدنِ آن هیچ فروشگاهی آن را نمی‌فرستد.</p>{% endif %}
-        {% if templates.sms.source == 'store' %}<p style="font-size:12px;color:var(--muted)">متنِ سفارشی‌شده به‌صورت پیامکِ معمولی ارسال می‌شود (الگوی تأییدشده‌ی Pattern ارائه‌دهنده فقط برای متنِ پیش‌فرضِ پلتفرم به‌کار می‌رود).</p>{% endif %}
-        {% else %}<p class="badge b-red" style="white-space:normal">ویرایشِ این قالب نیازمندِ دسترسیِ «تنظیماتِ پیامک» است؛ فقط نمایش.</p>{% endif %}
-      {% endif %}
-      <label><input type="checkbox" name="sms_enabled" {% if templates.sms.enabled %}checked{% endif %} {% if event.legacy_sms_event and not can_edit_legacy_sms %}disabled{% endif %}> فعال</label>
-      <textarea class="inp" name="sms_body" id="sms_body" rows="5" {% if event.legacy_sms_event and not can_edit_legacy_sms %}readonly{% endif %} style="margin-top:8px;width:100%" aria-label="متن پیامک">{{ templates.sms.body }}</textarea>
-      {% if errors.sms %}<div class="coup-err" style="color:var(--red-ink)">{{ errors.sms }}</div>{% endif %}
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#sms_body,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"sms"}' hx-target="#preview-sms">پیش‌نمایش</button>
-        {% if templates.sms.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='sms'">بازگشت به پیش‌فرض</button>{% endif %}
-      </div>
-      <div id="preview-sms"></div>
-      {% endif %}
-    </div></fieldset>
+  {% if not sms_globally_enabled %}<div class="ev-note red" style="margin-bottom:14px">ارسالِ پیامک در تنظیماتِ فروشگاه خاموش است؛ تا روشن‌شدنِ آن هیچ پیامکی ارسال نمی‌شود. <a href="{% url 'dashboard:settings' %}?section=sms">تنظیماتِ پیامک</a></div>{% endif %}
 
-    <fieldset class="card"><legend class="card-head" style="padding:10px 18px"><b>📧 ایمیل</b></legend><div class="card-body">
-      <p id="email-source" style="font-size:12px;color:var(--muted);margin:0 0 6px">منبعِ قالبِ مؤثر: {% if templates.email.source == 'store' %}بازنویسیِ این فروشگاه (نسخه {{ templates.email.version }}){% elif templates.email.source == 'platform' %}پیش‌فرضِ پلتفرم{% else %}پیش‌فرضِ سیستم{% endif %}</p>
-      {% if templates.email.locked %}<p class="badge b-amber" style="white-space:normal">🔒 این قالب را فقط راستی‌سی مدیریت می‌کند؛ اینجا فقط نمایش است.</p>{% endif %}
-      {% if event.category == 'security' %}<p class="badge b-amber" style="white-space:normal">اعلانِ امنیتی همیشه فعال است و متغیرِ ضروری ({% for v in event.required_variables %}<span dir="ltr">{{ '{' }}{{ v }}{{ '}' }}</span>{% endfor %}) باید در متن بماند.</p>{% endif %}
-      {% if sender.status != 'active' %}<p class="badge b-amber" style="white-space:normal">فرستنده‌ی ایمیلِ فروشگاه هنوز فعال نیست؛ ایمیل‌ها تا فعال‌شدن نگه‌داری می‌شوند. <a href="{% url 'dashboard:notification-sender' %}">وضعیت</a></p>{% endif %}
-      <label><input type="checkbox" name="email_enabled" {% if templates.email.enabled %}checked{% endif %} {% if templates.email.locked or event.category == 'security' %}disabled{% endif %}> فعال</label>
-      <input class="inp" name="email_subject" id="email_subject" value="{{ templates.email.subject }}" placeholder="موضوع ایمیل" style="margin-top:8px;width:100%" aria-label="موضوع ایمیل">
-      <textarea class="inp" name="email_body" id="email_body" rows="8" style="margin-top:8px;width:100%" aria-label="متن ایمیل (متنِ ساده)" {% if templates.email.locked %}readonly{% endif %}>{{ templates.email.body }}</textarea>
-      <label for="email_html" style="display:block;margin-top:8px;font-size:12.5px"><b>نسخه‌ی HTML (اختیاری)</b> — برچسب‌هایِ مجاز: p، br، strong، em، ul، ol، li، a، h1–h3، blockquote، table؛ اسکریپت و استایلِ درون‌خطی حذف می‌شوند.</label>
-      <textarea class="inp" name="email_html" id="email_html" rows="6" dir="ltr" style="margin-top:4px;width:100%;font-family:monospace" aria-label="متن HTML ایمیل" {% if templates.email.locked %}readonly{% endif %}>{{ templates.email.body_html }}</textarea>
-      {% if errors.email %}<div class="coup-err" style="color:var(--red-ink)">{{ errors.email }}</div>{% endif %}
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#email_subject,#email_body,#email_html,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"email"}' hx-target="#preview-email">پیش‌نمایش</button>
-        {% if templates.email.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='email'">بازگشت به پیش‌فرض</button>{% endif %}
-      </div>
-      <div id="preview-email"></div>
-    </div></fieldset>
+  <div class="ev-vars">
+    <h4>متغیرهای مجاز (برای درج، روی هر مورد کلیک کنید؛ متغیرِ دیگر پذیرفته نمی‌شود)</h4>
+    <div class="ev-vars-list">
+      {% for name, label in variables %}
+      <button type="button" class="ev-var" data-token="{{ '{' }}{{ name }}{{ '}' }}" title="درجِ {{ label }}"><code dir="ltr">{{ '{' }}{{ name }}{{ '}' }}</code><small>{{ label }}</small></button>
+      {% endfor %}
+    </div>
   </div>
-  <input type="hidden" name="channel" id="reset-channel" value="">
-  {% if event.audience == 'staff' %}
-  <div class="card" style="margin-top:14px"><div class="card-body">
-    <label for="extra_recipients"><b>گیرندگانِ اعلان (کارکنان)</b> — هر خط یک ایمیل یا شماره موبایل؛ مالکِ فروشگاه همیشه ایمیل می‌گیرد</label>
-    <textarea class="inp" name="extra_recipients" id="extra_recipients" rows="3" style="width:100%;margin-top:6px" dir="ltr">{{ extra_recipients }}</textarea>
-  </div></div>
-  {% endif %}
-  <div class="btn-row" style="margin-top:14px">
-    <button type="submit" class="btn btn-primary">ذخیره</button>
-    <a class="btn btn-secondary" href="{% url 'dashboard:notification-templates' %}">بازگشت</a>
-  </div>
-</form>
 
-<div class="card" style="margin-top:14px"><div class="card-head"><h3>تاریخچه‌ی نسخه‌ها</h3></div><div class="card-body" id="revisions">
-  {% for r in revisions %}<div style="font-size:12.5px;padding:3px 0">{{ r.created_at|jalali_dt }} · {{ r.channel }} · نسخه {{ r.version }} · {% if r.action == 'reset' %}بازگشت به پیش‌فرض{% else %}ذخیره{% endif %}{% if r.actor %} · {{ r.actor.get_username }}{% endif %}</div>{% empty %}<small style="color:var(--muted)">هنوز تغییری ثبت نشده است.</small>{% endfor %}
-</div></div>
-
-<div class="card" style="margin-top:14px"><div class="card-head"><h3>ارسالِ آزمایشی</h3></div><div class="card-body">
-  <p style="font-size:12.5px;color:var(--muted)">با داده‌ی نمونه و به شماره/ایمیلِ دلخواه (حداکثر ۱۰ بار در ساعت). متنِ فعلیِ فرم (ذخیره‌نشده) استفاده می‌شود.</p>
-  <form method="post" action="{% url 'dashboard:notification-template-test' event.key %}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+  <form method="post" id="ev-form">
     {% csrf_token %}
-    <select name="channel" class="inp" style="width:120px" aria-label="کانال"><option value="sms">پیامک</option><option value="email">ایمیل</option></select>
-    <input class="inp" name="recipient" placeholder="09123456789 یا name@example.com" dir="ltr" style="width:260px" aria-label="گیرنده‌ی آزمایشی" required>
-    <input type="hidden" name="sms_body" id="test_sms_body"><input type="hidden" name="email_body" id="test_email_body"><input type="hidden" name="email_subject" id="test_email_subject">
-    <button class="btn" onclick="document.getElementById('test_sms_body').value=(document.getElementById('sms_body')||{value:''}).value;document.getElementById('test_email_body').value=document.getElementById('email_body').value;document.getElementById('test_email_subject').value=document.getElementById('email_subject').value">ارسالِ آزمایشی</button>
+    <input type="hidden" name="channel" id="reset-channel" value="">
+    <div class="ev-grid">
+
+      {# ───────────── SMS ───────────── #}
+      <section class="ev-card" aria-labelledby="sms-h">
+        <div class="ev-card-head">
+          <span class="ev-title" id="sms-h"><span class="ev-ico">📱</span> پیامک</span>
+          {% if event.platform_sms_event %}<span class="ev-badge info">🔒 متنِ راستی‌سی</span>
+          {% else %}
+          <label class="ev-switch" title="روشن/خاموش کردنِ پیامکِ این رویداد">
+            <input type="checkbox" name="sms_enabled" id="sms_enabled" {% if templates.sms.enabled %}checked{% endif %} {% if event.legacy_sms_event and not can_edit_legacy_sms %}disabled{% endif %}>
+            <span class="ev-track" aria-hidden="true"></span><span>فعال</span>
+          </label>{% endif %}
+        </div>
+        <div class="ev-card-body">
+          <div class="ev-status" aria-label="وضعیتِ مؤثرِ ارسالِ پیامک">
+            {% if not sms_globally_enabled %}<span class="ev-badge off">سامانه خاموش</span>
+            {% elif templates.sms.enabled %}<span class="ev-badge ok">ارسال فعال است</span>
+            {% else %}<span class="ev-badge off">غیرفعال</span>{% endif %}
+            {% if templates.sms.customized %}<span class="ev-badge info">✎ سفارشی‌شده</span>{% endif %}
+          </div>
+
+          {% if event.platform_sms_event %}
+            <div class="ev-note amber">متنِ این پیامک را راستی‌سی تنظیم می‌کند و در سطحِ فروشگاه قابلِ ویرایش نیست. روشن/خاموش‌کردن از صفحه‌ی کمپین/مناسبت انجام می‌شود.</div>
+            <div class="ev-inp" style="white-space:pre-wrap;background:var(--bg-soft,#f3f4f6);min-height:120px" role="note" aria-label="متنِ فقط‌خواندنیِ پیامک">{{ templates.sms.body }}</div>
+            <div class="ev-actions"><button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="[name=csrfmiddlewaretoken]" hx-vals='{"channel":"sms"}' hx-target="#preview-sms">پیش‌نمایش</button></div>
+          {% else %}
+            {% if event.legacy_sms_event %}
+              {% if can_edit_legacy_sms %}<div class="ev-note green">{% if templates.sms.source == 'store' %}متنِ اختصاصیِ این فروشگاه (نسخه {{ templates.sms.version }}) ارسال می‌شود. «بازگشت به پیش‌فرض» متنِ پلتفرم را برمی‌گرداند.{% else %}اکنون متنِ پیش‌فرضِ پلتفرم استفاده می‌شود؛ با ذخیره، یک متنِ اختصاصیِ همین فروشگاه ساخته می‌شود.{% endif %}</div>
+              {% if not templates.sms.platform_active %}<div class="ev-note red">راستی‌سی این پیامک را برای کلِ پلتفرم خاموش کرده است.</div>{% endif %}
+              {% else %}<div class="ev-note red">ویرایشِ این قالب نیازمندِ دسترسیِ «تنظیماتِ پیامک» است؛ فقط نمایش.</div>{% endif %}
+            {% endif %}
+            <div class="ev-field">
+              <label class="ev-lbl" for="sms_body">متنِ پیامک</label>
+              <textarea class="ev-inp" name="sms_body" id="sms_body" rows="6" data-counter="sms-count" {% if event.legacy_sms_event and not can_edit_legacy_sms %}readonly{% endif %} aria-label="متن پیامک">{{ templates.sms.body }}</textarea>
+              <span class="ev-charcount" id="sms-count" aria-live="polite"></span>
+            </div>
+            {% if errors.sms %}<div class="ev-note red" role="alert">{{ errors.sms }}</div>{% endif %}
+            <div class="ev-actions">
+              <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#sms_body,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"sms"}' hx-target="#preview-sms">پیش‌نمایش</button>
+              {% if templates.sms.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='sms'">بازگشت به پیش‌فرض</button>{% endif %}
+            </div>
+          {% endif %}
+          <div class="ev-preview" id="preview-sms"></div>
+        </div>
+      </section>
+
+      {# ───────────── EMAIL ───────────── #}
+      <section class="ev-card" aria-labelledby="email-h">
+        <div class="ev-card-head">
+          <span class="ev-title" id="email-h"><span class="ev-ico">📧</span> ایمیل</span>
+          <label class="ev-switch" title="روشن/خاموش کردنِ ایمیلِ این رویداد">
+            <input type="checkbox" name="email_enabled" id="email_enabled" {% if templates.email.enabled %}checked{% endif %} {% if templates.email.locked or event.category == 'security' %}disabled{% endif %}>
+            <span class="ev-track" aria-hidden="true"></span><span>فعال</span>
+          </label>
+        </div>
+        <div class="ev-card-body">
+          <div class="ev-status" aria-label="وضعیتِ مؤثرِ ارسالِ ایمیل">
+            {% if sender.status == 'active' %}<span class="ev-badge ok">فرستنده فعال</span>{% else %}<span class="ev-badge warn">فرستنده غیرفعال</span>{% endif %}
+            {% if templates.email.enabled %}<span class="ev-badge ok">قالب روشن</span>{% else %}<span class="ev-badge off">قالب خاموش</span>{% endif %}
+            {% if templates.email.customized %}<span class="ev-badge info">✎ سفارشی‌شده</span>{% endif %}
+          </div>
+          <div class="ev-note muted" id="email-source">منبعِ قالبِ مؤثر: {% if templates.email.source == 'store' %}بازنویسیِ این فروشگاه (نسخه {{ templates.email.version }}){% elif templates.email.source == 'platform' %}پیش‌فرضِ پلتفرم{% else %}پیش‌فرضِ سیستم{% endif %}</div>
+          {% if templates.email.locked %}<div class="ev-note amber">🔒 این قالب را فقط راستی‌سی مدیریت می‌کند؛ اینجا فقط نمایش است.</div>{% endif %}
+          {% if event.category == 'security' %}<div class="ev-note amber">اعلانِ امنیتی همیشه فعال است و متغیرِ ضروری ({% for v in event.required_variables %}<span dir="ltr">{{ '{' }}{{ v }}{{ '}' }}</span>{% endfor %}) باید در متن بماند.</div>{% endif %}
+          {% if sender.status != 'active' %}<div class="ev-note amber">فرستنده‌ی ایمیلِ فروشگاه هنوز فعال نیست؛ ایمیل‌ها تا فعال‌شدن نگه‌داری می‌شوند و ارسال نمی‌شوند. <a href="{% url 'dashboard:notification-sender' %}">فرستنده‌ی ایمیل و دامنه</a></div>{% endif %}
+
+          <div class="ev-field">
+            <label class="ev-lbl" for="email_subject">موضوع ایمیل</label>
+            <input class="ev-inp" name="email_subject" id="email_subject" value="{{ templates.email.subject }}" placeholder="موضوع ایمیل" {% if templates.email.locked %}readonly{% endif %} aria-label="موضوع ایمیل">
+          </div>
+          <div class="ev-field">
+            <label class="ev-lbl" for="email_body">متنِ ساده (بدون قالب‌بندی)</label>
+            <textarea class="ev-inp" name="email_body" id="email_body" rows="6" {% if templates.email.locked %}readonly{% endif %} aria-label="متن ساده ایمیل">{{ templates.email.body }}</textarea>
+          </div>
+          <div class="ev-field">
+            <label class="ev-lbl" for="email_html">نسخه‌ی HTML <span style="font-weight:400;color:var(--muted)">(اختیاری)</span></label>
+            <span class="ev-hint">برچسب‌های مجاز: p، br، strong، em، ul، ol، li، a، h1–h3، blockquote، table؛ اسکریپت و استایلِ درون‌خطی حذف می‌شوند.</span>
+            <textarea class="ev-inp ev-mono" name="email_html" id="email_html" rows="7" {% if templates.email.locked %}readonly{% endif %} aria-label="متن HTML ایمیل">{{ templates.email.body_html }}</textarea>
+          </div>
+          {% if errors.email %}<div class="ev-note red" role="alert">{{ errors.email }}</div>{% endif %}
+          <div class="ev-actions">
+            <button type="button" class="btn btn-sm" hx-post="{% url 'dashboard:notification-template-preview' event.key %}" hx-include="#email_subject,#email_body,#email_html,[name=csrfmiddlewaretoken]" hx-vals='{"channel":"email"}' hx-target="#preview-email">پیش‌نمایش</button>
+            {% if templates.email.customized %}<button type="submit" name="action" value="reset" class="btn btn-sm" onclick="document.getElementById('reset-channel').value='email'">بازگشت به پیش‌فرض</button>{% endif %}
+          </div>
+          <div class="ev-preview" id="preview-email"></div>
+        </div>
+      </section>
+    </div>
+
+    {% if event.audience == 'staff' %}
+    <div class="ev-card" style="margin-top:var(--ev-gap)"><div class="ev-card-body">
+      <div class="ev-field">
+        <label class="ev-lbl" for="extra_recipients">گیرندگانِ اعلان (کارکنان) — هر خط یک ایمیل یا شماره موبایل؛ مالکِ فروشگاه همیشه ایمیل می‌گیرد</label>
+        <textarea class="ev-inp ev-mono" name="extra_recipients" id="extra_recipients" rows="3">{{ extra_recipients }}</textarea>
+      </div>
+    </div></div>
+    {% endif %}
+
+    <div class="ev-savebar">
+      <span class="ev-savehint">یک ذخیره برای هر دو کانال؛ کانالِ دیگر دست‌نخورده می‌ماند.</span>
+      <a class="btn btn-secondary" href="{% url 'dashboard:notification-templates' %}">بازگشت</a>
+      <button type="submit" class="btn btn-primary">ذخیره‌ی رویداد</button>
+    </div>
   </form>
-</div></div>
+
+  <div class="ev-aux">
+    <section class="ev-card"><div class="ev-card-head"><span class="ev-title">تاریخچه‌ی نسخه‌ها</span></div>
+      <div class="ev-card-body" id="revisions">
+        {% for r in revisions %}<div class="ev-revision">{{ r.created_at|jalali_dt }} · {{ r.channel }} · نسخه {{ r.version }} · {% if r.action == 'reset' %}بازگشت به پیش‌فرض{% else %}ذخیره{% endif %}{% if r.actor %} · {{ r.actor.get_username }}{% endif %}</div>{% empty %}<small style="color:var(--muted)">هنوز تغییری ثبت نشده است.</small>{% endfor %}
+      </div>
+    </section>
+    <section class="ev-card"><div class="ev-card-head"><span class="ev-title">ارسالِ آزمایشی</span></div>
+      <div class="ev-card-body">
+        <span class="ev-hint">با داده‌ی نمونه و به شماره/ایمیلِ دلخواه (حداکثر ۱۰ بار در ساعت). متنِ فعلیِ فرم (ذخیره‌نشده) استفاده می‌شود.</span>
+        <form method="post" action="{% url 'dashboard:notification-template-test' event.key %}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          {% csrf_token %}
+          <select name="channel" class="ev-inp" style="width:120px" aria-label="کانال"><option value="sms">پیامک</option><option value="email">ایمیل</option></select>
+          <input class="ev-inp" name="recipient" placeholder="09123456789 یا name@example.com" dir="ltr" style="width:240px;flex:1;min-width:180px" aria-label="گیرنده‌ی آزمایشی" required>
+          <input type="hidden" name="sms_body" id="test_sms_body"><input type="hidden" name="email_body" id="test_email_body"><input type="hidden" name="email_subject" id="test_email_subject">
+          <button class="btn" onclick="document.getElementById('test_sms_body').value=(document.getElementById('sms_body')||{value:''}).value;document.getElementById('test_email_body').value=document.getElementById('email_body').value;document.getElementById('test_email_subject').value=document.getElementById('email_subject').value">ارسالِ آزمایشی</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  // click-to-insert variable tokens into the focused (or last-focused) editor
+  var lastField = document.getElementById('sms_body') || document.getElementById('email_body');
+  document.querySelectorAll('#ev-form textarea, #ev-form input[type=text], #email_subject, #sms_body, #email_body, #email_html').forEach(function(el){
+    el.addEventListener('focus', function(){ lastField = el; });
+  });
+  document.querySelectorAll('.ev-var').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var token = btn.getAttribute('data-token');
+      var el = lastField;
+      if(!el || el.readOnly || el.disabled){ return; }
+      var s = el.selectionStart || 0, e = el.selectionEnd || 0, v = el.value;
+      el.value = v.slice(0,s) + token + v.slice(e);
+      el.focus(); el.selectionStart = el.selectionEnd = s + token.length;
+      el.dispatchEvent(new Event('input'));
+    });
+  });
+  // SMS character + segment count (gsm-ish: 70 chars/segment for non-latin)
+  var sms = document.getElementById('sms_body'), out = document.getElementById('sms-count');
+  function upd(){
+    if(!sms || !out){ return; }
+    var n = sms.value.length, seg = n === 0 ? 0 : Math.ceil(n/70);
+    out.innerHTML = 'کاراکتر: <b>' + n + '</b> · بخش پیامک: <b>' + seg + '</b>';
+    out.classList.toggle('over', seg > 3);
+  }
+  if(sms){ sms.addEventListener('input', upd); upd(); }
+})();
+</script>
 {% endblock %}
