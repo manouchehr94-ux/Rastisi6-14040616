@@ -5,6 +5,20 @@ Branch `kiro/messaging-settings-ux-20261104`, based on the combined integration 
 consolidation.** No schema change, no new migration, no change to the dispatcher, SES adapter, SMS backends, queues,
 outbox workers, suppression, retries, audit logs, or any financial logic.
 
+## Round 2 corrections (product-owner review)
+1. **Canonical Settings → پیام‌رسانی section** — a real route `settings/messaging/` (`settings_messaging` view +
+   `messaging_home.html`): a management center with a live KPI summary and five subsection cards, not just a shared nav
+   bar. Navigation has one canonical `messaging` tab (url `settings-messaging`) with the five subsections as Level-3
+   children. The Marketing entry is now a **command-palette shortcut** into this canonical section, not a competing
+   sidebar tab — so there is exactly one administration structure. Nav invariants are satisfied architecturally (distinct
+   canonical landing route; no two tabs share a destination; each tab resolves to itself).
+2. **Redesigned event editor** (`notification_template_form.html`) — full content width (max 1500px), genuinely
+   side-by-side SMS and Email at ≥1100px (verified at 1280 and 1440), stacked below; compact cards, toggle switches,
+   per-channel effective-status badges, SMS character + segment counter, click-to-insert variable chips, subject/plain/
+   HTML for email, previews, and one atomic sticky save bar. No narrow form with wasted whitespace.
+3. **Real-font visual evidence** at 1440 / 1280 / 768 / 390 in `ui-evidence/messaging-redesign/fx_*` (Vazirmatn embedded,
+   Persian renders correctly).
+
 ## What changed and why
 The product owner rejected the split messaging management: event templates and channels lived under **Marketing →
 «اعلان‌ها و پیام‌ها»**, while the SMS provider, credits, Android gateway and logs lived under **Settings → «پیامک»**, with

@@ -87,7 +87,7 @@ textarea.ev-mono{font-family:monospace;direction:ltr;font-size:12.5px}
     </div>
   </div>
 
-  {% if not sms_globally_enabled %}<div class="ev-note red" style="margin-bottom:14px">ارسالِ پیامک در تنظیماتِ فروشگاه خاموش است؛ تا روشن‌شدنِ آن هیچ پیامکی ارسال نمی‌شود. <a href="{% url 'dashboard:settings' %}?section=sms">تنظیماتِ پیامک</a></div>{% endif %}
+  {% if not sms_globally_enabled %}<div class="ev-note red" style="margin-bottom:14px">ارسالِ پیامک در تنظیماتِ فروشگاه غیرفعال است؛ تا فعال‌شدنِ آن هیچ پیامکی ارسال نمی‌شود. <a href="{% url 'dashboard:settings' %}?section=sms">تنظیماتِ پیامک</a></div>{% endif %}
 
   <div class="ev-vars">
     <h4>متغیرهای مجاز (برای درج، روی هر مورد کلیک کنید؛ متغیرِ دیگر پذیرفته نمی‌شود)</h4>

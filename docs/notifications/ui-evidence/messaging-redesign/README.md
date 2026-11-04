@@ -1,27 +1,29 @@
 # UI evidence — unified «پیام‌رسانی» (Settings → Messaging) redesign
 
 Captured from the running QA server (fake providers, seeded `qa-bike` store) on branch
-`kiro/messaging-settings-ux-20261104`. These show the five-subsection unified messaging experience the product owner asked
-for, replacing the previous split between Marketing → Notifications and Settings → SMS.
+`kiro/messaging-settings-ux-20261104`. The `fx_*` set is rendered in a real headless browser with the **Vazirmatn web font
+embedded**, so Persian text renders correctly (the earlier `msgux_*` set showed glyph boxes because the font was not
+embedded in the snapshot — superseded by these).
 
-The five subsections (exact Persian labels): رویدادها و قالب‌ها · کانال‌های ارسال · فرستنده‌ی ایمیل و دامنه · سرویس پیامک و
-اعتبار · تاریخچه و صف ارسال. The identical sub-navigation bar now appears on every messaging page, including the SMS
-provider/credits page that used to live on its own.
-
+## Real-font screenshots at the required widths
 | file | page | width |
 |---|---|---|
-| `msgux_1_events_templates_desktop.png` | Events & Templates — the event list with SMS + Email status per event | 1280 |
-| `msgux_1_events_templates_mobile.png` | Events & Templates | 390 |
-| `msgux_2_event_editor_order_created_desktop.png` | Unified event editor (`order.created`): SMS card + Email card (subject / plain / HTML), preview, one save, revisions, test-send | 1280 |
-| `msgux_5_sms_provider_desktop.png` | SMS Provider & Credits — **now carrying the unified sub-navigation** (the key consolidation) | 1280 |
-| `msgux_5_sms_provider_mobile.png` | SMS Provider & Credits, responsive stack | 390 |
-| `msgux_6_history_desktop.png` | Delivery History & Queue (with links to the SMS phone-gateway queue/logs) | 1280 |
+| `fx_messaging_home_1440.png` | Canonical **Settings → پیام‌رسانی** center (KPIs + 5 subsection cards with live status) | 1440 |
+| `fx_messaging_home_1280.png` | same | 1280 |
+| `fx_messaging_home_390.png` | same, mobile stack | 390 |
+| `fx_event_editor_1440.png` | Unified `order.created` editor — **side-by-side** SMS \| Email | 1440 |
+| `fx_event_editor_1280.png` | same — side-by-side at 1280 | 1280 |
+| `fx_event_editor_768.png` | same — stacked (tablet; side-by-side breakpoint is 1100px) | 768 |
+| `fx_event_editor_390.png` | same — stacked (mobile) | 390 |
 
-> The Persian glyphs render as boxes in these standalone PNGs because the Vazirmatn web font is not embedded in the
-> captured snapshot; on the live server (and in a real browser) the text renders normally. The snapshots still faithfully
-> show layout, RTL direction, the active sub-tab, spacing and all controls.
+## What the screenshots demonstrate
+- **Canonical section:** the Settings section tab row shows «پیام‌رسانی» active (its own real route `settings/messaging/`),
+  with a KPI summary (events / SMS-on / email-on / customised / failed) and five cards that each show live status and link
+  into the subsection. This is a real management center, not just a nav bar.
+- **Redesigned editor:** full content width (max 1500px), genuinely two balanced columns at ≥1100px (1280 and 1440 shown),
+  stacked below; toggle switches, per-channel effective-status badges, SMS character + segment counter, click-to-insert
+  variable chips, subject/plain/HTML for email, previews, one atomic sticky save bar, RTL Persian typography.
+- No horizontal overflow at any width; controls readable; stacking is clean on tablet/mobile.
 
-**Before:** SMS provider/credits lived under Settings → «پیامک» with no link to the notification event/template pages, which
-lived under Marketing → «اعلان‌ها و پیام‌ها»; the two had separate, inconsistent navigation and a duplicate SMS-template
-edit surface. **After:** one «پیام‌رسانی» experience with a shared five-subsection bar on every page, a single unified
-per-event editor for SMS+Email, and the SMS settings page pointing at that editor instead of duplicating it.
+> Note: in the full-page captures the sticky save bar (`position:sticky; bottom:0`) appears mid-content because a full-page
+> screenshot flattens the scroll viewport; in a live browser it is pinned to the bottom of the viewport while scrolling.
