@@ -119,6 +119,52 @@ class CheckoutListingTests(TestCase):
         self.assertEqual(PaymentGateway.objects.filter(store=self.store, slug="zibal").count(), 1)
 
 
+class LegacyRowsWithoutConfigTests(TestCase):
+    """A legacy payment-method row whose slug is a registered provider code is offered ONLY while a ready configuration backs it
+    (regression: ``seed_shop`` creates a ``mellat`` row; a store with a bare ``snappay`` row had the same problem)."""
+
+    def setUp(self):
+        self.store = Store.objects.get(slug="akhlaghi")
+
+    def listed(self):
+        return {g.slug for g in active_payment_gateways(store=self.store)}
+
+    def test_registered_provider_rows_without_any_config_are_not_offered(self):
+        for slug in ("mellat", "snappay", "zarinpal", "pasargad", "torobpay", "saman", "parsian", "sadad", "tejarat"):
+            PaymentGateway.objects.create(store=self.store, name=slug, slug=slug, is_active=True)
+        self.assertEqual(self.listed(), set())
+
+    def test_the_legacy_methods_and_unrelated_slugs_keep_their_existing_behaviour_without_a_config(self):
+        for slug in ("zibal", "cod", "zarin", "payping", "wallet"):                           # seed_shop's demo rows; only zibal/cod are real providers
+            PaymentGateway.objects.create(store=self.store, name=slug, slug=slug, is_active=True)
+        self.assertEqual(self.listed(), {"zibal", "cod", "zarin", "payping", "wallet"})
+
+    def test_a_ready_config_makes_the_row_visible_and_a_blocked_or_incomplete_one_does_not(self):
+        for slug in ("snappay", "mellat"):
+            PaymentGateway.objects.create(store=self.store, name=slug, slug=slug, is_active=True)
+        c = PaymentGatewayConfig.objects.create(store=self.store, gateway_code="snappay", is_active=True)
+        self.assertEqual(self.listed(), set())                                                  # config without credentials
+        c.set_credentials({"client_id": "c", "client_secret": "s"}); c.save()
+        self.assertEqual(self.listed(), {"snappay"})
+        PaymentGatewayConfig.objects.create(store=self.store, gateway_code="mellat", is_active=True)
+        self.assertEqual(self.listed(), {"snappay"})                                            # documentation-blocked never
+
+    def test_a_customer_cannot_select_a_hidden_provider_by_posting_its_id(self):
+        from django.contrib.sessions.backends.db import SessionStore
+        from django.test import RequestFactory
+
+        from apps.orders.services import checkout_service
+
+        hidden = PaymentGateway.objects.create(store=self.store, name="ملت", slug="mellat", is_active=True)
+        visible = PaymentGateway.objects.create(store=self.store, name="پرداخت در محل", slug="cod", is_active=True)
+        request = RequestFactory().get("/")
+        request.session = SessionStore()
+        checkout_service.set_payment_gateway(request, hidden.pk)
+        self.assertNotIn("payment_gateway_id", request.session.get(checkout_service.SESSION_KEY, {}))     # refused
+        checkout_service.set_payment_gateway(request, visible.pk)                                          # positive control: a listed one is accepted
+        self.assertEqual(request.session[checkout_service.SESSION_KEY]["payment_gateway_id"], visible.pk)
+
+
 class NoSilentProviderSwitchTests(TestCase):
     def test_a_chosen_provider_that_is_unavailable_is_reported_not_replaced(self):
         from decimal import Decimal

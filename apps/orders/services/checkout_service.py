@@ -123,6 +123,8 @@ def active_shipping_methods(*, store, address: dict | None = None):
 
 
 MANUAL_GATEWAY_SLUGS = ("card_to_card",)
+#: روش‌هایِ legacy که بدونِ ``PaymentGatewayConfig`` هم (رفتارِ قدیمیِ فروشگاه) در تسویه‌حساب فهرست می‌شوند.
+LEGACY_LISTED_WITHOUT_CONFIG = ("zibal", "cod")
 
 
 def active_payment_gateways(*, store):
@@ -151,20 +153,25 @@ def active_payment_gateways(*, store):
     if not gateways:
         return gateways
 
+    from apps.orders.gateways import GATEWAY_CHOICES
+
     configs = {
         c.gateway_code: c
         for c in PaymentGatewayConfig.objects.filter(store=store)
     }
-    if not configs:
-        return gateways
+    registered = {code for code, _label in GATEWAY_CHOICES}
 
     result = []
     for gateway in gateways:
         config = configs.get(gateway.slug)
-        # بدونِ پیکربندیِ متناظر ⇒ رفتارِ legacy حفظ می‌شود (نمایش داده شود).
-        # با پیکربندیِ متناظر ⇒ فقط وقتی نمایش داده می‌شود که برای
-        # پرداختِ واقعی انتخاب‌پذیر باشد.
-        if config is None or config.is_selectable_at_checkout:
+        if config is None:
+            # بدونِ پیکربندی: فقط ردیف‌هایِ واقعاً legacy (زیبال/پرداخت در محل/مسیرِ شبیه‌سازی و slugهایِ نامرتبط) نمایش داده می‌شوند.
+            # ردیفی که slugِ آن یکی از درگاه‌هایِ ثبت‌شده‌ی جدید است (مثلاً mellat یا snappay) بدونِ پیکربندیِ آماده هرگز عرضه نمی‌شود —
+            # وگرنه مشتری روشی را انتخاب می‌کرد که پس از ثبتِ سفارش هیچ مسیرِ پرداختی ندارد.
+            if gateway.slug in registered and gateway.slug not in LEGACY_LISTED_WITHOUT_CONFIG:
+                continue
+            result.append(gateway)
+        elif config.is_selectable_at_checkout:
             result.append(gateway)
     return result
 

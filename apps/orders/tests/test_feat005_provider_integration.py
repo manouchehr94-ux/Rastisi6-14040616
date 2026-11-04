@@ -422,11 +422,16 @@ class CrossTenantTests(Feat005TestBase):
         )
         other_config.set_credentials({"merchant_id": "y" * 36})
         other_config.save()
-        # This store has its own legacy zarinpal gateway but NO config -> legacy
-        # behavior (shown). The other store's config must not change that, and
-        # must never make THIS store's option readiness-filtered by Store B data.
+        # This store has its own legacy zarinpal row but NO config of its own. A registered provider is offered only while a READY config of
+        # THIS store backs it, so it is not offered — and Store B's ready config must never make it appear here (tenant isolation).
         gateways = checkout_service.active_payment_gateways(store=self.store)
-        self.assertIn("zarinpal", {g.slug for g in gateways})
+        self.assertNotIn("zarinpal", {g.slug for g in gateways})
+        # Store B itself (ready config + its own row) does offer it.
+        from apps.orders.models import PaymentGateway
+
+        PaymentGateway.objects.create(store=self.other_store, name="زرین‌پال", slug="zarinpal", is_active=True)
+        self.assertIn("zarinpal", {g.slug for g in checkout_service.active_payment_gateways(store=self.other_store)})
+        self.assertNotIn("zarinpal", {g.slug for g in checkout_service.active_payment_gateways(store=self.store)})
 
     def test_callback_bound_to_store_rejects_cross_tenant(self):
         config = self._ready_zarinpal_config()
