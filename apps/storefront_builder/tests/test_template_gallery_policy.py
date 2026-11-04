@@ -75,7 +75,9 @@ class CardsAndSelectionTests(R4MutationApiTestCase):
         cache.clear()
 
     def _cards(self, *, key=None, version=None):
-        return ready_template_card_service.build_ready_template_cards(None, current_template_key=key, current_template_version=version)
+        return ready_template_card_service.build_ready_template_cards(
+            None, current_template_key=key, current_template_version=version, scope=ready_template_card_service.SCOPE_GALLERY,   # the SELLER gallery projection
+        )
 
     def test_the_gallery_projection_has_exactly_the_nineteen_cards(self):
         cards = self._cards()

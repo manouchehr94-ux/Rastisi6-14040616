@@ -137,7 +137,7 @@ class CatalogTests(Base):
     def test_cards_are_the_shared_projection_used_by_the_merchant_gallery(self):
         cards = self.get("template").context["template_cards"]
         shared = ready_template_card_service.build_ready_template_cards(
-            None, current_template_key=None, current_template_version=None,
+            None, current_template_key=None, current_template_version=None, scope=ready_template_card_service.SCOPE_GALLERY,   # the seller gallery's own scope
         )
         self.assertEqual([c["thumbnail_url"] for c in cards], [c["thumbnail_url"] for c in shared])
         import inspect

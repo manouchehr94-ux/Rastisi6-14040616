@@ -201,5 +201,8 @@ def gateway_configs_context(*, store, only: str = "", posted: dict | None = None
             "readiness_label": readiness_display.get(readiness_value, readiness_value),
             "readiness_badge": _READINESS_BADGE.get(readiness_value, "off"),
             "is_selectable_at_checkout": config.is_selectable_at_checkout if config else False,
+            # Configuration completeness (above) and externally VERIFIED connectivity are different facts. No authorized live/sandbox
+            # verification call exists yet, so connectivity is never reported as verified.
+            "connectivity_verified": False,
         })
     return result

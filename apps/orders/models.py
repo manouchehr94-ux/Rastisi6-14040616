@@ -659,7 +659,9 @@ class PaymentGatewayConfig(TimeStampedModel):
         NOT_CONFIGURED = "not_configured", "پیکربندی‌نشده"
         NEEDS_CREDENTIALS = "needs_credentials", "نیازمند اعتبارنامه"
         READY_FOR_TEST = "ready_for_test", "آماده‌ی آزمایش (Sandbox)"
-        CONNECTED = "connected", "متصل و آماده"
+        # «پیکربندی کامل» = همه‌ی اعتبارنامه‌ها وارد و معتبرِ شکلی است و حالتِ واقعی (غیرِ Sandbox) انتخاب شده. این به‌معنیِ «اتصالِ تأییدشده»
+        # نیست: اتصال به درگاه فقط با یک تماسِ مجازِ زنده/Sandbox ثابت می‌شود (هنوز وجود ندارد) و جدا از این وضعیت نمایش داده می‌شود.
+        CONNECTED = "connected", "پیکربندی کامل"
         DOCUMENTATION_BLOCKED = "documentation_blocked", "مسدود به‌دلیل مستندات"
         UNAVAILABLE = "unavailable", "در دسترس نیست"
         ERROR = "error", "خطا"

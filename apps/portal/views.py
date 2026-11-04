@@ -1556,6 +1556,7 @@ def onboarding_template(request, store_public_id):
         None,
         current_template_key=applied.key if applied else None,
         current_template_version=applied.version if applied else None,
+        scope=ready_template_card_service.SCOPE_GALLERY,      # a seller CHOOSES here: the owner-restricted gallery
     )
     # A gallery card is "selected" only by an explicit choice or when it is the EXACT applied
     # (key AND version) template. A Store on a historical version of a key never gets the latest

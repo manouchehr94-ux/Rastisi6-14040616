@@ -899,7 +899,7 @@ def _build_studio_context(
 
     from . import appearance_registry, theme_catalog
     from .studio_icons import STUDIO_ICON_PATHS
-    from .services.ready_template_card_service import build_ready_template_cards, resolve_applied_template_card
+    from .services.ready_template_card_service import build_ready_template_cards, SCOPE_GALLERY, resolve_applied_template_card
 
     provenance = variant_contract.validate_template_provenance(draft.template_provenance)
     current_key = provenance["template"]["key"]
@@ -931,7 +931,7 @@ def _build_studio_context(
     )
 
     cards = build_ready_template_cards(
-        draft, current_template_key=current_key, current_template_version=current_version,
+        draft, current_template_key=current_key, current_template_version=current_version, scope=SCOPE_GALLERY,
     )
     # The exact applied template (key + version): the catalog card when the
     # Draft is on the latest version, else the exact historical version.

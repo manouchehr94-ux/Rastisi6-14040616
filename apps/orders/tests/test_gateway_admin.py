@@ -333,3 +333,61 @@ class GatewayConfigAllProvidersAdminTests(TestCase):
         response = self.client.get("/admin-portal/settings/?section=payment-config")
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "SECRET-ZP-MERCHANT-ID-DO-NOT-LEAK-0001")
+
+
+class ReadinessWordingTests(TestCase):
+    """«پیکربندی کامل» describes configuration completeness only; externally VERIFIED connectivity is a separate fact that nothing can claim yet."""
+
+    def setUp(self):
+        reset_fernet()
+        self.addCleanup(reset_fernet)
+        self.store = _akhlaghi()
+        self.owner = User.objects.create_user(username="wording-owner", password="pass123", is_staff=True)
+        StoreMembership.objects.create(
+            store=self.store, user=self.owner, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+        zp = PaymentGatewayConfig.objects.create(store=self.store, gateway_code="zarinpal", is_active=True, is_sandbox=False)
+        zp.set_credentials({"merchant_id": "a" * 36}); zp.save()
+
+    @staticmethod
+    def card(html, code):
+        """One accordion's markup: from its own ``data-testid`` to the next accordion's."""
+        start = html.index(f'data-testid="gateway-{code}"')
+        nxt = html.find('data-testid="gateway-', start + 10)
+        return html[start:nxt if nxt != -1 else len(html)]
+
+    def page(self):
+        self.client.login(username="wording-owner", password="pass123")
+        return self.client.get("/admin-portal/settings/?section=payment-config")
+
+    def test_the_label_never_claims_a_connection(self):
+        labels = dict(PaymentGatewayConfig.ReadinessStatus.choices)
+        self.assertEqual(labels["connected"], "پیکربندی کامل")
+        self.assertNotIn("متصل", " ".join(str(v) for v in labels.values()).replace("اتصال", ""))      # no «متصل …» wording on any readiness state
+        self.assertEqual(PaymentGatewayConfig.objects.get(gateway_code="zarinpal").readiness_status, "connected")   # the internal state itself is unchanged
+
+    def test_the_admin_page_shows_configuration_complete_with_an_explicit_unverified_connection_note(self):
+        response = self.page()
+        self.assertContains(response, "پیکربندی کامل")
+        self.assertNotContains(response, "متصل و آماده")
+        card = self.card(response.content.decode(), "zarinpal")
+        self.assertIn('data-testid="gw-connectivity-unverified"', card)
+        self.assertIn("هنوز با آزمونِ مجازِ زنده/Sandbox تأیید نشده", card)
+
+    def test_connectivity_is_never_reported_as_verified_and_other_states_show_no_such_note(self):
+        from apps.dashboard.services.settings_admin_service import gateway_configs_context
+
+        rows = {r["code"]: r for r in gateway_configs_context(store=self.store)}
+        self.assertTrue(all(r["connectivity_verified"] is False for r in rows.values()))                # no authorized verification call exists
+        html = self.page().content.decode()
+        for code in ("cod", "card_to_card", "mellat", "saman", "pasargad", "snappay"):                  # offline / blocked / not configured: no note
+            self.assertNotIn("gw-connectivity-unverified", self.card(html, code), code)
+        self.assertEqual(html.count("gw-connectivity-unverified"), 1)                                  # only the configured, live Zarinpal
+
+    def test_the_selection_rules_and_activation_gates_are_unchanged(self):
+        zp = PaymentGatewayConfig.objects.get(gateway_code="zarinpal")
+        self.assertTrue(zp.is_selectable_at_checkout)                                                    # still selectable: this round only renamed a label
+        blocked = PaymentGatewayConfig.objects.create(store=self.store, gateway_code="mellat", is_active=True)
+        self.assertFalse(blocked.is_selectable_at_checkout)
+        self.assertFalse(PaymentGatewayConfig(store=self.store, gateway_code="snappay").is_active)       # nothing is activated by default

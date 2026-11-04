@@ -31,6 +31,7 @@
   <div class="au-acc__panel" id="gw-panel-{{ gw.code }}"{% if not gw.open %} hidden{% endif %}>
     {% if gw.documentation_blocked %}<div class="au-note au-note--danger" role="note" data-testid="gw-doc-blocked">این درگاه هنوز قابلِ فعال‌سازی برای پرداختِ واقعی نیست: قراردادِ رسمیِ API آن تأیید نشده است. تا آن زمان در تسویه‌حسابِ مشتری نمایش داده نمی‌شود.</div>{% endif %}
     {% if gw.onboarding_help %}<div class="au-note" data-testid="gw-onboarding">{{ gw.onboarding_help }}</div>{% endif %}
+    {% if gw.is_online and gw.readiness_status == "connected" and not gw.connectivity_verified %}<div class="au-note" role="note" data-testid="gw-connectivity-unverified">پیکربندی کامل است، اما اتصال به درگاه هنوز با آزمونِ مجازِ زنده/Sandbox تأیید نشده است؛ نخستین پرداختِ واقعی باید با نظارت انجام شود.</div>{% endif %}
     {% if gw.needs_info and not gw.is_active %}<div class="au-note au-note--warn">این روش پرداخت تا کامل‌شدن اطلاعات زیر فعال نمی‌شود.</div>{% endif %}
     {% if gw.form_error %}<div class="au-note au-note--danger" role="alert">{{ gw.form_error }}</div>{% endif %}
     {% if gw.manual %}
