@@ -6068,18 +6068,28 @@ def footer_payment_logo_toggle(request, pk):
 # ===========================================================================
 
 
+#: روش‌هایی که ردیفِ ``PaymentGateway``‌شان را جایِ دیگری مدیریت می‌کنند (رفتارِ قدیمی دست‌نخورده می‌ماند).
+_LEGACY_ROW_UNMANAGED = ("zibal", "cod")
+
+
 def _sync_legacy_gateway_row(store, config, adapter):
-    """کارت‌به‌کارت: ردیفِ ``PaymentGateway`` که تسویه‌حساب فهرست می‌کند همیشه با پیکربندیِ واقعی هم‌وضعیت است (یک کلیدِ مدیر)."""
-    if not adapter.requires_manual_confirmation:
+    """ردیفِ ``PaymentGateway`` که تسویه‌حساب فهرست می‌کند همیشه با پیکربندیِ واقعیِ همین فروشگاه هم‌وضعیت است (یک کلیدِ مدیر).
+
+    کارت‌به‌کارت و هر درگاهِ تازه (زرین‌پال، پاسارگاد، اسنپ‌پی، تربپی، …) بدونِ این ردیف هیچ‌وقت در تسویه‌حساب فهرست نمی‌شد. فهرستِ
+    نهایی همچنان از ``checkout_service.active_payment_gateways`` (فیلترِ آمادگی ``is_selectable_at_checkout``) می‌گذرد؛ این تابع فهرستِ
+    دومی نمی‌سازد، فقط ردیفِ پایه را هم‌وضعیت نگه می‌دارد. زیبال و پرداخت در محل مسیرِ قدیمیِ خودشان را دارند."""
+    if config.gateway_code in _LEGACY_ROW_UNMANAGED:
         return
     from apps.orders.models import PaymentGateway
 
+    if adapter.requires_manual_confirmation:
+        description, icon = "واریز به کارت و ثبتِ رسید؛ پس از تأییدِ فروشگاه نهایی می‌شود", "💳"
+    else:
+        category = getattr(getattr(adapter, "category", None), "value", "")
+        description, icon = (adapter.display_name, "🛍️" if category == "bnpl" else "💳")
     PaymentGateway.objects.update_or_create(
         store=store, slug=config.gateway_code,
-        defaults={
-            "name": config.effective_title, "description": "واریز به کارت و ثبتِ رسید؛ پس از تأییدِ فروشگاه نهایی می‌شود",
-            "icon": "💳", "is_active": bool(config.is_active),
-        },
+        defaults={"name": config.effective_title, "description": description, "icon": icon, "is_active": bool(config.is_active)},
     )
 
 

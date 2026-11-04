@@ -435,6 +435,18 @@ def payment_initiate(request, code):
             is_active=True,
         ).first()
 
+    # The customer chose a SPECIFIC provider. If it is no longer available, never silently switch them to another provider
+    # (different fees / BNPL vs card): tell them and let them pick again. The generic fallback below only serves legacy orders
+    # whose payment-method row does not correspond to any registered provider.
+    from apps.orders.gateways import GATEWAY_CHOICES
+
+    chosen_code = order.payment_gateway.slug if order.payment_gateway else ""
+    if gateway_config is None and chosen_code in {code for code, _ in GATEWAY_CHOICES} and chosen_code != "cod":
+        return render_domain_page(request, "orders/payment_result.html", {
+            "order": order,
+            "error": "روش پرداختِ انتخاب‌شده در حال حاضر در دسترس نیست؛ لطفاً با فروشگاه تماس بگیرید یا روش دیگری انتخاب کنید.",
+        })
+
     # If no matching config, try any active online config for this store that is
     # genuinely selectable at real checkout (readiness-aware; never picks a
     # documentation-blocked / not-ready provider as a fallback).
