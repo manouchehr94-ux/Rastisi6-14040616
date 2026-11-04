@@ -363,3 +363,95 @@ class CodRegressionTests(SafetyBase):
         self.assertEqual(
             Transaction.objects.filter(order=order, status=Transaction.Status.OK).count(), 0
         )
+
+
+class AttemptFinalizationTests(CardToCardBase):
+    """Round 3 / issue 2: confirmation must finalize the PENDING card-to-card attempt."""
+
+    def attempts(self, order):
+        return list(PaymentAttempt.objects.filter(order=order))
+
+    def test_confirmation_moves_attempt_to_succeeded_with_consistent_evidence(self):
+        order = self.c2c_order()
+        self.initiate(order)
+        (a,) = self.attempts(order)
+        self.assertEqual(a.status, PaymentAttempt.Status.PENDING)  # before confirmation
+        self.assertIsNone(a.verified_at)
+        tx = self.confirm(order)
+        order.refresh_from_db()
+        (a,) = self.attempts(order)
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(self.tx_ok(order), 1)
+        self.assertEqual(a.status, PaymentAttempt.Status.SUCCEEDED)
+        self.assertEqual(a.gateway_ref_id, tx.ref_id)
+        self.assertEqual(a.verified_at, tx.confirmed_at)
+        self.assertEqual(a.failure_code, "")
+        self.assertEqual(a.gateway_track_id, f"card2card-{order.code}")
+
+    def test_duplicate_confirmation_adds_no_transaction_and_no_second_transition(self):
+        order = self.c2c_order()
+        self.initiate(order)
+        self.confirm(order)
+        (a,) = self.attempts(order)
+        verified, updated = a.verified_at, a.updated_at
+        with self.assertRaises(c2c.AlreadyConfirmed):
+            self.confirm(order, idempotency_key="tok-dup")
+        (a2,) = self.attempts(order)
+        self.assertEqual(self.tx_ok(order), 1)
+        self.assertEqual((a2.status, a2.verified_at, a2.updated_at), (PaymentAttempt.Status.SUCCEEDED, verified, updated))
+
+    def test_rejection_cancels_attempt_and_order_stays_unpaid(self):
+        order = self.c2c_order()
+        self.initiate(order)
+        c2c.reject_transfer(order.pk, store=self.store, actor=self.actor, reason="جعلی")
+        (a,) = self.attempts(order)
+        order.refresh_from_db()
+        self.assertEqual(a.status, PaymentAttempt.Status.CANCELED)
+        self.assertEqual(a.failure_code, "card_to_card_rejected")
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
+        self.assertEqual(self.tx_ok(order), 0)
+
+    def test_final_attempts_are_left_alone(self):
+        order = self.c2c_order()
+        self.initiate(order)
+        dead = PaymentAttempt.objects.create(
+            store=self.store, order=order, gateway_config=self.config, amount=order.grand_total,
+            currency="TOMAN", status=PaymentAttempt.Status.FAILED, failure_code="x",
+        )
+        self.confirm(order)
+        dead.refresh_from_db()
+        self.assertEqual((dead.status, dead.failure_code, dead.verified_at), (PaymentAttempt.Status.FAILED, "x", None))
+
+    def test_reject_refuses_pending_attempt_carrying_verified_at(self):
+        order = self.c2c_order()
+        a = self.initiate(order)
+        PaymentAttempt.objects.filter(pk=a.pk).update(verified_at=timezone.now())
+        with self.assertRaises(c2c.CardToCardConfirmationError):
+            c2c.reject_transfer(order.pk, store=self.store, actor=self.actor)
+        a.refresh_from_db()
+        self.assertEqual(a.status, PaymentAttempt.Status.PENDING)
+
+    def test_dashboard_confirmation_finalizes_attempt(self):
+        from django.urls import reverse
+        from apps.dashboard.tests.test_coupon_views import HOST
+        from django.test import Client
+
+        self.store.admin_subdomain = HOST.split(".")[0]
+        self.store.save(update_fields=["admin_subdomain"])
+        order = self.c2c_order()
+        self.initiate(order)
+        client = Client(HTTP_HOST=HOST)
+        client.force_login(self.owner)
+        with self.settings(ALLOWED_HOSTS=[HOST, "testserver"]), self.captureOnCommitCallbacks(execute=True):
+            resp = client.post(
+                reverse("dashboard:order-card-to-card-payment", args=[order.code]),
+                {"amount": str(int(order.grand_total)), "reference": "R-DASH-1", "token": "t-dash-1"},
+            )
+        self.assertEqual(resp.status_code, 302)
+        (a,) = self.attempts(order)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(self.tx_ok(order), 1)
+        self.assertEqual(a.status, PaymentAttempt.Status.SUCCEEDED)
+        self.assertEqual(a.gateway_ref_id, "R-DASH-1")
+        self.assertIsNotNone(a.verified_at)

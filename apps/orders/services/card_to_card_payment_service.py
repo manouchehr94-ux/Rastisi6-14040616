@@ -27,6 +27,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.services.audit_service import record_audit_event
 from apps.orders.models import Order, PaymentAttempt, PaymentGatewayConfig, Transaction
@@ -113,6 +114,24 @@ def confirm_transfer(
     )
     if tx is None:
         raise AlreadyConfirmed("پرداختِ این سفارش قبلاً تأیید شده است.")
+    # Finalize the card-to-card attempt(s) in the SAME atomic block, using the
+    # same terminal-success convention as the online engine
+    # (``_apply_verified_payment``): SUCCEEDED + verified_at + gateway_ref_id,
+    # failure fields cleared. Conditional UPDATE from PENDING only, scoped to
+    # this order/store's card-to-card attempts: attempts that are already final
+    # (or belong to another method) are left untouched, and a duplicate
+    # confirmation never reaches here (AlreadyConfirmed above), so there is no
+    # second transition.
+    PaymentAttempt.objects.filter(
+        order=order, store=store, status=PaymentAttempt.Status.PENDING,
+        gateway_config__gateway_code=CARD_TO_CARD_CODE,
+    ).update(
+        status=PaymentAttempt.Status.SUCCEEDED,
+        gateway_ref_id=(tx.ref_id or "")[:100],
+        verified_at=tx.confirmed_at or timezone.now(),
+        failure_code="", failure_message="",
+        updated_at=timezone.now(),
+    )
     record_audit_event(
         store=store, actor=actor, action_code="order.card_to_card_payment_confirmed",
         object_type="Order", object_id=order.pk, object_label=order.code,
@@ -145,19 +164,15 @@ def reject_transfer(
         order=order, status=PaymentAttempt.Status.PENDING
     )
     for attempt in pending:
-        # Card-to-card never sets ``verified_at`` or a gateway ref id on the
-        # PENDING attempt (unlike COD/online, it is only ever verified by the
-        # merchant confirm path, which routes through ``apply_payment_success``
-        # on a SEPARATE transition). Rejection therefore only has to move the
-        # attempt to CANCELED and record the failure — there is no stale
-        # verified/track state to clear. The assertion below makes that
-        # invariant explicit so a future change that starts stamping
-        # ``verified_at`` at selection would fail loudly here instead of
-        # silently leaving a canceled-yet-"verified" row that could mislead
-        # later reconciliation.
-        assert attempt.verified_at is None, (
-            "card-to-card PENDING attempt unexpectedly carries verified_at"
-        )
+        # A PENDING card-to-card attempt must never carry verified_at (only
+        # the merchant confirm path stamps it, and that also moves the attempt
+        # out of PENDING). If one does, the evidence is inconsistent: refuse
+        # explicitly (an ``assert`` would vanish under ``python -O``); the
+        # surrounding atomic block rolls everything back.
+        if attempt.verified_at is not None:
+            raise CardToCardConfirmationError(
+                "تلاشِ پرداختِ در انتظار دارای زمانِ تأیید است؛ رد کردن ممکن نیست و باید بررسیِ دستی شود."
+            )
         attempt.status = PaymentAttempt.Status.CANCELED
         attempt.failure_code = "card_to_card_rejected"
         attempt.failure_message = (reason or "رسیدِ کارت به کارت توسطِ فروشنده رد شد.")[:300]
