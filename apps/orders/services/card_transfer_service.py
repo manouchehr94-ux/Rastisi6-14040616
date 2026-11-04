@@ -63,12 +63,12 @@ def active_config(store) -> PaymentGatewayConfig | None:
 
 
 def destination_for(config: PaymentGatewayConfig) -> Destination:
-    from apps.orders.gateways.card_to_card import clean_card_number
+    from apps.orders.gateways.card_to_card import clean_card_number, clean_sheba
 
     creds = config.get_credentials()
     return Destination(
         card=clean_card_number(creds.get("destination_card")), holder=str(creds.get("holder_name") or "").strip(),
-        bank=str(creds.get("bank_name") or "").strip(), sheba=re.sub(r"\s", "", str(creds.get("sheba") or "")).upper(),
+        bank=str(creds.get("bank_name") or "").strip(), sheba=clean_sheba(creds.get("sheba")),
     )
 
 

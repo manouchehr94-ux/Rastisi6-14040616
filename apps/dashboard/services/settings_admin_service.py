@@ -8,6 +8,8 @@ apps.orders.services.checkout_service برای فهرست گزینه‌های ت
 می‌کند — هیچ مقدار جدا و بی‌اثری اینجا ساخته نشده.
 """
 
+import re
+
 from django.shortcuts import get_object_or_404
 
 from apps.orders.models import PaymentGateway, ShippingMethod
@@ -58,8 +60,11 @@ def toggle_shipping_method(pk: int, *, store) -> ShippingMethod:
 
 
 def _group_card(value: str) -> str:
-    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
-    return " ".join(digits[i:i + 4] for i in range(0, len(digits), 4)) if len(digits) == 16 else str(value or "")
+    """Display only: 4 groups of 4 for a 16-digit number; anything else is shown in its canonical (formatting-free) form so the merchant sees what will be judged."""
+    from apps.orders.gateways.card_to_card import clean_card_number
+
+    digits = clean_card_number(value)
+    return " ".join(digits[i:i + 4] for i in range(0, 16, 4)) if re.fullmatch(r"[0-9]{16}", digits) else digits
 
 
 #: نگاشتِ دسته‌ی کسب‌وکاری درگاه به برچسبِ فارسی (برای نمایش در پنل).

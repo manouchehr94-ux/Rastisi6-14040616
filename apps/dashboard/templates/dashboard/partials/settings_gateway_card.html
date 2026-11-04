@@ -62,7 +62,7 @@
         <div class="au-hint">خالی بگذارید تا مقدار فعلی حفظ شود. مقدارِ ذخیره‌شده هرگز نمایش داده نمی‌شود.</div>
         {% else %}
         <input class="au-input{% if field.ltr %} au-input--ltr{% endif %}" id="gw-{{ gw.code }}-{{ field.name }}" type="text" name="credential_{{ field.name }}" value="{{ field.value }}" autocomplete="off"
-               maxlength="{{ field.max_length|default:100 }}" {% if field.ltr %}dir="ltr"{% endif %} placeholder="{{ field.placeholder }}"{% if field.name == "destination_card" %} inputmode="numeric"{% endif %}{% if field.error %} aria-invalid="true" aria-describedby="gw-{{ gw.code }}-{{ field.name }}-err"{% endif %}>
+               maxlength="{{ field.max_length|default:100 }}" {% if field.ltr %}dir="ltr"{% endif %} placeholder="{{ field.placeholder }}"{% if field.mask == "card" %} inputmode="numeric" data-card-input{% endif %}{% if field.error %} aria-invalid="true" aria-describedby="gw-{{ gw.code }}-{{ field.name }}-err"{% endif %}>
         {% endif %}
         {% if field.error %}<div class="au-error" id="gw-{{ gw.code }}-{{ field.name }}-err" role="alert">{{ field.error }}</div>{% endif %}
       </div>

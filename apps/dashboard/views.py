@@ -6168,10 +6168,12 @@ def settings_gateway_config_save(request, gateway_code):
 
     if credentials and adapter.required_credentials:
         if adapter.requires_manual_confirmation:
-            from apps.orders.gateways.card_to_card import clean_card_number
+            from apps.orders.gateways.card_to_card import clean_card_number, clean_sheba
 
             if credentials.get("destination_card"):
-                credentials["destination_card"] = clean_card_number(credentials["destination_card"])
+                credentials["destination_card"] = clean_card_number(credentials["destination_card"])   # digits only, never the display grouping
+            if credentials.get("sheba"):
+                credentials["sheba"] = clean_sheba(credentials["sheba"])
         try:
             config.set_credentials(credentials)
         except CredentialEncryptionError:

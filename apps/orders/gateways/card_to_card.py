@@ -11,6 +11,7 @@ credentials. The CUSTOMER's card number, CVV2 and passwords are never requested 
 from __future__ import annotations
 
 import re
+import unicodedata
 from decimal import Decimal
 from typing import Any
 
@@ -31,8 +32,53 @@ def luhn_valid(number: str) -> bool:
     return checksum % 10 == 0
 
 
+# Digit scripts accepted on input (anything else that is not a separator stays in the string and is REJECTED, never silently dropped).
+_DIGIT_RANGES = ((0x30, 0x39), (0x6F0, 0x6F9), (0x660, 0x669), (0xFF10, 0xFF19))     # ASCII · Persian · Arabic-Indic · fullwidth
+#: Separators people type or paste between the 4-digit groups, in addition to every Unicode separator/format/control/dash character.
+_EXTRA_SEPARATORS = frozenset("_،٬,./\\·−")
+
+
+def strip_display_formatting(raw) -> str:
+    """The value without PRESENTATION formatting, with digits normalized to ASCII.
+
+    Removed: every whitespace/separator (``Z*`` incl. NBSP / thin space), format characters (``Cf``: ZWNJ, ZWSP, LRM, RLM, bidi isolates, BOM — routine in RTL typing and
+    copy/paste), control characters (tab/newline), dashes (``Pd``) and the common separators ``_ ، ٬ , . / \\``. Persian, Arabic-Indic and fullwidth digits become ASCII.
+    Nothing else is touched: letters / symbols / other-script digits remain so validation can reject them. This is the ONE rule used by validation, storage, display
+    and the customer page; the browser mask (``card_number_input.js``) mirrors it."""
+    out = []
+    for ch in str(raw or ""):
+        if unicodedata.category(ch) in ("Zs", "Zl", "Zp", "Cf", "Cc", "Pd") or ch in _EXTRA_SEPARATORS:
+            continue
+        code = ord(ch)
+        for low, high in _DIGIT_RANGES:
+            if low <= code <= high:
+                ch = str(code - low)
+                break
+        out.append(ch)
+    return "".join(out)
+
+
 def clean_card_number(raw) -> str:
-    return re.sub(r"[\s\-_]", "", normalize_digits(str(raw or "")))
+    return strip_display_formatting(raw)
+
+
+def clean_sheba(raw) -> str:
+    return strip_display_formatting(raw).upper()
+
+
+def card_number_error(raw) -> str:
+    """"" when valid; else ONE specific Persian reason (not a generic "16 digits" message): empty / non-digit characters / digit COUNT / checksum.
+    Length is judged on the digits only — never on grouped characters."""
+    card = clean_card_number(raw)
+    if not card:
+        return "شماره کارت مقصد را وارد کنید."
+    if not re.fullmatch(r"[0-9]+", card):
+        return "شماره کارت مقصد فقط باید شامل رقم باشد (حرف یا نماد مجاز نیست)."
+    if len(card) != 16:
+        return "شماره کارت مقصد باید دقیقاً ۱۶ رقم باشد (فاصله و خط تیره حساب نمی‌شوند)."
+    if not luhn_valid(card):
+        return "شماره کارت مقصد معتبر نیست؛ ارقام را دوباره بررسی کنید."
+    return ""
 
 
 class CardToCardAdapter(PaymentGatewayAdapter):
@@ -66,22 +112,30 @@ class CardToCardAdapter(PaymentGatewayAdapter):
     def credential_fields(self) -> list[dict]:
         """Non-secret fields: shown (prefilled) to the merchant and to customers at checkout."""
         return [
-            {"name": "destination_card", "label": "شماره کارت مقصد (۱۶ رقم)", "secret": False, "ltr": True, "max_length": 19, "placeholder": "6037 9970 0000 0000"},
+            {"name": "destination_card", "label": "شماره کارت مقصد (۱۶ رقم)", "secret": False, "ltr": True, "max_length": 40, "placeholder": "6037 9970 0000 0000", "mask": "card"},
             {"name": "holder_name", "label": "نام صاحب کارت", "secret": False, "ltr": False, "max_length": 80, "placeholder": "مثلاً: علی رضایی"},
             {"name": "bank_name", "label": "نام بانک (اختیاری)", "secret": False, "ltr": False, "max_length": 60, "optional": True, "placeholder": "مثلاً: ملی"},
-            {"name": "sheba", "label": "شماره شبا (اختیاری)", "secret": False, "ltr": True, "max_length": 30, "optional": True, "placeholder": "IR000000000000000000000000"},
+            {"name": "sheba", "label": "شماره شبا (اختیاری)", "secret": False, "ltr": True, "max_length": 48, "optional": True, "placeholder": "IR000000000000000000000000"},
         ]
+
+    def normalize_credentials(self, credentials: dict) -> dict:
+        """Aliases first, then the card / sheba READ in their canonical form: a value saved earlier with spaces or invisible RTL marks stays readable and usable
+        (the stored ciphertext is untouched until the merchant saves the form again)."""
+        out = super().normalize_credentials(credentials)
+        if out.get("destination_card"):
+            out["destination_card"] = clean_card_number(out["destination_card"])
+        if out.get("sheba"):
+            out["sheba"] = clean_sheba(out["sheba"])
+        return out
 
     def field_errors(self, credentials: dict[str, str]) -> dict[str, str]:
         out: dict[str, str] = {}
-        card = clean_card_number(credentials.get("destination_card"))
-        if not card:
-            out["destination_card"] = "شماره کارت مقصد را وارد کنید."
-        elif not (card.isdigit() and len(card) == 16 and luhn_valid(card)):
-            out["destination_card"] = "شماره کارت مقصد باید یک شماره کارت معتبر ۱۶ رقمی باشد."
+        card_problem = card_number_error(credentials.get("destination_card"))
+        if card_problem:
+            out["destination_card"] = card_problem
         if not str(credentials.get("holder_name") or "").strip():
             out["holder_name"] = "نام صاحب کارت را وارد کنید."
-        sheba = re.sub(r"\s", "", str(credentials.get("sheba") or "")).upper()
+        sheba = clean_sheba(credentials.get("sheba"))
         if sheba and not re.fullmatch(r"IR\d{24}", sheba):
             out["sheba"] = "شماره شبا باید با IR شروع شود و ۲۴ رقم داشته باشد."
         return out

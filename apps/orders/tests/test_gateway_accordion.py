@@ -44,7 +44,7 @@ class GatewayAccordionTests(TestCase):
     def test_activation_of_incomplete_card_to_card_is_refused_with_per_field_errors(self):
         res = self.client.post(self.save_url, {"is_active": "on", "credential_destination_card": "1234 5678 1234 5678"})
         self.assertEqual(res.status_code, 200)
-        self.assertContains(res, "شماره کارت مقصد باید یک شماره کارت معتبر ۱۶ رقمی باشد.")
+        self.assertContains(res, "شماره کارت مقصد معتبر نیست؛ ارقام را دوباره بررسی کنید.")
         self.assertContains(res, "نام صاحب کارت را وارد کنید.")
         self.assertContains(res, "au-acc is-open")                       # opened because of the error
         self.assertContains(res, 'aria-checked="false"')                 # the switch does not claim "on"
