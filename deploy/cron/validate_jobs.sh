@@ -14,6 +14,7 @@ step "5. segments";                            run segments refresh_customer_seg
 step "6. engagement (queue only)";             run engagement run_engagement_jobs --no-deliver
 step "7. health";                              ALLOW=1 run health check_background_jobs
 step "8. second run of the idempotent jobs must create nothing new"; run engagement2 run_engagement_jobs --no-deliver
+step "9. e-mail sender identities (provider identity API only; RASTISI_EMAIL_PROVIDER=fake is a no-op)"; run email-senders refresh_email_identities
 echo
 echo "Next, by hand: (a) crontab -l shows the installed entries; (b) after 5 min the log /var/log/rastisi/outbox.log has a new '=== … end outbox rc=0';"
 echo "(c) stop the DB briefly (staging only) and confirm the alert command fires and check_background_jobs/exit codes are non-zero;"

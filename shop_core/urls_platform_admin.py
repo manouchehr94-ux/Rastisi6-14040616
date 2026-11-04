@@ -15,6 +15,7 @@ this one is) never registers its own ``app_name`` as a namespace, so
 from django.urls import include, path
 
 from apps.portal.platform_admin_views import not_found as handler404  # noqa: F401 — Django urlconf convention
+from apps.portal.platform_admin_views import permission_denied as handler403  # noqa: F401 — Django urlconf convention
 
 urlpatterns = [
     path("", include("apps.portal.platform_admin_urls")),

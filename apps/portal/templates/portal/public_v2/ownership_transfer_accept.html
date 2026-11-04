@@ -1,0 +1,26 @@
+{% extends "portal/public_v2/auth_base.html" %}
+{% load public_site %}
+{% block title %}پذیرش مالکیت فروشگاه | {% ps 'layout.brand' %}{% endblock %}
+{% block auth_form %}
+{% if not transfer %}
+<h1>این پیوند معتبر نیست</h1>
+<p>این درخواست انتقال مالکیت یافت نشد یا منقضی شده است.</p>
+<p class="auth-alt"><a href="{% url 'portal:home' %}" class="lnk">بازگشت به راستی‌سی</a></p>
+{% else %}
+<h1>پذیرش مالکیت</h1>
+<p>فروشگاه «{{ transfer.store.name }}» به شماره <span class="phone-inline">{{ transfer.target_phone }}</span> منتقل می‌شود.</p>
+{% if messages %}{% for message in messages %}<div class="alert {% if message.tags == 'error' %}alert-err{% else %}alert-ok{% endif %}">{{ message }}</div>{% endfor %}{% endif %}
+<div class="auth-stack">
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request_code"><button type="submit" class="btn btn-line btn-block">دریافت کد</button></form>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="verify_code">
+    <div class="in"><label for="id_code">کد تأیید</label><input type="text" id="id_code" name="code" maxlength="6" minlength="6" inputmode="numeric" autocomplete="one-time-code"></div>
+    <button type="submit" class="btn btn-leaf btn-block">پذیرش مالکیت</button>
+  </form>
+</div>
+<p class="auth-note">پذیرش مالکیت یک اقدام حساس است. نام فروشگاه و شماره مقصد را پیش از ثبت نهایی بررسی کنید.</p>
+{% endif %}
+{% endblock %}
+{% block auth_sign %}<h2>یک عملیات حساس؛ با تأیید صریح</h2>
+<ul class="auth-points"><li>تأیید مقصد انتقال</li><li>دریافت کد قبل از پذیرش</li><li>پذیرش صریح مالکیت</li></ul>{% endblock %}

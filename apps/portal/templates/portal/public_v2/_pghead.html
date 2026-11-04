@@ -1,0 +1,6 @@
+<div class="pg-sign"><div class="wrap">
+  <div class="crumbs"><a href="{% url 'portal:home' %}">خانه</a> / {{ crumb }}</div>
+  <h1>{{ title }}</h1>
+  {% if lead %}<p>{{ lead }}</p>{% endif %}
+  {% if cta %}<a href="{% url 'portal:register' %}" class="btn btn-saffron">{{ cta }}</a>{% endif %}
+</div></div>

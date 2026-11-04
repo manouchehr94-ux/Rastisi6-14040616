@@ -1,0 +1,57 @@
+{% extends "portal/public_v2/auth_base.html" %}
+{% load public_site %}
+{% block title %}ورود | {% ps 'layout.brand' %}{% endblock %}
+{% block auth_form %}
+<div data-login-modes>
+  <h1>{% ps 'auth.login.title' %}</h1>
+  <p>{% ps 'auth.login.lead' %}</p>
+  {% include "portal/public_v2/_auth_messages.html" %}
+
+  {# Real links (work without JavaScript); auth-forms.js upgrades them to instant switching. #}
+  <nav class="tabs2" aria-label="روش ورود">
+    <a id="login-tab-password" class="r-auth-tab{% if mode == 'password' %} is-active{% endif %}" data-login-tab="password"
+       href="{% url 'portal:login' %}?mode=password{% if next %}&amp;next={{ next|urlencode }}{% endif %}{% if admin_return %}&amp;admin_return={{ admin_return|urlencode }}{% endif %}"
+       {% if mode == 'password' %}aria-current="true"{% endif %}>رمز عبور</a>
+    <a id="login-tab-otp" class="r-auth-tab{% if mode == 'otp' %} is-active{% endif %}" data-login-tab="otp"
+       href="{% url 'portal:login' %}?mode=otp{% if next %}&amp;next={{ next|urlencode }}{% endif %}{% if admin_return %}&amp;admin_return={{ admin_return|urlencode }}{% endif %}"
+       {% if mode == 'otp' %}aria-current="true"{% endif %}>کد پیامکی</a>
+  </nav>
+
+  <form method="post" action="{% url 'portal:login-password' %}" id="login-panel-password" data-login-panel="password"{% if mode != 'password' %} hidden{% endif %} novalidate data-auth-form data-loading-text="در حال ورود…">
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    {% if admin_return %}<input type="hidden" name="admin_return" value="{{ admin_return }}">{% endif %}
+    {% if password_form.non_field_errors %}<div class="p-alert alert alert-err" id="id_form_error" role="alert" tabindex="-1">{{ password_form.non_field_errors.0 }}</div>{% endif %}
+    <div class="in"><label for="id_identifier">شماره موبایل، نام کاربری یا ایمیل</label>{{ password_form.identifier }}{% if password_form.identifier.errors %}<div class="p-error err" id="id_identifier_error">{{ password_form.identifier.errors.0 }}</div>{% endif %}</div>
+    <div class="in"><label for="id_password">رمز عبور</label><div class="r-password-field" data-password-field>{{ password_form.password }}</div>{% if password_form.password.errors %}<div class="p-error err" id="id_password_error">{{ password_form.password.errors.0 }}</div>{% endif %}</div>
+    <label class="check">{{ password_form.remember_me }} مرا به خاطر بسپار</label>
+    {% include "portal/public_v2/_turnstile.html" with turnstile_action="login_password" %}
+    <button type="submit" class="btn btn-leaf btn-block">ورود</button>
+    <p class="auth-alt"><a class="lnk" href="{% url 'portal:password-reset-request' %}">فراموشی رمز عبور؟ تعیین رمز با کد پیامکی</a></p>
+  </form>
+
+  <form method="post" action="{% url 'portal:login' %}" id="login-panel-otp" data-login-panel="otp"{% if mode != 'otp' %} hidden{% endif %} novalidate data-auth-form data-loading-text="در حال ارسال کد…">
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    {% if admin_return %}<input type="hidden" name="admin_return" value="{{ admin_return }}">{% endif %}
+    {% if otp_form.non_field_errors %}<div class="p-alert alert alert-err" role="alert" tabindex="-1">{{ otp_form.non_field_errors.0 }}</div>{% endif %}
+    <div class="in">
+      <label for="id_phone">شماره موبایل</label>
+      {{ otp_form.phone }}
+      <div class="hint" id="id_phone_hint">مثلاً <span class="phone-inline">0912 123 4567</span> — کد ۶ رقمی به این شماره پیامک می‌شود.</div>
+      {% if otp_form.phone.errors %}<div class="p-error err" id="id_phone_error">{{ otp_form.phone.errors.0 }}</div>{% endif %}
+    </div>
+    <label class="check">{{ otp_form.remember_me }} مرا به خاطر بسپار</label>
+    {% if registration_open %}
+    <p class="hint auth-note">اگر حساب مالک دارید، با تأیید کد وارد می‌شوید. اگر این شماره هنوز حساب مالک ندارد، بعد از تأیید کد، نام و نام خانوادگی شما را می‌پرسیم و حساب مالک و فروشگاه آزمایشی شما ساخته می‌شود.</p>
+    {% else %}
+    <p class="hint auth-note">ساخت حساب جدید فعلاً در دسترس نیست؛ فقط مالکانی که قبلاً حساب ساخته‌اند می‌توانند با کد پیامکی وارد شوند.</p>
+    {% endif %}
+    {% include "portal/public_v2/_turnstile.html" with turnstile_action="login_otp" %}
+    <button type="submit" class="btn btn-leaf btn-block">دریافت کد پیامکی</button>
+  </form>
+
+  {% if registration_open %}<p class="auth-alt">حساب ندارید؟ <a href="{% url 'portal:register' %}" class="lnk">فروشگاه بسازید</a></p>{% endif %}
+</div>
+{% endblock %}
+{% block auth_sign %}<h2>{% ps 'auth.login.sign' %}</h2>{% endblock %}

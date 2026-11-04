@@ -4,6 +4,7 @@
 {% block page_title %}اعلان‌های پیامکی و ایمیلی{% endblock %}
 {% block page_sub %}برایِ هر رویدادِ کسب‌وکار، قالبِ جداگانه‌ی پیامک و ایمیل را فعال و ویرایش کنید{% endblock %}
 {% block content %}
+{% include "dashboard/partials/notification_tabs.html" with tab="templates" %}
 {% if not sms_globally_enabled %}<div class="card" style="margin-bottom:12px"><div class="card-body"><span class="badge b-red" style="white-space:normal">ارسالِ پیامک در تنظیماتِ این فروشگاه غیرفعال است؛ تا فعال‌شدنِ آن هیچ قالبِ پیامکی اثری ندارد.</span></div></div>{% endif %}
 <div class="page-header">
   <div>

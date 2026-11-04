@@ -12,6 +12,10 @@ from django.urls import include, path
 from apps.portal.views import not_found as handler404  # noqa: F401 — Django urlconf convention
 
 urlpatterns = [
+    # Amazon SES -> SNS delivery/bounce/complaint events. This is the ONLY platform-owned, publicly reachable host
+    # (the Platform Admin host is deliberately not public; tenant hosts resolve a Store first). Authenticity is
+    # enforced by SNS signature + topic allowlist inside the view, not by the host.
+    path("notifications/", include("apps.notifications.urls")),
     path("", include("apps.portal.urls")),
 ]
 

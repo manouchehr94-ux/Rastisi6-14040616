@@ -1,0 +1,1 @@
+{% for message in messages %}<div class="p-alert alert {% if message.tags == 'error' %}alert-err{% elif message.tags == 'warning' %}alert-warn{% else %}alert-ok{% endif %}" role="{% if message.tags == 'error' or message.tags == 'warning' %}alert{% else %}status{% endif %}" tabindex="-1">{{ message }}</div>{% endfor %}

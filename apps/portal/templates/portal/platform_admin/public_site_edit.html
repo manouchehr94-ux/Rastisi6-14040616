@@ -1,0 +1,62 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}{{ group.title }} | متن و ظاهر سایت عمومی{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:public-site' %}" class="pa-help">← بازگشت به متن و ظاهر سایت عمومی</a></p>
+<div class="pa-pagehead">
+  <div><h1>{{ group.title }}</h1><p>{{ group.blurb }}</p></div>
+  <a class="pa-btn" href="{{ preview_url }}" target="_blank" rel="noopener">مشاهده صفحه ↗</a>
+</div>
+<p class="pa-help">هر فیلد خالی یا برابر با پیش‌فرض، یعنی «همان پیش‌فرض». برای اینکه یک متن کاملاً خالی نمایش داده شود فقط یک خط تیره <code dir="ltr">-</code> بنویسید. فیلدهای رنگ‌شده با نشان «تغییر داده‌شده» قبلاً سفارشی شده‌اند.</p>
+
+<form method="post" id="site-edit-form">
+  {% csrf_token %}
+  {% for section in sections %}
+  <div class="pa-card">
+    <div class="pa-cardhead"><h3>{{ section.title }}</h3></div>
+    <div class="pa-cardbody">
+      {% if section.note %}<p class="pa-help">{{ section.note }}</p>{% endif %}
+      <div class="{% if group.slug == 'design' %}pa-grid3{% else %}pa-grid2{% endif %}">
+        {% for f in section.fields %}
+        <div class="pa-field" style="{% if f.multiline %}grid-column:1/-1{% endif %}">
+          {% if f.kind == 'bool' %}
+            <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="{{ f.key }}" value="1" {% if f.checked %}checked{% endif %}> {{ f.label }}{% if f.overridden %} <span class="pa-badge pa-ok">تغییر داده‌شده</span>{% endif %}</label>
+          {% else %}
+            <label for="f-{{ f.key }}">{{ f.label }}{% if f.overridden %} <span class="pa-badge pa-ok">تغییر داده‌شده</span>{% endif %}</label>
+            {% if f.kind == 'textarea' %}
+              <textarea class="pa-input" id="f-{{ f.key }}" name="{{ f.key }}" rows="3">{{ f.value }}</textarea>
+            {% elif f.kind == 'color' %}
+              <div style="display:flex;gap:10px;align-items:center">
+                <input type="color" id="f-{{ f.key }}" name="{{ f.key }}" value="{{ f.value }}" style="width:56px;height:38px;padding:2px">
+                <code dir="ltr">{{ f.value }}</code>
+              </div>
+            {% elif f.kind == 'choice' or f.kind == 'photo' %}
+              <select class="pa-input" id="f-{{ f.key }}" name="{{ f.key }}">
+                {% for value, label, selected in f.choices %}<option value="{{ value }}" {% if selected %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            {% else %}
+              <input class="pa-input" id="f-{{ f.key }}" name="{{ f.key }}" type="text" value="{{ f.value }}" {% if f.kind == 'url' %}dir="ltr"{% endif %}>
+            {% endif %}
+          {% endif %}
+          {% if f.error %}<div class="pa-alert pa-alert-error" style="padding:6px 10px;margin:4px 0 0">{{ f.error }}</div>{% endif %}
+          {% if f.help %}<p class="pa-help">{{ f.help }}</p>{% endif %}
+          {% if f.overridden %}
+            <label class="pa-help" style="display:flex;align-items:center;gap:6px;margin-top:4px"><input type="checkbox" name="__reset__{{ f.key }}" value="1"> بازگرداندن به پیش‌فرض{% if f.short_default %} («{{ f.short_default }}»){% endif %}</label>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="pa-actions" style="display:flex;gap:12px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--pa-bg, #f6f8f7);padding:12px 0;z-index:5">
+    <button class="pa-btn pa-primary" type="submit">ذخیره و اعمال در سایت</button>
+    <a class="pa-btn" href="{% url 'portal_platform_admin:public-site' %}">انصراف</a>
+  </div>
+</form>
+
+<form method="post" action="{% url 'portal_platform_admin:public-site-reset' group.slug %}" onsubmit="return confirm('همه تغییرات این بخش حذف می‌شود و پیش‌فرض برمی‌گردد. مطمئنید؟');" style="margin-top:20px">
+  {% csrf_token %}
+  <button class="pa-btn pa-danger" type="submit">بازگرداندن همه این بخش به پیش‌فرض</button>
+</form>
+{% endblock %}

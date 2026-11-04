@@ -76,7 +76,9 @@ class ScenarioCGiftPurchase(GiftScenarioBase):
         staff = rows.get(event_key="staff.order_created")
         self.assertIn("کادوپیچی", staff.body)
         deliver_pending()
-        self.assertTrue(any("packing@example.com" in m.to for m in mail.outbox))
+        from apps.notifications.mail.fake import FakeTransport
+
+        self.assertTrue(any(m["message"].to_address == "packing@example.com" for m in FakeTransport.sent))
 
 
 class ScenarioDGiftWrapWithDiscount(GiftScenarioBase):

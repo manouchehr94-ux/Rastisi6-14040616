@@ -1,0 +1,125 @@
+{% load static public_site persian %}<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% ps 'home.meta_title' %}{% endblock %}</title>
+{% block meta_description %}<meta name="description" content="{% ps 'home.meta_description' %}">{% endblock %}
+{% block robots_meta %}{% endblock %}
+{% if PLATFORM_ENAMAD_VERIFICATION_META_NAME and PLATFORM_ENAMAD_VERIFICATION_META_CONTENT %}
+<meta name="{{ PLATFORM_ENAMAD_VERIFICATION_META_NAME }}" content="{{ PLATFORM_ENAMAD_VERIFICATION_META_CONTENT }}">
+{% endif %}
+{% block canonical %}<link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">{% endblock %}
+<link rel="icon" href="{% static 'favicon.ico' %}">
+<script src="{% static 'portal/js/public-v2-theme.js' %}?v=20261020-1"></script>
+<link rel="stylesheet" href="{% static 'portal/css/public-v2.css' %}?v=20261020-1">
+{% ps_theme %}
+{% block extra_head %}{% endblock %}
+{% if turnstile_enabled %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% include "portal/public_v2/_sprite.html" %}
+<a class="skip-link" href="#main">پرش به محتوا</a>
+
+{% with route=request.resolver_match.url_name %}
+{% ps_photo 'logo' as logo %}
+<header class="hdr">
+  <div class="wrap hdr-in">
+    <a href="{% url 'portal:home' %}" class="brand" aria-label="{% ps 'layout.brand' %}، صفحه اصلی"><img src="{{ logo.url }}" alt="" width="36" height="36"><b>{% ps 'layout.brand' %}</b></a>
+    <nav class="nav" aria-label="منوی اصلی">
+      <a href="{% url 'portal:features' %}"{% if route == 'features' %} class="on" aria-current="page"{% endif %}>{% ps 'layout.nav.features' %}</a>
+      <a href="{% url 'portal:design' %}"{% if route == 'design' %} class="on" aria-current="page"{% endif %}>{% ps 'layout.nav.design' %}</a>
+      <a href="{% url 'portal:plans' %}"{% if route == 'plans' %} class="on" aria-current="page"{% endif %}>{% ps 'layout.nav.plans' %}</a>
+      <a href="{% url 'portal:help' %}"{% if route == 'help' %} class="on" aria-current="page"{% endif %}>{% ps 'layout.nav.faq' %}</a>
+      <a href="{% url 'portal:about' %}"{% if route == 'about' %} class="on" aria-current="page"{% endif %}>{% ps 'layout.nav.about' %}</a>
+      <a href="{% url 'portal:contact' %}"{% if route == 'contact' %} class="on" aria-current="page"{% endif %}>{% ps 'layout.nav.contact' %}</a>
+    </nav>
+    <div class="hdr-end">
+      <button class="ibtn theme-btn" id="themeBtn" type="button" aria-label="حالت نمایش"><svg aria-hidden="true"><use href="#i-auto"/></svg></button>
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'portal:app-home' %}" class="btn btn-saffron btn-sm btn-start">{% ps 'layout.panel' %}</a>
+      {% else %}
+        <a href="{% url 'portal:login' %}" class="btn btn-line btn-sm login-link">{% ps 'layout.login' %}</a>
+        <a href="{% url 'portal:register' %}" class="btn btn-saffron btn-sm btn-start">{% ps 'layout.start' %}</a>
+      {% endif %}
+      <button class="ibtn menu-btn" id="menuBtn" type="button" aria-label="منو" aria-expanded="false" aria-controls="mnav"><svg aria-hidden="true"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+</header>
+<nav class="mnav" id="mnav" aria-label="منوی موبایل">
+  <a href="{% url 'portal:home' %}">خانه</a>
+  <a href="{% url 'portal:features' %}">{% ps 'layout.nav.features' %}</a>
+  <a href="{% url 'portal:design' %}">{% ps 'layout.nav.design' %}</a>
+  <a href="{% url 'portal:plans' %}">{% ps 'layout.nav.plans' %}</a>
+  <a href="{% url 'portal:help' %}">{% ps 'layout.nav.faq' %}</a>
+  <a href="{% url 'portal:about' %}">{% ps 'layout.nav.about' %}</a>
+  <a href="{% url 'portal:contact' %}">{% ps 'layout.nav.contact' %}</a>
+  {% if request.user.is_authenticated %}
+    <a href="{% url 'portal:app-home' %}" class="btn btn-saffron">{% ps 'layout.panel' %}</a>
+  {% else %}
+    <a href="{% url 'portal:login' %}">{% ps 'layout.mobile_login' %}</a>
+    <a href="{% url 'portal:register' %}" class="btn btn-saffron">{% ps 'layout.mobile_cta' %}</a>
+  {% endif %}
+</nav>
+
+<main>
+<span id="main" tabindex="-1"></span>
+{% block messages %}{% if messages %}<div class="wrap msgs">{% for message in messages %}<div class="alert {% if message.tags == 'error' %}alert-err{% elif message.tags == 'warning' %}alert-warn{% else %}alert-ok{% endif %}" role="{% if message.tags == 'error' or message.tags == 'warning' %}alert{% else %}status{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}{% endblock %}
+{% block content %}{% endblock %}
+</main>
+
+{% block closing %}{% include "portal/public_v2/_closing.html" %}{% endblock %}
+
+<footer class="ftr">
+  <div class="wrap">
+    <div class="ftr-grid">
+      <div>
+        <a href="{% url 'portal:home' %}" class="brand"><img src="{{ logo.url }}" alt="" width="36" height="36"><b>{% ps 'layout.brand' %}</b></a>
+        <p>{% ps 'footer.about' %}</p>
+        {% ps 'footer.instagram' as f_insta %}{% ps 'footer.telegram' as f_tg %}{% ps 'footer.email_link' as f_mail %}
+        {% if f_insta or f_tg or f_mail %}
+        <div class="social">
+          {% if f_insta %}<a href="{{ f_insta }}" aria-label="اینستاگرام" rel="noopener" target="_blank"><svg aria-hidden="true"><use href="#i-insta"/></svg></a>{% endif %}
+          {% if f_tg %}<a href="{{ f_tg }}" aria-label="تلگرام" rel="noopener" target="_blank"><svg aria-hidden="true"><use href="#i-tg"/></svg></a>{% endif %}
+          {% if f_mail %}<a href="{{ f_mail }}" aria-label="ایمیل"><svg aria-hidden="true"><use href="#i-mail"/></svg></a>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <div><h4>{% ps 'footer.h_product' %}</h4><ul>
+        <li><a href="{% url 'portal:features' %}">{% ps 'footer.link_features' %}</a></li>
+        <li><a href="{% url 'portal:design' %}">{% ps 'footer.link_design' %}</a></li>
+        <li><a href="{% url 'portal:plans' %}">{% ps 'footer.link_plans' %}</a></li>
+        <li><a href="{% url 'portal:register' %}">{% ps 'footer.link_register' %}</a></li>
+      </ul></div>
+      <div><h4>{% ps 'footer.h_support' %}</h4><ul>
+        <li><a href="{% url 'portal:help' %}">{% ps 'footer.link_faq' %}</a></li>
+        <li><a href="{% url 'portal:contact' %}">{% ps 'footer.link_contact' %}</a></li>
+        <li><a href="{% url 'portal:login' %}">{% ps 'footer.link_login' %}</a></li>
+        {% ps 'footer.phone' as f_phone %}{% if f_phone %}<li class="ftr-phone" dir="ltr">{{ f_phone }}</li>{% endif %}
+      </ul></div>
+      <div><h4>{% ps 'footer.h_company' %}</h4><ul>
+        <li><a href="{% url 'portal:about' %}">{% ps 'footer.link_about' %}</a></li>
+        <li><a href="{% url 'portal:supported-industries' %}">صنوف پشتیبانی‌شده</a></li>
+        <li><a href="{% url 'portal:terms' %}">{% ps 'footer.link_terms' %}</a></li>
+        <li><a href="{% url 'portal:privacy' %}">{% ps 'footer.link_privacy' %}</a></li>
+      </ul></div>
+      <div>
+        {% if PLATFORM_ENAMAD_BADGE_PROFILE_URL and PLATFORM_ENAMAD_BADGE_LOGO_URL %}
+        <a class="trust" referrerpolicy="origin" target="_blank" rel="noopener noreferrer" href="{{ PLATFORM_ENAMAD_BADGE_PROFILE_URL }}">
+          <img referrerpolicy="origin" src="{{ PLATFORM_ENAMAD_BADGE_LOGO_URL }}" alt="نماد اعتماد الکترونیکی راستی‌سی">
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="ftr-bottom"><span>© {% ps_year %} {% ps 'footer.copyright' %}</span><span>{% ps 'footer.bottom_left' %}</span></div>
+  </div>
+</footer>
+
+{% block mobile_bar %}{% if not request.user.is_authenticated %}<div class="mbar"><a href="{% url 'portal:register' %}" class="btn btn-saffron">{% ps 'layout.mobile_cta' %}</a></div>{% endif %}{% endblock %}
+{% endwith %}
+<script src="{% static 'portal/js/public-v2.js' %}?v=20261020-1" defer></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

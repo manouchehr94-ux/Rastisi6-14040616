@@ -279,9 +279,11 @@ class MandatoryCampaignTests(MandatoryBase):
         self.assertTrue(all(r.customer == winner and coupon.code in r.body for r in rows))
         self.assertTrue(all(r.metadata["issuance_id"] == issuance.pk for r in rows))
         deliver_pending()
-        coupon_mail = [m for m in mail.outbox if coupon.code in m.body]
+        from apps.notifications.mail.fake import FakeTransport
+
+        coupon_mail = [m["message"] for m in FakeTransport.sent if coupon.code in m["message"].text_body]
         self.assertEqual(len(coupon_mail), 1)
-        self.assertEqual(coupon_mail[0].to, ["w@example.com"])
+        self.assertEqual(coupon_mail[0].to_address, "w@example.com")
 
         # اجرایِ دوباره: idempotent — نه صدورِ جدید، نه پیامِ جدید
         run2 = cs.execute_campaign(campaign)

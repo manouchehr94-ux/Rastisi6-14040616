@@ -79,9 +79,13 @@ class EmailTransportTests(TestCase):
         self.addCleanup(self.settings_override.disable)
 
     def queue(self):
-        rows = dispatch_event("return.approved", store=self.store, customer=self.customer, context=self.ctx, channels=["email"], dedupe_key="smtp-1")
-        self.assertEqual([r.status for r in rows], ["pending"])
-        return rows[0]
+        """Platform-originated email (no Store): the Django SMTP path. Store->customer email goes through the
+        per-store verified sender (see test_store_sender_policy) and never through this shared SMTP sender."""
+        from apps.notifications.services.notification_service import enqueue
+
+        row = enqueue(channel="email", subject="تغییر امنیتی", body="متن تست", recipient_email="sara@example.com")
+        self.assertEqual(row.status, "pending")
+        return row
 
     def test_message_is_delivered_over_smtp_with_correct_envelope_and_multipart_once(self):
         sink = SmtpSink(self.port)
@@ -98,7 +102,7 @@ class EmailTransportTests(TestCase):
         self.assertEqual(msg["To"], "sara@example.com")
         self.assertTrue(msg.is_multipart())
         self.assertEqual({p.get_content_type() for p in msg.walk() if not p.is_multipart()}, {"text/plain", "text/html"})
-        self.assertNotIn("راستی", str(msg["Subject"]))  # store message — no platform branding added
+        self.assertEqual(msg["From"], "shop@example.test")
 
     def test_unreachable_server_fails_with_backoff_then_recovers_with_exactly_one_send(self):
         row = self.queue()  # nothing is listening on the port

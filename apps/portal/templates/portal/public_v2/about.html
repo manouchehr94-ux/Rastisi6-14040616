@@ -1,0 +1,16 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}{% ps 'about.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'about.meta_description' %}">{% endblock %}
+{% block content %}
+{% ps 'about.crumb' as crumb %}{% ps 'about.title' as title %}
+{% include "portal/public_v2/_pghead.html" %}
+<div class="sec"><div class="wrap">
+  <div class="prose">
+    <p>{% ps 'about.p1' %}</p>
+    <p>{% ps 'about.p2' %}</p>
+    {% ps 'about.p3' as about_p3 %}{% if about_p3 %}<p>{{ about_p3 }}</p>{% endif %}
+  </div>
+  <div class="values">{% ps_items 'values' as values %}{% for v in values %}<div><h3>{{ v.title }}</h3><p>{{ v.text }}</p></div>{% endfor %}</div>
+</div></div>
+{% endblock %}

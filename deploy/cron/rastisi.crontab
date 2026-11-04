@@ -16,6 +16,9 @@ JOB=/srv/rastisi/deploy/cron/run_job.sh
 # admin inbox retention (expired events and their per-user rows; pinned items stay) — daily
 45   3 * * *  $JOB inbox_prune     prune_notifications
 
+# store e-mail sender identities (SES DKIM verification state; picks up newly published DNS records, detects a domain that
+# stopped verifying, releases held mail on recovery). Talks only to the provider's identity API; sends nothing — hourly
+5    * * * *  $JOB email-senders refresh_email_identities
 # campaigns + occasions (birthday etc.) → queue only; delivery is the outbox job above — hourly
 15   * * * *  $JOB engagement    run_engagement_jobs --no-deliver
 # inventory reservations — every 10 minutes

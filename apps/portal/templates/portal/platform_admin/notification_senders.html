@@ -1,0 +1,18 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}هویتِ فرستنده‌ی ایمیل فروشگاه‌ها{% endblock %}
+{% block content %}
+<div class="pa-pagehead"><div><h1>هویتِ فرستنده‌ی ایمیل فروشگاه‌ها</h1><p>هر فروشگاه فقط از دامنه‌ی اختصاصیِ خودش ایمیل می‌فرستد؛ اینجا وضعیتِ همه را می‌بینید.</p></div></div>
+<form method="get" class="pa-card" style="padding:10px;margin-bottom:10px">
+  <input name="q" value="{{ filters.q }}" placeholder="نام فروشگاه یا دامنه" aria-label="جستجو">
+  <select name="status" aria-label="وضعیت"><option value="">همه</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <button class="pa-btn pa-small" type="submit">فیلتر</button>
+</form>
+<div class="pa-card"><div class="pa-tablewrap"><table id="sender-table">
+  <thead><tr><th>فروشگاه</th><th>دامنه</th><th>وضعیت</th><th>علت</th><th>آخرین بررسی</th><th></th></tr></thead>
+  <tbody>{% for i in page %}
+    <tr><td>{{ i.store.name }}</td><td dir="ltr">{{ i.domain_name|default:"—" }}</td><td>{{ i.get_status_display }}{% if i.platform_disabled %} (غیرفعال‌شده توسط پلتفرم){% endif %}</td><td>{{ i.reason_code|default:"—" }}</td><td>{% if i.last_checked_at %}{{ i.last_checked_at|jalali_dt }}{% else %}—{% endif %}</td>
+    <td><form method="post" action="{% url 'portal_platform_admin:notification-sender-toggle' i.pk %}">{% csrf_token %}<button class="pa-btn pa-small" type="submit">{% if i.platform_disabled %}فعال‌سازی مجدد{% else %}غیرفعال‌سازی{% endif %}</button></form></td></tr>
+  {% empty %}<tr><td colspan="6">موردی نیست.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

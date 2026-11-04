@@ -74,8 +74,10 @@ class PublicSitePhotographyContractTests(SimpleTestCase):
                 )
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], PUBLIC_SITE_FORCE_DESIGN="legacy")
 class PublicSitePageSmokeTests(TestCase):
+    """Previous design (rollback path); the new design is smoke-tested in test_public_site_v2.py."""
+
     def test_marketing_pages_render(self):
         for path in [
             "/",

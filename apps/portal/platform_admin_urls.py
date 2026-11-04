@@ -3,6 +3,8 @@ from django.urls import path
 from apps.notifications.inbox_views import VIEWS_PLAT, url_patterns as _inbox_patterns
 from . import platform_admin_views as views
 from . import platform_admin_photo_views as photo_views
+from . import platform_admin_site_views as site_views
+from . import notification_admin_views as notif_views
 
 app_name = "portal_platform_admin"
 
@@ -37,6 +39,12 @@ urlpatterns = [
     path("public-photos/<slug:slot>/", photo_views.public_photo_edit, name="public-photo-edit"),
     path("public-photos/<slug:slot>/reset/", photo_views.public_photo_reset, name="public-photo-reset"),
 
+    # --- متن‌ها، رنگ‌ها و فونت‌های سایت عمومی (فقط مدیر پلتفرم) ---
+    path("public-site/", site_views.public_site_home, name="public-site"),
+    path("public-site/switch/", site_views.public_site_switch, name="public-site-switch"),
+    path("public-site/<slug:slug>/", site_views.public_site_edit, name="public-site-edit"),
+    path("public-site/<slug:slug>/reset/", site_views.public_site_reset, name="public-site-reset"),
+
     # --- پلن‌های اشتراک ---
     path("plans/", views.plans, name="plans"),
     path("plans/add/", views.plan_form, name="plan-add"),
@@ -69,6 +77,16 @@ urlpatterns = [
     path("sms/credits/", views.sms_credits, name="sms-credits"),
     path("sms/credits/<uuid:store_public_id>/adjust/", views.sms_credit_adjust, name="sms-credit-adjust"),
     path("sms/logs/", views.sms_logs, name="sms-logs"),
+
+    # --- اعلان‌ها (SMS + ایمیل)
+    path("notifications/", notif_views.notification_catalog, name="notification-catalog"),
+    path("notifications/senders/", notif_views.notification_senders, name="notification-senders"),
+    path("notifications/senders/<int:pk>/toggle/", notif_views.notification_sender_toggle, name="notification-sender-toggle"),
+    path("notifications/delivery/", notif_views.notification_delivery, name="notification-delivery"),
+    path("notifications/audit/", notif_views.notification_audit, name="notification-audit"),
+    path("notifications/<str:event_key>/", notif_views.notification_platform_template, name="notification-platform-template"),
+    path("notifications/<str:event_key>/preview/", notif_views.notification_platform_template_preview, name="notification-platform-template-preview"),
+    path("notifications/<str:event_key>/test/", notif_views.notification_platform_template_test, name="notification-platform-template-test"),
 
     # --- صنف‌ها و قالب‌ها ---
     path("industries/", views.industries, name="industries"),

@@ -1,0 +1,18 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}{% ps 'faq.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'faq.meta_description' %}">{% endblock %}
+{% block extra_head %}<script type="application/ld+json">{% ps_faq_jsonld %}</script>{% endblock %}
+{% block content %}
+{% ps_faq_groups as faq_groups %}{% ps 'faq.crumb' as crumb %}{% ps 'faq.title' as title %}{% ps 'faq.lead' as lead %}
+{% include "portal/public_v2/_pghead.html" %}
+<div class="sec"><div class="wrap narrow">
+  <div class="faq-search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" id="faqQ" placeholder="{% ps 'faq.search_placeholder' %}" aria-label="{% ps 'faq.search_aria' %}"></div>
+  <div id="faqAll">
+    {% for group in faq_groups %}
+    <div class="faq-group">{% if group.cat %}<h2 class="faq-cat">{{ group.cat }}</h2>{% endif %}<div class="faq">{% for f in group.items %}{% include "portal/public_v2/_faq_item.html" %}{% endfor %}</div></div>
+    {% endfor %}
+  </div>
+  <p class="faq-none" hidden>{% ps 'faq.empty' %} <a href="{% url 'portal:contact' %}" class="lnk">{% ps 'faq.empty_link' %}</a></p>
+</div></div>
+{% endblock %}
