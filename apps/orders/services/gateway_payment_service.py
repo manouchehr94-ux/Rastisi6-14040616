@@ -422,13 +422,19 @@ def process_callback_and_verify(
             status=PaymentAttempt.Status.PENDING, updated_at=timezone.now(),
         )
 
-    def fail(code: str, message: str, exc_message: str):
+    def fail(code: str, message: str, exc_message: str, *, definitive: bool = False):
         if not was_final:  # یک تلاشِ نهایی‌شده با callbackِ تکراری/دیرهنگام بازنویسی نمی‌شود
             fresh_paid = Order.objects.filter(pk=order.pk, payment_status=Order.PaymentStatus.PAID).exists()
-            PaymentAttempt.objects.filter(pk=attempt.pk, status__in=open_statuses).update(
+            moved = PaymentAttempt.objects.filter(pk=attempt.pk, status__in=open_statuses).update(
                 status=PaymentAttempt.Status.CANCELED if fresh_paid else PaymentAttempt.Status.FAILED,
                 failure_code=code, failure_message=message[:300], updated_at=timezone.now(),
             )
+            if definitive and moved and not fresh_paid:
+                # فقط «تلاشِ پرداخت» قطعاً ناموفق شد (نه کلِ سفارش) — اعلانِ مدیر پس از commitِ همین گذار؛ dedupe روی شناسه‌ی تلاش.
+                from apps.notifications.services import admin_events
+
+                public_id = attempt.public_id
+                transaction.on_commit(lambda: admin_events.payment_attempt_failed(order, public_id))
         raise PaymentVerificationFailed(exc_message)
 
     if not attempt.gateway_track_id:
@@ -477,6 +483,9 @@ def process_callback_and_verify(
 
     if not result.success:
         logger.info("Verification returned failure: attempt=%s final=%s", attempt.public_id, was_final)
-        fail(f"status_{result.status_code}", result.message or "تأیید پرداخت ناموفق", result.message or "تأیید پرداخت توسط درگاه ناموفق بود")
+        # «قطعی» = خودِ درگاه در تأییدِ server-to-server اعلامِ ناموفق کرد و callback ادعای موفقیت نداشت؛
+        # قطع/تایم‌اوت/پاسخِ نامعتبر/مغایرتِ مبلغ/ادعای موفقیتِ callback هرگز اعلانِ «ناموفق» نمی‌سازند.
+        fail(f"status_{result.status_code}", result.message or "تأیید پرداخت ناموفق", result.message or "تأیید پرداخت توسط درگاه ناموفق بود",
+             definitive=not _callback_claims_success(callback_data))
 
     return _apply_verified_payment(attempt.pk, result, store)

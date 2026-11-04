@@ -64,6 +64,10 @@ def checkout_step1(request):
     context = checkout_service.build_context(request, cart)
     context["address_form"] = CheckoutAddressForm(initial=checkout_service.address_initial(request))
     context["coupon_input"] = ""
+    # Tracking: begin_checkout at the real checkout ENTRY (this full-page GET only — HTMX re-renders / failed validation / payment never reach it). The identity is
+    # the cart's completed-cycle count (tracking_events.checkout_cycle): same on every render of an open checkout, new after an order closes it.
+    from apps.core import tracking_events
+    tracking_events.queue(request, tracking_events.build_begin_checkout, resolve_store_for_service(request), cart)
     return render_domain_page(request, "orders/checkout_step1.html", context, page_type="checkout")
 
 
