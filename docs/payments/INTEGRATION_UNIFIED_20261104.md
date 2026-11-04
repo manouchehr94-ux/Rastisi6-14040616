@@ -75,7 +75,7 @@ No adapter declares `REFUND`: automated gateway refunds are **not** implemented 
 `orders`: `…0019_reconciliation_evidence_level` → `0020_card_transfer` (unchanged, never renumbered) → `0021_payment_engine_unified` (single leaf).
 `0021` is additive and reversible: `AddField PaymentAttempt.gateway_redirect_url` (default `""`), `AlterField PaymentAttempt.status` (choices + varchar 15→20),
 `AlterField PaymentGatewayConfig.gateway_code` (the union of all 12 codes), `AlterField PaymentReconciliation.kind` (+`settlement_uncertain`), `CreateModel PaymentTransactionEvent`.
-`makemigrations --check` is clean. **Caveat:** if any persistent database had applied the PR #35 migrations (`0020_alter_paymentattempt…`–`0023`), this migration would
+`core.0024_tracking_emission` (new `TrackingEmission` table) depends on it. `makemigrations --check` is clean. **Caveat:** if any persistent database had applied the PR #35 migrations (`0020_alter_paymentattempt…`–`0023`), this migration would
 conflict with them; PR #35 was never merged, so none is expected — verify before applying anywhere persistent. **Nothing was applied to QA/production.**
 
 ## 6. Operations
@@ -89,4 +89,4 @@ conflict with them; PR #35 was never merged, so none is expected — verify befo
 * No provider was called live; contract tests use documented shapes with mocked HTTP.
 * A reconciled UNKNOWN attempt whose provider cannot be asked (no `INQUIRE`) needs the administrative resolution.
 * `PaymentTransactionEvent` is written for settlement evidence only (not yet for every state change).
-* Purchase tracking stays BLOCKED (see `docs/tracking/ECOMMERCE_TRACKING_20261103.md`).
+* Purchase tracking is implemented for verified ONLINE payments in the browser channel only (migration `core.0024_tracking_emission`; at-most-once server print, best-effort delivery, provider-side dedup). COD / card-transfer purchases, server-side channels (Measurement Protocol / CAPI) and acknowledgements are NOT implemented — see `docs/tracking/ECOMMERCE_TRACKING_20261103.md`.
