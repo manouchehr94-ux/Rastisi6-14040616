@@ -75,6 +75,12 @@ def login_view(request):
             user = owner_auth_service.authenticate_owner_by_identifier(
                 request, identifier=identifier, password=form.cleaned_data["password"],
             )
+            if user is None:
+                # a platform TEAM member (is_staff + a granted notification permission, no store/owner profile)
+                user = owner_auth_service.authenticate_platform_team_by_identifier(
+                    request, identifier=identifier, password=form.cleaned_data["password"],
+                    is_team_member=_is_notification_team,
+                )
             if user is not None and (_is_platform_staff(user) or _is_notification_team(user)):
                 auth_login(request, user)
                 session_service.apply_remember_me(request, form.cleaned_data.get("remember_me", False))

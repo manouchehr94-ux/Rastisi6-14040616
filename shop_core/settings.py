@@ -597,6 +597,8 @@ RASTISI_SMSRASTI_QUEUE_TTL_HOURS = env_int("RASTISI_SMSRASTI_QUEUE_TTL_HOURS", d
 #   (b) RASTISI_EMAIL_DNS_PROVISIONER = dotted path of a custom DnsProvisioner (e.g. a vendor API adapter).
 RASTISI_EMAIL_DNS_PROVISIONER = env_str("RASTISI_EMAIL_DNS_PROVISIONER", "")
 RASTISI_EMAIL_DNS_ZONES = tuple(z.strip().lower() for z in env_str("RASTISI_EMAIL_DNS_ZONES", "").split(",") if z.strip())
+# Advisory (never gating) SPF/DMARC DNS observation on the sender panel. Off by default: it does live DNS lookups.
+RASTISI_EMAIL_DNS_ADVISORY_LOOKUP = env_bool("RASTISI_EMAIL_DNS_ADVISORY_LOOKUP", default=False)
 RASTISI_EMAIL_DNS_RFC2136_SERVER = env_str("RASTISI_EMAIL_DNS_RFC2136_SERVER", "")
 RASTISI_EMAIL_DNS_RFC2136_PORT = env_int("RASTISI_EMAIL_DNS_RFC2136_PORT", default=53)
 RASTISI_EMAIL_DNS_RFC2136_KEY_NAME = env_str("RASTISI_EMAIL_DNS_RFC2136_KEY_NAME", "")

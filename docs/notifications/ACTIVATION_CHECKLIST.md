@@ -1,5 +1,7 @@
 # Production activation checklist — email engine
 
+> The step-by-step AWS procedure with exact commands is in `docs/notifications/AWS_ACTIVATION_RUNBOOK.md`; the local Windows QA package is `tools/windows-qa/README-WINDOWS-QA.md`.
+
 **Nothing below has been verified against a real AWS account, DNS server, SNS topic or mailbox.** "Tested" means automated tests
 with the evidence type named; "Live" means proven in the real world (all rows: **No**).
 
@@ -30,7 +32,7 @@ Legend — Code: IMPLEMENTED / PARTIAL / MISSING. Tests: the strongest evidence 
 |---|---|---|---|---|---|
 | C1 | Merchant adds 3 DKIM CNAMEs (manual path) | IMPLEMENTED (exact records, relative names, Persian steps, per-record "seen" probe, recheck cron) | rendering + state machine; **DNS lookups were not performed against real zones** | No | Merchant. This is the path that works **today**. |
 | C2 | Automatic record creation | IMPLEMENTED but **disabled by default** (RFC 2136+TSIG, or a custom provisioner) | in-memory authoritative server: safety rules, conflicts, partial failure, secrets | No | **Platform owner decision.** RastiSi has no DNS-write authority over any merchant zone (audit). Needs: a zone RastiSi controls/was delegated, a TSIG key, `RASTISI_EMAIL_DNS_*` env. Otherwise stay manual. |
-| C3 | Mail-From / SPF alignment, merchant DMARC | MISSING (not customised) | — | No | Optional hardening; DMARC currently passes by DKIM alignment only. |
+| C3 | SPF / DMARC on the merchant domain | **ADVISORY, read-only, never gating** (`mail/dns.py::advisory_checks`; shown on the sender panel; lookups off unless `RASTISI_EMAIL_DNS_ADVISORY_LOOKUP=True`) | ok / missing / unknown / not_checked states; a missing SPF/DMARC leaves an ACTIVE sender ACTIVE (`AdvisoryNeverBlocksSenderTests`); DNS lookups are mocked — **no real zone was queried** | No | Optional hardening. DMARC passes by DKIM alignment with SES's default MAIL FROM; custom MAIL FROM (SPF alignment) is **not** implemented. |
 
 ## D. Workers and scheduling
 | # | Prerequisite | Code | Tests | Live | Missing / who |

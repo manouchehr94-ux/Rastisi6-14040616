@@ -330,6 +330,32 @@ def authenticate_owner_by_identifier(request, *, identifier: str, password: str)
     return authenticate(request, username=user.username, password=password)
 
 
+def authenticate_platform_team_by_identifier(request, *, identifier: str, password: str, is_team_member):
+    """ورودِ رمزیِ «عضوِ تیمِ پلتفرم» (کارمندِ راستی‌سی با مجوزِ مشخص، بدونِ فروشگاه و بدونِ OwnerProfile).
+
+    ``authenticate_owner_by_identifier`` عمداً چنین حسابی را رد می‌کند (فقط مالک/عضوِ فروشگاه/ابرکاربر). این تابعِ جداگانه
+    فقط برای صفحه‌ی ورودِ **پنلِ مدیریتِ پلتفرم** است و شرطِ اضافه دارد: ``is_staff`` فعال باشد و ``is_team_member(user)``
+    (داشتنِ دستِ‌کم یکی از مجوزهای اعلان) برقرار باشد. اهلیتِ پرتالِ مالک را گسترش نمی‌دهد. همان رفتارِ زمانی (هشِ رمز در
+    هر شکست) و fail-closed برای شناسه‌ی مبهم را دارد."""
+    identifier = (identifier or "").strip()
+    password = password or ""
+    if (not identifier or not password or len(identifier) > LOGIN_IDENTIFIER_MAX_LENGTH
+            or len(password) > LOGIN_PASSWORD_MAX_LENGTH):
+        _burn_password_hash(password[:LOGIN_PASSWORD_MAX_LENGTH])
+        return None
+    user = _resolve_login_candidate(identifier)
+    if user is None:
+        # staff accounts that are neither owners nor store members are not found by the phone path; look up by exact username/email
+        matches = list(User.objects.filter(username__iexact=identifier)[:2]) or (
+            list(User.objects.filter(email__iexact=_normalize_email(identifier))[:2]) if _looks_like_email(identifier) else [])
+        user = matches[0] if len(matches) == 1 else None
+    if (user is None or not user.has_usable_password() or not user.is_active or not user.is_staff
+            or not is_team_member(user)):
+        _burn_password_hash(password)
+        return None
+    return authenticate(request, username=user.username, password=password)
+
+
 def login_identifier_throttle_key(identifier: str) -> str:
     """کلیدِ پایدارِ throttle برایِ یک شناسه‌یِ ورود — بدونِ حساس‌بودن به
     حروف/ارقامِ فارسی/فاصله، و هشِ SHA-256 (هیچ ایمیل/شماره‌ای خام در cache

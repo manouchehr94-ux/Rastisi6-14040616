@@ -73,6 +73,18 @@
 </div></div>
 {% endif %}
 
+{% if diag.advisory %}
+<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>توصیه‌هایِ اختیاریِ DNS (SPF و DMARC)</h3></div><div class="card-body" id="dns-advisory">
+  <p style="font-size:12.5px;color:var(--muted)">این موارد فقط توصیه است: نبودنِ آن‌ها هرگز فرستنده را غیرفعال نمی‌کند. فعال‌شدنِ فرستنده فقط به تأییدِ DKIM توسطِ ارائه‌دهنده بستگی دارد.</p>
+  <ul style="padding-inline-start:20px;line-height:2">
+  {% for a in diag.advisory %}
+    <li data-kind="{{ a.kind }}" data-status="{{ a.status }}"><b>{{ a.label }}</b> — {{ a.text_fa }}
+      {% if a.status != 'ok' %}<br><small>نوع: TXT — نام: <code dir="ltr">{{ a.name }}</code> — مقدار پیشنهادی: <code dir="ltr">{{ a.recommended }}</code></small>{% endif %}</li>
+  {% endfor %}
+  </ul>
+</div></div>
+{% endif %}
+
 <div class="card" style="margin-bottom:14px"><div class="card-head"><h3>دو تأییدِ جدا: وب‌سایت و ایمیل</h3></div><div class="card-body" id="two-verifications">
   <p style="font-size:12.5px;color:var(--muted)">تأییدِ دامنه‌ی وب‌سایت (TXT، اتصال، SSL) با تأییدِ فرستنده‌ی ایمیل (DKIM نزد ارائه‌دهنده) مستقل است؛ هیچ‌کدام دیگری را تأیید نمی‌کند.</p>
   <dl style="display:grid;grid-template-columns:max-content 1fr;gap:6px 14px">

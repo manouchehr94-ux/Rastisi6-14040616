@@ -1,5 +1,21 @@
 # Notifications migration collision — analysis and integration proposal
 
+> ## DECISION (updated in the finalization pass): **Option A — merge migration**
+> Earlier text in this document recommended Option B (re-point `0005` onto `0004_inbox_engine`). That is **withdrawn**.
+> Option B *rewrites* `0005_email_sender_identity_platform_templates`'s dependency. That is only safe if **no database anywhere has ever applied
+> `0005`/`0006`** — and that cannot be established: the product owner's Windows QA databases, any developer's local database and any staging copy created from
+> this PR's branch have applied it, and no tool in this repository can enumerate them. The rule applied here: *if persistent migration state cannot be
+> established, never rewrite an already-applied migration.* Option A rewrites nothing: it adds one new, empty migration
+> `0007_merge_inbox_and_email_identity` that depends on **both** leaves (`0004_inbox_engine`, `0006_expiry_status_and_dns_automation`). A database that
+> already applied `0005`/`0006`, one that already applied `0004`, one that applied both lineages' tables, and a fresh database all migrate cleanly to the same schema.
+>
+> Where the merge migration lives: **only on the integrated review branch** (`kiro/notifications-integrated-20261104`, based on
+> `integration/payment-engine-unified-20261104`), never in PR #37 — PR #37 alone has no `0004`, so a migration depending on it would raise
+> `NodeNotFound` there. A generic test (`apps.notifications.tests.test_qa_tooling.MigrationGraphTests`) asserts that every tree has exactly **one** notifications leaf, so the
+> branch that is missing the merge migration fails loudly instead of silently conflicting.
+> Evidence on the integrated tree (run on isolated seeded databases; nothing was merged, deployed, or applied to a shared database): see "Integrated review branch result" at the end.
+
+
 ## Facts (reproduced, not assumed)
 | branch | notifications migrations added | parent |
 |---|---|---|

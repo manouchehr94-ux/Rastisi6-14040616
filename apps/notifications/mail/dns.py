@@ -300,3 +300,53 @@ def _lookup(record: dict):
         return False
     except Exception:  # noqa: BLE001 — timeouts / no network: unknown, never "published"
         return None
+
+
+# --- SPF / DMARC advisory (READ-ONLY, NEVER GATING) ---------------------------------------------------------------------
+# DKIM (the three CNAMEs above) is what the provider verifies and what makes a sender ACTIVE. SPF and DMARC records on the
+# merchant's own domain improve inbox placement and let the domain owner see/spoof-protect their mail, but a missing record
+# NEVER blocks or changes a sender's status. With SES' default MAIL FROM, DMARC passes through DKIM alignment, so SPF on the
+# merchant domain is optional; a DMARC policy is recommended.
+SPF_RECOMMENDED = "v=spf1 include:amazonses.com ~all"
+DMARC_RECOMMENDED = "v=DMARC1; p=none;"
+
+
+def _txt_values(name: str):
+    """List of TXT strings at ``name`` ([] = the name has no TXT), or ``None`` when the lookup could not be completed."""
+    try:
+        import dns.resolver
+
+        answers = dns.resolver.resolve(name, "TXT", lifetime=3)
+        return ["".join(part.decode() if isinstance(part, bytes) else part for part in rdata.strings) for rdata in answers]
+    except Exception as exc:  # noqa: BLE001
+        import dns.resolver
+
+        if isinstance(exc, (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer)):
+            return []
+        return None
+
+
+def advisory_checks(domain: str, *, enabled: bool | None = None, txt_lookup=None) -> list[dict]:
+    """SPF + DMARC observations for ``domain``. ``status`` is one of ok | missing | unknown | not_checked. Advisory only."""
+    if enabled is None:
+        enabled = bool(getattr(settings, "RASTISI_EMAIL_DNS_ADVISORY_LOOKUP", False))
+    lookup = txt_lookup or _txt_values
+    out = []
+    for kind, name, prefix, recommended, label in (
+        ("spf", domain, "v=spf1", SPF_RECOMMENDED, "SPF"),
+        ("dmarc", f"_dmarc.{domain}", "v=dmarc1", DMARC_RECOMMENDED, "DMARC"),
+    ):
+        if not enabled:
+            status = "not_checked"
+        else:
+            values = lookup(name)
+            status = "unknown" if values is None else ("ok" if any(v.strip().lower().startswith(prefix) for v in values) else "missing")
+        text = {
+            "ok": f"رکورد {label} روی دامنه‌ی شما دیده شد.",
+            "missing": f"رکورد {label} روی دامنه‌ی شما دیده نشد. این فقط یک توصیه است و ارسال ایمیل را متوقف نمی‌کند.",
+            "unknown": f"بررسی رکورد {label} انجام نشد (خطای شبکه یا DNS).",
+            "not_checked": f"رکورد {label} به‌صورت خودکار بررسی نمی‌شود؛ مقدار پیشنهادی را در DNS دامنه اضافه کنید.",
+        }[status]
+        out.append({"kind": kind, "label": label, "name": name, "type": "TXT", "status": status,
+                    "recommended": recommended, "text_fa": text})
+    return out

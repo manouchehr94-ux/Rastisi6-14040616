@@ -269,3 +269,26 @@ class TemplateEditorTests(CouponViewsTestCase):
         r = self.edit(email_enabled="on", email_subject="x {return_number}", email_body="y {order_number}")
         self.assertEqual(r.status_code, 403)
         self.assertFalse(NotificationTemplate.objects.exists())
+
+
+class HistoryProviderIdTests(CouponViewsTestCase):
+    def test_history_shows_provider_message_id_and_delivery_state(self):
+        from apps.notifications.models import NotificationOutbox
+
+        row = NotificationOutbox.objects.create(
+            store=self.store, event_key="order.created", channel="email", recipient_email="x@example.com", subject="s",
+            body="b", status="sent", provider="fake", provider_ref="fake-msg-777", delivery_state="bounced")
+        r = self.client.get(reverse("dashboard:notification-history"))
+        self.assertContains(r, 'class="provider-ref"')
+        self.assertContains(r, "fake-msg-777")
+        self.assertContains(r, 'data-state="bounced"')
+        self.assertContains(r, "برگشت خورد")
+        self.assertEqual(row.provider_ref, "fake-msg-777")
+
+    def test_other_stores_provider_ids_are_never_listed(self):
+        from apps.notifications.models import NotificationOutbox
+
+        other = Store.objects.create(name="o", slug="hist-other", status=Store.Status.ACTIVE)
+        NotificationOutbox.objects.create(store=other, event_key="order.created", channel="email", recipient_email="y@example.com",
+                                          subject="s", body="b", status="sent", provider="fake", provider_ref="fake-OTHER-1")
+        self.assertNotContains(self.client.get(reverse("dashboard:notification-history")), "fake-OTHER-1")

@@ -96,6 +96,8 @@ class EmailDiagnostics:
     dns_automation_reason_fa: str = ""
     dns_automation_action_fa: str = ""
     manual_steps_fa: tuple = ()
+    #: SPF/DMARC observations — advisory only, they never change ``status``
+    advisory: tuple = ()
 
 
 def _sender_domain(store: Store) -> StoreDomain | None:
@@ -281,6 +283,7 @@ def diagnostics(store: Store) -> EmailDiagnostics:
         dns_automation_state=identity.dns_automation_state, dns_automation_code=identity.dns_automation_code,
         dns_automation_reason_fa=_auto_text(identity)[0], dns_automation_action_fa=_auto_text(identity)[1],
         manual_steps_fa=dns_provisioning.MANUAL_STEPS_FA if identity.status != EmailSenderIdentity.Status.ACTIVE else (),
+        advisory=tuple(dns_provisioning.advisory_checks(identity.domain_name)) if identity.domain_name else (),
     )
 
 

@@ -191,8 +191,25 @@ The matrix is produced by `apps/notifications/parity.py` from the registries and
 ## 7. Known limitations (unchanged or newly discovered)
 * No real provider/DNS/mailbox was contacted. See the checklist.
 * A custom domain is required for email; a store without one has no email channel (SMS is unaffected). Mail-From (SPF alignment) is
-  not customized; DMARC alignment relies on DKIM signed by the merchant's own domain. The merchant's own DMARC/SPF records are not managed.
+  not customized; DMARC alignment relies on DKIM signed by the merchant's own domain. The merchant's own DMARC/SPF records are not managed — since the
+  finalization pass the sender panel shows **advisory, never-gating** SPF/DMARC observations with a recommended record (`mail/dns.py::advisory_checks`).
 * Customer e-mail addresses are not verified in this codebase (mail goes to the address on file).
 * Customized store SMS texts bypass provider Patterns (plain send) — a product consequence, not a bug.
 * The webhook is served on `RASTISI_PLATFORM_HOSTS` only. (An earlier version of this document pointed at the wrong host; the routing is
   now fixed and covered by `test_endpoint_is_served_on_the_platform_host_only`.)
+
+## 8. Finalization pass: local QA package, real-HTTP acceptance, and the two defects it found
+* **Windows QA package** `tools/windows-qa/` (PowerShell 5.1+/7): isolated detached worktree + its own SQLite DB (path is asserted to be inside the run
+  folder), QA-only venv, `check` + `makemigrations --check` + `migrate`, seed of four tenants, local server + worker, fake mail written to a mailbox folder.
+  Guide: `tools/windows-qa/README-WINDOWS-QA.md`. The fake provider can share state across processes through `RASTISI_FAKE_EMAIL_STATE_FILE` /
+  `RASTISI_FAKE_EMAIL_MAILBOX_DIR` (QA only; unset ⇒ unchanged in-memory behaviour used by the whole test suite).
+* QA-only commands (`seed_qa_notifications`, `qa_email_domain`, `qa_simulate_email_event`, `qa_place_order`, `qa_worker`) refuse to run unless
+  `DEBUG` is on **and** `RASTISI_QA_MODE=1` **and** the provider is `fake`. The one live command `ses_smoke_test` requires `RASTISI_EMAIL_PROVIDER=ses`,
+  a **verified** sender identity, and `--i-understand-this-sends-real-email`; `--check-only` sends nothing and now **fails** (non-zero) when the identity is not verified/reachable.
+* `tools/windows-qa/qa_http_acceptance.py` drives scenarios A–N through real HTTP (host-based routing, cookies, central-login handoff, CSRF) against
+  the running server and worker; it found two real defects that unit tests built on `force_login` had missed, both fixed with tests:
+  1. a platform **team member** (staff + a granted notification permission, no store membership) could never sign in to the platform host because the shared
+     owner-login resolver correctly refuses accounts that are neither owner, store member nor superuser → new narrowly-scoped
+     `authenticate_platform_team_by_identifier` used only by the platform-admin login (`test_platform_team_login.py`);
+  2. the store **history** page did not show the provider message id or the delivery state → both columns added (`HistoryProviderIdTests`).
+* Fake-provider caveat (unchanged): none of this proves deliverability. See `AWS_ACTIVATION_RUNBOOK.md` for the live steps and their status labels.
