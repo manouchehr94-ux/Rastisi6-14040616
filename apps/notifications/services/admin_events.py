@@ -21,8 +21,17 @@ def order_canceled(order):
 
 
 def payment_failed(order):
-    safe_publish("payment.failed", store=order.store, title="پرداخت ناموفق", summary=f"پرداخت سفارش {order.code} کامل نشد.", entity=("Order", order.pk),
-                 link_kwargs={"code": order.code}, group_key=f"pay-failed:{order.store_id}")
+    """مسیرِ شبیه‌سازی/توسعه (``simulate_payment``): پرداختِ شبیه‌سازی‌شده ناموفق شد."""
+    safe_publish("payment.failed", store=order.store, title="تلاش پرداخت ناموفق بود", summary=f"پرداختِ سفارش {order.code} کامل نشد.", entity=("Order", order.pk),
+                 link_kwargs={"code": order.code}, group_key=f"pay-failed:order:{order.pk}")
+
+
+def payment_attempt_failed(order, attempt_public_id: str):
+    """یک «تلاشِ پرداختِ» واقعی را درگاه قطعاً ناموفق اعلام کرد. این به‌معنیِ شکستِ نهاییِ سفارش نیست: سفارش باز است و مشتری می‌تواند دوباره تلاش کند.
+    dedupe: شناسه‌ی پایدارِ تلاش (callbackِ تکراری ⇒ هیچ اعلانِ دوم)؛ تلاش‌هایِ مجددِ همان سفارش در یک ردیفِ صندوق (شمارنده) تجمیع می‌شوند."""
+    safe_publish("payment.failed", store=order.store, title="تلاش پرداخت ناموفق بود",
+                 summary=f"درگاه پرداختِ سفارش {order.code} را تأیید نکرد؛ سفارش هنوز باز است و مشتری می‌تواند دوباره تلاش کند.",
+                 entity=("Order", order.pk), link_kwargs={"code": order.code}, dedupe_key=f"payattempt:{attempt_public_id}", group_key=f"pay-failed:order:{order.pk}")
 
 
 def return_requested(return_request):
@@ -82,10 +91,16 @@ def access_revoked(membership):
 
 
 def subscription_state(subscription, kind: str):
-    key = {"past_due": "subscription.past_due", "suspended": "subscription.suspended"}[kind]
-    label = {"past_due": "اشتراک معوق شد", "suspended": "اشتراک تعلیق شد"}[kind]
-    safe_publish(key, store=subscription.store, title=label, summary="برای جلوگیری از محدودشدنِ فروشگاه، صورتحساب را بررسی کنید.", entity=("StoreSubscription", subscription.pk),
-                 dedupe_key=f"sub:{subscription.pk}:{kind}:{timezone.now():%Y%m%d}")
+    """``kind``: grace (مهلتِ ارفاقی؛ مسیرِ واقعیِ dunning/ارزیابی) | past_due (حالتِ PAST_DUE — در تولید فراخوانِ واقعی ندارد) | suspended.
+    dedupe روی «آخرین رخدادِ گذار» (``SubscriptionEvent``) ⇒ هر گذارِ واقعی دقیقاً یک اعلان؛ اجرای تکراری هیچ‌چیز نمی‌سازد."""
+    key = {"grace": "subscription.grace_period", "past_due": "subscription.past_due", "suspended": "subscription.suspended"}[kind]
+    label = {"grace": "مهلت ارفاقی اشتراک شروع شد", "past_due": "اشتراک معوق شد", "suspended": "اشتراک تعلیق شد"}[kind]
+    summary = {"grace": "برای جلوگیری از تعلیق، صورتحساب/تمدید اشتراک را در مهلت ارفاقی پرداخت کنید.",
+               "past_due": "برای جلوگیری از محدودشدنِ فروشگاه، صورتحساب را بررسی کنید.",
+               "suspended": "برای جلوگیری از محدودشدنِ فروشگاه، صورتحساب را بررسی کنید."}[kind]
+    last = subscription.events.order_by("-id").values_list("pk", flat=True).first()
+    safe_publish(key, store=subscription.store, title=label, summary=summary, entity=("StoreSubscription", subscription.pk),
+                 dedupe_key=f"sub:{subscription.pk}:{kind}:{last or ''}")
 
 
 def domain_verification(domain, ok: bool):

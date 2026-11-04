@@ -25,6 +25,9 @@ D = NotificationDelivery
 Status, Chan = D.Status, D.Channel
 
 MAX_PUSH_PER_10_MIN = 5
+#: اعلانِ «به‌تعویق‌افتاده» (Snooze) تا پایانِ تعویق ارسال نمی‌شود: اگر پایانِ تعویق تا این بازه باشد، تحویل به همان لحظه موکول می‌شود (بدونِ مصرفِ تلاش و بدونِ شکستِ دائمی)؛
+#: تعویقِ طولانی‌تر ⇒ «ارسال‌نشده» (یادآوریِ کهنه‌ی چنددوزه‌ای Push نمی‌شود). پس از پایانِ تعویق همان بررسی‌های معمول (خوانده/بایگانی/دسترسی/ترجیح) دوباره اجرا می‌شود.
+SNOOZE_DEFER_MAX = timedelta(hours=24)
 
 
 @dataclass
@@ -132,7 +135,7 @@ def _claim_batch(limit: int, now) -> list[NotificationDelivery]:
     return rows
 
 
-def _still_allowed(delivery, channel) -> str:
+def _still_allowed(delivery, channel, now) -> str:
     """نامِ دلیلِ ارسال‌نشدن، یا «» اگر همه‌چیز هنوز مجاز است."""
     item = delivery.inbox_item
     user, ev = item.user, item.event
@@ -142,6 +145,8 @@ def _still_allowed(delivery, channel) -> str:
         return "access_revoked"
     if item.archived_at is not None or item.read_at is not None:
         return "already_seen"
+    if item.snoozed_until is not None and item.snoozed_until > now:
+        return "snoozed"
     if not channel.enabled():
         return "channel_disabled"
     pref = NotificationPreference.objects.filter(user=user, scope_key=item.scope_key).first() or NotificationPreference(user=user, scope_key=item.scope_key)
@@ -152,7 +157,14 @@ def _still_allowed(delivery, channel) -> str:
 
 def _process(delivery: NotificationDelivery, now, transports: dict) -> str:
     channel = CHANNELS.get(delivery.channel)
-    reason = "unknown_channel" if channel is None else _still_allowed(delivery, channel)
+    reason = "unknown_channel" if channel is None else _still_allowed(delivery, channel, now)
+    if reason == "snoozed":
+        until = delivery.inbox_item.snoozed_until
+        if until - now <= SNOOZE_DEFER_MAX:
+            delivery.status, delivery.next_attempt_at, delivery.claimed_at = Status.PENDING, until, None      # موکول به پایانِ تعویق؛ attempts دست‌نخورده
+            delivery.save(update_fields=["status", "next_attempt_at", "claimed_at"])
+            return "deferred"
+        reason = "snoozed_beyond_window"
     if reason:
         delivery.status, delivery.skip_reason, delivery.claimed_at = Status.SKIPPED, reason, None
         delivery.save(update_fields=["status", "skip_reason", "claimed_at"])
@@ -182,7 +194,7 @@ def _process(delivery: NotificationDelivery, now, transports: dict) -> str:
 
 def deliver_pending(*, limit: int = 200, now=None, transports: dict | None = None) -> dict:
     now = now or timezone.now()
-    counts = {"delivered": 0, "failed": 0, "skipped": 0}
+    counts = {"delivered": 0, "failed": 0, "skipped": 0, "deferred": 0}
     for delivery in _claim_batch(limit, now):
         counts[_process(delivery, now, transports or {})] += 1
     counts["processed"] = sum(counts.values())

@@ -145,40 +145,55 @@ def activate_subscription(subscription, *, actor=None, period_end=None, idempote
     )
 
 
+def _status_of(subscription):
+    """وضعیتِ فعلی با قفلِ ردیف — فقط درونِ تراکنشِ فراخوان (همان قفلی که ``_transition`` می‌گیرد)؛ دو اجرای هم‌زمان یک گذار را دو بار گزارش نمی‌کنند."""
+    return StoreSubscription.objects.select_for_update().filter(pk=subscription.pk).values_list("status", flat=True).first()
+
+
 @transaction.atomic
 def enter_grace_period(subscription, *, actor=None, grace_end=None, idempotency_key="") -> StoreSubscription:
     now = timezone.now()
     if grace_end is None:
         days = subscription.plan_version.grace_period_days
         grace_end = now + timezone.timedelta(days=days) if days else now
-    return _transition(
+    before = _status_of(subscription)
+    result = _transition(
         subscription, to_status=S.GRACE_PERIOD, event_type=ET.GRACE_STARTED, actor=actor,
         reason="", idempotency_key=idempotency_key, extra_fields={"grace_period_end": grace_end},
     )
+    if before != S.GRACE_PERIOD:                       # فقط گذارِ واقعی؛ اجرای تکراریِ dunning/ارزیابی (از قبل در مهلت) اعلانِ دوم نمی‌سازد
+        from apps.notifications.services import admin_events
+
+        admin_events.subscription_state(result, "grace")
+    return result
 
 
 @transaction.atomic
 def mark_past_due(subscription, *, actor=None, idempotency_key="") -> StoreSubscription:
+    before = _status_of(subscription)
     result = _transition(
         subscription, to_status=S.PAST_DUE, event_type=ET.PAST_DUE, actor=actor,
         reason="", idempotency_key=idempotency_key,
     )
-    from apps.notifications.services import admin_events
+    if before != S.PAST_DUE:
+        from apps.notifications.services import admin_events
 
-    admin_events.subscription_state(result, "past_due")
+        admin_events.subscription_state(result, "past_due")
     return result
 
 
 @transaction.atomic
 def suspend_subscription(subscription, *, actor=None, reason="", idempotency_key="") -> StoreSubscription:
+    before = _status_of(subscription)
     result = _transition(
         subscription, to_status=S.SUSPENDED, event_type=ET.SUSPENDED, actor=actor,
         reason=reason, idempotency_key=idempotency_key,
         extra_fields={"suspended_at": timezone.now()},
     )
-    from apps.notifications.services import admin_events
+    if before != S.SUSPENDED:
+        from apps.notifications.services import admin_events
 
-    admin_events.subscription_state(result, "suspended")
+        admin_events.subscription_state(result, "suspended")
     return result
 
 

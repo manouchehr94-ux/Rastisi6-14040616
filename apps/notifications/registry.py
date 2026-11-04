@@ -55,6 +55,9 @@ class EventType:
     retention_days: int = 90
     source: str = ""                # Trigger واقعی در کد (برایِ ممیزی/گزارش)
     wired: bool = True
+    #: چرخه‌ی تولیدکننده: production (مسیرِ تولیدیِ فعال) | feature_flagged (فقط وقتی پرچمِ پلتفرم روشن شود) | cron_dependent (نیازمندِ Cron نصب‌شده)
+    #: | dormant (تولیدکننده هست اما هیچ فراخوانِ تولیدی ندارد) | test_only (دکمه‌ی اعلانِ آزمایشی). زنجیره‌ی تولید در ``producers.py`` با AST راستی‌آزمایی می‌شود.
+    lifecycle: str = "production"
 
 
 def _t(*types: EventType) -> dict:
@@ -70,8 +73,8 @@ EVENT_TYPES: dict[str, EventType] = _t(
     EventType("return.requested", "درخواست مرجوعی", "orders", IMPORTANT, permission=A.RETURN_VIEW, link_name="return-detail",
               source="orders.return_service.create_return_request → business_events.return_event(requested)"),
     # ---------------------------------------------------------------- پرداخت و مالی
-    EventType("payment.failed", "پرداخت ناموفق", "finance", NORMAL, permission=A.ORDER_VIEW, link_name="order-detail", groupable=True, retention_days=30,
-              source="orders.payment_service → business_events.payment_result(success=False)"),
+    EventType("payment.failed", "تلاش پرداخت ناموفق", "finance", NORMAL, permission=A.ORDER_VIEW, link_name="order-detail", groupable=True, retention_days=30,
+              source="orders.gateway_payment_service.process_callback_and_verify (تأییدِ server-to-server ناموفق؛ on_commit، dedupe روی PaymentAttempt) + simulate_payment (فقط توسعه)"),
     EventType("payment.suspicious", "پرداخت مشکوک / مغایرت", "finance", CRITICAL, permission=A.REFUND_MANAGE, link_name="payment-reconciliations",
               source="orders.gateway_payment_service → business_events.late_payment"),
     EventType("refund.completed", "بازپرداخت انجام شد", "finance", NORMAL, permission=A.REFUND_VIEW, link_name="order-detail",
@@ -94,8 +97,10 @@ EVENT_TYPES: dict[str, EventType] = _t(
     EventType("staff.access_revoked", "لغو دسترسی یک عضو", "security", IMPORTANT, permission=A.STAFF_MANAGE, link_name="staff-list",
               source="stores.membership_service.revoke_membership"),
     # ---------------------------------------------------------------- اشتراک و حساب
-    EventType("subscription.past_due", "اشتراک معوق شد", "account", CRITICAL, permission=A.SUBSCRIPTION_VIEW, link_name="subscription-overview",
-              source="subscriptions.subscription_service.mark_past_due"),
+    EventType("subscription.grace_period", "مهلت ارفاقی اشتراک شروع شد", "account", IMPORTANT, permission=A.SUBSCRIPTION_VIEW, link_name="subscription-overview",
+              source="subscriptions.subscription_service.enter_grace_period ← billing.dunning_service + evaluate_subscription_states (مسیرِ واقعی)"),
+    EventType("subscription.past_due", "اشتراک معوق شد", "account", CRITICAL, permission=A.SUBSCRIPTION_VIEW, link_name="subscription-overview", lifecycle="dormant", wired=False,
+              source="subscriptions.subscription_service.mark_past_due (حالتِ PAST_DUE؛ هیچ فراخوانِ تولیدیِ فعلی ندارد — dunning از GRACE_PERIOD عبور می‌کند)"),
     EventType("subscription.suspended", "اشتراک تعلیق شد", "account", CRITICAL, permission=A.SUBSCRIPTION_VIEW, link_name="subscription-overview",
               source="subscriptions.subscription_service.suspend_subscription"),
     # ---------------------------------------------------------------- دامنه و زیرساخت
@@ -105,9 +110,9 @@ EVENT_TYPES: dict[str, EventType] = _t(
               source="stores.domain_verification_service.check_dns_verification (ناموفق)"),
     # ---------------------------------------------------------------- یکپارچه‌سازی‌ها
     EventType("integration.sync_failed", "خطا در عملیات خودکار SEO/IndexNow", "integrations", IMPORTANT, permission=A.SETTINGS_MANAGE, link_name="settings",
-              groupable=True, source="core.automation.run (نتیجه‌ی FAILED با کدِ خطا)"),
+              groupable=True, lifecycle="feature_flagged", source="core.automation.run (نتیجه‌ی FAILED با کدِ خطا)"),
     # ---------------------------------------------------------------- سیستمی
-    EventType("system.test", "اعلان آزمایشی", "system", NORMAL, link_name="inbox-home", urgent=True, retention_days=7,
+    EventType("system.test", "اعلان آزمایشی", "system", NORMAL, link_name="inbox-home", urgent=True, retention_days=7, lifecycle="test_only",
               source="inbox_views.send_test (فقط به خودِ درخواست‌دهنده)"),
     # ================================================================ پلتفرم
     EventType("platform.store_created", "فروشگاه جدید ساخته شد", "account", NORMAL, scope=PLATFORM, link_name="stores",
@@ -116,9 +121,9 @@ EVENT_TYPES: dict[str, EventType] = _t(
               source="stores.store_status_service.suspend_store/activate_store"),
     EventType("platform.contact_message", "پیام جدید از فرم تماس", "customers", NORMAL, scope=PLATFORM, link_name="home", groupable=True,
               source="portal.views.contact (ContactMessage)"),
-    EventType("platform.jobs_unhealthy", "هشدار عملیاتی: کارهای زمان‌بندی‌شده", "infra", CRITICAL, scope=PLATFORM, link_name="home",
+    EventType("platform.jobs_unhealthy", "هشدار عملیاتی: کارهای زمان‌بندی‌شده", "infra", CRITICAL, scope=PLATFORM, link_name="home", lifecycle="cron_dependent",
               source="core.management.commands.check_background_jobs (سطح CRITICAL)"),
-    EventType("platform.test", "اعلان آزمایشی پلتفرم", "system", NORMAL, scope=PLATFORM, link_name="inbox-home", urgent=True, retention_days=7,
+    EventType("platform.test", "اعلان آزمایشی پلتفرم", "system", NORMAL, scope=PLATFORM, link_name="inbox-home", urgent=True, retention_days=7, lifecycle="test_only",
               source="inbox_views.send_test"),
 )
 

@@ -238,15 +238,3 @@ class CatalogTruthTests(TestCase):
         self.assertFalse(set(R.PLANNED) & set(R.EVENT_TYPES))
         for key in R.PLANNED:
             self.assertFalse(NotificationEvent.objects.filter(type_key=key).exists())
-
-    def test_every_registered_type_is_published_by_some_trigger_in_the_code_base(self):
-        """A registered type nobody publishes would be a fake catalog entry — grep the code for each key (the engine's own tests/registry excluded)."""
-        import pathlib
-        import re
-
-        root = pathlib.Path(__file__).resolve().parents[2]
-        text = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in root.rglob("*.py") if "tests" not in p.parts and "migrations" not in p.parts and p.name != "registry.py")
-        for key in R.EVENT_TYPES:
-            if key in ("system.test", "platform.test"):
-                continue
-            self.assertTrue(re.search(re.escape('"' + key + '"'), text) or key in {"subscription.past_due", "subscription.suspended"}, key)

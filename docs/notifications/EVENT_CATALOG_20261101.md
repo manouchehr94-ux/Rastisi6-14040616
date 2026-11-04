@@ -8,7 +8,7 @@
 | `order.created` | سفارش جدید | سفارش‌ها | فروشگاه | معمولی | ORDERS | فوری | خیر | orders.order_service.place_order → business_events.order_created | `order:<pk>` |
 | `order.canceled` | لغو سفارش | سفارش‌ها | فروشگاه | مهم | ORDERS | — | خیر | orders.order_service.change_status(canceled) → business_events.order_status_changed | `order-canceled:<pk>` |
 | `return.requested` | درخواست مرجوعی | سفارش‌ها | فروشگاه | مهم | RETURN_VIEW | — | خیر | orders.return_service.create_return_request → business_events.return_event(requested) | `return:<pk>` |
-| `payment.failed` | پرداخت ناموفق | پرداخت و امور مالی | فروشگاه | معمولی | ORDERS | — | بله | orders.payment_service → business_events.payment_result(success=False) | گروه `pay-failed:<store>` (۲۴ ساعت) |
+| `payment.failed` | پرداخت ناموفق | پرداخت و امور مالی | فروشگاه | معمولی | ORDERS | — | بله | orders.gateway_payment_service.process_callback_and_verify (فقط شکستِ قطعیِ PaymentAttempt: `fail(..., definitive=True)`، پس از commit) → admin_events.payment_attempt_failed؛ شبیه‌ساز: payment_service.simulate_payment | `payattempt:<public_id>` (هر تلاش یک بار) + گروه `pay-failed:order:<pk>` |
 | `payment.suspicious` | پرداخت مشکوک / مغایرت | پرداخت و امور مالی | فروشگاه | بحرانی | REFUND_MANAGE | — | خیر | orders.gateway_payment_service → business_events.late_payment | `reconcile:<pk>[:confirmed]` |
 | `refund.completed` | بازپرداخت انجام شد | پرداخت و امور مالی | فروشگاه | معمولی | REFUND_VIEW | — | خیر | orders.refund_service → business_events.refund_completed | `refund:<pk>` |
 | `payment.card_transfer_submitted` | رسید کارت‌به‌کارت منتظر بررسی | پرداخت و امور مالی | فروشگاه | مهم | ORDER_REVIEW_CARD_TRANSFER | فوری | خیر | orders.card_transfer_service.submit | `c2c:<pk>` |
@@ -18,8 +18,9 @@
 | `review.pending` | نظر جدید نیازمند بررسی | مشتریان و پیام‌ها | فروشگاه | معمولی | CONTENT | — | بله | catalog.views.product_review_submit → business_events.review_created | گروه `reviews:<store>` |
 | `staff.role_changed` | تغییر نقش یا سطح دسترسی | امنیت | فروشگاه | مهم | MEMBERSHIP | — | خیر | stores.membership_service.change_role | `role:<pk>:<role>:<دقیقه>` |
 | `staff.access_revoked` | لغو دسترسی یک عضو | امنیت | فروشگاه | مهم | MEMBERSHIP | — | خیر | stores.membership_service.revoke_membership | `revoked:<pk>` |
-| `subscription.past_due` | اشتراک معوق شد | اشتراک و حساب | فروشگاه | بحرانی | SUBSCRIPTION_VIEW | — | خیر | subscriptions.subscription_service.mark_past_due | `sub:<pk>:past_due:<روز>` |
-| `subscription.suspended` | اشتراک تعلیق شد | اشتراک و حساب | فروشگاه | بحرانی | SUBSCRIPTION_VIEW | — | خیر | subscriptions.subscription_service.suspend_subscription | `sub:<pk>:suspended:<روز>` |
+| `subscription.grace_period` | اشتراک وارد مهلت پرداخت شد | اشتراک و حساب | فروشگاه | مهم | SUBSCRIPTION_VIEW | — | خیر | subscriptions.subscription_service.enter_grace_period (فقط در گذارِ واقعیِ وضعیت؛ مسیرِ Dunning: `_process_invoice`) | `sub:<pk>:grace_period:<شناسه‌ی آخرین SubscriptionEvent>` |
+| `subscription.past_due` | اشتراک معوق شد (**خفته** — `lifecycle=dormant`، `wired=False`) | اشتراک و حساب | فروشگاه | بحرانی | SUBSCRIPTION_VIEW | — | خیر | subscriptions.subscription_service.mark_past_due — در جریانِ تولیدی هیچ مسیرِ فراخوانی ندارد؛ فقط تعریف و تست | `sub:<pk>:past_due:<شناسه‌ی آخرین SubscriptionEvent>` |
+| `subscription.suspended` | اشتراک تعلیق شد | اشتراک و حساب | فروشگاه | بحرانی | SUBSCRIPTION_VIEW | — | خیر | subscriptions.subscription_service.suspend_subscription (فقط در گذارِ واقعی) | `sub:<pk>:suspended:<شناسه‌ی آخرین SubscriptionEvent>` |
 | `domain.verified` | دامنه تأیید شد | دامنه و زیرساخت | فروشگاه | معمولی | DOMAIN_MANAGE | — | خیر | stores.domain_verification_service.check_dns_verification (موفق) | `domain-ok:<pk>` |
 | `domain.verification_failed` | تأیید دامنه ناموفق بود | دامنه و زیرساخت | فروشگاه | مهم | DOMAIN_MANAGE | — | بله | stores.domain_verification_service.check_dns_verification (ناموفق) | گروه `domain:<pk>` |
 | `integration.sync_failed` | خطا در عملیات خودکار SEO/IndexNow | یکپارچه‌سازی‌ها | فروشگاه | مهم | SETTINGS | — | بله | core.automation.run (نتیجه‌ی FAILED با کدِ خطا) | گروه `automation:<store>:<operation>` |
@@ -49,3 +50,9 @@
 | `integration.token_expired` | انقضای دسترسی سرویس — هیچ Integrationی OAuth/Token منقضی‌شونده ندارد (فقط ID). |
 | `integration.torob_readiness` | آمادگی کالا برای ترب — فقط محاسبهٔ نمایشی در صفحه است؛ رویدادِ زمان‌بندی‌شده ندارد. |
 | `platform.subscription_event` | رخدادهای اشتراکِ مؤثر بر پلتفرم — ``process_subscription_dunning`` خروجیِ رویداد نمی‌دهد (فقط شمارنده). |
+
+
+## کلاس‌های چرخه‌ی حیات (`EventType.lifecycle`) و صحتِ رجیستری (۱۴۰۵/۰۸/۱۲)
+`production` = تولیدکننده‌ی واقعی در مسیر تولیدی؛ `feature_flagged` / `cron_dependent` = تولیدکننده هست ولی پشتِ پرچم/Cron است؛ `dormant` = ثبت‌شده و دارای تابع، **بدونِ** فراخوانِ تولیدی؛ `test_only` = فقط اعلان آزمایشی؛ `planned` = در `PLANNED` (ثبت‌نشده). کلیدهای بیرونی (`key`) بدونِ تغییر و سازگارِ عقب‌رو هستند. درستیِ هر ادعا را `apps/notifications/producers.py` (جدولِ زنجیره‌ی فراخوانی) و `test_producer_wiring` با تحلیلِ AST می‌سنجد، نه جست‌وجوی رشته.
+
+`payment.refund_failed` همچنان **PLANNED** است: نه Orders `record_refund_result` (بدونِ فراخوانِ تولیدی؛ بازپرداختِ GATEWAY رد می‌شود) و نه Billing `SubscriptionRefund` (ارائه‌دهنده‌ها هرگز `FAILED` تعیین نمی‌کنند) تولیدکننده‌ی قطعیِ شکست ندارند. وابستگی: یک قراردادِ قطعیِ شکست در سرویسِ بازپرداخت (تغییر ماشینِ حالتِ مالی ← نیازمندِ تأییدِ مالک). یک تستِ نگهبان تضمین می‌کند هیچ کدِ تولیدی `Refund.status=FAILED` را ننویسد.
