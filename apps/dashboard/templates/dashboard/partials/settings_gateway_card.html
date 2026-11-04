@@ -7,8 +7,11 @@
       <span class="au-acc__text">
         <span class="au-acc__title">{{ gw.label }}
           {% if gw.is_active %}<span class="au-badge au-badge--ok" data-testid="gw-status">فعال</span>
+          {% elif gw.documentation_blocked %}<span class="au-badge au-badge--danger" data-testid="gw-status">مسدود به‌دلیل مستندات</span>
           {% elif gw.needs_info %}<span class="au-badge au-badge--warn" data-testid="gw-status">نیازمند تکمیل اطلاعات</span>
           {% else %}<span class="au-badge" data-testid="gw-status">غیرفعال</span>{% endif %}
+          {% if gw.category_label and gw.category != "offline" %}<span class="au-badge au-badge--info" data-testid="gw-category">{{ gw.category_label }}</span>{% endif %}
+          {% if gw.readiness_status and gw.category != "offline" %}<span class="au-badge{% if gw.readiness_badge == 'ok' %} au-badge--ok{% elif gw.readiness_badge == 'warn' %} au-badge--warn{% elif gw.readiness_badge == 'err' %} au-badge--danger{% endif %}" data-testid="gw-readiness" data-readiness="{{ gw.readiness_status }}">{{ gw.readiness_label }}</span>{% endif %}
         </span>
         <span class="au-acc__desc">{% if gw.code == "zibal" %}پرداخت آنلاین با درگاه زیبال{% elif gw.code == "cod" %}مشتری هنگام تحویل سفارش پرداخت می‌کند{% elif gw.code == "card_to_card" %}واریز به کارت فروشگاه؛ پس از تأیید شما پرداخت‌شده می‌شود{% else %}{{ gw.label }}{% endif %}</span>
       </span>
@@ -16,6 +19,7 @@
     </button>
     <div class="au-acc__ctrl">
       <button type="button" class="au-toggle" role="switch" aria-checked="{{ gw.is_active|yesno:'true,false' }}" aria-label="فعال‌سازی {{ gw.label }}" data-testid="gw-toggle"
+              {% if gw.documentation_blocked and not gw.is_active %}aria-disabled="true" title="این درگاه به‌دلیلِ تأییدنشدنِ قرارداد/مستنداتِ رسمی قابلِ فعال‌سازی نیست"{% endif %}
               hx-post="{% url 'dashboard:settings-gateway-config-toggle' gw.code %}" hx-target="#gw-{{ gw.code }}" hx-swap="outerHTML"
               hx-vals='js:{open: document.getElementById("gw-{{ gw.code }}").classList.contains("is-open") ? "1" : ""}'>
         <span class="au-toggle__track" aria-hidden="true"></span>
@@ -25,6 +29,8 @@
   </div>
 
   <div class="au-acc__panel" id="gw-panel-{{ gw.code }}"{% if not gw.open %} hidden{% endif %}>
+    {% if gw.documentation_blocked %}<div class="au-note au-note--danger" role="note" data-testid="gw-doc-blocked">این درگاه هنوز قابلِ فعال‌سازی برای پرداختِ واقعی نیست: قراردادِ رسمیِ API آن تأیید نشده است. تا آن زمان در تسویه‌حسابِ مشتری نمایش داده نمی‌شود.</div>{% endif %}
+    {% if gw.onboarding_help %}<div class="au-note" data-testid="gw-onboarding">{{ gw.onboarding_help }}</div>{% endif %}
     {% if gw.needs_info and not gw.is_active %}<div class="au-note au-note--warn">این روش پرداخت تا کامل‌شدن اطلاعات زیر فعال نمی‌شود.</div>{% endif %}
     {% if gw.form_error %}<div class="au-note au-note--danger" role="alert">{{ gw.form_error }}</div>{% endif %}
     {% if gw.manual %}
@@ -43,7 +49,7 @@
           <input class="au-input" id="gw-{{ gw.code }}-order" type="number" name="display_order" value="{{ gw.display_order }}" min="0">
         </div>
       </div>
-      {% if gw.is_online %}
+      {% if gw.is_online and gw.supports_sandbox %}
       <label class="au-switch"><input type="checkbox" name="is_sandbox" {% if gw.is_sandbox %}checked{% endif %}><span class="au-switch__track"></span><span class="au-switch__text" data-on="روشن" data-off="خاموش"></span><span class="au-switch__label">حالت آزمایشی (Sandbox)<small>پرداختِ واقعی انجام نمی‌شود.</small></span></label>
       {% endif %}
       {% for field in gw.credential_fields %}

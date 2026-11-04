@@ -206,3 +206,130 @@ class GatewayConfigAdminTests(TestCase):
         self.client.login(username="admin_gw", password="pass123")
         response = self.client.get("/admin-portal/settings/gateway-config/zibal/save/")
         self.assertEqual(response.status_code, 405)
+
+
+# ---------------------------------------------------------------------------
+# FEAT-005: all providers render with readiness / category; blocked ones can
+# not be activated for real checkout.
+# ---------------------------------------------------------------------------
+
+
+class GatewayConfigAllProvidersAdminTests(TestCase):
+    def setUp(self):
+        reset_fernet()
+        self.store = _akhlaghi()
+        self.admin_user = User.objects.create_user(
+            username="admin_all", password="pass123", is_staff=True
+        )
+        StoreMembership.objects.create(
+            store=self.store, user=self.admin_user, role=StoreMembership.Role.OWNER,
+            status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now(),
+        )
+
+    def tearDown(self):
+        reset_fernet()
+
+    def test_context_lists_every_registered_provider(self):
+        from apps.dashboard.services.settings_admin_service import gateway_configs_context
+        from apps.orders.gateways.registry import registered_codes
+
+        rows = gateway_configs_context(store=self.store)
+        codes = {r["code"] for r in rows}
+        self.assertEqual(codes, set(registered_codes()))
+
+    def test_context_includes_readiness_and_category(self):
+        from apps.dashboard.services.settings_admin_service import gateway_configs_context
+
+        rows = {r["code"]: r for r in gateway_configs_context(store=self.store)}
+        # Documentation-blocked PSP skeleton
+        self.assertEqual(rows["mellat"]["readiness_status"], "documentation_blocked")
+        self.assertEqual(rows["mellat"]["category"], "psp")
+        self.assertEqual(rows["mellat"]["readiness_badge"], "err")
+        # BNPL real adapter (implemented + contract-tested; no creds yet ->
+        # derives not_configured, NOT documentation_blocked).
+        self.assertEqual(rows["snappay"]["category"], "bnpl")
+        self.assertEqual(rows["snappay"]["readiness_status"], "not_configured")
+        # Offline
+        self.assertEqual(rows["cod"]["category"], "offline")
+        # Ready online adapter (no config yet -> not configured)
+        self.assertEqual(rows["zibal"]["readiness_status"], "not_configured")
+
+    def test_sandbox_toggle_only_where_supported(self):
+        from apps.dashboard.services.settings_admin_service import gateway_configs_context
+
+        rows = {r["code"]: r for r in gateway_configs_context(store=self.store)}
+        self.assertTrue(rows["zibal"]["supports_sandbox"])     # zibal has a real sandbox
+        self.assertFalse(rows["zarinpal"]["supports_sandbox"])  # no verified sandbox host
+        self.assertFalse(rows["cod"]["supports_sandbox"])       # offline
+        self.assertFalse(rows["mellat"]["supports_sandbox"])    # documentation-blocked
+
+    def test_settings_page_renders_all_providers(self):
+        self.client.login(username="admin_all", password="pass123")
+        response = self.client.get("/admin-portal/settings/?section=payment-config")
+        self.assertEqual(response.status_code, 200)
+        # Persian provider labels present for a spread of categories.
+        self.assertContains(response, "زیبال")
+        self.assertContains(response, "اسنپ‌پی")
+        self.assertContains(response, "بانک ملت")
+        # Readiness badge label appears.
+        self.assertContains(response, "مسدود به‌دلیل مستندات")
+
+    def test_save_can_not_activate_documentation_blocked_provider(self):
+        self.client.login(username="admin_all", password="pass123")
+        response = self.client.post(
+            "/admin-portal/settings/gateway-config/mellat/save/",
+            {
+                "display_order": "0",
+                "credential_terminal_id": "123",
+                "is_active": "on",  # trying to activate a blocked provider
+            },
+        )
+        self.assertEqual(response.status_code, 200)            # the canonical accordion card is re-rendered with the reason
+        self.assertContains(response, "قرارداد رسمی")
+        config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="mellat")
+        self.assertFalse(config.is_active)
+
+    def test_toggle_can_not_activate_documentation_blocked_provider(self):
+        self.client.login(username="admin_all", password="pass123")
+        PaymentGatewayConfig.objects.create(
+            store=self.store, gateway_code="saman", is_active=False,
+        )
+        response = self.client.post(
+            "/admin-portal/settings/gateway-config/saman/toggle/",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "gw-doc-blocked")         # visible «documentation blocked» note on the card
+        self.assertIn("err", response["HX-Trigger"])
+        config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="saman")
+        self.assertFalse(config.is_active)
+
+    def test_save_zarinpal_credentials_stored_encrypted(self):
+        self.client.login(username="admin_all", password="pass123")
+        secret = "m" * 36
+        response = self.client.post(
+            "/admin-portal/settings/gateway-config/zarinpal/save/",
+            {
+                "display_order": "1",
+                "credential_merchant_id": secret,
+                "is_active": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        config = PaymentGatewayConfig.objects.get(store=self.store, gateway_code="zarinpal")
+        # Stored value is encrypted, not plaintext.
+        self.assertNotIn(secret, config.encrypted_credentials)
+        self.assertEqual(config.get_credentials()["merchant_id"], secret)
+        # Zarinpal is a verified online adapter -> can be activated.
+        self.assertTrue(config.is_active)
+        self.assertNotContains(response, secret)               # the secret is never echoed back
+
+    def test_plaintext_secret_never_rendered_for_any_provider(self):
+        self.client.login(username="admin_all", password="pass123")
+        config = PaymentGatewayConfig.objects.create(
+            store=self.store, gateway_code="zarinpal", is_active=True,
+        )
+        config.set_credentials({"merchant_id": "SECRET-ZP-MERCHANT-ID-DO-NOT-LEAK-0001"})
+        config.save()
+        response = self.client.get("/admin-portal/settings/?section=payment-config")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "SECRET-ZP-MERCHANT-ID-DO-NOT-LEAK-0001")

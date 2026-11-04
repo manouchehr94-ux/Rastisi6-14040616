@@ -126,13 +126,47 @@ MANUAL_GATEWAY_SLUGS = ("card_to_card",)
 
 
 def active_payment_gateways(*, store):
-    """درگاه‌هایِ فعالِ Store؛ روشِ کارت‌به‌کارت فقط وقتی نمایش داده می‌شود که پیکربندیِ واقعیِ آن فعال و کامل باشد."""
+    """روش‌های پرداختِ قابل‌نمایش در تسویه‌حسابِ این فروشگاه.
+
+    مبنا همان رکوردهای legacy ``PaymentGateway`` فعالِ همین ``store`` است
+    (سازگاریِ عقب‌رو با جریانِ موجودِ تسویه‌حساب/ثبتِ سفارش). روی آن یک فیلترِ
+    آگاه از آمادگی اعمال می‌شود: اگر برای کدِ یک درگاه، یک
+    ``PaymentGatewayConfig`` در همین فروشگاه وجود داشته باشد اما برای
+    پرداختِ واقعی انتخاب‌پذیر نباشد (``is_selectable_at_checkout`` نادرست —
+    مثلاً غیرفعال، مسدودِ مستندات، یا ناقص)، آن روش از فهرست حذف می‌شود.
+    درگاه‌هایی که هیچ پیکربندیِ متناظری ندارند (مسیرِ legacy/شبیه‌سازی) دست
+    نمی‌خورند. ایزوله‌سازیِ tenant حفظ می‌شود: تنها پیکربندی‌های همین
+    ``store`` دیده می‌شوند، پس پیکربندیِ فروشگاهِ دیگر هرگز یک روش را
+    انتخاب‌پذیر/غیرانتخاب‌پذیر نمی‌کند.
+
+    روشِ کارت‌به‌کارت (گردشِ کاریِ کانونیِ ``CardTransferSubmission``) علاوه بر این فقط وقتی نمایش داده می‌شود که پیکربندیِ واقعیِ آن
+    فعال و کامل باشد (``card_transfer_service.active_config``)."""
+    from apps.orders.models import PaymentGatewayConfig
+
     from apps.orders.services import card_transfer_service
 
     gateways = list(PaymentGateway.objects.filter(is_active=True, store=store))
     if any(g.slug in MANUAL_GATEWAY_SLUGS for g in gateways) and card_transfer_service.active_config(store) is None:
         gateways = [g for g in gateways if g.slug not in MANUAL_GATEWAY_SLUGS]
-    return gateways
+    if not gateways:
+        return gateways
+
+    configs = {
+        c.gateway_code: c
+        for c in PaymentGatewayConfig.objects.filter(store=store)
+    }
+    if not configs:
+        return gateways
+
+    result = []
+    for gateway in gateways:
+        config = configs.get(gateway.slug)
+        # بدونِ پیکربندیِ متناظر ⇒ رفتارِ legacy حفظ می‌شود (نمایش داده شود).
+        # با پیکربندیِ متناظر ⇒ فقط وقتی نمایش داده می‌شود که برای
+        # پرداختِ واقعی انتخاب‌پذیر باشد.
+        if config is None or config.is_selectable_at_checkout:
+            result.append(gateway)
+    return result
 
 
 def get_selected_shipping_method(request):
@@ -173,7 +207,9 @@ def get_selected_payment_gateway(request):
 
 def set_payment_gateway(request, gateway_id) -> None:
     """یک POST دستکاری‌شده هرگز نمی‌تواند درگاه پرداخت متعلق به Store دیگری
-    را انتخاب کند — استخر گزینه‌های مجاز همیشه با ``store`` فعلی فیلتر می‌شود."""
+    یا یک درگاهِ آماده‌نشده/غیرقابلِ‌انتخاب را انتخاب کند — استخر گزینه‌های
+    مجاز همیشه همان فهرستِ آگاه از آمادگیِ ``active_payment_gateways`` است
+    (فیلترشده با ``store`` و ``is_selectable_at_checkout``)."""
     store = resolve_store_for_service(request)
     gateway = next((g for g in active_payment_gateways(store=store) if g.pk == gateway_id), None)
     if gateway:

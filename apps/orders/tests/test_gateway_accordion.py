@@ -31,11 +31,13 @@ class GatewayAccordionTests(TestCase):
 
     def test_page_has_one_closed_accordion_per_gateway_with_accessible_switches(self):
         page = self.client.get("/admin-portal/settings/?section=payment-config")
-        for code in ("zibal", "cod", "card_to_card"):
+        from apps.orders.gateways import GATEWAY_CHOICES
+
+        for code, _label in GATEWAY_CHOICES:                       # the whole catalog: 10 online providers + COD + card-to-card
             self.assertContains(page, f'id="gw-{code}"')
         html = page.content.decode()
         self.assertNotIn("au-acc is-open", html)
-        self.assertEqual(html.count('aria-expanded="false"'), 3)
+        self.assertEqual(html.count('aria-expanded="false"'), len(GATEWAY_CHOICES))
         self.assertIn('role="switch"', html)
         self.assertIn('aria-checked="false"', html)
 

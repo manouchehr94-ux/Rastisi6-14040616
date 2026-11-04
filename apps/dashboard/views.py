@@ -6142,6 +6142,13 @@ def settings_gateway_config_save(request, gateway_code):
         if problems and wants_active:
             is_active = False   # cannot be activated with invalid / incomplete credentials
 
+    if wants_active and getattr(adapter, "documentation_blocked", False):
+        # A provider whose official contract is unverified is never activatable — say so explicitly (not only «incomplete fields»).
+        is_active = False
+        config.is_active = True  # evaluate readiness as if active (DOCUMENTATION_BLOCKED takes precedence)
+        field_errors[""] = settings_admin_service.gateway_activation_error(config) or field_errors.get("", "")
+        config.is_active = False
+
     config.display_title = display_title
     config.display_order = display_order
     config.is_sandbox = is_sandbox
@@ -6156,6 +6163,18 @@ def settings_gateway_config_save(request, gateway_code):
             config.set_credentials(credentials)
         except CredentialEncryptionError:
             field_errors[""] = "خطا در رمزنگاری اعتبارنامه. لطفاً دوباره تلاش کنید."
+            is_active = False
+
+    # Readiness enforcement (single source of truth, no per-gateway conditionals):
+    # a DOCUMENTATION_BLOCKED / NEEDS_CREDENTIALS / NOT_CONFIGURED / UNAVAILABLE /
+    # ERROR provider must NOT be activatable for real (non-sandbox) checkout. The
+    # check runs against the config *as it will be saved* (credentials + sandbox
+    # already applied above).
+    if is_active:
+        config.is_active = True  # evaluate readiness as if active
+        activation_error = settings_admin_service.gateway_activation_error(config)
+        if activation_error:
+            field_errors[""] = activation_error
             is_active = False
 
     config.is_active = is_active
@@ -6203,7 +6222,14 @@ def settings_gateway_config_toggle(request, gateway_code):
                 request, store, gateway_code, toast=f"{adapter.display_name} فعال نشد: ابتدا اطلاعات ناقص را کامل کنید.",
                 toast_type="err", errors=problems, open_card=True,
             )
-    config.is_active = True
+    # Readiness is the single source of truth: a DOCUMENTATION_BLOCKED / not-ready provider is never activatable for real checkout.
+    config.is_active = True  # evaluate readiness as if active
+    activation_error = settings_admin_service.gateway_activation_error(config)
+    if activation_error:
+        config.is_active = False
+        return _gateway_card_response(
+            request, store, gateway_code, toast=activation_error, toast_type="err", errors={"": activation_error}, open_card=True,
+        )
     config.save(update_fields=["is_active", "updated_at"])
     _sync_legacy_gateway_row(store, config, adapter)
     return _gateway_card_response(request, store, gateway_code, toast=f"{adapter.display_name} فعال شد", toast_type="ok", open_card=keep_open)
