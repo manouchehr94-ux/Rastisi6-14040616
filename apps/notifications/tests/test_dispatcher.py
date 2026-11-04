@@ -26,6 +26,9 @@ S = NotificationOutbox.Status
 class Base(TestCase):
     def setUp(self):
         self.store = Store.objects.get(slug="akhlaghi")
+        from apps.notifications.tests.helpers import give_active_sender
+
+        give_active_sender(self.store, "info@akhlaghi-example.test")
         user = User.objects.create_user(username="09120001111", password="x12345678")
         self.customer = Customer.objects.create(
             user=user, full_name="سارا", phone="09120001111", email="sara@example.com",
@@ -131,7 +134,9 @@ class DispatchTests(Base):
         deliver_pending()
         by["sms"].refresh_from_db()
         self.assertEqual(by["sms"].status, S.SKIPPED)  # never delivered
-        self.assertEqual(len(mail.outbox), 1)
+        from apps.notifications.mail.fake import FakeTransport
+
+        self.assertEqual(len(FakeTransport.sent), 1)
 
     def test_transactional_ignores_promotional_consent(self):
         self.customer.accepts_promotional_sms = False
@@ -228,17 +233,21 @@ class DeliveryTests(Base):
     def test_email_delivery_is_rtl_html_with_store_name(self):
         self._row()
         deliver_pending()
-        msg = mail.outbox[0]
-        html = msg.alternatives[0][0]
-        self.assertIn('dir="rtl"', html)
-        self.assertIn(self.store.name, html)
-        self.assertEqual(msg.body, "متن")
+        from apps.notifications.mail.fake import FakeTransport
+
+        msg = FakeTransport.sent[0]["message"]
+        self.assertIn('dir="rtl"', msg.html_body)
+        self.assertIn(self.store.name, msg.html_body)
+        self.assertEqual(msg.text_body, "متن")
+        self.assertEqual(msg.from_address, "info@akhlaghi-example.test")
 
     def test_html_in_body_is_escaped(self):
         NotificationOutbox.objects.create(channel="email", store=self.store, subject="s", body="<script>x</script>",
                                           recipient_email="a@example.com")
         deliver_pending()
-        self.assertNotIn("<script>", mail.outbox[0].alternatives[0][0])
+        from apps.notifications.mail.fake import FakeTransport
+
+        self.assertNotIn("<script>", FakeTransport.sent[0]["message"].html_body)
 
     def test_sms_provider_recorded(self):
         row = self._row("sms")

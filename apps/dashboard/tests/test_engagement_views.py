@@ -245,13 +245,34 @@ class NotificationAdminTests(CouponViewsTestCase):
         self.assertEqual(self.client.get(reverse("dashboard:notification-template-edit", args=["no.such"])).status_code, 404)
 
     def test_test_send_email_delivers_and_marks_row(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        from apps.notifications.tests.helpers import give_active_sender
+        from apps.notifications.mail.fake import FakeTransport
+
+        give_active_sender(self.store)
         url = reverse("dashboard:notification-template-test", args=["order.created"])
         r = self.client.post(url, {"channel": "email", "recipient": "qa@example.com"})
         self.assertEqual(r.status_code, 302)
         row = NotificationOutbox.objects.get(is_test=True)
         self.assertEqual(row.status, NotificationOutbox.Status.SENT)
-        self.assertEqual([m.to for m in mail.outbox], [["qa@example.com"]])
-        self.assertIn("DM-12345", mail.outbox[0].body)
+        self.assertEqual([m["message"].to_address for m in FakeTransport.sent], ["qa@example.com"])
+        self.assertIn("DM-12345", FakeTransport.sent[0]["message"].text_body)
+        self.assertEqual(len(mail.outbox), 0)  # never via the shared Django sender
+
+    def test_test_send_email_is_held_without_an_active_sender(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        from apps.notifications.mail.fake import FakeTransport
+
+        FakeTransport.reset()
+        url = reverse("dashboard:notification-template-test", args=["order.created"])
+        self.client.post(url, {"channel": "email", "recipient": "qa@example.com"})
+        row = NotificationOutbox.objects.get(is_test=True)
+        self.assertEqual((row.status, row.last_error), ("pending", "sender_not_active"))
+        self.assertEqual((FakeTransport.sent, len(mail.outbox)), ([], 0))  # no shared-domain fallback
 
     def test_test_send_invalid_recipient_and_rate_limit(self):
         url = reverse("dashboard:notification-template-test", args=["coupon.issued"])

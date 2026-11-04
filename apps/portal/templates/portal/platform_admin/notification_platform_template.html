@@ -1,0 +1,51 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}{{ event.label }} | قالب پیش‌فرض پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead"><div><h1>{{ event.label }}</h1><p dir="ltr">{{ event.key }}</p></div><a class="pa-btn" href="{% url 'portal_platform_admin:notification-catalog' %}">بازگشت</a></div>
+<div class="pa-card" style="padding:14px;margin-bottom:12px"><b>متغیرهای مجاز:</b>
+  {% for name, label in variables %}<code dir="ltr" title="{{ label }}">{{ '{' }}{{ name }}{{ '}' }}</code> {% endfor %}
+  {% if required_variables %}<div class="pa-help">متغیرهای ضروری (حذف‌شدنی نیستند): {% for v in required_variables %}<code dir="ltr">{{ '{' }}{{ v }}{{ '}' }}</code> {% endfor %}</div>{% endif %}
+  {% if event.category == 'security' %}<div class="pa-help">اعلانِ امنیتی همیشه فعال است و توسط پلتفرم یا فروشگاه خاموش نمی‌شود.</div>{% endif %}
+</div>
+<form method="post" class="pa-card" style="padding:14px">
+  {% csrf_token %}
+  <h3>📧 ایمیل <small>(منبع: {{ templates.email.source }}{% if templates.email.version %}، نسخه {{ templates.email.version }}{% endif %})</small></h3>
+  <label><input type="checkbox" name="email_enabled" {% if templates.email.enabled %}checked{% endif %} {% if event.category == 'security' %}disabled{% endif %}> فعالِ پیش‌فرض</label>
+  <label><input type="checkbox" name="email_locked" {% if templates.email.locked %}checked{% endif %} {% if event.sender == 'platform' %}disabled{% endif %}> قفل برای فروشگاه‌ها (بازنویسی ممنوع)</label>
+  <input name="email_subject" value="{{ templates.email.subject }}" placeholder="موضوع" style="width:100%;margin-top:6px" aria-label="موضوع ایمیل">
+  <textarea name="email_body" rows="6" style="width:100%;margin-top:6px" aria-label="متن ساده ایمیل">{{ templates.email.body }}</textarea>
+  <textarea name="email_html" rows="5" dir="ltr" style="width:100%;margin-top:6px;font-family:monospace" aria-label="HTML ایمیل">{{ templates.email.body_html }}</textarea>
+  {% if errors.email %}<div style="color:#b91c1c">{{ errors.email }}</div>{% endif %}
+  <div style="margin-top:6px"><button type="button" class="pa-btn pa-small" hx-post="{% url 'portal_platform_admin:notification-platform-template-preview' event.key %}" hx-include="[name=email_subject],[name=email_body],[name=email_html],[name=csrfmiddlewaretoken]" hx-vals='{"channel":"email"}' hx-target="#pv-email">پیش‌نمایش</button>
+  {% if templates.email.source == 'platform' %}<button type="submit" name="action" value="reset" class="pa-btn pa-small" onclick="document.getElementById('reset-ch').value='email'">حذف قالبِ پلتفرم</button>{% endif %}</div>
+  <div id="pv-email"></div>
+
+  {% if not event.legacy_sms_event and not event.platform_sms_event %}
+  <h3 style="margin-top:18px">📱 پیامک <small>(منبع: {{ templates.sms.source }})</small></h3>
+  <label><input type="checkbox" name="sms_enabled" {% if templates.sms.enabled %}checked{% endif %} {% if event.category == 'security' %}disabled{% endif %}> فعالِ پیش‌فرض</label>
+  <label><input type="checkbox" name="sms_locked" {% if templates.sms.locked %}checked{% endif %}> قفل برای فروشگاه‌ها</label>
+  <textarea name="sms_body" rows="3" style="width:100%;margin-top:6px" aria-label="متن پیامک">{{ templates.sms.body }}</textarea>
+  {% if errors.sms %}<div style="color:#b91c1c">{{ errors.sms }}</div>{% endif %}
+  {% else %}
+  <p class="pa-help" style="margin-top:18px">متنِ پیامکِ این رویداد در بخشِ «پیامک ← قالب‌ها و الگوها» مدیریت می‌شود.</p>
+  {% endif %}
+  <input type="hidden" name="channel" id="reset-ch" value="">
+  <div style="margin-top:12px"><button class="pa-btn" type="submit">ذخیره</button></div>
+</form>
+
+<div class="pa-card" style="padding:14px;margin-top:12px"><h3>ارسالِ آزمایشیِ کنترل‌شده</h3>
+  <form method="post" action="{% url 'portal_platform_admin:notification-platform-template-test' event.key %}">
+    {% csrf_token %}
+    <select name="channel" aria-label="کانال"><option value="email">ایمیل</option></select>
+    <input name="recipient" dir="ltr" placeholder="name@example.com" required aria-label="گیرنده">
+    <input name="store_id" dir="ltr" placeholder="شناسه‌ی فروشگاه (برای رویدادهای فروشگاه‌محور)" aria-label="فروشگاه">
+    <button class="pa-btn" type="submit">ارسال آزمایشی</button>
+  </form>
+  <div class="pa-help">رویدادهای فروشگاه‌محور فقط از فرستنده‌ی فعالِ همان فروشگاه ارسال می‌شوند؛ جایگزین مشترکی وجود ندارد.</div>
+</div>
+
+<div class="pa-card" style="padding:14px;margin-top:12px" id="platform-revisions"><h3>تاریخچه‌ی نسخه‌ها</h3>
+  {% for r in revisions %}<div>{{ r.created_at|jalali_dt }} · {{ r.channel }} · نسخه {{ r.version }} · {{ r.action }}{% if r.actor %} · {{ r.actor.get_username }}{% endif %}</div>{% empty %}<small>—</small>{% endfor %}
+</div>
+{% endblock %}
