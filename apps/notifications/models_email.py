@@ -96,6 +96,11 @@ class EmailSenderIdentity(TimeStampedModel):
     reason_detail = models.CharField(max_length=300, blank=True, default="")
     dns_records = models.JSONField(default=list, blank=True)
     dns_auto_requested = models.BooleanField("درخواستِ ثبتِ خودکارِ DNS ارسال شد (تأییدشده نیست)", default=False)
+    dns_automation_state = models.CharField(
+        "وضعیتِ ثبتِ خودکارِ DNS", max_length=14, blank=True, default="",
+        help_text="requested | not_attempted | failed — «requested» یعنی ناحیه‌ی مجاز درخواست را پذیرفت، نه اینکه تأیید شده باشد.")
+    dns_automation_code = models.CharField("کدِ نتیجه‌ی ثبتِ خودکارِ DNS", max_length=30, blank=True, default="")
+    dns_automation_detail = models.CharField("جزئیاتِ فنی (بدونِ اطلاعاتِ محرمانه)", max_length=200, blank=True, default="")
     platform_disabled = models.BooleanField("غیرفعال‌سازی توسطِ پلتفرم", default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
     last_checked_at = models.DateTimeField(null=True, blank=True)

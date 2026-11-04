@@ -10,7 +10,7 @@ from apps.core.services.audit_service import record_audit_event
 from apps.notifications import events as notif_events
 from apps.notifications.mail import provisioning_service
 from apps.notifications.services import template_service
-from apps.stores.authorization import SETTINGS_MANAGE
+from apps.stores.authorization import SETTINGS_MANAGE, SMS_SETTINGS_MANAGE, membership_has_permission
 from apps.stores.models import StoreDomain
 
 from .decorators import permission_required, staff_required
@@ -50,6 +50,7 @@ def notification_sender_retry(request):
 @permission_required(SETTINGS_MANAGE)
 def notification_channels(request):
     store = request.store
+    can_sms = membership_has_permission(request.store_membership, SMS_SETTINGS_MANAGE)
     if request.method == "POST":
         errors = 0
         for key, event in notif_events.EVENTS.items():
@@ -59,6 +60,9 @@ def notification_channels(request):
                 field = f"{key}__{channel}"
                 if f"seen__{field}" not in request.POST:
                     continue  # this switch was not rendered as editable for this user
+                if channel == "sms" and event.legacy_sms_event and not can_sms:
+                    errors += 1  # legacy SMS needs the SMS-settings permission even if a forged field is posted
+                    continue
                 wanted = request.POST.get(field) == "on"
                 current = template_service.get_template(store, key, channel)
                 if wanted == current["enabled"]:
@@ -82,9 +86,10 @@ def notification_channels(request):
         for channel in notif_events.CHANNELS:
             tpl = template_service.get_template(store, key, channel)
             editable = not (
-                template_service._reads_from_sms_template(key, channel)
+                template_service.is_platform_sms(key, channel)
                 or event.category == notif_events.SECURITY
                 or tpl.get("locked")
+                or (channel == "sms" and event.legacy_sms_event and not can_sms)
             )
             cells[channel] = {"enabled": tpl["enabled"], "editable": editable, "source": tpl.get("source", "")}
         rows.append({"event": event, "category": notif_events.CATEGORY_LABELS[event.category], "cells": cells})

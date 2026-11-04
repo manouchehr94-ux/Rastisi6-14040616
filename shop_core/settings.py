@@ -589,7 +589,18 @@ RASTISI_EMAIL_PLATFORM_MINUTE_LIMIT = env_int("RASTISI_EMAIL_PLATFORM_MINUTE_LIM
 # manually retryable and auto-revived on recovery); promotional mail waits up to the PROMOTIONAL limit, then is SKIPPED.
 RASTISI_EMAIL_HOLD_MAX_HOURS = env_int("RASTISI_EMAIL_HOLD_MAX_HOURS", default=72)
 RASTISI_EMAIL_HOLD_MAX_HOURS_PROMOTIONAL = env_int("RASTISI_EMAIL_HOLD_MAX_HOURS_PROMOTIONAL", default=24)
-# Optional dotted path of a DNS provisioner class (see apps.notifications.mail.dns). Empty = manual DNS only.
+# SmsRasti phone-gateway queue: a message older than this is never handed to the device (stale content).
+RASTISI_SMSRASTI_QUEUE_TTL_HOURS = env_int("RASTISI_SMSRASTI_QUEUE_TTL_HOURS", default=72)
+# Automatic DKIM-record provisioning (apps.notifications.mail.dns). RastiSi has NO DNS-write access to merchant domains by
+# default; everything below is empty unless the platform owner explicitly grants it. Either:
+#   (a) RFC 2136 + TSIG against a nameserver authoritative for zones RastiSi controls (all five values + zones), or
+#   (b) RASTISI_EMAIL_DNS_PROVISIONER = dotted path of a custom DnsProvisioner (e.g. a vendor API adapter).
 RASTISI_EMAIL_DNS_PROVISIONER = env_str("RASTISI_EMAIL_DNS_PROVISIONER", "")
+RASTISI_EMAIL_DNS_ZONES = tuple(z.strip().lower() for z in env_str("RASTISI_EMAIL_DNS_ZONES", "").split(",") if z.strip())
+RASTISI_EMAIL_DNS_RFC2136_SERVER = env_str("RASTISI_EMAIL_DNS_RFC2136_SERVER", "")
+RASTISI_EMAIL_DNS_RFC2136_PORT = env_int("RASTISI_EMAIL_DNS_RFC2136_PORT", default=53)
+RASTISI_EMAIL_DNS_RFC2136_KEY_NAME = env_str("RASTISI_EMAIL_DNS_RFC2136_KEY_NAME", "")
+RASTISI_EMAIL_DNS_RFC2136_KEY_SECRET = env_str("RASTISI_EMAIL_DNS_RFC2136_KEY_SECRET", "")   # base64 TSIG secret; env only
+RASTISI_EMAIL_DNS_RFC2136_KEY_ALGORITHM = env_str("RASTISI_EMAIL_DNS_RFC2136_KEY_ALGORITHM", "hmac-sha256")
 
 

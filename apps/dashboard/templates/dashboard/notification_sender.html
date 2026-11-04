@@ -39,16 +39,37 @@
 
 {% if diag.dns_records and diag.status != 'active' %}
 <div class="card" style="margin-bottom:14px"><div class="card-head"><h3>رکوردهایِ DNS که باید اضافه شود</h3></div><div class="card-body">
-  {% if diag.dns_auto_requested %}<p class="badge b-amber" style="white-space:normal" id="dns-auto-note">درخواستِ ثبتِ خودکارِ این رکوردها از طریقِ دسترسیِ مجازِ DNS ارسال شد؛ <b>تا تأییدِ ارائه‌دهنده‌ی ایمیل، موفق فرض نمی‌شود.</b></p>
-  {% else %}<p>این رکوردها را دقیقاً همان‌طور که نوشته شده در بخشِ DNS دامنه‌ی خود (نزد ثبت‌کننده‌ی دامنه) اضافه کنید.</p>{% endif %}
-  <div class="table-wrap"><table id="dns-records">
-    <thead><tr><th>نوع</th><th>نام (Host)</th><th>مقدار (Value)</th><th>کاربرد</th><th>مشاهده‌ی DNS</th></tr></thead>
+  <div id="dns-automation" data-code="{{ diag.dns_automation_code }}" data-state="{{ diag.dns_automation_state }}">
+    {% if diag.dns_automation_state == 'requested' %}
+      <p class="badge b-amber" style="white-space:normal" id="dns-auto-note">{{ diag.dns_automation_reason_fa }} <b>تا تأییدِ ارائه‌دهنده‌ی ایمیل، موفق فرض نمی‌شود.</b></p>
+    {% else %}
+      <p class="badge b-red" style="white-space:normal" id="dns-auto-blocked">{{ diag.dns_automation_reason_fa }}</p>
+    {% endif %}
+    <p id="dns-auto-action"><b>اقدام:</b> {{ diag.dns_automation_action_fa }}</p>
+  </div>
+  <style>
+    #dns-records code{white-space:normal;word-break:break-all;overflow-wrap:anywhere;display:block;direction:ltr;text-align:left}
+    #dns-records td,#dns-records th{vertical-align:top}
+  </style>
+  <div class="table-wrap" style="overflow-x:auto"><table id="dns-records" style="table-layout:fixed;width:100%">
+    <colgroup><col style="width:9%"><col style="width:38%"><col style="width:41%"><col style="width:12%"></colgroup>
+    <thead><tr><th>نوع</th><th>نام (Host) و نامِ نسبی</th><th>مقدار (Value)</th><th>مشاهده‌ی DNS</th></tr></thead>
     <tbody>
     {% for r in diag.dns_records %}
-      <tr><td dir="ltr">{{ r.type }}</td><td dir="ltr" style="word-break:break-all"><code>{{ r.name }}</code></td><td dir="ltr" style="word-break:break-all"><code>{{ r.value }}</code></td><td>{{ r.purpose }}</td><td>{% if r.published is True %}دیده شد{% elif r.published is False %}دیده نشد{% else %}نامشخص{% endif %}</td></tr>
+      <tr>
+        <td dir="ltr">{{ r.type }}</td>
+        <td><code>{{ r.name }}</code><small style="color:var(--muted)">نامِ نسبی:</small><code class="rel">{{ r.relative }}</code></td>
+        <td><code>{{ r.value }}</code></td>
+        <td>{% if r.published is True %}دیده شد{% elif r.published is False %}دیده نشد{% else %}نامشخص{% endif %}</td>
+      </tr>
     {% endfor %}
     </tbody>
   </table></div>
+  {% if diag.dns_automation_state != 'requested' and diag.manual_steps_fa %}
+  <ol id="manual-steps" style="margin-top:10px;padding-inline-start:20px;line-height:2">
+    {% for step in diag.manual_steps_fa %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+  {% endif %}
 </div></div>
 {% endif %}
 

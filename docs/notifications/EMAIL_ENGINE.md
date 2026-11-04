@@ -1,60 +1,141 @@
-# Unified SMS + Email Notification Engine — Phase 1 delivery
+# Unified SMS + Email Notification Engine — implementation report
 
-Branch `kiro/notifications-email-engine-20261104`, base `origin/main` @ `7d3115564569509f1da442fdc4aeacc9f855a81d`.
-No financial-owned file is modified (verified by path audit, see report). Nothing was merged or deployed.
+PR #37, branch `kiro/notifications-email-engine-20261104`, base `origin/main` @ `7d3115564569509f1da442fdc4aeacc9f855a81d`.
+**Not merged, not deployed. No email has been sent through a real provider.** Companion documents:
+[ACTIVATION_CHECKLIST.md](ACTIVATION_CHECKLIST.md) (what is missing for production) and
+[MIGRATION_INTEGRATION.md](MIGRATION_INTEGRATION.md) (collision with the payment-engine branch).
 
-## 1. What already existed on `main` and was REUSED (not rebuilt)
-Event registry (`events.py`), transactional outbox (`NotificationOutbox`, dedupe unique constraint, claim/lock, exponential
-backoff, DEAD state, manual retry), per-store templates (`NotificationTemplate`), consent enforcement, business-event hooks
-(`business_events.py`), legacy-SMS bridge, store UI (list/edit/preview/test/history/retry). This audit corrected an earlier
-assumption that the engine lived only on `gemini-dev`.
-
-## 2. NEW in this change
-| Area | Component |
+## 0. How to read the status words
+| word | meaning |
 |---|---|
-| Provider-independent transport | `mail/base.py`, `mail/fake.py` (deterministic, no network), `mail/ses.py` (SESv2 via boto3, lazy import), `mail/registry.py` |
-| Sender identity (per Store, own domain only) | `EmailSenderIdentity`, `mail/provisioning_service.py`, `mail/dns.py` (authorized auto-DNS interface), `refresh_email_identities` command |
-| Provider events | `EmailProviderEvent`, `EmailSuppression`, `mail/events_service.py`, `mail/sns.py` (SNS signature verification), `webhook_views.py` → `/notifications/email/ses-events/` |
-| Template inheritance | `PlatformNotificationTemplate` (platform default, optional lock) → `NotificationTemplate` (store override) → render; `NotificationTemplateRevision` (versions + audit) |
-| HTML email | `services/html_sanitizer.py` (allowlist), HTML body per template, unified `render_email_document` |
-| Delivery policy | sender gate, hold/recovery/expiry, rate limits, suppression, permanent-vs-transient classification |
-| Platform admin | catalog, platform defaults editor, preview, controlled test-send, sender oversight (enable/disable), delivery/failure/usage, audit; granular permissions |
-| Store admin | sender identity page, channel switches, HTML editor, inheritance badge, revisions, locks |
-| Parity | `parity.py` (computed matrix) + `test_sms_email_parity.py` |
+| **IMPLEMENTED** | the code path exists |
+| **TESTED** | automated tests exercise it — the *kind* of test is always named (unit / fake provider / botocore service-model stub / merged-tree rehearsal) |
+| **LIVE-VERIFIED** | proven against a real external system (AWS, a real DNS server, a real mailbox). **Nothing in this PR is live-verified.** |
 
-## 3. Policy as implemented
-* **Store email is sent ONLY from the Store's own provider-verified custom domain** (`info@<domain>`). There is no
-  fallback sender: `notification_service._store_sender_address` returns `""` unless an `EmailSenderIdentity` is `ACTIVE`.
-* **Website-domain verification and email-sender verification are separate facts.** `StoreDomain.verification_status`
-  (TXT ownership), routing and TLS describe the storefront; `EmailSenderIdentity` (provider DKIM verification) describes
-  sending. Neither implies the other; the Store panel shows both (`#two-verifications`).
-* **ACTIVE only after the provider says so** (`VerifiedForSendingStatus` + DKIM `SUCCESS`). A transient provider blip does
-  not demote an ACTIVE sender until 3 consecutive failures.
-* **Automatic DNS** happens only through a configured `DnsProvisioner` that `controls_zone(domain)`. The result is
-  recorded as `dns_auto_requested` ("requested", never "succeeded"); success is claimed solely when the provider verifies.
-  The panel additionally shows a per-record DNS *observation* (`published`: seen / not seen / unknown). No provisioner is
-  shipped enabled (see §7).
-* **Blocked-mail policy** (sender inactive / rate limit): the row is HELD (`PENDING`, no retry attempt consumed, retried every
-  15 min). Transactional/security mail waits `RASTISI_EMAIL_HOLD_MAX_HOURS` (72h) and then becomes a visible `DEAD` row
-  (`…_expired`) — never silently dropped — which is manually retryable and **auto-revived** (within 7 days) the moment the
-  sender becomes ACTIVE (`release_held`). Promotional mail expires after 24h as `SKIPPED` (visible) and is not revived.
-* **Only email is blocked** when the sender is unavailable; SMS and the business flow are unaffected (tested).
-* Platform→store-admin notices (`platform.email_sender_active/_problem`) use the platform's own sender
-  (`DEFAULT_FROM_EMAIL`), because they must work precisely when the Store's domain is broken. They are locked for stores
-  and never substitute for a Store→customer send.
-* Security-category mail cannot be disabled by a store *or* the platform and keeps protected variables (`required_variables`).
-* OTP: phone-possession proof is never emailed (see matrix).
+## 1. Reused vs new
+Reused from `main` (not rebuilt): event registry, transactional outbox (dedupe constraint, claim/lock, exponential backoff, DEAD
+state, manual retry), per-store templates, consent enforcement, business-event hooks, the legacy-SMS bridge and the store
+list/edit/preview/test/history UI. New: provider-independent mail transport (fake + SES v2), per-store sender identity, DNS
+automation contract, SNS/SES event ingestion + suppression, platform default templates + revisions, HTML email with an allowlist
+sanitizer, **tenant-specific SMS overrides**, **expiry/validity policy**, platform + store admin pages with granular permissions.
 
-## 4. Permissions
-Platform (host-isolated): superuser = all. Team members (`is_staff`) need granular permissions on
-`notifications.PlatformNotificationTemplate`: `view_notification_catalog`, `manage_platform_templates`,
-`view_notification_delivery`, `manage_email_senders`, `send_notification_tests`. Authenticated-but-unauthorized → 403
-(platform-specific 403 page). A team member can sign in to the platform host and lands on the notification catalog; every
-other platform section still requires superuser.
-Store: existing `SETTINGS_MANAGE`; SMS text of legacy events additionally needs `SMS_SETTINGS_MANAGE`.
-Precedence: store override → platform default (unless `locked_for_stores`) → code default. Reset removes the override.
+## 2. Mandatory own-domain sender policy
+* Store email is sent **only** from `info@<the store's own custom domain>` and only while the provider reports that identity
+  verified. There is no shared-domain fallback anywhere (`notification_service._store_sender_address`).
+* **Website-domain verification and email-sender verification are separate facts** (TXT ownership/routing/TLS vs. DKIM at the
+  email provider). The panel shows both (`#two-verifications`); neither implies the other.
+* `platform.email_sender_*` notices are RastiSi's own message *to* the store admin and use the platform sender, so they work exactly
+  when the store's domain is broken. They are locked for stores and never substitute for a store→customer send.
+* If the sender is not ACTIVE: **only email is held**; SMS and the business operation are unaffected.
 
-## 5. SMS ↔ email parity matrix (computed from code by `apps/notifications/parity.py`)
+## 3. Store-level SMS **and** email template management (gap 1)
+Authorized store admins can now edit **both** channels for every event except the deliberately platform-managed ones.
+Resolution order for any channel: **store override → platform default → code default** (`template_service.get_template`).
+
+| aspect | behaviour |
+|---|---|
+| Where a store's SMS text lives | `NotificationTemplate(store, event_key, channel="sms")` — **never** the global `SmsTemplate` |
+| Platform default | the global `SmsTemplate` (text, provider Pattern ids, platform switch) — unchanged, still edited in the platform SMS pages |
+| Platform kill-switch | global `SmsTemplate.is_active=False` switches the event off for **everyone**; a store override cannot switch it back on |
+| Store switch | per store (`is_enabled` on the override); other stores unaffected |
+| Provider behaviour | **default text** → exactly as before (incl. Melipayamak Pattern/BodyId). **Customized text** → plain-text send (an approved Pattern no longer matches custom wording); credit reservation, refund-on-failure, `SmsLog`, history mirror, SmsRasti queue all unchanged |
+| Validation | the same strict legacy renderer (`{ }` rules, allowed variables only, no attribute/index access) + ≤1000 chars + no NUL/CR; an unrenderable stored row falls back to the platform text instead of blocking the SMS |
+| Permissions | legacy SMS events require the existing `SMS_SETTINGS_MANAGE`; a forged "seen" field on the channels page is ignored and counted as an error |
+| Not overridable (by design) | OTP (`otp`, `platform_owner_otp`: no `EventDef`, lookup short-circuits), platform-managed campaign/occasion SMS (`PlatformManagedError`), `platform.*` notices, security events cannot be switched off |
+| Auditing | every save/reset writes a `NotificationTemplateRevision` (version, actor) |
+
+TESTED: `test_store_sms_overrides.py` (23 tests: tenant isolation, kill-switch bound, Pattern vs plain, billing/credit, SmsRasti queue,
+history mirror, broken-row fallback, permission, forged fields, revisions) + the rewritten legacy suite (`test_legacy_sms_integration.py`, 23)
++ all of `apps.sms` (163) unchanged. LIVE-VERIFIED: no (no real SMS provider was contacted).
+
+## 4. DNS: audit result and automation (gap 2)
+**Audit of RastiSi's real domain-management architecture** (code, settings, `deploy/`, docs, and the payment-engine branch):
+* A merchant custom domain is *bring-your-own*: the merchant owns the registrar/DNS account. RastiSi only **reads** DNS
+  (`dnspython` TXT/A/CNAME lookups in `domain_verification_service`) and tells the merchant what to add.
+* There is **no DNS-write integration, credential, API token or delegated zone anywhere** (no Cloudflare/ArvanCloud/Route 53/…
+  client, no TSIG key, no setting). The payment-engine branch's domain wizard (`advance_domain_connection`) is also read-only
+  and reports `routing_unconfigured` when even the A/CNAME targets are undeclared.
+* Conclusion: **automatic record creation is impossible for every merchant domain today.** Nothing was invented.
+
+What is implemented (`mail/dns.py`): a conservative contract that activates **only** where the platform owner has granted authority:
+RFC 2136 dynamic update with a TSIG key against a nameserver authoritative for zones explicitly listed in
+`RASTISI_EMAIL_DNS_ZONES`, or a custom `DnsProvisioner` class. Safety rules (all tested):
+only `CNAME <token>._domainkey.<domain> → *.dkim.amazonses.com`; identical existing record = no-op; a *different* CNAME or any other
+record type at that name = reported **conflict, nothing written**; a batch with one forbidden record writes nothing; the server's
+acceptance is recorded as **`requested`, never "succeeded"** (ACTIVE requires the email provider's verification); secrets never appear
+in stored details.
+When automation is not possible the panel shows the **exact blocking reason in Persian** (`no_integration`, `zone_not_authorized`,
+`record_conflict`, `dns_server_error`, …), the actionable instruction, five manual steps, the exact provider-generated records
+(type / full name / relative name / value) and a per-record "seen in DNS" observation.
+TESTED: `test_dns_provisioning.py` (28) with an in-memory authoritative server (no network). LIVE-VERIFIED: no.
+
+## 5. Delivery validity: expiry, hold, recovery (gap 3)
+Rules checked immediately before **every** send (worker, manual retry, revival) by `services/expiry.py`:
+1. **Hard TTL** per event. Past it the row becomes `EXPIRED` — kept, listed in history and the platform "needs attention" filter,
+   **never retried or revived**.
+2. **Contextual validity** (read-only checks of current order/coupon/sender state). A message whose premise no longer holds is not sent
+   and kept as `SKIPPED` with `stale:<reason>` — e.g. "payment failed" after the order was paid, "processing" after it shipped,
+   "shipped" after cancellation, a coupon notice after the code expired / was deactivated / used up.
+3. **Hold window** (sender inactive / rate limit): the row waits without consuming retries; after the window, transactional/security
+   rows become a visible failed (`DEAD`) row an operator can retry, and are auto-revived when the sender recovers — **only while still valid**.
+   Promotional rows are never revived.
+* **OTPs are not part of this engine** (they use the dedicated OTP path with its own few-minute validity). Tests assert no event
+  carries a code/token/reset-link variable and that OTP never enters the device queue even for stores using the phone gateway.
+* The SmsRasti phone-gateway queue previously had no age limit (a phone offline for days would send stale texts). It now fails items
+  older than `RASTISI_SMSRASTI_QUEUE_TTL_HOURS` (72) with an explicit reason.
+* The cron health check no longer mistakes held mail for a dead cron (false CRITICAL) and now reports held mail, expired transactional
+  rows, sender errors and a missing revalidation job separately.
+* Validators only **read** `Order.status` / `Order.payment_status` / `Coupon`; they never write, and call no payment/refund logic.
+
+| رویداد | دسته | مهلتِ اعتبار (TTL) | مهلتِ نگه‌داری (hold) | شرطِ اعتبارِ بافتاری |
+|---|---|---|---|---|
+| `account.registered` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `account.sensitive_changed` | امنیتی | 48 ساعت | 24 ساعت | — |
+| `order.created` | تراکنشی | 168 ساعت | 72 ساعت | سفارش لغو نشده باشد |
+| `payment.succeeded` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `payment.failed` | تراکنشی | 72 ساعت | 72 ساعت | پرداخت هنوز تعیین‌تکلیف نشده و سفارش لغو نشده باشد |
+| `order.processing` | تراکنشی | 72 ساعت | 72 ساعت | سفارش هنوز «در حال پردازش» باشد |
+| `order.shipped` | تراکنشی | 168 ساعت | 72 ساعت | سفارش لغو/تحویل نشده باشد |
+| `order.delivered` | تراکنشی | 168 ساعت | 72 ساعت | سفارش لغو نشده باشد |
+| `order.canceled` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `return.requested` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `return.approved` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `return.rejected` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `refund.completed` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `coupon.issued` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `coupon.expiring` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `coupon.redeemed` | تراکنشی | 72 ساعت | 72 ساعت | — |
+| `campaign.activated` | تراکنشی | 72 ساعت | 72 ساعت | — |
+| `reward.issued` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.birthday_before` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.birthday` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.birthday_after` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.birthday_before_greeting` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.birthday_greeting` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.birthday_after_greeting` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.generic_before` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.generic` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.generic_after` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.generic_before_greeting` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.generic_greeting` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `occasion.generic_after_greeting` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `campaign.offer_percent` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `campaign.offer_fixed` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `campaign.offer_free_ship` | تبلیغاتی | 24 ساعت | 24 ساعت | کد تخفیف فعال، منقضی‌نشده و دارای سقفِ باقی‌مانده باشد |
+| `campaign.announce` | تبلیغاتی | 24 ساعت | 24 ساعت | — |
+| `staff.order_created` | تراکنشی | 72 ساعت | 72 ساعت | — |
+| `staff.return_requested` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `staff.review_created` | تراکنشی | 72 ساعت | 72 ساعت | — |
+| `staff.late_payment` | تراکنشی | 168 ساعت | 72 ساعت | — |
+| `platform.email_sender_active` | تراکنشی | 72 ساعت | 72 ساعت | فرستنده‌ی ایمیل هنوز فعال باشد |
+| `platform.email_sender_problem` | تراکنشی | 72 ساعت | 72 ساعت | مشکلِ فرستنده هنوز برطرف نشده باشد |
+
+TESTED: `test_expiry.py` (34). LIVE-VERIFIED: n/a (pure application policy).
+
+## 6. SMS ↔ email parity matrix (computed from code)
+The matrix is produced by `apps/notifications/parity.py` from the registries and verified against the real trigger call sites
+(a removed/renamed trigger, or a new unlisted dispatch site, fails the build).
+
 | رویداد (شناسه) | عنوان | دسته | مخاطب | پیامک (منبع) | ایمیل | فرستنده | محرک (فایل) |
 |---|---|---|---|---|---|---|---|
 | `account.registered` | ثبت‌نام و خوش‌آمدگویی | transactional | customer | welcome (قدیمی (apps.sms / SmsTemplate)) | ✔ | store | `apps/customers/services/auth_service.py` |
@@ -101,33 +182,17 @@ Precedence: store override → platform default (unless `locked_for_stores`) →
 | — | تست زیرساخت پیامک (`platform_test`) | infra | — | قدیمی (apps.sms) | ✘ (عمدی) | — | — |
 | — | اعلان عمومی / امنیتی (`notification`) | infra | — | قدیمی (apps.sms) | ✘ (عمدی) | — | — |
 | — | کد ورود یکبار مصرف (`otp`) | otp | — | قدیمی (apps.sms) | ✘ (عمدی) | — | — |
-Every row with a notification event has an email definition (40/40); 38 also have an SMS. The only SMS events without an
-email counterpart are the two phone-possession OTPs (`otp`, `platform_owner_otp`), by design: an emailed code proves access
-to a mailbox, not to the phone. The repository has no email-login/registration flow that would need an email-scoped
-verification; if one is added it must use its own token/purpose, never the phone OTP.
-`notification` / `platform_test` are plumbing (the outbox email row *is* the email counterpart).
-Tests: `test_sms_email_parity.py` (inventory completeness, trigger call-sites exist in source, every dispatch site is
-listed, per-event email row creation, no-recipient → no row, Persian RTL/plain+HTML rendering, OTP never emailed).
 
-## 6. Activation checklist (platform-only, cannot be done from the repository)
-1. `pip install boto3` on the deployment (already in `requirements.txt`).
-2. Environment: `RASTISI_EMAIL_PROVIDER=ses`, `RASTISI_SES_REGION`, credentials via env **or** instance/task role,
-   optional `RASTISI_SES_CONFIGURATION_SET` with an SNS event destination (Bounce, Complaint, Delivery).
-3. Create an SNS topic, subscribe `https://<platform host>/notifications/email/ses-events/` (HTTPS), put the topic ARN in
-   `RASTISI_SES_SNS_TOPIC_ARNS` (the endpoint rejects everything else), then confirm the subscription.
-4. Request SES production access (out of sandbox) and size `RASTISI_EMAIL_*_LIMIT`.
-5. Schedule `manage.py refresh_email_identities` (hourly) and `process_notification_outbox`.
-6. Optional: implement `DnsProvisioner` for a DNS host RastiSi is authorized on and set `RASTISI_EMAIL_DNS_PROVISIONER`.
+40/40 notification events define an email; 38 also define an SMS. The only SMS events with no email counterpart are the two
+**phone-possession OTPs** (`otp`, `platform_owner_otp`), deliberately: an emailed code proves access to a mailbox, not to the phone.
+`notification`/`platform_test` are plumbing. The payment-engine branch adds one more *trigger* for an existing event
+(`account_security_service` → `account.sensitive_changed`, password change); its SMS-verified password *set* still uses the phone OTP path.
 
-## 7. Known limitations / not claimed
-* **No live email was sent.** The SES adapter is tested only against a stub shaped like the boto3 `sesv2` client
-  (`test_ses_adapter.py`) and the SNS verifier against locally generated keys; neither was run against a real AWS account.
-* No real DNS-provider adapter is shipped; DNS is manual unless a provisioner is configured.
-* Legacy SMS templates (`SmsTemplate`) are global across stores (pre-existing); the channel page shows them read-only.
-* The platform test-send covers email only and requires a target Store (so the correct sender is used).
-* Customer e-mail addresses are not verified in this codebase; mail goes to the address on file.
-* Owner password-reset mail still uses the platform sender via Django mail (unchanged).
-* `boto3`-based bounce handling relies on the SES→SNS→webhook path; Tenant attribution uses only our own outbox rows.
-
-## 8. Coordination with Claude Code
-See the PR description (migration-graph conflict with `integration/payment-engine-unified-20261104`, shared files).
+## 7. Known limitations (unchanged or newly discovered)
+* No real provider/DNS/mailbox was contacted. See the checklist.
+* A custom domain is required for email; a store without one has no email channel (SMS is unaffected). Mail-From (SPF alignment) is
+  not customized; DMARC alignment relies on DKIM signed by the merchant's own domain. The merchant's own DMARC/SPF records are not managed.
+* Customer e-mail addresses are not verified in this codebase (mail goes to the address on file).
+* Customized store SMS texts bypass provider Patterns (plain send) — a product consequence, not a bug.
+* The webhook is served on `RASTISI_PLATFORM_HOSTS` only. (An earlier version of this document pointed at the wrong host; the routing is
+  now fixed and covered by `test_endpoint_is_served_on_the_platform_host_only`.)

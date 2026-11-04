@@ -34,7 +34,9 @@ def collect(now=None) -> list[dict]:
     # ۱) صفِ اعلان — process_notification_outbox / run_engagement_jobs (هر ۵ دقیقه)
     deliverable = N.objects.filter(
         status__in=(N.Status.PENDING, N.Status.FAILED), sms_log__isnull=True, attempts__lt=F("max_attempts"),
-    ).exclude(metadata__has_key="legacy_sms_log_id")
+    ).exclude(metadata__has_key="legacy_sms_log_id").filter(held_since__isnull=True)
+    # rows HELD for an inactive e-mail sender / rate limit are waiting on a *business* condition, not on the cron job: they
+    # are reported separately below, so one broken store sender can never look like "the delivery cron is dead".
     oldest = deliverable.order_by("created_at").values_list("created_at", flat=True).first()
     age = (now - oldest) if oldest else timedelta(0)
     level = CRIT if age > timedelta(hours=2) else WARN if age > timedelta(minutes=30) else OK
@@ -43,6 +45,20 @@ def collect(now=None) -> list[dict]:
     add("notification_stuck_sending", WARN if stuck else OK, f"stuck={stuck}")
     dead = N.objects.filter(status=N.Status.DEAD, updated_at__gte=now - timedelta(hours=24)).count()
     add("notification_dead_24h", WARN if dead else OK, f"dead={dead}")
+    held = N.objects.filter(status=N.Status.PENDING, held_since__isnull=False)
+    held_oldest = held.order_by("held_since").values_list("held_since", flat=True).first()
+    held_age_h = int(((now - held_oldest).total_seconds() // 3600)) if held_oldest else 0
+    add("email_held", WARN if held.exists() else OK, f"held={held.count()} oldest_age_h={held_age_h} (sender inactive / rate limit)")
+    expired = N.objects.filter(status=N.Status.EXPIRED, is_promotional=False, updated_at__gte=now - timedelta(hours=24)).count()
+    add("notification_expired_24h", WARN if expired else OK, f"expired_transactional={expired}")
+    from apps.notifications.models import EmailSenderIdentity as E
+
+    broken = E.objects.filter(status=E.Status.ERROR, platform_disabled=False).count()
+    add("email_sender_errors", WARN if broken else OK, f"identities_in_error={broken}")
+    overdue_checks = E.objects.filter(platform_disabled=False, next_check_at__lt=now - timedelta(hours=3)).exclude(
+        status=E.Status.INACTIVE).count()
+    add("email_sender_revalidation", WARN if overdue_checks else OK,
+        f"identities_overdue_for_recheck={overdue_checks} (is `refresh_email_identities` scheduled?)")
 
     # ۲) کمپین‌ها — run_engagement_jobs
     bad_runs = CampaignRun.objects.filter(started_at__gte=now - timedelta(hours=24), errors__gt=0).count()

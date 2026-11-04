@@ -146,7 +146,11 @@ class SnsVerificationTests(TestCase):
             sns.verify_sns_message(p, cert_fetcher=FETCH)
 
 
-@override_settings(RASTISI_SES_SNS_TOPIC_ARNS=(TOPIC,))
+PLATFORM_HOST = "rastisi.localhost"  # a member of RASTISI_PLATFORM_HOSTS: the only public, platform-owned host
+
+
+@override_settings(RASTISI_SES_SNS_TOPIC_ARNS=(TOPIC,), ALLOWED_HOSTS=[PLATFORM_HOST, "platformadmins.rastisi.localhost",
+                                                                       "mystore.rastisi.localhost", "testserver"])
 class WebhookTests(TestCase):
     URL = "/notifications/email/ses-events/"
 
@@ -154,7 +158,7 @@ class WebhookTests(TestCase):
         FakeTransport.reset()
         webhook_views.ses_sns_webhook.cert_fetcher = FETCH
         self.addCleanup(lambda: setattr(webhook_views.ses_sns_webhook, "cert_fetcher", None))
-        self.client = Client(HTTP_HOST="testserver")
+        self.client = Client(HTTP_HOST=PLATFORM_HOST)
         self.store = Store.objects.get(slug="akhlaghi")
         user = User.objects.create_user(username="09128880001", password="x12345678")
         self.customer = Customer.objects.create(user=user, full_name="سارا", phone="09128880001", email="sara@example.com")
@@ -171,6 +175,16 @@ class WebhookTests(TestCase):
         return {"notificationType": "Bounce", "mail": {"messageId": mid},
                 "bounce": {"bounceType": kind, "bounceSubType": "General", "bouncedRecipients": [{"emailAddress": rcpt}]}}
 
+    def test_endpoint_is_served_on_the_platform_host_only(self):
+        """SNS must reach a stable platform-owned public host. The Platform Admin host (not public, own urlconf) and tenant
+        hosts do not expose it, so a store's own domain can never be used to feed events."""
+        signed = notification(self.bounce("Transient"))
+        self.assertEqual(self.client.post(self.URL, data=json.dumps(signed), content_type="text/plain").status_code, 200)
+        for host in ("platformadmins.rastisi.localhost", "mystore.rastisi.localhost"):
+            r = Client(HTTP_HOST=host).post(self.URL, data=json.dumps(signed), content_type="text/plain")
+            self.assertIn(r.status_code, (404, 403), host)
+            self.assertNotEqual(r.content, b"ok 1", host)
+
     def test_unsigned_request_is_rejected_403_and_changes_nothing(self):
         r = self.post({"Type": "Notification", "TopicArn": TOPIC, "Message": json.dumps(self.bounce())})
         self.assertEqual(r.status_code, 403)
@@ -178,7 +192,7 @@ class WebhookTests(TestCase):
 
     def test_get_is_not_allowed_and_csrf_does_not_block_signed_posts(self):
         self.assertEqual(self.client.get(self.URL).status_code, 405)
-        csrf_client = Client(enforce_csrf_checks=True, HTTP_HOST="testserver")
+        csrf_client = Client(enforce_csrf_checks=True, HTTP_HOST=PLATFORM_HOST)
         r = csrf_client.post(self.URL, data=json.dumps(notification(self.bounce("Transient"))), content_type="text/plain")
         self.assertEqual(r.status_code, 200)
 

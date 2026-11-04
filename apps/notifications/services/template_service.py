@@ -76,6 +76,7 @@ def _sms_source_event(event_key: str) -> str:
 
 
 def _reads_from_sms_template(event_key: str, channel: str) -> bool:
+    """The channel's *platform default text* lives in the global ``SmsTemplate`` (legacy or platform-managed)."""
     return is_legacy_sms(event_key, channel) or is_platform_sms(event_key, channel)
 
 
@@ -118,13 +119,24 @@ def get_template(store, event_key: str, channel: str) -> dict:
         row = _legacy_sms_row(event_key)
         body = row.body if row else DEFAULT_TEMPLATES.get(source, "")
         default = DEFAULT_TEMPLATES.get(source, "")
-        return {
-            "enabled": row.is_active if row else True, "subject": "", "extra_recipients": "", "body_html": "",
-            "body": legacy_sms.body_to_new(source, body),
-            "customized": body != default, "row": None, "source": "legacy_sms", "locked": False, "version": 0,
-            "security_locked": False,
+        platform_active = row.is_active if row else True
+        base = {
+            "subject": "", "extra_recipients": "", "body_html": "", "security_locked": False,
+            "platform_active": platform_active, "platform_body": legacy_sms.body_to_new(source, body),
+            "platform_customized": body != default,
             "managed_by": "platform" if event.platform_sms_event else "legacy_sms",
         }
+        if is_legacy_sms(event_key, channel) and store is not None:
+            override = NotificationTemplate.objects.filter(store=store, event_key=event_key, channel=channel).first()
+            if override is not None:
+                # tenant override: the STORE's text and switch; the platform switch stays an upper bound
+                return {**base, "enabled": override.is_enabled and platform_active, "store_enabled": override.is_enabled,
+                        "body": override.body, "customized": True, "row": override, "source": "store",
+                        "locked": False, "version": override.version}
+        return {**base, "enabled": platform_active, "store_enabled": platform_active,
+                "body": legacy_sms.body_to_new(source, body), "customized": body != default, "row": None,
+                "source": "platform" if is_legacy_sms(event_key, channel) else "platform_managed",
+                "locked": bool(event.platform_sms_event), "version": 0}
     platform = _platform_row(event_key, channel)
     locked = event.sender == "platform" or bool(platform and platform.locked_for_stores)
     row = None if (locked or store is None) else NotificationTemplate.objects.filter(
@@ -197,9 +209,14 @@ def render_email_document(store, subject: str, body: str, html_fragment: str = "
             primary = ShopSettings.load(store=store).primary_color or primary
         except Exception:  # noqa: BLE001 — هویتِ بصری اختیاری است
             pass
+    # The ONLY place HTML is marked safe. The fragment is re-sanitized here (allowlist, no script/style/handlers/unsafe
+    # URLs) regardless of where it came from, so even a tampered database row cannot inject markup. The template itself
+    # stays on plain autoescape (no ``|safe`` / ``mark_safe`` in any notifications template — a repo-wide guard test).
+    from django.utils.safestring import mark_safe
+
     return render_to_string("notifications/email/base.html", {
         "store_name": name, "subject": subject, "primary_color": primary,
-        "content_html": html_fragment,
+        "content_html": mark_safe(sanitize_html(html_fragment)) if html_fragment else "",
         "paragraphs": [line for line in (body or "").splitlines() if line.strip()],
     })
 
@@ -252,9 +269,7 @@ def save_template(store, event_key: str, channel: str, *, enabled: bool, subject
     if event.category == ev.SECURITY:
         enabled = True  # اعلانِ امنیتی غیرقابلِ‌غیرفعال‌سازی است (سیاستِ پلتفرم)
     if is_legacy_sms(event_key, channel):
-        if enabled and not body:
-            raise TemplateError("متنِ قالبِ فعال نمی‌تواند خالی باشد.")
-        return _save_legacy_sms(store, event_key, enabled=enabled, body=body)
+        return _save_store_sms_override(store, event_key, enabled=enabled, body=body, actor=actor)
     html = _check_body_rules(event, channel, enabled=enabled, subject=subject, body=body, body_html=body_html)
     if channel == ev.SMS:
         subject = ""
@@ -278,9 +293,11 @@ def set_channel_enabled(store, event_key: str, channel: str, enabled: bool, *, a
     event = ev.get_event(event_key)
     if event.category == ev.SECURITY and not enabled:
         raise TemplateError("اعلانِ امنیتی غیرقابلِ غیرفعال‌سازی است.")
-    if _reads_from_sms_template(event_key, channel):
-        raise PlatformManagedError("روشن/خاموشیِ این پیامک از بخشِ تنظیماتِ پیامک مدیریت می‌شود.")
+    if is_platform_sms(event_key, channel):
+        raise PlatformManagedError("روشن/خاموشیِ این پیامک از صفحه‌ی کمپین/مناسبت مدیریت می‌شود.")
     current = get_template(store, event_key, channel)
+    if is_legacy_sms(event_key, channel):
+        current = {**current, "body": current["body"]}
     return save_template(
         store, event_key, channel, enabled=enabled, subject=current["subject"], body=current["body"],
         body_html=current.get("body_html", ""), extra_recipients=current.get("extra_recipients", ""), actor=actor,
@@ -343,29 +360,37 @@ def _legacy_body_or_error(event_key: str, body: str) -> str:
     return legacy_body
 
 
-def _save_legacy_sms(store, event_key: str, *, enabled: bool, body: str) -> NotificationTemplate | None:
-    """ذخیره در ``SmsTemplate`` (منبعِ حقیقتِ ارسال). ردیفِ بی‌اثرِ قدیمیِ
-    ``NotificationTemplate`` برایِ همین رویداد/کانال حذف می‌شود تا نسخه‌ی دومِ
-    پنهانی نماند. توجه: ``SmsTemplate`` سراسری است (مشترک میانِ فروشگاه‌ها)."""
-    row = _legacy_sms_row(event_key)
-    if body:  # متنِ خالیِ غیرفعال: متنِ فعلی دست‌نخورده می‌ماند، فقط وضعیت تغییر می‌کند
-        row.body = _legacy_body_or_error(event_key, body)
-    row.is_active = enabled
-    row.save(update_fields=["body", "is_active", "updated_at"])
-    NotificationTemplate.objects.filter(store=store, event_key=event_key, channel=ev.SMS).delete()
-    return None
+def _save_store_sms_override(store, event_key: str, *, enabled: bool, body: str, actor=None) -> NotificationTemplate:
+    """Tenant-specific SMS text/switch for a legacy event. The global ``SmsTemplate`` (platform default, provider
+    Pattern ids, platform kill-switch) is NEVER modified from a Store panel. The text is validated with the legacy
+    strict renderer rules (after mapping to the legacy vocabulary) so it can be sent by the existing provider path."""
+    body = (body or "").strip()
+    if enabled and not body:
+        raise TemplateError("متنِ قالبِ فعال نمی‌تواند خالی باشد.")
+    if len(body) > 1000:
+        raise TemplateError("متنِ پیامک بیش از حدِ مجاز (۱۰۰۰ نویسه) است.")
+    if "\r" in body or "\x00" in body:
+        raise TemplateError("نویسه‌ی نامعتبر در متنِ پیامک.")
+    if body:
+        _legacy_body_or_error(event_key, body)
+    else:  # disabling without text: keep the platform text as the stored body so the row stays valid
+        body = get_template(None, event_key, "sms")["platform_body"]
+    row = NotificationTemplate.objects.filter(store=store, event_key=event_key, channel="sms").first()
+    if row is None:
+        row = NotificationTemplate(store=store, event_key=event_key, channel="sms", version=1)
+    else:
+        row.version += 1
+    row.is_enabled, row.subject, row.body, row.body_html, row.extra_recipients = enabled, "", body, "", ""
+    row.save()
+    _record_revision(scope="store", store=store, event_key=event_key, channel="sms", version=row.version, action="save",
+                     enabled=enabled, subject="", body=body, body_html="", actor=actor)
+    return row
 
 
 def reset_template(store, event_key: str, channel: str, *, actor=None) -> None:
     """بازگشت به پیش‌فرض: بازنویسیِ فروشگاه حذف می‌شود و قالبِ مؤثر دوباره «پیش‌فرضِ پلتفرم» است."""
     if is_platform_sms(event_key, channel):
         raise PlatformManagedError("متنِ این پیامک را فقط راستی‌سی مدیریت می‌کند و قابلِ بازنشانی نیست.")
-    if is_legacy_sms(event_key, channel):
-        from apps.sms.events import DEFAULT_TEMPLATES
-
-        row = _legacy_sms_row(event_key)
-        row.body = DEFAULT_TEMPLATES[row.event_key]
-        row.save(update_fields=["body", "updated_at"])
     existing = NotificationTemplate.objects.filter(store=store, event_key=event_key, channel=channel).first()
     if existing is not None:
         _record_revision(scope="store", store=store, event_key=event_key, channel=channel, version=existing.version + 1,

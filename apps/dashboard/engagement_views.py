@@ -453,6 +453,8 @@ def notification_template_edit(request, event_key):
             elif channel == "sms" and event.legacy_sms_event and not membership_has_permission(
                     request.store_membership, SMS_SETTINGS_MANAGE):
                 messages.error(request, "برایِ بازگشتِ قالبِ پیامک دسترسیِ «تنظیماتِ پیامک» لازم است.")
+            elif channel in notif_events.CHANNELS and template_service.is_store_locked(event_key, channel) and channel == "email":
+                messages.error(request, "این قالب را فقط راستی‌سی مدیریت می‌کند.")
             elif channel in notif_events.CHANNELS:
                 template_service.reset_template(store, event_key, channel, actor=request.user)
                 messages.info(request, "قالب به حالتِ پیش‌فرض بازگشت")
@@ -598,6 +600,15 @@ def notification_history(request):
             bound = _dt.datetime.combine(day + _dt.timedelta(days=1 if end else 0), _dt.time.min, tzinfo=tz)
             qs = qs.filter(**{f"created_at__{op}": bound})
     page = Paginator(qs.order_by("-created_at"), 30).get_page(g.get("page"))
+    from apps.notifications.services import expiry as _expiry
+
+    for n in page:  # actionable, plain-Persian explanation for rows that will not (or could not yet) be delivered
+        reason = n.skip_reason if n.skip_reason.startswith("stale:") else (n.last_error if n.status == "expired" else "")
+        n.reason_fa = _expiry.reason_text(reason) if reason else ""
+        if n.status == "pending" and n.last_error == "sender_not_active":
+            n.reason_fa = "فرستنده‌ی ایمیلِ فروشگاه فعال نیست؛ پیام نگه‌داری شده و پس از فعال‌شدن ارسال می‌شود (هویتِ فرستنده را بررسی کنید)."
+        elif n.status == "dead" and n.last_error.endswith("_expired"):
+            n.reason_fa = "مهلتِ نگه‌داری تمام شد و ارسال نشد؛ پس از رفعِ مشکل می‌توانید «تلاش دوباره» بزنید (تا پیش از پایانِ مهلتِ اعتبار)."
     query = g.copy()
     query.pop("page", None)
     return render(request, "dashboard/notification_history.html", {

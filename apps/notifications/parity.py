@@ -51,6 +51,14 @@ TRIGGERS = {
     "platform.email_sender_active": ("apps/notifications/mail/provisioning_service.py", '"platform.email_sender_active"', "تغییر وضعیتِ فرستنده"),
     "platform.email_sender_problem": ("apps/notifications/mail/provisioning_service.py", '"platform.email_sender_problem"', "تغییر وضعیتِ فرستنده"),
 }
+#: Additional trigger sites for an event. ``optional=True``: the file exists only in some branches (e.g. the customer
+#: account-security flow arrives with the payment-engine integration); when the file is present its call text is verified.
+EXTRA_TRIGGERS = {
+    "account.sensitive_changed": [
+        ("apps/customers/services/account_security_service.py", "business_events.account_sensitive_changed(",
+         "تغییر رمز عبور (حساب مشتری)", True),
+    ],
+}
 #: events dispatched by campaign/occasion runs through a computed key (``dispatch_event(`` in campaign_service)
 CAMPAIGN_DRIVEN_PREFIXES = ("occasion.", "campaign.offer_", "campaign.announce", "coupon.expiring", "reward.")
 
@@ -89,6 +97,7 @@ def build() -> list[dict]:
             "required_variables": list(d.required_variables),
             "trigger_file": trig[0] if trig else "", "trigger_text": trig[1] if trig else "",
             "trigger_desc": trig[2] if trig else "",
+            "extra_triggers": EXTRA_TRIGGERS.get(d.key, []),
             "security": d.category == ev.SECURITY,
         })
     for sms in SmsEvent:

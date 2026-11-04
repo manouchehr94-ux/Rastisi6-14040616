@@ -222,7 +222,8 @@ def notification_delivery(request):
     if g.get("status") in NotificationOutbox.Status.values:
         qs = qs.filter(status=g["status"])
     if g.get("attention"):
-        qs = qs.filter(Q(status__in=("failed", "dead")) | Q(held_since__isnull=False))
+        qs = qs.filter(Q(status__in=("failed", "dead")) | Q(held_since__isnull=False)
+                       | Q(status="expired", is_promotional=False))
     if g.get("store", "").strip():
         qs = qs.filter(store__name__icontains=g["store"].strip())
     page = Paginator(qs, 40).get_page(g.get("page"))

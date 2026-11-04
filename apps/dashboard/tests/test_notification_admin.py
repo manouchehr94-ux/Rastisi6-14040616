@@ -78,6 +78,29 @@ class SenderPageTests(CouponViewsTestCase):
         self.assertContains(r, "نامعتبر یا ناموجود")
         self.assertContains(r, 'id="sender-owner-action">بله')
 
+    def test_pending_panel_shows_the_exact_persian_blocking_reason_steps_and_relative_names(self):
+        custom_domain(self.store, "mybikestore.test")
+        self.client.post(reverse("dashboard:notification-sender-retry"))
+        r = self.client.get(self.url)
+        self.assertContains(r, 'id="dns-automation" data-code="no_integration" data-state="not_attempted"')
+        self.assertContains(r, "ثبتِ خودکارِ DNS برای این دامنه ممکن نیست")
+        self.assertContains(r, "راستی‌سی هیچ دسترسیِ مجازی برای نوشتن در DNS")
+        self.assertContains(r, 'id="dns-auto-action"')
+        self.assertContains(r, 'id="manual-steps"')
+        self.assertNotContains(r, "موفق فرض نمی‌شود")
+        rec = EmailSenderIdentity.objects.get(store=self.store).dns_records[0]
+        self.assertContains(r, "نامِ نسبی:")      # relative name shown under the full name
+        self.assertContains(r, rec["value"])
+
+    def test_active_panel_has_no_dns_instructions(self):
+        custom_domain(self.store, "mybikestore.test")
+        self.client.post(reverse("dashboard:notification-sender-retry"))
+        FakeTransport.verify("mybikestore.test")
+        self.client.post(reverse("dashboard:notification-sender-retry"))
+        r = self.client.get(self.url)
+        self.assertNotContains(r, 'id="dns-automation"')
+        self.assertNotContains(r, 'id="manual-steps"')
+
     def test_retry_requires_post_and_login(self):
         self.assertEqual(self.client.get(reverse("dashboard:notification-sender-retry")).status_code, 405)
         self.client.logout()

@@ -90,6 +90,12 @@ class EmailDiagnostics:
     website_status: str = ""
     website_routing: str = ""
     website_tls: str = ""
+    #: automatic-DNS result (Persian): why automation is/was not possible and what to do instead
+    dns_automation_state: str = ""
+    dns_automation_code: str = ""
+    dns_automation_reason_fa: str = ""
+    dns_automation_action_fa: str = ""
+    manual_steps_fa: tuple = ()
 
 
 def _sender_domain(store: Store) -> StoreDomain | None:
@@ -142,6 +148,7 @@ def sync_sender_identity(store: Store, *, actor=None) -> EmailSenderIdentity:
         identity.provider_ref = ""
         identity.verified_at = None
         identity.dns_auto_requested = False
+        identity.dns_automation_state = identity.dns_automation_code = identity.dns_automation_detail = ""
     identity.domain = domain
     identity.domain_name = domain.hostname
     if not identity.provider_ref:
@@ -154,11 +161,17 @@ def sync_sender_identity(store: Store, *, actor=None) -> EmailSenderIdentity:
     identity.provider = transport.code
     identity.provider_ref = state.provider_ref or identity.provider_ref
     identity.dns_records = [r.as_dict() for r in state.dns_records]
-    if state.dns_records and not identity.dns_auto_requested and state.status != PROVIDER_VERIFIED:
-        # Authorized automatic DNS provisioning — ONLY through an existing, configured DNS integration that controls
-        # this zone. "requested" means the integration accepted the write; it is NOT success. Success is claimed only
-        # when the email provider itself reports the identity verified (see ACTIVE below).
-        identity.dns_auto_requested = dns_provisioning.try_apply(domain.hostname, state.dns_records)
+    if state.dns_records and state.status != PROVIDER_VERIFIED and identity.dns_automation_state != dns_provisioning.REQUESTED:
+        # Authorized automatic DNS provisioning — ONLY through a configured integration that controls this zone.
+        # "requested" means the zone accepted the records; it is NOT success. Success is claimed only when the email
+        # provider itself reports the identity verified (see ACTIVE below). Failures/conflicts are retried on each
+        # recheck; "no integration" / "zone not authorized" are recorded as the exact blocking reason.
+        outcome = dns_provisioning.try_apply(domain.hostname, state.dns_records)
+        identity.dns_automation_state, identity.dns_automation_code = outcome.state, outcome.code
+        identity.dns_automation_detail = (outcome.detail or "")[:200]
+        identity.dns_auto_requested = outcome.state == dns_provisioning.REQUESTED
+    elif state.status == PROVIDER_VERIFIED and identity.dns_automation_state != dns_provisioning.REQUESTED:
+        identity.dns_automation_state, identity.dns_automation_code, identity.dns_automation_detail = "", "", ""
     identity.dns_records = dns_provisioning.annotate_published(
         domain.hostname, [r.as_dict() for r in state.dns_records], enabled=transport.code != "fake",
     )
@@ -257,13 +270,24 @@ def diagnostics(store: Store) -> EmailDiagnostics:
     return EmailDiagnostics(
         status=identity.status, reason_code=code, reason_text=text, corrective_action=action,
         platform_can_fix=platform_fix, owner_action_required=owner_needed,
-        dns_records=tuple(identity.dns_records or ()), from_address=identity.from_address,
+        dns_records=tuple({**r, "relative": dns_provisioning.relative_name(identity.domain_name, r["name"])}
+                          for r in (identity.dns_records or ())),
+        from_address=identity.from_address,
         last_checked_at=identity.last_checked_at, dns_auto_requested=identity.dns_auto_requested,
         responsible_party=responsible, website_domain=site.hostname if site else "",
         website_status=site.get_verification_status_display() if site else "",
         website_routing=site.get_routing_status_display() if site else "",
         website_tls=site.get_tls_status_display() if site else "",
+        dns_automation_state=identity.dns_automation_state, dns_automation_code=identity.dns_automation_code,
+        dns_automation_reason_fa=_auto_text(identity)[0], dns_automation_action_fa=_auto_text(identity)[1],
+        manual_steps_fa=dns_provisioning.MANUAL_STEPS_FA if identity.status != EmailSenderIdentity.Status.ACTIVE else (),
     )
+
+
+def _auto_text(identity) -> tuple[str, str]:
+    if identity.status == EmailSenderIdentity.Status.ACTIVE or not identity.dns_records:
+        return "", ""
+    return dns_provisioning.describe(identity.dns_automation_code or "no_integration")
 
 
 def active_sender_address(store: Store) -> str:

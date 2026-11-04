@@ -95,3 +95,32 @@ class RenderHtmlSecurityTests(TestCase):
 
         out, _ = render_html("ev", '<a href="{order_url}">link</a>', {"order_url": "javascript:alert(1)"})
         self.assertNotIn("javascript:", out)
+
+
+class EmailDocumentSafetyTests(TestCase):
+    """The layout template may never use ``|safe`` (repo-wide guard); HTML is sanitized again where it is marked safe."""
+
+    def test_no_notifications_template_uses_safe_or_mark_safe_or_autoescape_off(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1] / "templates" / "notifications"
+        for path in root.rglob("*.html"):
+            body = path.read_text(encoding="utf-8")
+            for banned in ("|safe", "mark_safe", "{% autoescape off"):
+                self.assertNotIn(banned, body, f"{path.name}: {banned}")
+
+    def test_a_tampered_stored_fragment_cannot_inject_markup_into_the_final_document(self):
+        from apps.notifications.services.template_service import render_email_document
+
+        evil = '<p>ok</p><script>steal()</script><img src=x onerror=alert(1)><a href="javascript:alert(1)">x</a>'
+        doc = render_email_document(None, "موضوع", "متن", evil)
+        self.assertIn("<p>ok</p>", doc)
+        for bad in ("<script", "onerror", "<img", "javascript:"):
+            self.assertNotIn(bad, doc)
+
+    def test_plain_text_fallback_is_still_escaped(self):
+        from apps.notifications.services.template_service import render_email_document
+
+        doc = render_email_document(None, "s", "<b>x</b>\nخط دوم", "")
+        self.assertIn("&lt;b&gt;x&lt;/b&gt;", doc)
+        self.assertNotIn("<b>x</b>", doc)

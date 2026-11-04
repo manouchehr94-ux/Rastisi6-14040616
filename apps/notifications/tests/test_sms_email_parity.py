@@ -56,12 +56,25 @@ class InventoryTests(TestCase):
             text = (ROOT / r["trigger_file"]).read_text(encoding="utf-8")
             self.assertIn(r["trigger_text"], text, f"{r['event_key']}: call site not found in {r['trigger_file']}")
 
+    def test_extra_trigger_sites_are_verified_when_their_file_exists(self):
+        checked = 0
+        for r in self.rows:
+            for path, text, _desc, optional in r.get("extra_triggers", []):
+                file = ROOT / path
+                if not file.exists():
+                    self.assertTrue(optional, f"{path} is required but missing")
+                    continue
+                self.assertIn(text, file.read_text(encoding="utf-8"), path)
+                checked += 1
+        self.assertGreaterEqual(checked, 0)
+
     def test_every_dispatch_site_in_the_codebase_is_in_the_inventory(self):
         """Scan production code for ``business_events.<fn>(`` and ``safe_dispatch/dispatch_event(`` — a new, unlisted
         trigger fails here so the matrix cannot silently go stale."""
         import re
 
         known_files = {r["trigger_file"] for r in self.rows if r["trigger_file"]}
+        known_files |= {t[0] for r in self.rows for t in r.get("extra_triggers", [])}
         found = set()
         for path in (ROOT / "apps").rglob("*.py"):
             rel = path.relative_to(ROOT).as_posix()
@@ -75,6 +88,7 @@ class InventoryTests(TestCase):
             "apps/dashboard/engagement_views.py",  # template TEST-send (is_test), not a business event
             "apps/portal/notification_admin_views.py",  # platform-admin TEST-send (is_test), not a business event
             "apps/notifications/parity.py",  # the matrix itself quotes these strings as data, not calls
+            "apps/notifications/registry.py",  # admin-Inbox trigger registry (payment-engine branch): names call sites in a string
         }
         self.assertEqual(found - known_files - allowed_infra, set(), "unlisted notification trigger call sites")
 

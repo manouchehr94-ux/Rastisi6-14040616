@@ -25,7 +25,9 @@
         <div id="preview-sms"></div>
       {% else %}
       {% if event.legacy_sms_event %}
-        {% if can_edit_legacy_sms %}<p class="badge b-amber" style="white-space:normal">این همان قالبِ «قالب‌هایِ پیامک» (تنظیمات ← پیامک) است و پیامکِ واقعیِ این رویداد را می‌سازد. توجه: این قالب میانِ همه‌ی فروشگاه‌هایِ پلتفرم مشترک است.</p>
+        {% if can_edit_legacy_sms %}<p class="badge b-green" id="sms-source" style="white-space:normal">{% if templates.sms.source == 'store' %}متنِ اختصاصیِ این فروشگاه (نسخه {{ templates.sms.version }}) — پیامکِ واقعیِ این رویداد با همین متن ارسال می‌شود. «بازگشت به پیش‌فرض» متنِ پلتفرم را برمی‌گرداند و روی فروشگاه‌های دیگر اثری ندارد.{% else %}اکنون متنِ پیش‌فرضِ پلتفرم استفاده می‌شود؛ با ذخیره، یک متنِ اختصاصیِ همین فروشگاه ساخته می‌شود و فروشگاه‌های دیگر تغییر نمی‌کنند.{% endif %}</p>
+        {% if not templates.sms.platform_active %}<p class="badge b-red" style="white-space:normal">راستی‌سی این پیامک را برای کلِ پلتفرم غیرفعال کرده است؛ تا فعال‌شدنِ آن هیچ فروشگاهی آن را نمی‌فرستد.</p>{% endif %}
+        {% if templates.sms.source == 'store' %}<p style="font-size:12px;color:var(--muted)">متنِ سفارشی‌شده به‌صورت پیامکِ معمولی ارسال می‌شود (الگوی تأییدشده‌ی Pattern ارائه‌دهنده فقط برای متنِ پیش‌فرضِ پلتفرم به‌کار می‌رود).</p>{% endif %}
         {% else %}<p class="badge b-red" style="white-space:normal">ویرایشِ این قالب نیازمندِ دسترسیِ «تنظیماتِ پیامک» است؛ فقط نمایش.</p>{% endif %}
       {% endif %}
       <label><input type="checkbox" name="sms_enabled" {% if templates.sms.enabled %}checked{% endif %} {% if event.legacy_sms_event and not can_edit_legacy_sms %}disabled{% endif %}> فعال</label>

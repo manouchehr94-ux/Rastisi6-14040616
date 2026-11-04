@@ -119,6 +119,11 @@ class SesTransport(EmailTransport):
             Destination={"ToAddresses": [message.to_address]},
             Content=content,
         )
+        # Bounce/complaint/delivery events reach our webhook ONLY if the send (or the identity) is tied to a configuration
+        # set whose event destination publishes to the SNS topic. Without this, the whole feedback loop is silent.
+        config_set = getattr(settings, "RASTISI_SES_CONFIGURATION_SET", "")
+        if config_set:
+            kwargs["ConfigurationSetName"] = config_set
         if message.reply_to:
             kwargs["ReplyToAddresses"] = [message.reply_to]
         if message.tags:

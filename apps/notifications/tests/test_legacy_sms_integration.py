@@ -69,14 +69,15 @@ class UnifiedTemplateAdminTests(Base):
         tpl = ts.get_template(self.store, "return.requested", "sms")
         self.assertNotIn("managed_by", tpl)
 
-    def test_save_writes_smstemplate_in_legacy_vocabulary_and_drops_stale_row(self):
-        NotificationTemplate.objects.create(store=self.store, event_key="order.created", channel="sms", body="قدیمیِ بی‌اثر")
+    def test_save_writes_a_tenant_override_and_never_touches_the_global_template(self):
+        before = SmsTemplate.objects.get(event_key="order_placed")
         ts.save_template(self.store, "order.created", "sms", enabled=True, subject="",
                          body="سفارش {order_number} به {order_total} - {store_name}")
-        row = SmsTemplate.objects.get(event_key="order_placed")
-        self.assertEqual(row.body, "سفارش {order_code} به {amount} - {shop_name}")
-        self.assertFalse(NotificationTemplate.objects.filter(store=self.store, event_key="order.created", channel="sms").exists())
-        # و پیامکِ واقعی دقیقاً همین متن را می‌فرستد
+        after = SmsTemplate.objects.get(event_key="order_placed")
+        self.assertEqual((after.body, after.is_active, after.melipayamak_body_id), (before.body, before.is_active, before.melipayamak_body_id))
+        row = NotificationTemplate.objects.get(store=self.store, event_key="order.created", channel="sms")
+        self.assertEqual(row.body, "سفارش {order_number} به {order_total} - {store_name}")
+        # و پیامکِ واقعیِ همین فروشگاه دقیقاً همین متن را میفرستد
         log = send_event_sms("order_placed", "09121234567", {"customer_name": "س", "order_code": "A1", "amount": "5"}, store=self.store)
         self.assertEqual(log.message, "سفارش A1 به 5 - " + ShopSettings.load(store=self.store).name)
 
@@ -87,15 +88,17 @@ class UnifiedTemplateAdminTests(Base):
                 ts.save_template(self.store, "order.created", "sms", enabled=True, subject="", body=bad)
         self.assertEqual(SmsTemplate.objects.get(event_key="order_placed").body, before)
 
-    def test_enabled_flag_controls_real_delivery(self):
+    def test_enabled_flag_controls_real_delivery_for_this_store_only(self):
         ts.save_template(self.store, "order.created", "sms", enabled=False, subject="", body="")
-        self.assertFalse(SmsTemplate.objects.get(event_key="order_placed").is_active)
+        self.assertTrue(SmsTemplate.objects.get(event_key="order_placed").is_active)  # platform switch untouched
         self.assertIsNone(send_event_sms("order_placed", "09121234567", {"customer_name": "س"}, store=self.store))
 
-    def test_reset_restores_default_text(self):
+    def test_reset_removes_the_override_and_the_platform_text_applies_again(self):
         ts.save_template(self.store, "order.created", "sms", enabled=True, subject="", body="سفارش {order_number}")
         ts.reset_template(self.store, "order.created", "sms")
+        self.assertFalse(NotificationTemplate.objects.filter(store=self.store, event_key="order.created", channel="sms").exists())
         self.assertEqual(SmsTemplate.objects.get(event_key="order_placed").body, DEFAULT_TEMPLATES["order_placed"])
+        self.assertEqual(ts.get_template(self.store, "order.created", "sms")["source"], "platform")
 
     def test_preview_uses_legacy_rules_and_sample_data(self):
         result = ts.preview(self.store, "order.created", "sms", body="{{x}} {order_number}")
@@ -225,13 +228,17 @@ class AdminUiTests(CouponViewsTestCase):
         data.update(extra)
         return self.client.post(reverse("dashboard:notification-template-edit", args=["order.created"]), data)
 
-    def test_editor_edits_real_template_and_shows_shared_notice(self):
+    def test_editor_creates_a_store_specific_override_and_explains_it(self):
         r = self.client.get(reverse("dashboard:notification-template-edit", args=["order.created"]))
-        self.assertContains(r, "مشترک")
+        self.assertContains(r, "پیش‌فرضِ پلتفرم")
         self.assertContains(r, "{order_number}")
+        before = SmsTemplate.objects.get(event_key="order_placed").body
         r = self.post("سفارش {order_number} ثبت شد", )
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(SmsTemplate.objects.get(event_key="order_placed").body, "سفارش {order_code} ثبت شد")
+        self.assertEqual(SmsTemplate.objects.get(event_key="order_placed").body, before)  # global untouched
+        self.assertEqual(NotificationTemplate.objects.get(store=self.store, event_key="order.created", channel="sms").body,
+                         "سفارش {order_number} ثبت شد")
+        self.assertContains(self.client.get(reverse("dashboard:notification-template-edit", args=["order.created"])), "متنِ اختصاصیِ این فروشگاه")
 
     def test_invalid_template_shows_error_and_keeps_data(self):
         before = SmsTemplate.objects.get(event_key="order_placed").body

@@ -29,6 +29,7 @@ class NotificationOutbox(TimeStampedModel):
         FAILED = "failed", "ناموفق (قابلِ تلاشِ دوباره)"
         DEAD = "dead", "ناموفقِ نهایی"
         SKIPPED = "skipped", "ارسال‌نشده (رضایت/گیرنده/متغیر)"
+        EXPIRED = "expired", "منقضی‌شده"
 
     channel = models.CharField("کانال", max_length=10, choices=Channel.choices)
     recipient_user = models.ForeignKey(

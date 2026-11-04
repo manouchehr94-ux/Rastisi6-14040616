@@ -247,22 +247,42 @@ def _consent_withdrawn(notification: NotificationOutbox) -> bool:
     return not fresh_promotional_consent(notification.customer_id, notification.channel)
 
 
-REVIVE_EXPIRED_WITHIN_DAYS = 7
+def release_held(store, now=None) -> dict:
+    """Recovery when a Store's sender becomes ACTIVE. Held rows are released for immediate sending. Rows that were turned
+    into failed (``DEAD``) only because of the sender/rate problem are revived **if and only if** they are still valid:
+    ``expiry.evaluate`` (hard TTL + contextual checks) decides per row, so an expired or no-longer-relevant message is
+    finalized (``EXPIRED``/``SKIPPED``, kept for the record) instead of being delivered late. Idempotent; never sends."""
+    from apps.notifications.services import expiry
 
-
-def release_held(store) -> dict:
-    """Recovery when a Store's sender becomes ACTIVE: held rows are released for immediate sending, and important
-    (non-promotional) rows that expired in the last 7 days because of sender/rate problems are revived. Promotional
-    rows that expired are NOT revived (stale marketing). Idempotent; never sends by itself."""
+    now = now or timezone.now()
     base = NotificationOutbox.objects.filter(store=store, channel=C.EMAIL)
     released = base.filter(status=S.PENDING, held_since__isnull=False).update(
         next_attempt_at=None, held_since=None, last_error="",
     )
-    revived = base.filter(
-        status=S.DEAD, is_promotional=False, last_error__endswith="_expired",
-        created_at__gte=timezone.now() - timedelta(days=REVIVE_EXPIRED_WITHIN_DAYS),
-    ).update(status=S.PENDING, next_attempt_at=None, held_since=None, last_error="")
-    return {"released": released, "revived": revived}
+    revived = finalized = 0
+    for row in base.filter(status=S.DEAD, is_promotional=False, last_error__endswith="_expired"):
+        verdict = expiry.evaluate(row, now)
+        if verdict.ok:
+            NotificationOutbox.objects.filter(pk=row.pk).update(
+                status=S.PENDING, next_attempt_at=None, held_since=None, last_error="", updated_at=now)
+            revived += 1
+        else:
+            _finalize_invalid(row, verdict)
+            finalized += 1
+    return {"released": released, "revived": revived, "finalized": finalized}
+
+
+def _finalize_invalid(notification: NotificationOutbox, verdict) -> None:
+    """Record why a row will never be delivered. Rows are kept (audit trail + actionable view); nothing is deleted."""
+    if verdict.kind == "expired":
+        notification.status = S.EXPIRED
+        notification.last_error = verdict.reason
+    else:
+        notification.status = S.SKIPPED
+        notification.skip_reason = f"stale:{verdict.reason}"
+    notification.claimed_at = None
+    notification.next_attempt_at = None
+    notification.save(update_fields=["status", "last_error", "skip_reason", "claimed_at", "next_attempt_at", "updated_at"])
 
 
 _GATE_OPEN = object()
@@ -280,22 +300,19 @@ def _finish_skipped(notification: NotificationOutbox, reason: str):
 
 
 def _hold(notification: NotificationOutbox, now, reason: str):
-    """Email cannot go out RIGHT NOW (no active sender / rate limit) but may soon: keep the row, do not burn a
-    retry attempt, give up (SKIPPED, visible in history) after ``RASTISI_EMAIL_HOLD_MAX_HOURS``."""
-    from django.conf import settings
-
+    """Email cannot go out RIGHT NOW (no active sender / rate limit) but may soon: keep the row, do not burn a retry
+    attempt, and retry every 15 minutes. After the event's *hold window* (``expiry.policy_for``) a transactional/security
+    row becomes a visible failed (``DEAD``) row — retryable by an operator and auto-revived on recovery, but only while
+    its hard TTL allows; a promotional row is simply skipped (stale marketing)."""
     from apps.notifications import events as ev
+    from apps.notifications.services import expiry
 
     notification.held_since = notification.held_since or now
-    event = ev.EVENTS.get(notification.event_key)
-    important = not notification.is_promotional and (event is None or event.category in (ev.TRANSACTIONAL, ev.SECURITY))
-    hours = (getattr(settings, "RASTISI_EMAIL_HOLD_MAX_HOURS", 72) if important
-             else getattr(settings, "RASTISI_EMAIL_HOLD_MAX_HOURS_PROMOTIONAL", 24))
-    if now - notification.held_since > timedelta(hours=hours):
+    policy = expiry.policy_for(notification.event_key)
+    important = not notification.is_promotional
+    if now - notification.held_since > timedelta(hours=policy.hold_hours):
         if not important:
             return _finish_skipped(notification, f"{reason}_expired")  # promotional: expiry by design, visible as SKIPPED
-        # Transactional / security: NEVER silently discarded. It becomes a visible DEAD row ("failed — needs action"),
-        # listed in history/failures, manually retryable, and auto-revived by release_held() when the sender recovers.
         notification.status = S.DEAD
         notification.claimed_at = None
         notification.next_attempt_at = None
@@ -341,6 +358,12 @@ def _process(notification: NotificationOutbox, now) -> bool | None:
     """یک اعلانِ برداشته‌شده (SENDING) را می‌فرستد و وضعیتش را ذخیره می‌کند.
     → ``True`` اگر ارسال موفق بود، ``False`` اگر شکست خورد، ``None`` اگر ارسال نشد (رضایت/سرکوب)،
     ``HELD`` اگر موقتاً نگه داشته شد (فرستنده‌ی غیرفعال / سقفِ نرخ) — بدونِ مصرفِ تلاش."""
+    from apps.notifications.services import expiry
+
+    verdict = expiry.evaluate(notification, now)
+    if not verdict.ok:
+        _finalize_invalid(notification, verdict)
+        return None
     if _consent_withdrawn(notification):
         notification.status = S.SKIPPED
         notification.skip_reason = "consent_withdrawn"
@@ -430,7 +453,13 @@ def retry_notification(notification: NotificationOutbox) -> NotificationOutbox:
     if notification.is_legacy_sms_mirror:
         raise RetryNotAllowed("این پیامک از مسیرِ قدیمیِ پیامک ارسال شده؛ تلاشِ دوباره از «گزارشِ پیامک‌ها» انجام می‌شود.")
     if notification.status not in (S.FAILED, S.DEAD):
-        raise RetryNotAllowed("فقط اعلان‌هایِ ناموفق قابلِ تلاشِ دوباره‌اند.")
+        raise RetryNotAllowed("فقط اعلان‌هایِ ناموفق قابلِ تلاشِ دوباره‌اند. (پیامِ منقضی‌شده هرگز دوباره ارسال نمی‌شود.)")
+    from apps.notifications.services import expiry
+
+    verdict = expiry.evaluate(notification)
+    if not verdict.ok:
+        _finalize_invalid(notification, verdict)
+        raise RetryNotAllowed(expiry.reason_text(verdict.reason) + " ارسالِ دوباره ممکن نیست.")
     notification.status = S.PENDING
     notification.next_attempt_at = None
     notification.claimed_at = None

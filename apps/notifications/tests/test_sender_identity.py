@@ -351,7 +351,8 @@ class HoldRecoveryExpiryTests(SenderBase):
         NotificationOutbox.objects.filter(pk=row.pk).update(next_attempt_at=later - timedelta(minutes=1))
         deliver_pending(now=later)
         row.refresh_from_db()
-        self.assertEqual((row.status, row.skip_reason), (S.SKIPPED, "sender_not_active_expired"))
+        # promotional TTL is 24h: it is expired for good (kept for the record), never delivered late, never revived
+        self.assertEqual((row.status, row.last_error), (S.EXPIRED, "ttl_exceeded"))
         self.assertEqual(release_held(self.store)["revived"], 0)
 
     def test_hold_does_not_burn_retry_attempts(self):

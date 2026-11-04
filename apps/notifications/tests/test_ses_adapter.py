@@ -114,6 +114,11 @@ class SesAdapterTests(SimpleTestCase):
         self.assertEqual({t["Name"] for t in req["EmailTags"]}, {"event_key", "store_id"})
         self.assertNotIn("ConfigurationSetName", req)
 
+    @override_settings(RASTISI_SES_CONFIGURATION_SET="rastisi-events")
+    def test_configuration_set_is_attached_so_sns_bounce_and_complaint_events_are_published(self):
+        self.t.send(base.OutboundEmail("info@shop.test", "n", "c@example.com", "s", "t"))
+        self.assertEqual(self.stub.sent[0]["ConfigurationSetName"], "rastisi-events")
+
     def test_error_classification_throttling_is_retryable_rejection_is_permanent(self):
         msg = base.OutboundEmail("info@shop.test", "n", "c@example.com", "s", "t")
         for code, retryable in (("TooManyRequestsException", True), ("Throttling", True), ("MessageRejected", False),
