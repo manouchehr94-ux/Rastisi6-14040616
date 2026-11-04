@@ -1,0 +1,13 @@
+diff --git a/apps/notifications/migrations/0005_email_sender_identity_platform_templates.py b/apps/notifications/migrations/0005_email_sender_identity_platform_templates.py
+index 3db45e19..93373da8 100644
+--- a/apps/notifications/migrations/0005_email_sender_identity_platform_templates.py
++++ b/apps/notifications/migrations/0005_email_sender_identity_platform_templates.py
+@@ -8,7 +8,7 @@ from django.db import migrations, models
+ class Migration(migrations.Migration):
+ 
+     dependencies = [
+-        ("notifications", "0003_sms_log_mirror"),
++        ("notifications", "0004_inbox_engine"),
+         ("stores", "0020_store_onboarding_required_at"),
+         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+     ]

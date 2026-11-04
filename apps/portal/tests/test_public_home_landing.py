@@ -14,7 +14,9 @@ from django.test import SimpleTestCase, TestCase, override_settings
 _HOST = "rastisi.localhost"
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+# These assertions describe the *previous* landing design (the rollback path kept intact by the new
+# "Sardar" design); the new design's contract lives in test_public_site_v2.py.
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], PUBLIC_SITE_FORCE_DESIGN="legacy")
 class PublicHomeLandingTests(TestCase):
     def setUp(self):
         response = self.client.get("/", HTTP_HOST=_HOST)

@@ -1,0 +1,36 @@
+{% extends "dashboard/base_admin.html" %}
+{% block title %}تنظیمات کانال‌های اعلان | پنل مدیریت{% endblock %}
+{% block page_title %}تنظیمات کانال‌های اعلان{% endblock %}
+{% block page_sub %}برای هر رویداد، پیامک و ایمیل را مستقل از هم روشن یا خاموش کنید{% endblock %}
+{% block content %}
+{% include "dashboard/partials/notification_tabs.html" with tab="channels" %}
+{% if diag.status != 'active' %}<div class="card" style="margin-bottom:12px"><div class="card-body"><span class="badge b-amber" style="white-space:normal">فرستنده‌ی ایمیلِ فروشگاه هنوز فعال نیست؛ کلیدهایِ ایمیل ذخیره می‌شوند اما تا فعال‌شدنِ فرستنده ایمیلی ارسال نمی‌شود. <a href="{% url 'dashboard:notification-sender' %}">مشاهده‌ی وضعیت</a></span></div></div>{% endif %}
+<form method="post">
+  {% csrf_token %}
+  <div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>رویداد</th><th>دسته</th><th>پیامک</th><th>ایمیل</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td><b>{{ row.event.label }}</b><br><small dir="ltr" style="color:var(--muted)">{{ row.event.key }}</small></td>
+        <td>{{ row.category }}</td>
+        <td>
+          {% if row.cells.sms.editable %}
+            <input type="hidden" name="seen__{{ row.event.key }}__sms" value="1">
+            <label><input type="checkbox" name="{{ row.event.key }}__sms" {% if row.cells.sms.enabled %}checked{% endif %} aria-label="پیامک {{ row.event.label }}"> فعال</label>
+          {% else %}<span class="badge {% if row.cells.sms.enabled %}b-green{% else %}b-amber{% endif %}" title="این مورد از اینجا قابل تغییر نیست">{% if row.cells.sms.enabled %}فعال{% else %}غیرفعال{% endif %} 🔒</span>{% endif %}
+        </td>
+        <td>
+          {% if row.cells.email.editable %}
+            <input type="hidden" name="seen__{{ row.event.key }}__email" value="1">
+            <label><input type="checkbox" name="{{ row.event.key }}__email" {% if row.cells.email.enabled %}checked{% endif %} aria-label="ایمیل {{ row.event.label }}"> فعال</label>
+          {% else %}<span class="badge {% if row.cells.email.enabled %}b-green{% else %}b-amber{% endif %}" title="این مورد از اینجا قابل تغییر نیست">{% if row.cells.email.enabled %}فعال{% else %}غیرفعال{% endif %} 🔒</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div>
+  <p style="font-size:12px;color:var(--muted);margin-top:8px">🔒 = قابل تغییر نیست: اعلان‌هایِ امنیتی همیشه فعال‌اند، متنِ پیامکِ کمپین/مناسبت و پیامک‌هایِ مشترکِ قدیمی از بخشِ تنظیماتِ پیامک/پلتفرم مدیریت می‌شوند.</p>
+  <div class="btn-row" style="margin-top:12px"><button type="submit" class="btn btn-primary">ذخیره</button></div>
+</form>
+{% endblock %}

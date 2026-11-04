@@ -1,0 +1,29 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}{% ps 'contact.meta_title' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% ps 'contact.meta_description' %}">{% endblock %}
+{% block content %}
+{% ps 'contact.crumb' as crumb %}{% ps 'contact.title' as title %}{% ps 'contact.lead' as lead %}
+{% include "portal/public_v2/_pghead.html" %}
+<div class="sec"><div class="wrap contact">
+  <div class="cinfo">
+    {% ps_items 'cinfo' as infos %}
+    {% if infos %}
+    <dl>{% for i in infos %}<div><dt>{{ i.label }}</dt><dd{% if i.ltr %} class="num ltr" dir="ltr"{% endif %}>{{ i.value }}</dd></div>{% endfor %}</dl>
+    {% else %}<p class="cinfo-empty">{% ps 'contact.info_empty' %}</p>{% endif %}
+  </div>
+  <form class="form" method="post" novalidate>
+    {% csrf_token %}
+    <h2>{% ps 'contact.form_title' %}</h2>
+    {% if form.non_field_errors %}<div class="alert alert-err" role="alert">{{ form.non_field_errors.0 }}</div>{% endif %}
+    <div class="frow">
+      <div class="in"><label for="id_full_name">نام و نام خانوادگی</label>{{ form.full_name }}{% if form.full_name.errors %}<div class="p-error err">{{ form.full_name.errors.0 }}</div>{% endif %}</div>
+      <div class="in"><label for="id_email">ایمیل</label>{{ form.email }}{% if form.email.errors %}<div class="p-error err">{{ form.email.errors.0 }}</div>{% endif %}</div>
+    </div>
+    <div class="in"><label for="id_subject">موضوع</label>{{ form.subject }}{% if form.subject.errors %}<div class="p-error err">{{ form.subject.errors.0 }}</div>{% endif %}</div>
+    <div class="in"><label for="id_message">پیام</label>{{ form.message }}{% if form.message.errors %}<div class="p-error err">{{ form.message.errors.0 }}</div>{% endif %}</div>
+    {% include "portal/public_v2/_turnstile.html" with turnstile_action="contact" %}
+    <button class="btn btn-leaf btn-block" type="submit">{% ps 'contact.button' %}</button>
+  </form>
+</div></div>
+{% endblock %}

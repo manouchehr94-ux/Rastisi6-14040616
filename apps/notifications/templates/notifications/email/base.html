@@ -8,7 +8,7 @@
         <tr><td style="background:{{ primary_color }};color:#ffffff;padding:18px 24px;font-size:18px;font-weight:bold">{{ store_name }}</td></tr>
         <tr><td style="padding:24px;color:#1f2937;font-size:15px;line-height:2">
           <h1 style="margin:0 0 12px;font-size:17px">{{ subject }}</h1>
-          {% for line in paragraphs %}<p style="margin:0 0 10px">{{ line }}</p>{% endfor %}
+          {% if content_html %}{{ content_html }}{% else %}{% for line in paragraphs %}<p style="margin:0 0 10px">{{ line }}</p>{% endfor %}{% endif %}
         </td></tr>
         <tr><td style="padding:14px 24px;background:#fafafa;color:#6b7280;font-size:12px">این پیام به‌صورت خودکار از {{ store_name }} ارسال شده است.</td></tr>
       </table>

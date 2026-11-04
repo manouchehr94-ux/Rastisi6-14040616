@@ -26,6 +26,8 @@ class RunEngagementJobsCommandTests(EngagementBase):
         call_command("run_engagement_jobs", stdout=out)
         self.assertEqual(CampaignIssuance.objects.count(), 1)
         code = CampaignIssuance.objects.get().coupon.code
-        self.assertEqual(len([m for m in mail.outbox if code in m.body]), 1)
+        from apps.notifications.mail.fake import FakeTransport
+
+        self.assertEqual(len([m for m in FakeTransport.sent if code in m["message"].text_body]), 1)
         call_command("run_engagement_jobs", "--no-deliver", stdout=out)
         self.assertIn("کمپین‌هایِ اجراشده", out.getvalue())

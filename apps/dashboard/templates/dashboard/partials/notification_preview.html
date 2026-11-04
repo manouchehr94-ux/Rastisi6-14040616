@@ -3,6 +3,7 @@
 {% else %}
   {% if result.subject %}<div><b>موضوع:</b> {{ result.subject }}</div>{% endif %}
   <div dir="rtl" style="white-space:pre-wrap">{{ result.body }}</div>
+  {% if result.html_document %}<iframe title="پیش‌نمایش HTML ایمیل" sandbox="" srcdoc="{{ result.html_document }}" style="width:100%;height:340px;border:1px solid var(--line,#d9dce3);border-radius:8px;margin-top:8px;background:#fff"></iframe>{% endif %}
   <small style="color:var(--muted)">{{ result.length }} نویسه (با داده‌ی نمونه){% if result.sms_long %} — ⚠ پیامک طولانی است و بیش از یک بخش محاسبه می‌شود{% endif %}</small>
 {% endif %}
 </div>

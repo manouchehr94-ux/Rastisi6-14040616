@@ -1,0 +1,13 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site %}
+{% block title %}صفحه پیدا نشد | {% ps 'layout.brand' %}{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block canonical %}{% endblock %}
+{% block closing %}{% endblock %}
+{% block content %}
+<div class="pg-sign pg-404"><div class="wrap">
+  <h1>{% ps 'notfound.title' %}</h1>
+  <p>{% ps 'notfound.text' %}</p>
+  <a href="{% url 'portal:home' %}" class="btn btn-saffron">{% ps 'notfound.button' %}</a>
+</div></div>
+{% endblock %}

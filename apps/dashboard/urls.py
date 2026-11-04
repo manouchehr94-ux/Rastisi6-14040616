@@ -6,7 +6,7 @@ from apps.storefront_builder import vision_views as storefront_builder_vision_vi
 from apps.storefront_builder import views as storefront_builder_views
 
 from apps.notifications.inbox_views import VIEWS_DASH, url_patterns as _inbox_patterns
-from . import card_transfer_views, cod_views, engagement_views, journal_views, payment_reconciliation_views, views, views_domain
+from . import card_transfer_views, cod_views, engagement_views, journal_views, notification_admin_views, payment_reconciliation_views, views, views_domain
 
 app_name = "dashboard"
 
@@ -240,6 +240,9 @@ urlpatterns = [
     path("payments/reconciliation/", payment_reconciliation_views.payment_reconciliation_list, name="payment-reconciliations"),
     path("payments/reconciliation/<int:pk>/resolve/", payment_reconciliation_views.payment_reconciliation_resolve, name="payment-reconciliation-resolve"),
     path("notifications/history/<int:pk>/retry/", engagement_views.notification_retry, name="notification-retry"),
+    path("notifications/sender/", notification_admin_views.notification_sender, name="notification-sender"),
+    path("notifications/sender/retry/", notification_admin_views.notification_sender_retry, name="notification-sender-retry"),
+    path("notifications/channels/", notification_admin_views.notification_channels, name="notification-channels"),
     path("notifications/<str:event_key>/", engagement_views.notification_template_edit, name="notification-template-edit"),
     path("notifications/<str:event_key>/preview/", engagement_views.notification_template_preview, name="notification-template-preview"),
     path("notifications/<str:event_key>/test/", engagement_views.notification_template_test, name="notification-template-test"),

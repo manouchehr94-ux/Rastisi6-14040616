@@ -1,0 +1,31 @@
+{% extends "portal/public_v2/base.html" %}
+{% load public_site persian %}
+{% block title %}صنوف پشتیبانی‌شده | {% ps 'layout.brand' %}{% endblock %}
+{% block meta_description %}<meta name="description" content="{% if industry_count %}{{ industry_count }} ساختار صنفی آماده در راستی‌سی؛ صنف کسب‌وکار خود را جست‌وجو کنید.{% else %}صنوف و ساختارهای آماده برای شروع فروشگاه در راستی‌سی.{% endif %}">{% endblock %}
+{% block content %}
+{% ps 'industries.crumb' as crumb %}{% ps 'industries.title' as title %}
+<div class="pg-sign"><div class="wrap">
+  <div class="crumbs"><a href="{% url 'portal:home' %}">خانه</a> / {{ crumb }}</div>
+  <h1>{{ title }}</h1>
+  {% if industry_count %}<p>در حال حاضر {{ industry_count|fa_number }} ساختار صنفی آماده قابل انتخاب است. اگر صنف شما در فهرست نباشد، فروشگاه همچنان بدون قالب صنفی آماده قابل ساخت است.</p>
+  {% else %}<p>در حال حاضر ساختار صنفی آماده‌ای برای نمایش وجود ندارد؛ فروشگاه همچنان می‌تواند بدون قالب آماده ساخته و به‌صورت دستی تنظیم شود.</p>{% endif %}
+  <a href="{% url 'portal:register' %}" class="btn btn-saffron">شروع ساخت فروشگاه</a>
+</div></div>
+<div class="sec"><div class="wrap">
+  <div class="ind-tools">
+    <div class="ind-search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" data-ind-search placeholder="جستجوی صنف شغلی..." aria-label="جستجوی صنف شغلی" autocomplete="off"></div>
+    <div class="filters" role="group" aria-label="دسته‌بندی صنوف">
+      {% for code, label in industry_sector_tabs %}<button type="button" data-ind-tab="{{ code }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ label }}</button>{% endfor %}
+    </div>
+  </div>
+  <div class="ind-grid" data-ind-grid>
+    {% for template in industry_templates %}
+    <div class="ind-card" data-name="{{ template.name }}" data-sector="{{ template.sector }}"><div class="ic" aria-hidden="true">{{ template.icon|default:"•" }}</div><b>{{ template.name }}</b><span>{{ template.get_sector_display }}</span></div>
+    {% endfor %}
+  </div>
+  <p class="ind-empty" data-ind-empty hidden>صنف مورد نظر یافت نشد. می‌توانید کلمه‌ی دیگری جست‌وجو کنید یا صنفِ «سایر» را انتخاب کنید.</p>
+</div></div>
+<div class="sec sec-band"><div class="wrap">
+  <div class="intro"><h2 class="h2-sm h2">ساختار آماده، نقطه شروع است، نه محدودیت نهایی</h2><p class="sub">انتخاب صنف برای نزدیک‌ترکردن ساختار اولیه به کسب‌وکار شماست. بعد از شروع، فروشگاه باید بتواند مطابق نیاز واقعی شما تنظیم شود. نبودن صنف آماده مانع ساخت فروشگاه نیست.</p></div>
+</div></div>
+{% endblock %}

@@ -173,6 +173,9 @@ class CheckoutConsentTests(TestCase):
 class DispatchAndDeliveryEnforcementTests(TestCase):
     def setUp(self):
         self.store = Store.objects.get(slug="akhlaghi")
+        from apps.notifications.tests.helpers import give_active_sender
+
+        give_active_sender(self.store)  # mandatory-custom-domain policy: store email needs an ACTIVE verified sender
         self.customer = make_customer("09120009020")
 
     def dispatch(self, key="coupon.issued", **kw):
