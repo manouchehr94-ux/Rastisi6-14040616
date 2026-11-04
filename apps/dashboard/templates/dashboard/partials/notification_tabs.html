@@ -1,6 +1,15 @@
-<nav aria-label="بخش‌های اعلان" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-  <a class="btn btn-sm {% if tab == 'templates' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-templates' %}" {% if tab == 'templates' %}aria-current="page"{% endif %}>قالب‌ها</a>
-  <a class="btn btn-sm {% if tab == 'channels' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-channels' %}" {% if tab == 'channels' %}aria-current="page"{% endif %}>تنظیمات کانال‌ها</a>
-  <a class="btn btn-sm {% if tab == 'sender' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-sender' %}" {% if tab == 'sender' %}aria-current="page"{% endif %}>هویتِ فرستنده‌ی ایمیل</a>
-  <a class="btn btn-sm {% if tab == 'history' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-history' %}" {% if tab == 'history' %}aria-current="page"{% endif %}>تاریخچه‌ی ارسال</a>
+{% comment %}
+Unified messaging sub-navigation (Settings -> Messaging). One coherent set of subsections for the whole
+notifications/SMS/email management experience; every page that belongs to the messaging section includes this with the
+matching ``tab=`` value so the five subsections stay consistent.
+
+Subsections (spec order): events & templates, channels & delivery, email sender & domain, SMS provider & credits,
+delivery history & queue. Each links to an existing, working view — this is navigation only, no behaviour change.
+{% endcomment %}
+<nav aria-label="بخش‌های پیام‌رسانی" class="msg-subnav" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px">
+  <a class="btn btn-sm {% if tab == 'templates' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-templates' %}" {% if tab == 'templates' %}aria-current="page"{% endif %}>رویدادها و قالب‌ها</a>
+  <a class="btn btn-sm {% if tab == 'channels' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-channels' %}" {% if tab == 'channels' %}aria-current="page"{% endif %}>کانال‌های ارسال</a>
+  <a class="btn btn-sm {% if tab == 'sender' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-sender' %}" {% if tab == 'sender' %}aria-current="page"{% endif %}>فرستنده‌ی ایمیل و دامنه</a>
+  <a class="btn btn-sm {% if tab == 'sms' %}btn-primary{% endif %}" href="{% url 'dashboard:settings' %}?section=sms" {% if tab == 'sms' %}aria-current="page"{% endif %}>سرویس پیامک و اعتبار</a>
+  <a class="btn btn-sm {% if tab == 'history' %}btn-primary{% endif %}" href="{% url 'dashboard:notification-history' %}" {% if tab == 'history' %}aria-current="page"{% endif %}>تاریخچه و صف ارسال</a>
 </nav>

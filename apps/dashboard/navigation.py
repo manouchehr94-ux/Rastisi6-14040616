@@ -217,10 +217,13 @@ SECTIONS: tuple = (
             Tab("coupons", "کدهای تخفیف", "coupon-list", perms=("can_view_coupons",),
                 matches=(_m(prefix="coupon-"),), pages=("coupons",),
                 keywords="تخفیف کوپن کد تخفیف جشنواره coupon"),
-            Tab("notifications", "اعلان‌ها و پیام‌ها", "notification-templates",
+            # Entry into the unified messaging experience (رویدادها و قالب‌ها + the shared 5-subsection sub-bar). It owns
+            # the notification-* routes; the SMS-provider screen is its sibling subsection under Settings. Same views, no
+            # second admin system. Label aligned with the «پیام‌رسانی» section name shown across the sub-navigation.
+            Tab("notifications", "پیام‌رسانی (اعلان‌ها و پیام‌ها)", "notification-templates",
                 perms=("can_manage_settings",),
                 matches=(_m(prefix="notification-"),), pages=("notifications",),
-                keywords="اعلان پیام قالب پیام پیامک ایمیل اطلاع رسانی notification"),
+                keywords="پیام‌رسانی اعلان پیام قالب پیام پیامک ایمیل اطلاع رسانی رویداد فرستنده دامنه اعتبار تاریخچه صف notification messaging"),
         ),
     ),
     Section(
@@ -335,12 +338,15 @@ SECTIONS: tuple = (
                            matches=(_m("settings", get={"section": ("delivery-payment",)}),),
                            keywords="خلاصه ارسال درگاه پرداخت"),
                 )),
-            Tab("sms", "پیامک و ارتباطات", "settings", perms=("can_manage_settings",), query="?section=sms",
+            # «سرویس پیامک و اعتبار» — one of the five subsections of the unified Messaging experience. The five
+            # subsections are tied together by the shared sub-navigation bar rendered inside the pages
+            # (dashboard/partials/notification_tabs.html); this Settings tab owns the SMS-provider/credits screen.
+            Tab("sms", "سرویس پیامک و اعتبار", "settings", perms=("can_manage_settings",), query="?section=sms",
                 matches=(
                     _m("settings", get={"section": ("sms",)}),
                     _m(prefix=("settings-sms", "settings-smsrasti", "sms-")),
                 ),
-                keywords="پیامک sms اس ام اس اتصال پیامک پنل پیامکی ارسال آزمایشی ارتباطات"),
+                keywords="پیام‌رسانی پیامک sms اس ام اس اتصال پیامک پنل پیامکی ارسال آزمایشی اعتبار ارتباطات"),
             Tab("integrations", "یکپارچه‌سازی‌ها", "settings", perms=("can_manage_settings",), query="?section=integrations",
                 matches=(_m("settings", get={"section": ("integrations",)}), _m(prefix="settings-integration")),
                 keywords="اینماد ترب گوگل آنالیتیکس تگ منیجر پیکسل یکپارچه‌سازی integrations",
