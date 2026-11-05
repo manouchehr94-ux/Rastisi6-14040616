@@ -91,6 +91,11 @@ class JourneyATestCase(TestCase):
 
         cache.clear()
         call_command("seed_default_plans", stdout=StringIO())
+        # This journey models a deployment whose default plans already existed BEFORE domains.custom became plan-gated
+        # (grandfathering: EntitlementDefinition.enforced_from). Seeding "now" would otherwise create brand-new versions that
+        # explicitly say "no custom domain for Trial" and are — correctly — enforced.
+        from apps.subscriptions.models import PlanVersion
+        PlanVersion.objects.update(published_at=timezone.now() - timedelta(days=400))
         self._codes = iter([
             "111111",  # registration OTP
             "222222",  # step-up: subscription purchase

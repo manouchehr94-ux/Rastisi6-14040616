@@ -40,7 +40,10 @@ ENTITLEMENT_DEFINITIONS = [
     ("staff.members", "اعضایِ تیم", _T.INTEGER_LIMIT, True),
     ("staff.management", "مدیریتِ کارکنان", _T.BOOLEAN, True),
     # دامنه/یکپارچه‌سازی (رزرو برایِ آینده — کلیدها واقعی، سقف/رفتارشان بعداً)
-    ("domains.custom", "دامنه‌ی اختصاصی", _T.BOOLEAN, False),
+    # domains.custom با grandfathering اعمال می‌شود (EntitlementDefinition.enforced_from): نسخه‌هایِ منتشرشده پیش از تاریخِ اعمال
+    # (از جمله Trial/Basicِ seed شده که False دارند) دسترسیِ قبلی را حفظ می‌کنند؛ نسخه‌هایِ تازه‌ای که کلید را تعریف نکنند
+    # fail-open‌اند (default_enabled=True) و فقط مقدارِ صریحِ «خاموش» مسدود می‌کند.
+    ("domains.custom", "دامنه‌ی اختصاصی", _T.BOOLEAN, True),
     ("integrations.api", "API", _T.BOOLEAN, False),
     ("integrations.webhooks", "Webhookها", _T.BOOLEAN, False),
     # محدودیت‌هایِ دوره‌ای (period-based؛ سنجش در usage_service)

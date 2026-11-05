@@ -31,11 +31,10 @@ DOMAINS_CUSTOM = "domains.custom"
 ENFORCED_ENTITLEMENT_KEYS = frozenset({
     ekeys.CATALOG_PRODUCTS, ekeys.CATALOG_VARIANTS, ekeys.CATALOG_IMPORT, ekeys.CATALOG_EXPORT,
     ekeys.CATALOG_IMPORT_ROWS_MONTHLY, ekeys.CATALOG_EXPORTS_MONTHLY, ekeys.INVENTORY_WAREHOUSES,
-    ekeys.CUSTOMERS_SEGMENTS, ekeys.STAFF_MEMBERS,
+    ekeys.CUSTOMERS_SEGMENTS, ekeys.STAFF_MEMBERS, DOMAINS_CUSTOM,
 })
-# DOMAINS_CUSTOM عمداً اینجا نیست: پلن‌هایِ seed شده‌ی Trial/Basic آن را صریحاً False اعلام کرده‌اند، پس اعمالِ آن دسترسیِ
-# فعلیِ مشترکانِ موجود را بی‌صدا لغو می‌کرد (و «حفظِ مشترکانِ موجود» را نقض می‌کرد). اعمال‌کردنش تصمیمِ مالک است
-# (نیازمندِ مهاجرتِ grandfathering)؛ سندِ ممیزی را ببینید.
+# DOMAINS_CUSTOM با grandfathering اعمال می‌شود: Trial/Basicِ seed شده آن را False دارند و دسترسیِ مشترکانِ فعلی نباید لغو شود،
+# پس فقط نسخه‌هایِ منتشرشده‌ی *پس از* ``EntitlementDefinition.enforced_from`` مقدارِ صریحشان اعمال می‌شود.
 
 
 @dataclass(frozen=True)
@@ -72,7 +71,7 @@ CATALOG: tuple[Feature, ...] = (
     # ------------------------------------------------------------------ زیرساختِ فنی
     Feature("tenant_isolation", INFRA, "فضایِ مستقل برایِ هر فروشگاه", "داده، کاربران و تنظیماتِ هر فروشگاه از دیگران کاملاً جداست (چندمستاجری).", evidence="apps/stores resolution + tenant scoping tests"),
     Feature("platform_subdomain", INFRA, "نشانیِ رایگانِ ویترین/پنل روی راستی‌سی", "هر فروشگاه یک زیردامنه‌ی ویترین و یک نشانیِ پنل می‌گیرد.", evidence="provisioning_service + StoreDomain"),
-    Feature("custom_domain", INFRA, "دامنه‌یِ اختصاصی", "اتصالِ دامنه‌ی خودِ فروشگاه با تأییدِ مالکیتِ DNS.", note="DNS را مالکِ دامنه تنظیم می‌کند؛ محدودکردنِ آن بر اساسِ پلن هنوز اعمال نمی‌شود.", evidence="apps/stores/services/domain_verification_service.py"),
+    Feature("custom_domain", INFRA, "دامنه‌یِ اختصاصی", "اتصالِ دامنه‌ی خودِ فروشگاه با تأییدِ مالکیتِ DNS (دامنه‌یِ دوم هم ممکن است).", entitlement=DOMAINS_CUSTOM, note="مشترکانِ نسخه‌هایِ منتشرشده پیش از تاریخِ اعمال دسترسیِ فعلی را حفظ می‌کنند؛ DNS را مالکِ دامنه تنظیم می‌کند.", evidence="apps/stores/services/domain_verification_service.py"),
     Feature("access_control", INFRA, "ورودِ امن و تأییدِ دو مرحله‌ای", "ورودِ مالک با کدِ پیامکی، محدودیتِ تلاش و تأییدِ گامِ دوم برایِ عملیاتِ حساس.", evidence="apps/portal owner auth + step-up"),
     Feature("audit_log", INFRA, "گزارشِ فعالیت‌ها (Audit Log)", "ثبتِ عملیاتِ مهمِ فروشگاه برایِ پیگیری.", evidence="apps/core audit + dashboard audit_log"),
     Feature("api", INFRA, "API و Webhook برایِ توسعه‌دهندگان", "رابطِ برنامه‌نویسیِ فروشگاه.", availability=PLANNED, entitlement="", evidence="کلیدِ integrations.api/webhooks فقط رزرو است؛ پیاده‌سازی ندارد"),
@@ -80,7 +79,7 @@ CATALOG: tuple[Feature, ...] = (
     Feature("seo_basics", SEO, "سئویِ فنیِ خودکار", "نقشه‌ی سایت، robots.txt، canonical و داده‌ی ساخت‌یافته (JSON-LD) برایِ ویترین.", evidence="apps/core/seo.py"),
     Feature("seo_fields", SEO, "ویرایشِ عنوان و توضیحِ سئو", "عنوان/توضیحِ متا برایِ کالا، دسته و صفحه‌ها.", evidence="catalog/content seo fields"),
     Feature("indexnow", SEO, "اطلاعِ فوریِ تغییرات به موتورهایِ جستجو (IndexNow)", "ارسالِ خودکارِ نشانیِ تغییرکرده.", evidence="apps/core IndexNow pipeline"),
-    Feature("redirects", SEO, "ریدایرکتِ ۳۰۱", "حفظِ اعتبارِ نشانی‌ها هنگامِ تغییرِ آدرس.", evidence="redirect handling"),
+    Feature("redirects", SEO, "ریدایرکتِ ۳۰۱ قابلِ‌تعریف توسطِ فروشنده", "تعریفِ قاعده‌ی تغییرمسیر برایِ نشانی‌هایِ قدیمی.", availability=PLANNED, evidence="apps/stores/middleware.py::StorefrontCanonicalRedirectMiddleware فقط ریدایرکتِ هستِ canonical است؛ قاعده‌ی قابلِ‌تعریف وجود ندارد"),
     Feature("pages_blog", SEO, "صفحه‌هایِ محتوا و مجله", "ساختِ صفحه‌هایِ ثابت و مقاله‌هایِ مجله.", evidence="apps/content, apps/blog"),
     Feature("analytics", SEO, "GA4، GTM و Meta Pixel با رضایتِ کاربر", "اتصالِ ابزارهایِ ردیابی با مدیریتِ رضایتِ بازدیدکننده.", availability=EXTERNAL, note="نیازمندِ حسابِ شخصِ ثالث.", evidence="settings/integrations; core consent engine"),
     Feature("torob_enamad", SEO, "ترب و اینماد", "نقشه/فیدِ ترب و ثبتِ نشانِ اینماد.", availability=EXTERNAL, note="نیازمندِ ثبت‌نام در سرویس‌هایِ مربوط.", evidence="settings/integrations (Torob, eNamad)"),
@@ -93,17 +92,28 @@ CATALOG: tuple[Feature, ...] = (
     # ------------------------------------------------------------------ طراحی و شخصی‌سازی
     Feature("storefront_builder", DESIGN, "سازنده‌ی ویترین با بخش‌هایِ آماده", "چیدمانِ صفحه‌ی اصلی با بخش‌ها، پیش‌نمایش، تاریخچه و بازگشت.", evidence="apps/storefront_builder"),
     Feature("ready_templates", DESIGN, "قالب‌هایِ آماده‌ی ویترین", "قالب‌هایِ آماده‌ی صنفی با اعمالِ یک‌کلیکی.", evidence="storefront_builder templates"),
-    Feature("branding", DESIGN, "هویتِ بصری (لوگو، رنگ، فونت)", "تنظیمِ لوگو، رنگِ برند، هدر و فوتر و عرضِ صفحه.", evidence="settings identity-assets; global design"),
+    Feature("branding", DESIGN, "هویتِ بصری (لوگو، رنگ، پالت)", "تنظیمِ لوگو، رنگِ برند، هدر و فوتر و عرضِ صفحه.", evidence="settings identity-assets; global design"),
     Feature("homepage_media", DESIGN, "بنر و هیروی صفحه‌ی اصلی", "مدیریتِ بنرها و بخشِ هیرو.", evidence="dashboard homepage hero/banners"),
     Feature("menus_footer", DESIGN, "منوها و فوتر", "منوهایِ قابلِ‌ویرایش، نمادهایِ اعتماد و لوگویِ پرداخت.", evidence="dashboard menus/footer"),
     Feature("rtl_mobile", DESIGN, "ویترینِ فارسی، راست‌چین و واکنش‌گرا", "طراحیِ RTL با نمایشِ مناسبِ موبایل.", evidence="storefront templates"),
     # ------------------------------------------------------------------ بازاریابی و رشدِ فروش
-    Feature("coupons", MARKETING, "کدِ تخفیف", "کوپن با شرط و سقفِ استفاده.", evidence="apps/engagement coupons"),
+    Feature("coupons", MARKETING, "کدِ تخفیفِ پیشرفته و گروهی", "کوپن با حداقلِ سفارش، سقفِ استفاده، بازه‌ی اعتبار و تخصیصِ اختصاصیِ مشتری؛ کمپین‌ها برایِ گروهی از مشتریان کدِ جداگانه صادر می‌کنند.", evidence="apps/cart/models.py::Coupon; apps/engagement/services/campaign_service.py"),
     Feature("campaigns", MARKETING, "کمپین‌هایِ تخفیفی", "کمپین و کمپینِ مجموعه.", evidence="dashboard campaigns"),
     Feature("free_shipping_goal", MARKETING, "هدفِ ارسالِ رایگان", "نمایشِ پیشرفتِ سبد تا ارسالِ رایگان.", evidence="cart free_shipping"),
     Feature("gift_wrap", MARKETING, "بسته‌بندیِ هدیه", "افزودنِ گزینه‌ی هدیه به کالا.", evidence="dashboard gift-wrap"),
     Feature("messaging", MARKETING, "اعلان و پیامک", "قالب‌هایِ اعلان، پیامک و ایمیل؛ اعتبارِ پیامک جداگانه خریداری می‌شود.", availability=PARTIAL, note="اعتبارِ پیامک خریدِ جدا دارد.", evidence="apps/notifications, apps/sms"),
     Feature("social_links", MARKETING, "شبکه‌هایِ اجتماعی", "لینکِ شبکه‌هایِ اجتماعی در ویترین.", evidence="dashboard social-links"),
+    Feature("bulk_actions", STORE, "عملیاتِ گروهی روی کالاها", "انتخابِ چند کالا و اعمالِ همزمانِ وضعیت/عملیات از فهرستِ کالاها.", evidence="apps/dashboard/views.py::product_bulk_action"),
+    Feature("order_sms", STORE, "پیامکِ وضعیتِ سفارش به مشتری", "ثبت، پرداختِ موفق/ناموفق، پردازش، ارسال (با کدِ رهگیری)، تحویل و لغو؛ متن‌ها با متغیر شخصی‌سازی می‌شوند.", availability=PARTIAL, note="اعتبارِ پیامک خریدِ جدا دارد؛ سهمیه‌ی رایگانِ هر پلن تعریف نشده است.", evidence="apps/sms/events.py (SmsEvent.ORDER_*)"),
+    Feature("stock_alerts", STORE, "هشدارِ کاهش و اتمامِ موجودی", "اعلان برایِ کالایی که از آستانه‌ی موجودی عبور می‌کند.", evidence="apps/notifications/registry.py (stock.low / stock.out)"),
+    Feature("reviews", STORE, "دیدگاهِ مشتریان با تأییدِ فروشنده", "ثبتِ امتیاز و متن در صفحه‌ی کالا؛ نمایش پس از تأییدِ فروشنده.", evidence="apps/catalog/views.py::product_review_create; apps/catalog/models.py::Review"),
+    Feature("advanced_search", STORE, "جستجوی فارسی‌محورِ کالا با فیلتر", "جستجوی مقاوم به ی/ک، نیم‌فاصله و خط‌تیره با فیلترِ دسته، برند، قیمت و موجودی.", availability=PARTIAL, note="فیلترِ ویژگی‌هایِ دلخواهِ کالا هنوز در جستجو نیست.", evidence="apps/catalog/services/search_service.py; apps/catalog/views.py::_filtered_products"),
+    Feature("shipping_carriers", STORE, "پیش‌تنظیمِ حامل‌هایِ ارسال و کدِ رهگیری", "انتخابِ حاملِ آماده (تیپاکس، چاپار، اسنپ‌باکس و…) و ثبتِ کدِ رهگیریِ مرسوله.", availability=PARTIAL, note="نرخ‌گیری و ثبتِ مرسوله با API حامل‌ها وجود ندارد.", evidence="apps/orders/services/shipping_service.py; apps/orders/models.py (tracking_code)"),
+    Feature("min_order_rules", STORE, "حداقلِ مبلغِ سفارش (کد تخفیف و روشِ ارسال)", "حداقلِ سبد برایِ اعمالِ کد تخفیف و برایِ دسترسی‌پذیریِ هر روشِ ارسال.", availability=PARTIAL, note="حداقلِ مبلغِ کلِ سبدِ فروشگاه (مستقل از کوپن/ارسال) تعریف نشده است.", evidence="apps/cart/models.py (Coupon.min_order); apps/orders/models.py (min_subtotal)"),
+    Feature("customer_accounts", STORE, "حسابِ مشتری (موبایل/ایمیل)", "ثبت‌نامِ مشتری با موبایل و گذرواژه؛ ورود با موبایل، ایمیل یا نامِ کاربری.", availability=PARTIAL, note="ثبت‌نامِ صرفاً با ایمیل (بدونِ موبایل) پشتیبانی نمی‌شود.", evidence="apps/customers/services/auth_service.py"),
+    Feature("fonts", DESIGN, "انتخابِ فونتِ ویترین", "انتخابِ فونت از فهرستِ تعریف‌شده (۷ گزینه).", evidence="apps/storefront_builder/appearance_registry.py::FONT_CHOICES"),
+    Feature("occasions", MARKETING, "کمپینِ مناسبتی و بازگشتِ مشتری", "ارسالِ تبریک/هدیه‌ی تولد، سالگرد، نقطه‌ی عطفِ سفارش/خرید و بازگشتِ مشتریِ غیرفعال، با یادآوریِ انقضای کد.", evidence="apps/engagement/models.py::Campaign.Occasion; apps/engagement/services/occasions.py"),
+    Feature("welcome_sms", MARKETING, "پیامِ خوش‌آمدگویی", "پیامکِ خوش‌آمدگویی پس از ثبت‌نامِ مشتری.", note="اعتبارِ پیامک خریدِ جدا دارد.", evidence="apps/customers/services/auth_service.py; apps/sms/events.py (SmsEvent.WELCOME)"),
     # ------------------------------------------------------------------ خدماتِ حرفه‌ایِ اختیاری
     # عمداً ردیفی ساخته نمی‌شود: خدمات را مدیر در «خدماتِ اختیاری» تعریف می‌کند (بخشِ جدا در صفحه‌ی عمومی).
 )

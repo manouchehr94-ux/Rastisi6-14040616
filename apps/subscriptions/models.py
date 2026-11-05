@@ -77,6 +77,9 @@ class EntitlementDefinition(TimeStampedModel):
     # نکرده باشد — برایِ boolean یعنی «آیا در نبودِ تعریف، فعال است؟».
     default_enabled = models.BooleanField("پیش‌فرض: فعال", default=False)
     is_active = models.BooleanField("فعال", default=True)
+    # Grandfathering: برایِ کلیدی که *بعداً* اعمال شده، نسخه‌هایِ منتشرشده **پیش از** این زمان رفتارِ قبلی (fail-open) را
+    # نگه می‌دارند؛ فقط نسخه‌هایِ منتشرشده‌ی بعد از آن مقدارِ صریحشان اعمال می‌شود. خالی = برایِ همه اعمال می‌شود.
+    enforced_from = models.DateTimeField("اعمال از (برایِ نسخه‌هایِ منتشرشده پس از)", null=True, blank=True)
 
     class Meta:
         verbose_name = "تعریفِ حق‌دسترسی"

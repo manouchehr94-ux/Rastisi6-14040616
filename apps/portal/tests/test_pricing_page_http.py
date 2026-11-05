@@ -61,7 +61,7 @@ class PublicPricingPageTests(TestCase):
         self.assertEqual(row.count("pz-yes"), 2)                                 # advanced + ultra only
         self.assertEqual(row.count("pz-none"), 1)
         domain_row = html.split('data-feature="custom_domain"')[1].split('data-feature="')[0]
-        self.assertEqual(domain_row.count("pz-all"), 3)                          # not plan-gated today ⇒ honestly "all plans"
+        self.assertEqual(domain_row.count("pz-yes"), 3)                          # no explicit value ⇒ fail-open ⇒ available
 
     def test_unimplemented_capabilities_are_never_advertised(self):
         html = self.get().content.decode()

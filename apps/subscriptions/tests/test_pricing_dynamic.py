@@ -248,23 +248,83 @@ class ExistingSubscriberPreservationTests(TestCase):
         self.assertTrue(ent.has_entitlement(store, "catalog.import"))             # default_enabled + fail-open
 
 
-class CustomDomainBehaviourPreservedTests(TestCase):
-    """domains.custom is declared (and seeded False for Trial/Basic) but NOT enforced. Enforcing it in this release would
-    silently revoke custom-domain access from existing trial/basic stores, so it stays an owner decision."""
+class CustomDomainGrandfatheringTests(TestCase):
+    """domains.custom is now enforced, but ONLY for versions published after EntitlementDefinition.enforced_from; versions
+    published before (e.g. the seeded Trial/Basic, which declare False) keep today's access, and nothing is ever deleted."""
 
-    def test_custom_domain_is_not_gated_by_the_plan_today_and_is_not_advertised_as_gated(self):
+    def setUp(self):
         from apps.stores.services import domain_verification_service as dvs
 
-        _p, off = make_plan("nodomain", flags={"domains.custom": False})
-        store, _s = store_on(off, "dom-preserved")
-        dvs.request_custom_domain(store=store, hostname="preserved.example.com", actor=None)      # same as before this release
-        self.assertTrue(store.domains.filter(hostname="preserved.example.com").exists())
-        self.assertNotIn("domains.custom", catalog.ENFORCED_ENTITLEMENT_KEYS)
-        self.assertIn("domains.custom", catalog.UNENFORCED_ENTITLEMENT_KEYS)
+        self.dvs = dvs
+        self.effective = EntitlementDefinition.objects.get(key="domains.custom").enforced_from
+
+    def old_version(self, code, value):
+        _p, v = make_plan(code, flags={"domains.custom": value})
+        PlanVersion.objects.filter(pk=v.pk).update(published_at=self.effective - timedelta(days=30))
+        return PlanVersion.objects.get(pk=v.pk)
+
+    def request(self, store, host):
+        return self.dvs.request_custom_domain(store=store, hostname=host, actor=None)
+
+    def test_the_effective_date_is_recorded_and_the_key_is_enforced_and_advertised_as_plan_controlled(self):
+        self.assertIsNotNone(self.effective)
+        self.assertIn("domains.custom", catalog.ENFORCED_ENTITLEMENT_KEYS)
+        self.assertNotIn("domains.custom", catalog.UNENFORCED_ENTITLEMENT_KEYS)
+        self.assertTrue(EntitlementDefinition.objects.get(key="domains.custom").default_enabled)
+        self.assertEqual(PricingFeature.objects.get(key="custom_domain").entitlement.key, "domains.custom")
+
+    def test_subscribers_on_versions_published_before_the_effective_date_keep_access_even_if_the_version_says_false(self):
+        store, _s = store_on(self.old_version("oldfalse", False), "gf-old")
+        self.request(store, "grandfathered.example.com")
+        self.assertTrue(store.domains.filter(hostname="grandfathered.example.com").exists())
+        self.assertTrue(ent.has_entitlement(store, "domains.custom"))
+
+    def test_legacy_versions_without_a_published_at_are_grandfathered(self):
+        plan = Plan.objects.create(code="legacypub", name="L")
+        v = PlanVersion.objects.create(plan=plan, version_number=1, status="published", display_price=0, billing_interval="none")
+        ps_row = ps  # noqa: F841
+        store, _s = store_on(v, "gf-legacy")
+        self.request(store, "legacy.example.com")
+
+    def test_new_versions_apply_their_explicit_value(self):
+        _p, off = make_plan("newoff", flags={"domains.custom": False})
+        _p2, on = make_plan("newon", flags={"domains.custom": True})
+        denied, _s = store_on(off, "gf-new-denied")
+        allowed, _s2 = store_on(on, "gf-new-allowed")
+        with self.assertRaises(self.dvs.DomainVerificationError) as ctx:
+            self.request(denied, "denied.example.com")
+        self.assertIn("ارتقا", str(ctx.exception))
+        self.assertFalse(denied.domains.filter(hostname="denied.example.com").exists())
+        self.request(allowed, "allowed.example.com")
+
+    def test_a_new_version_that_never_defines_the_key_stays_fail_open(self):
+        _p, v = make_plan("newundefined")
+        store, _s = store_on(v, "gf-undefined")
+        self.request(store, "undefined.example.com")
+
+    def test_a_store_without_any_subscription_stays_fail_open(self):
+        store = Store.objects.create(name="ns", slug="gf-nosub", admin_subdomain="gf-nosub", status=Store.Status.ACTIVE)
+        self.request(store, "nosub.example.com")
+
+    def test_downgrading_to_a_gated_plan_closes_the_gate_but_deletes_nothing(self):
+        _p, on = make_plan("downon", flags={"domains.custom": True})
+        _p2, off = make_plan("downoff", flags={"domains.custom": False})
+        store, sub = store_on(on, "gf-down")
+        self.request(store, "keepme.example.com")
+        sub_svc.change_plan_version(sub, off)
+        ent.clear_entitlement_cache()
+        with self.assertRaises(self.dvs.DomainVerificationError):
+            self.request(store, "second.example.com")
+        self.assertTrue(store.domains.filter(hostname="keepme.example.com").exists())
+
+    def test_matrix_shows_what_is_actually_enforced_per_plan_including_grandfathered_versions(self):
+        _p, new_off = make_plan("mxoff", order=1, flags={"domains.custom": False})
+        _p2, new_on = make_plan("mxon", order=2, flags={"domains.custom": True})
+        old = self.old_version("mxold", False)
         row = PricingFeature.objects.get(key="custom_domain")
-        self.assertIsNone(row.entitlement)
-        self.assertEqual(page._cell(row, off.plan.versions.get())["kind"], "all")                 # honest: available on every plan
-        self.assertFalse(EntitlementDefinition.objects.get(key="domains.custom").default_enabled)
+        self.assertEqual(page._cell(row, new_off)["kind"], "none")
+        self.assertEqual(page._cell(row, new_on)["kind"], "check")
+        self.assertEqual(page._cell(row, old)["kind"], "check")            # honest: that version's subscribers keep access
 
 
 class EnforcedQuotaConsistencyTests(TestCase):
