@@ -341,3 +341,6 @@ dialog.pa-dialog .pa-modalbox{width:min(560px,calc(100vw - 32px))}
 /* مؤلفه‌یِ مشترکِ «نمایشِ رمز» (core/password_toggle.css) هم‌قدِ کنترل‌هایِ این پنل — فقط داخلِ .pa */
 .pa .pw-field{--pw-size:30px;--pw-gutter:42px}
 .pa .pw-field>input[type]{height:var(--pa-ctl-h);min-height:var(--pa-ctl-h)}
+/* عنصرِ مخفیِ صفحه‌خوان (.pa-sr) absolute است؛ اگر نیای positioned نداشته باشد، موقعیتِ ایستایش (مثلاً انتهایِ یک جدولِ عریض) overflowِ افقیِ صفحه می‌سازد.
+   ظرفِ اسکرول/کارت ریشه‌یِ آن می‌شود؛ خودِ .pa-sr دست‌نخورده می‌ماند (clip، نه display:none) تا صفحه‌خوان همچنان بخواندش. */
+.pa-tablewrap,.pa-card{position:relative}
