@@ -48,7 +48,7 @@ class AdminV22ShellContractTests(SimpleTestCase):
             "can_manage_settings",
         )}
         titles = {item.title for item in navigation.build_palette(flags)}
-        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "پیامک و ارتباطات", "گزارش پیامک‌ها"):
+        for term in ("لوگو", "ساختار صفحه‌ها", "همه کالاها", "دسته‌بندی‌ها", "سرویس پیامک و اعتبار", "گزارش پیامک‌ها"):
             self.assertIn(term, titles)
         hrefs = " ".join(item.href for item in navigation.build_palette(flags))
         self.assertIn("panel=header", hrefs)

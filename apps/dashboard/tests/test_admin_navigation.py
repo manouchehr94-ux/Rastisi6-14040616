@@ -35,12 +35,12 @@ EXPECTED_TABS = {
                  "رزرو موجودی", "انتقال انبار"],
     "finance": ["فاکتورها", "پرداخت‌ها", "تطبیق پرداخت‌ها"],
     "customers": ["مشتریان", "سگمنت‌ها"],
-    "marketing": ["کمپین‌ها", "مناسبت‌ها و هدیه‌ها", "کدهای تخفیف", "اعلان‌ها و پیام‌ها"],
+    "marketing": ["کمپین‌ها", "مناسبت‌ها و هدیه‌ها", "کدهای تخفیف"],
     "store": ["ظاهر و طراحی", "ساختار صفحه‌ها", "قالب‌های آماده", "کالکشن‌ها", "محتوا", "مجله",
               "رسانه‌های مشترک فروشگاه", "منوها", "فوتر", "شبکه‌های اجتماعی"],
     "reports": ["گزارش‌های حرفه‌ای", "گزارش رخدادها"],
     # one category bar; sub-screens (مالیات، درگاه‌ها، ورود/خروج اطلاعات، اعضا/اشتراک…) are Level-3 children of these
-    "settings": ["اطلاعات فروشگاه", "دامنه و آدرس", "مالی و پرداخت", "ارسال و تحویل", "پیامک و ارتباطات",
+    "settings": ["اطلاعات فروشگاه", "دامنه و آدرس", "مالی و پرداخت", "ارسال و تحویل", "پیام‌رسانی",
                  "یکپارچه‌سازی‌ها", "ورود و خروج اطلاعات", "تیم و اشتراک"],
 }
 
@@ -133,7 +133,7 @@ class NavigationMapTests(SimpleTestCase):
             "customer-tag-list": ("customers", "customers"),
             "segment-detail": ("customers", "segments"),
             "coupon-edit": ("marketing", "coupons"),
-            "notification-history": ("marketing", "notifications"),
+            "notification-history": ("settings", "messaging"),
             "storefront-builder-header": ("store", "builder"),
             "storefront-builder-template-live-preview": ("store", "templates"),
             "collection-products": ("store", "collections"),
@@ -146,8 +146,8 @@ class NavigationMapTests(SimpleTestCase):
             "tax-rate-list": ("settings", "settings-finance"),
             "settings-industry-preview": ("settings", "settings-general"),
             "gift-wrap-products": ("settings", "settings-finance"),
-            "sms-log-list": ("settings", "sms"),
-            "sms-outbox-list": ("settings", "sms"),
+            "sms-log-list": ("settings", "messaging"),
+            "sms-outbox-list": ("settings", "messaging"),
             "staff-add": ("settings", "account"),
             "subscription-plans": ("settings", "account"),
             "billing-invoice-detail": ("settings", "account"),
@@ -171,7 +171,7 @@ class NavigationMapTests(SimpleTestCase):
                             ("general", "settings-general")):
             self.assertEqual(resolve("settings", {"section": legacy}, ""), ("settings", tab), legacy)
         self.assertEqual(resolve("settings", {"section": "finance"}, ""), ("settings", "settings-finance"))
-        self.assertEqual(resolve("settings", {"section": "sms"}, ""), ("settings", "sms"))
+        self.assertEqual(resolve("settings", {"section": "sms"}, ""), ("settings", "messaging"))
         self.assertEqual(
             resolve("storefront-builder-r4-editor", {"panel": "appearance"}, ""), ("store", "appearance"))
         self.assertEqual(resolve("storefront-builder-r4-editor", {}, ""), ("store", "builder"))
@@ -233,7 +233,7 @@ class NavigationPermissionFilteringTests(SimpleTestCase):
         self.assertEqual(items["همه کالاها"], "کالاها ← همه کالاها")
         self.assertEqual(items["همه سفارش‌ها"], "سفارش‌ها ← همه سفارش‌ها")
         self.assertEqual(items["کدهای تخفیف"], "بازاریابی ← کدهای تخفیف")
-        self.assertEqual(items["پیامک و ارتباطات"], "تنظیمات ← پیامک و ارتباطات")
+        self.assertEqual(items["سرویس پیامک و اعتبار"], "تنظیمات ← پیام‌رسانی ← سرویس پیامک و اعتبار")
         self.assertEqual(items["نمای کلی"], "داشبورد")
         for path in items.values():
             for old in ("فروش ←", "مدیریت ←", "ارسال و مالیات ←"):

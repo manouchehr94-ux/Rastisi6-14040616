@@ -4438,7 +4438,7 @@ SETTINGS_SECTIONS = [
     ("unpaid-orders", "مدیریت سفارش‌های پرداخت‌نشده", "⏱", "لغوِ خودکارِ سفارش‌های آنلاینی که پرداخت‌شان کامل نشده"),
     ("delivery-payment", "ارسال و درگاه", "🚚", "روش‌های ارسال و درگاه‌های پرداخت"),
     ("payment-config", "پیکربندی درگاه", "🔐", "تنظیمات اعتبارنامه و فعال‌سازی درگاه‌های پرداخت"),
-    ("sms", "پیامک", "📲", "اتصال و قالب‌های پیامک"),
+    ("sms", "سرویس پیامک و اعتبار", "📲", "روشِ ارسال، وضعیتِ درگاه و اعتبارِ پیامک — بخشی از «پیام‌رسانی»"),
     ("industry", "صنف فروشگاه", "🏭", "نصب الگوی کاتالوگ آماده بر اساس صنف فعالیت"),
     ("integrations", "یکپارچه‌سازی‌ها", "🔗", "اینماد، ترب، گوگل آنالیتیکس و سایرِ اتصال‌های بیرونی"),
 ]
@@ -4447,6 +4447,47 @@ VALID_SECTION_KEYS = {s[0] for s in SETTINGS_SECTIONS}
 
 #: RS-13 — مسیرِ قدیمیِ «تم رنگی» (و POSTِ آن) دیگر مرجعِ طراحی نیست؛ طراحی فقط در Design Studio (R4) انجام می‌شود.
 LEGACY_APPEARANCE_SECTION = "appearance"
+
+
+@staff_required
+@permission_required(SETTINGS_MANAGE)
+def settings_messaging(request):
+    """Canonical «تنظیمات ← پیام‌رسانی» landing: one management center that gathers the five messaging subsections with a
+    live status summary for each. Every card links to its existing, working screen — this is the single home of the
+    messaging section, not a second admin system."""
+    from apps.notifications import events as notif_events
+    from apps.notifications.mail import provisioning_service
+    from apps.notifications.models import NotificationOutbox
+    from apps.notifications.services import template_service
+
+    store = _resolve_dashboard_store(request)
+    diag = provisioning_service.diagnostics(store)
+    # per-event configured/enabled counts (customer-facing + staff), cheap in-memory over the registry
+    sms_on = email_on = customized = 0
+    for key, event in notif_events.EVENTS.items():
+        if template_service.get_template(store, key, "sms")["enabled"]:
+            sms_on += 1
+        etpl = template_service.get_template(store, key, "email")
+        if etpl["enabled"]:
+            email_on += 1
+        if etpl.get("customized") or template_service.get_template(store, key, "sms").get("customized"):
+            customized += 1
+    recent = NotificationOutbox.objects.filter(store=store)
+    sms_status = get_sms_delivery_status(store)
+    context = {
+        "active_page": "notifications",
+        "event_count": len(notif_events.EVENTS),
+        "sms_enabled_count": sms_on,
+        "email_enabled_count": email_on,
+        "customized_count": customized,
+        "sender": diag,
+        "sms_status": sms_status,
+        "sms_globally_enabled": sms_status["enabled"],
+        "recent_total": recent.count(),
+        "recent_failed": recent.filter(status__in=("failed", "dead")).count(),
+        "recent_sent": recent.filter(status="sent").count(),
+    }
+    return render(request, "dashboard/messaging_home.html", context)
 
 
 @staff_required

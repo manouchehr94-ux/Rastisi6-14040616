@@ -1,4 +1,10 @@
 {% load persian %}
+<div class="page-header" style="margin-bottom:12px">
+  <div>
+    <h2>📲 سرویس پیامک و اعتبار</h2>
+    <p class="page-desc">روشِ ارسال، وضعیتِ درگاه، اعتبارِ پیامک و گیت‌وی اندروید. متنِ پیامکِ هر رویداد را در «رویدادها و قالب‌ها» ویرایش کنید.</p>
+  </div>
+</div>
 <div class="card" style="margin-bottom:18px" id="sms-delivery-status" role="region" aria-label="وضعیت ارسال پیامک">
   <div class="card-head"><h3>📡 وضعیتِ ارسالِ پیامک</h3>
     <span class="badge {% if sms_status.health == 'ok' %}b-green{% elif sms_status.health == 'warning' %}b-amber{% else %}b-red{% endif %}">{% if sms_status.health == 'ok' %}سالم{% elif sms_status.health == 'warning' %}هشدار{% else %}نیازمندِ اقدام{% endif %}</span></div>
@@ -110,10 +116,18 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h3>✉️ قالب‌های پیامک رویدادها</h3><span class="hint">ویرایش متن پیامک‌های خودکار</span></div>
-  <div class="card-body" style="max-height:520px;overflow-y:auto">
-    <div id="smsTemplatesWrap">
-      {% include "dashboard/partials/sms_templates_table.html" %}
-    </div>
+  <div class="card-head"><h3>✉️ متنِ پیامکِ رویدادها</h3><span class="hint">در بخشِ یکپارچه ویرایش می‌شود</span></div>
+  <div class="card-body">
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
+      متنِ پیامکِ هر رویداد (سفارش، پرداخت، مرجوعی، …) اکنون در کنارِ ایمیلِ همان رویداد و در یک ویرایشگرِ واحد تنظیم می‌شود،
+      تا کلیدهایِ روشن/خاموشِ کانال‌ها در دو جای مختلف با هم در تضاد نباشند.
+    </p>
+    <a class="btn btn-primary btn-sm" href="{% url 'dashboard:notification-templates' %}">رفتن به رویدادها و قالب‌ها</a>
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;color:var(--muted);font-size:12.5px">نمایشِ فهرستِ قالب‌های پیامک (فقط مرور)</summary>
+      <div id="smsTemplatesWrap" style="max-height:420px;overflow-y:auto;margin-top:10px">
+        {% include "dashboard/partials/sms_templates_table.html" %}
+      </div>
+    </details>
   </div>
 </div>

@@ -1,9 +1,8 @@
 {% extends "dashboard/base_admin.html" %}
-{% block title %}تنظیمات کانال‌های اعلان | پنل مدیریت{% endblock %}
-{% block page_title %}تنظیمات کانال‌های اعلان{% endblock %}
+{% block title %}کانال‌های ارسال | پیام‌رسانی{% endblock %}
+{% block page_title %}کانال‌های ارسال{% endblock %}
 {% block page_sub %}برای هر رویداد، پیامک و ایمیل را مستقل از هم روشن یا خاموش کنید{% endblock %}
 {% block content %}
-{% include "dashboard/partials/notification_tabs.html" with tab="channels" %}
 {% if diag.status != 'active' %}<div class="card" style="margin-bottom:12px"><div class="card-body"><span class="badge b-amber" style="white-space:normal">فرستنده‌ی ایمیلِ فروشگاه هنوز فعال نیست؛ کلیدهایِ ایمیل ذخیره می‌شوند اما تا فعال‌شدنِ فرستنده ایمیلی ارسال نمی‌شود. <a href="{% url 'dashboard:notification-sender' %}">مشاهده‌ی وضعیت</a></span></div></div>{% endif %}
 <form method="post">
   {% csrf_token %}
