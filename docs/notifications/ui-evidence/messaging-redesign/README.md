@@ -16,6 +16,11 @@ embedded in the snapshot — superseded by these).
 | `fx_event_editor_768.png` | same — stacked (tablet; side-by-side breakpoint is 1100px) | 768 |
 | `fx_event_editor_390.png` | same — stacked (mobile) | 390 |
 
+## Duplicate-nav fix (round 3)
+`fx_fix_messaging_home_1440.png` — the Messaging Center after removing the duplicate subsection bar: exactly **one**
+subsection navigation row sits immediately below the Settings tabs; the search area and KPI cards follow with no second
+bar. Verified over HTTP on all 7 messaging pages: `admin-subtabs` bar = 1, old `msg-subnav` = 0, active subtab = 1.
+
 ## What the screenshots demonstrate
 - **Canonical section:** the Settings section tab row shows «پیام‌رسانی» active (its own real route `settings/messaging/`),
   with a KPI summary (events / SMS-on / email-on / customised / failed) and five cards that each show live status and link
