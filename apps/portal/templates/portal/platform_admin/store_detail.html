@@ -2,23 +2,22 @@
 {% load persian %}
 {% block title %}{{ store.name }} | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
-<div x-data="{modal:null}">
-<p><a href="{% url 'portal_platform_admin:stores' %}" class="pa-help">← بازگشت به فهرستِ فروشگاه‌ها</a></p>
+<a class="pa-back" href="{% url 'portal_platform_admin:stores' %}">← فهرستِ فروشگاه‌ها</a>
 
 <div class="pa-card">
   <div class="pa-cardbody pa-detail-header">
-    <div class="pa-store-logo">🏪</div>
+    <div class="pa-store-logo" aria-hidden="true"><svg class="pa-i"><use href="#i-store"/></svg></div>
     <div>
-      <h2 style="margin:0">{{ store.name }}</h2>
-      <p class="pa-help" style="direction:ltr;text-align:right">{{ store.slug }} · {{ store.platform_code }} · {{ store.public_id }}</p>
-      <div style="margin-top:6px">
+      <h1 class="pa-detail-title">{{ store.name }}</h1>
+      <p class="pa-help pa-ltr">{{ store.slug }} · {{ store.platform_code }} · {{ store.public_id }}</p>
+      <div class="pa-mt-2">
         {% if store.status == "active" %}<span class="pa-badge pa-ok">فعال</span>
         {% elif store.status == "suspended" %}<span class="pa-badge pa-off">تعلیق‌شده</span>
         {% else %}<span class="pa-badge pa-warn">{{ store.get_status_display }}</span>{% endif %}
         {% if store.suspension_reason %}<span class="pa-help">— {{ store.suspension_reason }}</span>{% endif %}
       </div>
     </div>
-    <div class="pa-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="pa-actions pa-row">
       <form method="post" action="{% url 'portal_platform_admin:store-support-login' store.public_id %}">
         {% csrf_token %}<button class="pa-btn pa-primary" type="submit">ورودِ پشتیبانی</button>
       </form>
@@ -27,13 +26,13 @@
         {% csrf_token %}<button class="pa-btn pa-soft" type="submit">فعال‌سازی</button>
       </form>
       {% else %}
-      <button class="pa-btn pa-danger" type="button" @click="modal='suspend'">تعلیق</button>
+      <button class="pa-btn pa-danger" type="button" data-pa-open="dlg-suspend">تعلیق</button>
       {% endif %}
     </div>
   </div>
 </div>
 
-<div class="pa-tabs">
+<nav class="pa-tabs" aria-label="بخش‌هایِ فروشگاه">
   <a class="pa-tab {% if tab == 'overview' %}active{% endif %}" href="?tab=overview">نمای‌کلی</a>
   <a class="pa-tab {% if tab == 'subscription' %}active{% endif %}" href="?tab=subscription">اشتراک</a>
   <a class="pa-tab {% if tab == 'usage' %}active{% endif %}" href="?tab=usage">مصرف</a>
@@ -41,12 +40,12 @@
   <a class="pa-tab {% if tab == 'sms-credit' %}active{% endif %}" href="?tab=sms-credit">اعتبارِ پیامک</a>
   <a class="pa-tab {% if tab == 'notes' %}active{% endif %}" href="?tab=notes">یادداشت‌ها</a>
   <a class="pa-tab {% if tab == 'audit' %}active{% endif %}" href="?tab=audit">حسابرسی</a>
-</div>
+</nav>
 
 {% if tab == "overview" %}
 <div class="pa-grid3">
-  <div class="pa-kpi pa-purple"><span>مالکِ فعال</span><b style="font-size:15px">{{ owner_membership.user.owner_profile.full_name|default:owner_membership.user.email|default:"—" }}</b></div>
-  <div class="pa-kpi pa-blue"><span>صنف</span><b style="font-size:15px">{{ industry_installation.industry_template.name|default:"نصب‌نشده" }}</b></div>
+  <div class="pa-kpi pa-purple"><span>مالکِ فعال</span><b class="pa-kpi-text">{{ owner_membership.user.owner_profile.full_name|default:owner_membership.user.email|default:"—" }}</b></div>
+  <div class="pa-kpi pa-blue"><span>صنف</span><b class="pa-kpi-text">{{ industry_installation.industry_template.name|default:"نصب‌نشده" }}</b></div>
   <div class="pa-kpi pa-green"><span>محصولاتِ فعال / سفارش‌ها</span><b>{{ product_count }} / {{ order_count }}</b></div>
 </div>
 <div class="pa-card">
@@ -54,8 +53,8 @@
   <div class="pa-cardbody">
     <form method="post" action="{% url 'portal_platform_admin:store-add-note' store.public_id %}">
       {% csrf_token %}
-      <div class="pa-field"><textarea class="pa-input" name="body" rows="2" placeholder="یادداشتِ داخلی درباره‌ی این فروشگاه..."></textarea></div>
-      <button class="pa-btn pa-primary" style="margin-top:8px" type="submit">ثبتِ یادداشت</button>
+      <div class="pa-field"><label class="pa-sr" for="note-body">یادداشتِ داخلی</label><textarea id="note-body" name="body" rows="2" placeholder="یادداشتِ داخلی درباره‌یِ این فروشگاه…"></textarea></div>
+      <button class="pa-btn pa-primary pa-mt-2" type="submit">ثبتِ یادداشت</button>
     </form>
   </div>
 </div>
@@ -64,12 +63,12 @@
 <div class="pa-card">
   <div class="pa-cardhead">
     <h3>اشتراکِ جاری</h3>
-    <div style="display:flex;gap:8px">
-      <button class="pa-btn pa-small" type="button" @click="modal='extend-trial'">تمدیدِ آزمایشی</button>
-      <button class="pa-btn pa-small" type="button" @click="modal='set-trial-end'">تنظیمِ پایانِ آزمایشی</button>
-      <button class="pa-btn pa-small" type="button" @click="modal='end-trial-now'">پایانِ فوریِ آزمایشی</button>
-      <button class="pa-btn pa-small" type="button" @click="modal='change-plan'">تغییرِ پلن</button>
-      <button class="pa-btn pa-small" type="button" @click="modal='extend-sub'">تمدیدِ اشتراک</button>
+    <div class="pa-row">
+      <button class="pa-btn pa-small" type="button" data-pa-open="dlg-extend-trial">تمدیدِ آزمایشی</button>
+      <button class="pa-btn pa-small" type="button" data-pa-open="dlg-set-trial-end">تنظیمِ پایانِ آزمایشی</button>
+      <button class="pa-btn pa-small" type="button" data-pa-open="dlg-end-trial-now">پایانِ فوریِ آزمایشی</button>
+      <button class="pa-btn pa-small" type="button" data-pa-open="dlg-change-plan">تغییرِ پلن</button>
+      <button class="pa-btn pa-small" type="button" data-pa-open="dlg-extend-sub">تمدیدِ اشتراک</button>
     </div>
   </div>
   <div class="pa-cardbody">
@@ -141,7 +140,7 @@
       <tbody>
         {% for domain in domains %}
         <tr>
-          <td style="direction:ltr;text-align:left">{{ domain.hostname }}</td>
+          <td class="pa-ltr">{{ domain.hostname }}</td>
           <td>{{ domain.get_domain_type_display }}</td>
           <td>{% if domain.verification_status == "verified" %}<span class="pa-badge pa-ok">تأییدشده</span>{% elif domain.verification_status == "failed" %}<span class="pa-badge pa-off">ناموفق</span>{% else %}<span class="pa-badge pa-warn">{{ domain.get_verification_status_display }}</span>{% endif %}</td>
           <td>{% if domain.is_primary %}بله{% else %}—{% endif %}</td>
@@ -166,8 +165,8 @@
   <div class="pa-cardbody">
     <form method="post" action="{% url 'portal_platform_admin:store-add-note' store.public_id %}">
       {% csrf_token %}
-      <div class="pa-field"><textarea class="pa-input" name="body" rows="2" placeholder="یادداشتِ داخلی..."></textarea></div>
-      <button class="pa-btn pa-primary" style="margin-top:8px" type="submit">ثبتِ یادداشت</button>
+      <div class="pa-field"><label class="pa-sr" for="note-body2">یادداشتِ داخلی</label><textarea id="note-body2" name="body" rows="2" placeholder="یادداشتِ داخلی…"></textarea></div>
+      <button class="pa-btn pa-primary pa-mt-2" type="submit">ثبتِ یادداشت</button>
     </form>
   </div>
 </div>
@@ -201,85 +200,84 @@
 {% endif %}
 
 <!-- مودال‌ها -->
-<div class="pa-modal" x-show="modal==='suspend'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-suspend" aria-labelledby="dlg-suspend-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>تعلیقِ فروشگاه</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>تعلیقِ فروشگاه</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:store-suspend' store.public_id %}">
       {% csrf_token %}
       <div class="pa-modalbody">
         <div class="pa-field"><label>دلیلِ تعلیق</label><textarea class="pa-input" name="reason" required rows="3"></textarea></div>
-        <div class="pa-field" style="margin-top:10px"><label>یادداشتِ داخلی (اختیاری)</label><textarea class="pa-input" name="note" rows="2"></textarea></div>
+        <div class="pa-field pa-mt-3"><label>یادداشتِ داخلی (اختیاری)</label><textarea class="pa-input" name="note" rows="2"></textarea></div>
       </div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-danger" type="submit">تعلیق</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-danger" type="submit">تعلیق</button></div>
     </form>
   </div>
-</div>
+</dialog>
 
-<div class="pa-modal" x-show="modal==='extend-trial'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-extend-trial" aria-labelledby="dlg-extend-trial-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>تمدیدِ دوره‌ی آزمایشی</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>تمدیدِ دوره‌ی آزمایشی</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:store-extend-trial' store.public_id %}">
       {% csrf_token %}
       <div class="pa-modalbody">
         <div class="pa-field"><label>تعدادِ روز</label><input class="pa-input" type="number" name="days" min="1" value="7" required></div>
-        <div class="pa-field" style="margin-top:10px"><label>دلیل</label><input class="pa-input" type="text" name="reason"></div>
+        <div class="pa-field pa-mt-3"><label>دلیل</label><input class="pa-input" type="text" name="reason"></div>
       </div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-primary" type="submit">تمدید</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">تمدید</button></div>
     </form>
   </div>
-</div>
+</dialog>
 
-<div class="pa-modal" x-show="modal==='set-trial-end'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-set-trial-end" aria-labelledby="dlg-set-trial-end-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>تنظیمِ دقیقِ پایانِ آزمایشی</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>تنظیمِ دقیقِ پایانِ آزمایشی</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:store-set-trial-end' store.public_id %}">
       {% csrf_token %}
       <div class="pa-modalbody">
         <div class="pa-field"><label>تاریخ و زمانِ پایان</label><input class="pa-input" type="datetime-local" name="trial_end_at" required></div>
-        <div class="pa-field" style="margin-top:10px"><label>دلیل</label><input class="pa-input" type="text" name="reason" required></div>
+        <div class="pa-field pa-mt-3"><label>دلیل</label><input class="pa-input" type="text" name="reason" required></div>
       </div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-primary" type="submit">تنظیم</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">تنظیم</button></div>
     </form>
   </div>
-</div>
+</dialog>
 
-<div class="pa-modal" x-show="modal==='end-trial-now'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-end-trial-now" aria-labelledby="dlg-end-trial-now-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>پایانِ فوریِ دوره‌ی آزمایشی</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>پایانِ فوریِ دوره‌ی آزمایشی</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:store-end-trial-now' store.public_id %}">
       {% csrf_token %}
       <div class="pa-modalbody">
         <p class="pa-help">دوره‌ی آزمایشی همین حالا پایان می‌یابد؛ دیتای فروشگاه حذف نمی‌شود و مالک همچنان می‌تواند وارد شده و اشتراک تهیه کند.</p>
         <div class="pa-field"><label>دلیل</label><input class="pa-input" type="text" name="reason" required></div>
       </div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-danger" type="submit">پایانِ فوری</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-danger" type="submit">پایانِ فوری</button></div>
     </form>
   </div>
-</div>
+</dialog>
 
-<div class="pa-modal" x-show="modal==='change-plan'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-change-plan" aria-labelledby="dlg-change-plan-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>تغییرِ پلن</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>تغییرِ پلن</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:store-change-plan' store.public_id %}">
       {% csrf_token %}
       <div class="pa-modalbody">
-        <div class="pa-field"><label>نسخه‌ی پلنِ هدف (شناسه)</label><input class="pa-input" type="number" name="plan_version_id" required></div>
-        <div class="pa-field" style="margin-top:10px"><label>دلیل</label><input class="pa-input" type="text" name="reason"></div>
+        <div class="pa-field"><label>نسخه‌یِ پلنِ هدف</label><select name="plan_version_id" required><option value="">انتخاب کنید…</option>{% for v in target_versions %}<option value="{{ v.pk }}">{{ v.plan.name }} — v{{ v.version_number }} ({{ v.get_billing_interval_display }}){% if current_subscription and current_subscription.plan_version_id == v.pk %} · نسخه‌یِ فعلی{% endif %}</option>{% endfor %}</select><span class="pa-help">فقط نسخه‌هایِ منتشرشده‌یِ پلن‌هایِ فعال.</span></div>
+        <div class="pa-field pa-mt-3"><label>دلیل</label><input class="pa-input" type="text" name="reason"></div>
       </div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-primary" type="submit">تغییرِ پلن</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">تغییرِ پلن</button></div>
     </form>
   </div>
-</div>
+</dialog>
 
-<div class="pa-modal" x-show="modal==='extend-sub'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-extend-sub" aria-labelledby="dlg-extend-sub-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>تمدیدِ اشتراک</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>تمدیدِ اشتراک</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:store-extend-subscription' store.public_id %}">
       {% csrf_token %}
       <div class="pa-modalbody"><div class="pa-field"><label>تعدادِ روز</label><input class="pa-input" type="number" name="days" min="1" value="30" required></div></div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-primary" type="submit">تمدید</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">تمدید</button></div>
     </form>
   </div>
-</div>
-</div>
+</dialog>
 {% endblock %}

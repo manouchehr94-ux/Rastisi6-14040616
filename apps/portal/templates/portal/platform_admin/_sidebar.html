@@ -1,0 +1,26 @@
+{% comment %}سایدبارِ یگانه‌ی پنلِ مالکِ پلتفرم — تنها مصرف‌کننده‌ی ``apps/portal/platform_admin_nav.py``. نباید در هیچ صفحه‌ای تکرار یا جایگزین شود.{% endcomment %}
+<aside class="pa-sidebar" id="pa-sidebar" data-pa-sidebar aria-label="ناوبریِ اصلی">
+  <div class="pa-brand">
+    <span class="pa-logo" aria-hidden="true">ر</span>
+    <div><b>راستیسی</b><small>پنلِ مالکِ پلتفرم</small></div>
+    <button type="button" class="pa-btn pa-icon pa-ghost pa-nav-close" data-pa-nav-close aria-label="بستنِ منو"><svg class="pa-i"><use href="#i-x"/></svg></button>
+  </div>
+  <nav class="pa-nav" aria-label="بخش‌هایِ مدیریت">
+    {% for group in nav.groups %}
+      {% if group.single %}
+        {% with item=group.items.0 %}
+        <a href="{{ item.url }}" class="pa-nav-link pa-nav-top{% if item.active %} active{% endif %}"{% if item.active %} aria-current="page"{% endif %}><svg class="pa-i"><use href="#i-{{ item.icon }}"/></svg>{{ item.label }}</a>
+        {% endwith %}
+      {% else %}
+      <details class="pa-nav-group" data-group="{{ group.key }}"{% if group.open %} open{% endif %}>
+        <summary><svg class="pa-i"><use href="#i-{{ group.icon }}"/></svg><span>{{ group.label }}</span><svg class="pa-i pa-chev"><use href="#i-chevron"/></svg></summary>
+        <div class="pa-nav-items">
+          {% for item in group.items %}
+          <a href="{{ item.url }}" class="pa-nav-link{% if item.active %} active{% endif %}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+    {% endfor %}
+  </nav>
+</aside>

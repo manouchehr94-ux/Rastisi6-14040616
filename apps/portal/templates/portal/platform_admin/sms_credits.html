@@ -3,14 +3,12 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>اعتبارِ پیامکِ فروشگاه‌ها</h1><p>اصلاحِ دستیِ اعتبار همیشه دلیل و یادداشت می‌خواهد و در دفترِ تغییرات ثبت می‌شود.</p></div></div>
 
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="نامِ فروشگاه..." value="{{ query }}"></div>
-    <button class="pa-btn pa-primary" type="submit">جست‌وجو</button>
-  </div>
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:sms-credits' %}">پاک‌کردن</a></div>
 </div></form>
 
-<div class="pa-card" x-data="{modal:null}">
+<div class="pa-card">
   {% if page.object_list %}
   <div class="pa-tablewrap">
     <table>
@@ -20,29 +18,31 @@
         <tr>
           <td>{{ balance.store.name }}</td>
           <td>{{ balance.credits }}</td>
-          <td><button class="pa-btn pa-small pa-soft" type="button" @click="modal='{{ balance.store.public_id }}'">اصلاحِ اعتبار</button></td>
+          <td><button class="pa-btn pa-small pa-soft" type="button" data-pa-open="dlg-{{ balance.store.public_id }}">اصلاحِ اعتبار</button></td>
         </tr>
-        <div class="pa-modal" x-show="modal==='{{ balance.store.public_id }}'" x-cloak @click.self="modal=null">
-          <div class="pa-modalbox">
-            <div class="pa-modalhead"><h3>اصلاحِ اعتبارِ «{{ balance.store.name }}»</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
-            <form method="post" action="{% url 'portal_platform_admin:sms-credit-adjust' balance.store.public_id %}">
-              {% csrf_token %}
-              <div class="pa-modalbody">
-                <div class="pa-field"><label>مقدارِ تغییر (مثبت یا منفی)</label><input class="pa-input" type="number" name="delta" required></div>
-                <div class="pa-field" style="margin-top:10px"><label>دلیل</label><input class="pa-input" type="text" name="reason" required></div>
-                <div class="pa-field" style="margin-top:10px"><label>یادداشتِ داخلی (اختیاری)</label><textarea class="pa-input" name="note" rows="2"></textarea></div>
-              </div>
-              <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-primary" type="submit">اعمالِ اصلاح</button></div>
-            </form>
-          </div>
-        </div>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% for balance in page.object_list %}
+        <dialog class="pa-dialog" id="dlg-{{ balance.store.public_id }}" aria-labelledby="dlg-{{ balance.store.public_id }}-t">
+          <div class="pa-modalbox">
+            <div class="pa-modalhead"><h3>اصلاحِ اعتبارِ «{{ balance.store.name }}»</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
+            <form method="post" action="{% url 'portal_platform_admin:sms-credit-adjust' balance.store.public_id %}">
+              {% csrf_token %}
+              <div class="pa-modalbody">
+                <div class="pa-field"><label>مقدارِ تغییر (مثبت یا منفی)</label><input class="pa-input" type="number" name="delta" required></div>
+                <div class="pa-field pa-mt-3"><label>دلیل</label><input class="pa-input" type="text" name="reason" required></div>
+                <div class="pa-field pa-mt-3"><label>یادداشتِ داخلی (اختیاری)</label><textarea class="pa-input" name="note" rows="2"></textarea></div>
+              </div>
+              <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">اعمالِ اصلاح</button></div>
+            </form>
+          </div>
+        </dialog>
+  {% endfor %}
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">📲</div><p>فروشگاهی یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-message"/></svg></div><p>فروشگاهی یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

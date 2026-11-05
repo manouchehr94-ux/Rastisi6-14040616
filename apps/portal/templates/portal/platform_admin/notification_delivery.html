@@ -3,19 +3,19 @@
 {% block title %}ارسال‌ها و شکست‌ها{% endblock %}
 {% block content %}
 <div class="pa-pagehead"><div><h1>ارسال‌ها و شکست‌ها</h1><p>مصرف و وضعیتِ ارسالِ ۷ روز اخیر در کلِ پلتفرم.</p></div></div>
-<div class="pa-card" style="padding:12px;margin-bottom:10px" id="usage"><b>مصرف ۷ روز اخیر:</b>
-  {% for u in usage %}<span style="margin-inline-end:12px">{{ u.channel }}/{{ u.status }}: <b>{{ u.n }}</b></span>{% empty %}—{% endfor %}</div>
-<form method="get" class="pa-card" style="padding:10px;margin-bottom:10px">
-  <select name="channel" aria-label="کانال"><option value="">همه</option>{% for c in channels %}<option value="{{ c }}" {% if filters.channel == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-  <select name="status" aria-label="وضعیت"><option value="">همه</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-  <input name="store" value="{{ filters.store }}" placeholder="فروشگاه" aria-label="فروشگاه">
-  <label><input type="checkbox" name="attention" value="1" {% if filters.attention %}checked{% endif %}> فقط نیازمندِ رسیدگی</label>
-  <button class="pa-btn pa-small" type="submit">فیلتر</button>
-</form>
+<div class="pa-card" id="usage"><div class="pa-cardbody pa-row"><b>مصرفِ ۷ روزِ اخیر:</b>
+  {% for u in usage %}<span class="pa-badge pa-info">{{ u.channel }}/{{ u.status }}: <b class="pa-num">{{ u.n }}</b></span>{% empty %}<span class="pa-help">—</span>{% endfor %}</div></div>
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field"><label for="flt-channel">کانال</label><select id="flt-channel" name="channel"><option value="">همه</option>{% for c in channels %}<option value="{{ c }}" {% if filters.channel == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+  <div class="pa-field"><label for="flt-status">وضعیت</label><select id="flt-status" name="status"><option value="">همه</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="pa-field"><label for="flt-store">فروشگاه</label><input id="flt-store" type="text" name="store" value="{{ filters.store }}"></div>
+  <label class="pa-check"><input type="checkbox" name="attention" value="1" {% if filters.attention %}checked{% endif %}> فقط نیازمندِ رسیدگی</label>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:notification-delivery' %}">پاک‌کردن</a></div>
+</div></form>
 <div class="pa-card"><div class="pa-tablewrap"><table id="delivery-table">
   <thead><tr><th>زمان</th><th>فروشگاه</th><th>رویداد</th><th>کانال</th><th>وضعیت</th><th>تلاش</th><th>خطا / دلیل</th></tr></thead>
   <tbody>{% for r in page %}
-    <tr><td>{{ r.created_at|jalali_dt }}</td><td>{{ r.store.name|default:"پلتفرم" }}</td><td dir="ltr">{{ r.event_key|default:"—" }}</td><td>{{ r.channel }}</td><td>{{ r.get_status_display }}{% if r.delivery_state %} · {{ r.delivery_state }}{% endif %}</td><td>{{ r.attempts }}</td><td>{{ r.last_error|default:r.skip_reason|default:"—" }}</td></tr>
-  {% empty %}<tr><td colspan="7">موردی نیست.</td></tr>{% endfor %}</tbody>
+    <tr><td>{{ r.created_at|jalali_dt }}</td><td>{{ r.store.name|default:"پلتفرم" }}</td><td><span class="pa-ltr">{{ r.event_key|default:"—" }}</span></td><td>{{ r.channel }}</td><td>{{ r.get_status_display }}{% if r.delivery_state %} · {{ r.delivery_state }}{% endif %}</td><td>{{ r.attempts }}</td><td>{{ r.last_error|default:r.skip_reason|default:"—" }}</td></tr>
+  {% empty %}<tr><td colspan="7" class="pa-help">موردی نیست.</td></tr>{% endfor %}</tbody>
 </table></div></div>
 {% endblock %}

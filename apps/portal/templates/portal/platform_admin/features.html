@@ -4,23 +4,30 @@
 <div class="pa-pagehead">
   <div><h1>کاتالوگِ قابلیت‌ها</h1>
     <p>هر قابلیت چهار وضعیتِ جدا دارد: <b>آمادگیِ فنی</b> (فقط وقتی کلیدش در رجیستریِ کد ثبت شده)، <b>وضعیتِ تجاری</b>، <b>دسترسیِ هر پلن</b> (در «تخصیصِ قابلیت به پلن») و <b>نمایشِ عمومی</b>. قابلیتِ آماده‌نشده فقط «به‌زودی» نشان داده می‌شود و هیچ دسترسیِ واقعی نمی‌دهد.</p></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pa-btn" href="{% url 'portal_platform_admin:assignment-matrix' %}">تخصیصِ قابلیت به پلن</a><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:feature-add' %}">+ قابلیتِ تازه</a></div>
+  <div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:feature-add' %}"><svg class="pa-i"><use href="#i-plus"/></svg>قابلیتِ تازه</a></div>
 </div>
-{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
-<div class="pa-card"><div class="pa-cardhead"><h3>قابلیت‌هایِ اعمال‌شده در کد ({{ registered_keys|length }})</h3></div>
-  <div class="pa-cardbody"><p class="pa-help">فقط این کلیدها می‌توانند دسترسیِ واقعی بدهند. افزودنِ کلیدِ تازه کارِ توسعه‌دهنده است (گیتِ سرویس + تست + ثبت در <code>capability_registry</code>)، نه پنل.</p>
-    <p class="pa-help" dir="ltr" style="text-align:left">{{ registered_keys|join:" · " }}</p></div></div>
+
+<details class="pa-acc pa-mb-4">
+  <summary>قابلیت‌هایِ اعمال‌شده در کد ({{ registered_keys|length }})</summary>
+  <div>
+    <p class="pa-help pa-mb-2">فقط این کلیدها می‌توانند دسترسیِ واقعی بدهند. افزودنِ کلیدِ تازه کارِ توسعه‌دهنده است (گیتِ سرویس + تست + ثبت در <span class="pa-code">capability_registry</span>)، نه پنل.</p>
+    <p class="pa-code">{{ registered_keys|join:" · " }}</p>
+  </div>
+</details>
+
 <div class="pa-card"><div class="pa-tablewrap"><table>
-  <thead><tr><th>قابلیت</th><th>دسته</th><th>آمادگیِ فنی</th><th>وضعیتِ تجاری</th><th>دسترسی می‌دهد؟</th><th>نمایشِ عمومی</th><th></th></tr></thead><tbody>
+  <thead><tr><th>قابلیت</th><th>دسته</th><th>آمادگیِ فنی</th><th>وضعیتِ تجاری</th><th>دسترسی می‌دهد؟</th><th>نمایشِ عمومی</th><th class="pa-actcol"></th></tr></thead><tbody>
   {% for r in rows %}
   <tr data-feature="{{ r.f.key }}">
-    <td>{% if r.f.icon %}<span aria-hidden="true">{{ r.f.icon }}</span> {% endif %}<b>{{ r.f.title }}</b><div class="pa-help" dir="ltr" style="text-align:left">{{ r.f.key }}{% if r.f.entitlement %} → {{ r.f.entitlement.key }}{% endif %}</div>{% if r.f.is_custom %}<span class="pa-badge pa-info">ساخته‌ی مالک</span>{% endif %}</td>
+    <td>{% if r.f.icon %}<span aria-hidden="true">{{ r.f.icon }}</span> {% endif %}<b>{{ r.f.title }}</b>
+      <div class="pa-help"><span class="pa-ltr">{{ r.f.key }}{% if r.f.entitlement %} → {{ r.f.entitlement.key }}{% endif %}</span></div>
+      {% if r.f.is_custom %}<span class="pa-badge pa-info">ساخته‌یِ مالک</span>{% endif %}</td>
     <td>{{ r.f.get_category_display }}</td>
     <td>{{ r.f.get_technical_status_display }}{% if r.f.entitlement and not r.registered %}<div class="pa-help">کلید در رجیستریِ کد نیست</div>{% endif %}</td>
-    <td>{{ r.f.get_commercial_status_display }}{% if r.f.planned_release_on %}<div class="pa-help">{{ r.f.planned_release_on }}</div>{% endif %}{% if r.f.kill_switch %} <span class="pa-badge pa-off">قطع اضطراری</span>{% endif %}</td>
+    <td>{{ r.f.get_commercial_status_display }}{% if r.f.planned_release_on %}<div class="pa-help pa-num">{{ r.f.planned_release_on }}</div>{% endif %}{% if r.f.kill_switch %} <span class="pa-badge pa-off">قطعِ اضطراری</span>{% endif %}</td>
     <td>{% if r.grants %}<span class="pa-badge pa-ok">بله</span>{% else %}<span class="pa-badge pa-off">خیر</span>{% endif %}</td>
-    <td>{% if r.state == "available" %}<span class="pa-badge pa-ok">در دسترس</span>{% elif r.state == "coming_soon" %}<span class="pa-badge pa-warn">به‌زودی</span>{% else %}<span class="pa-badge pa-off">پنهان</span>{% endif %}</td>
-    <td><a class="pa-btn pa-small" href="{% url 'portal_platform_admin:feature-edit' r.f.pk %}">مدیریت</a></td></tr>
+    <td>{% if r.state == "available" %}<span class="pa-badge pa-ok">در دسترس</span>{% elif r.state == "coming_soon" %}<span class="pa-badge pa-warn">به‌زودی</span>{% else %}<span class="pa-badge">پنهان</span>{% endif %}</td>
+    <td class="pa-actcol"><a class="pa-btn" href="{% url 'portal_platform_admin:feature-edit' r.f.pk %}">مدیریت</a></td></tr>
   {% endfor %}
 </tbody></table></div></div>
 {% endblock %}

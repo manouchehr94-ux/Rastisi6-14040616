@@ -3,10 +3,10 @@
 {% block content %}
 <div class="pa-pagehead">
   <div><h1>متن و ظاهر سایت عمومی</h1><p>متن‌ها، رنگ‌ها و فونت‌های سایت معرفی راستی‌سی را از اینجا عوض کنید. تصاویر در صفحه جداگانه «تصاویر سایت عمومی» عوض می‌شوند.</p></div>
-  <a class="pa-btn" href="{{ preview_home }}" target="_blank" rel="noopener">مشاهده سایت ↗</a>
+  <div class="pa-actions"><a class="pa-btn" href="{{ preview_home }}" target="_blank" rel="noopener">مشاهده‌یِ سایت ↗</a></div>
 </div>
 
-<div class="pa-card" style="margin-bottom:18px">
+<div class="pa-card pa-mb-4">
   <div class="pa-cardhead">
     <h3>طراحی فعال سایت عمومی</h3>
     {% if design == 'v2' %}<span class="pa-badge pa-ok">طراحی جدید («سردر»)</span>{% else %}<span class="pa-badge pa-warn">طراحی قبلی</span>{% endif %}
@@ -14,11 +14,11 @@
   <div class="pa-cardbody">
     <p class="pa-help">اگر بعد از تغییری چیزی به‌هم ریخت، با یک کلیک به طراحی قبلی برگردید. این کار هیچ متن یا رنگی را پاک نمی‌کند؛ هر زمان خواستید دوباره طراحی جدید را فعال کنید.</p>
     {% if forced %}
-    <div class="pa-alert pa-alert-error">طراحی از طرف تنظیمات سرور روی «{% if forced == 'legacy' %}قبلی{% else %}جدید{% endif %}» قفل شده است (متغیر محیطی <code dir="ltr">RASTISI_PUBLIC_SITE_DESIGN</code>)؛ کلیدهای زیر تا برداشتن آن اثری ندارند.</div>
+    <div class="pa-alert pa-alert-error">طراحی از طرف تنظیمات سرور روی «{% if forced == 'legacy' %}قبلی{% else %}جدید{% endif %}» قفل شده است (متغیر محیطی <span class="pa-code">RASTISI_PUBLIC_SITE_DESIGN</span>)؛ کلیدهای زیر تا برداشتن آن اثری ندارند.</div>
     {% endif %}
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
+    <div class="pa-row pa-mt-4">
       <form method="post" action="{% url 'portal_platform_admin:public-site-switch' %}">{% csrf_token %}<input type="hidden" name="design" value="v2"><button class="pa-btn {% if design == 'v2' %}pa-primary{% endif %}" type="submit" {% if design == 'v2' %}disabled{% endif %}>طراحی جدید</button></form>
-      <form method="post" action="{% url 'portal_platform_admin:public-site-switch' %}">{% csrf_token %}<input type="hidden" name="design" value="legacy"><button class="pa-btn {% if design == 'legacy' %}pa-primary{% else %}pa-danger{% endif %}" type="submit" {% if design == 'legacy' %}disabled{% endif %}>بازگشت به طراحی قبلی</button></form>
+      <form method="post" action="{% url 'portal_platform_admin:public-site-switch' %}" data-confirm="سایتِ عمومی به طراحیِ قبلی برمی‌گردد (هیچ متن یا رنگی پاک نمی‌شود). ادامه می‌دهید؟">{% csrf_token %}<input type="hidden" name="design" value="legacy"><button class="pa-btn {% if design != 'legacy' %}pa-danger{% endif %}" type="submit" {% if design == 'legacy' %}disabled{% endif %}>بازگشت به طراحیِ قبلی</button></form>
     </div>
   </div>
 </div>
@@ -29,7 +29,7 @@
     <div class="pa-cardhead"><h3>{{ row.group.title }}</h3>{% if row.changed %}<span class="pa-badge pa-ok">{{ row.changed }} تغییر</span>{% else %}<span class="pa-badge pa-info">پیش‌فرض</span>{% endif %}</div>
     <div class="pa-cardbody">
       <p class="pa-help">{{ row.group.blurb }}</p>
-      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <div class="pa-row pa-mt-4">
         <a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:public-site-edit' row.group.slug %}">ویرایش</a>
       </div>
     </div>
@@ -39,9 +39,9 @@
     <div class="pa-cardhead"><h3>تصاویر</h3></div>
     <div class="pa-cardbody">
       <p class="pa-help">لوگو و عکس‌های سایت عمومی (قالب‌ها، فروشگاه نمونه و ...).</p>
-      <div style="margin-top:14px"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:public-photos' %}">مدیریت تصاویر</a></div>
+      <div class="pa-mt-4"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:public-photos' %}">مدیریت تصاویر</a></div>
     </div>
   </div>
 </div>
-<p class="pa-help">همه تغییرات در گزارش رخدادها ثبت می‌شود. عبارت‌های <code dir="ltr">{trial}</code> (مدت دوره رایگان)، <code dir="ltr">{support_phone}</code> و <code dir="ltr">{support_email}</code> داخل متن‌ها خودکار از «تنظیمات پلتفرم» پر می‌شوند.</p>
+<p class="pa-help">همه تغییرات در گزارش رخدادها ثبت می‌شود. عبارت‌های <span class="pa-code">{trial}</span> (مدت دوره رایگان)، <span class="pa-code">{support_phone}</span> و <span class="pa-code">{support_email}</span> داخل متن‌ها خودکار از «تنظیمات پلتفرم» پر می‌شوند.</p>
 {% endblock %}

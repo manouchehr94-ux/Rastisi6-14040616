@@ -1,11 +1,11 @@
-{% load static %}<!DOCTYPE html>
+{% load static platform_admin_ui %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}پنل مدیریت پلتفرم | راستیسی{% endblock %}</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="{% static 'portal/css/platform-admin-panel.css' %}">
+<link rel="stylesheet" href="{% static 'portal/css/platform-admin-panel.css' %}?v=20261105-ux1">
 <link rel="stylesheet" href="{% static 'notifications/inbox.css' %}?v=20261101-1">
 <script src="{% static 'notifications/inbox.js' %}?v=20261101-1" defer></script>
 <link rel="stylesheet" href="{% static 'core/password_toggle.css' %}?v=20261029-2">
@@ -13,95 +13,40 @@
 <link rel="stylesheet" href="{% static 'core/jalali_picker.css' %}">
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
 <script src="{% static 'core/jalali_picker.js' %}" defer></script>
+<script src="{% static 'portal/js/platform-admin-ui.js' %}?v=20261105-ux1" defer></script>
 {% block extra_css %}{% endblock %}
 </head>
 <body class="pa">
 {% if request.user.is_authenticated %}
-<div class="pa-app" x-data="platformSidebarNav()">
-  <div class="pa-backdrop hidden" :class="{hidden: !mobileOpen}" @click="mobileOpen=false"></div>
-  <aside class="pa-sidebar" :class="{open: mobileOpen}">
-    <div class="pa-brand">
-      <div class="pa-logo">ر</div>
-      <div><b>راستیسی</b><small>پنل مالک پلتفرم</small></div>
-    </div>
-
-    <div class="pa-menu-title">مدیریت اصلی</div>
-    <nav class="pa-nav">
-      <a href="{% url 'portal_platform_admin:home' %}" class="{% if active_nav == 'dashboard' %}active{% endif %}">🏠 داشبورد</a>
-      <a href="{% url 'portal_platform_admin:stores' %}" class="{% if active_nav == 'stores' %}active{% endif %}">🏪 فروشگاه‌ها</a>
-      <a href="{% url 'portal_platform_admin:users' %}" class="{% if active_nav == 'users' %}active{% endif %}">👤 کاربران</a>
-    </nav>
-
-    <div class="pa-menu-title">اشتراک‌ها</div>
-    <nav class="pa-nav">
-      <button type="button" @click="toggle('subscriptions')">
-        🧩 اشتراک‌ها
-        <svg class="pa-nav-chevron" :class="{open: groups.subscriptions}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
-      <div x-show="groups.subscriptions" x-cloak>
-        <a href="{% url 'portal_platform_admin:plans' %}" class="pa-sub {% if active_nav == 'plans' %}active{% endif %}">پلن‌های اشتراک</a>
-        <a href="{% url 'portal_platform_admin:features' %}" class="pa-sub {% if active_nav == 'features' %}active{% endif %}">کاتالوگِ قابلیت‌ها</a>
-        <a href="{% url 'portal_platform_admin:assignment-matrix' %}" class="pa-sub {% if active_nav == 'assignments' %}active{% endif %}">تخصیصِ قابلیت به پلن</a>
-        <a href="{% url 'portal_platform_admin:subscriptions' %}" class="pa-sub {% if active_nav == 'subscriptions' %}active{% endif %}">اشتراک فروشگاه‌ها</a>
-        <a href="{% url 'portal_platform_admin:payments' %}" class="pa-sub {% if active_nav == 'payments' %}active{% endif %}">پرداخت‌ها و فاکتورها</a>
-        <a href="{% url 'portal_platform_admin:billing-zibal-settings' %}" class="pa-sub {% if active_nav == 'payments' %}active{% endif %}">زیبال — اشتراکِ پلتفرم</a>
-      </div>
-    </nav>
-
-    <div class="pa-menu-title">پیامک</div>
-    <nav class="pa-nav">
-      <button type="button" @click="toggle('sms')">
-        📲 پیامک
-        <svg class="pa-nav-chevron" :class="{open: groups.sms}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
-      <div x-show="groups.sms" x-cloak>
-        <a href="{% url 'portal_platform_admin:sms-providers' %}" class="pa-sub {% if active_nav == 'sms-providers' %}active{% endif %}">شرکت‌های پیامکی</a>
-        <a href="{% url 'portal_platform_admin:sms-templates' %}" class="pa-sub {% if active_nav == 'sms-templates' %}active{% endif %}">قالب‌ها و الگوها</a>
-        <a href="{% url 'portal_platform_admin:sms-messages' %}" class="pa-sub {% if active_nav == 'sms-messages' %}active{% endif %}">همه پیامک‌ها</a>
-      </div>
-    </nav>
-
-    <div class="pa-menu-title">اعلان‌ها (پیامک و ایمیل)</div>
-    <nav class="pa-nav">
-      <a href="{% url 'portal_platform_admin:notification-catalog' %}" class="{% if active_nav == 'notification-catalog' %}active{% endif %}">✉ رویدادها و قالب‌ها</a>
-      <a href="{% url 'portal_platform_admin:notification-senders' %}" class="{% if active_nav == 'notification-senders' %}active{% endif %}">🔐 هویتِ فرستنده‌ی ایمیل</a>
-      <a href="{% url 'portal_platform_admin:notification-delivery' %}" class="{% if active_nav == 'notification-delivery' %}active{% endif %}">📊 ارسال‌ها و شکست‌ها</a>
-      <a href="{% url 'portal_platform_admin:notification-audit' %}" class="{% if active_nav == 'notification-audit' %}active{% endif %}">🕑 تاریخچه‌ی تغییرات</a>
-    </nav>
-
-    <div class="pa-menu-title">مدیریت محتوا و زیرساخت</div>
-    <nav class="pa-nav">
-      <a href="{% url 'portal_platform_admin:industries' %}" class="{% if active_nav == 'industries' %}active{% endif %}">🧱 صنف‌ها و قالب‌ها</a>
-      <a href="{% url 'portal_platform_admin:public-site' %}" class="{% if active_nav == 'public-site' %}active{% endif %}">✏️ متن و ظاهر سایت عمومی</a>
-      <a href="{% url 'portal_platform_admin:public-photos' %}" class="{% if active_nav == 'public-photos' %}active{% endif %}">🖼️ تصاویر سایت عمومی</a>
-      <a href="{% url 'portal_platform_admin:domains' %}" class="{% if active_nav == 'domains' %}active{% endif %}">🌐 دامنه‌ها</a>
-      <a href="{% url 'portal_platform_admin:audit-log' %}" class="{% if active_nav == 'audit' %}active{% endif %}">🛡️ گزارش رخدادها</a>
-      <a href="{% url 'portal_platform_admin:configuration' %}" class="{% if active_nav == 'platform-settings' %}active{% endif %}">⚙️ تنظیمات پلتفرم</a>
-    </nav>
-  </aside>
+{% include "portal/platform_admin/_icons.html" %}
+<a class="pa-sr" href="#pa-main-content">پرش به محتوا</a>
+<div class="pa-app">
+  <div class="pa-backdrop" data-pa-backdrop hidden></div>
+  {% pa_sidebar %}
 
   <section class="pa-main">
     <header class="pa-topbar">
-      <div class="pa-right">
-        <button class="pa-btn pa-mobile-menu" type="button" @click="mobileOpen=true">☰</button>
-        <form method="get" action="{% url 'portal_platform_admin:stores' %}">
-          <input class="pa-search" type="search" name="q" placeholder="جستجو در فروشگاه‌ها..." value="{{ request.GET.q|default:'' }}">
+      <div class="pa-start">
+        <button class="pa-btn pa-icon pa-menu-btn" type="button" data-pa-nav-open aria-controls="pa-sidebar" aria-expanded="false" aria-label="باز کردنِ منو"><svg class="pa-i"><use href="#i-menu"/></svg></button>
+        <form class="pa-search" method="get" action="{% url 'portal_platform_admin:stores' %}" role="search">
+          <label class="pa-sr" for="pa-global-search">جستجو در فروشگاه‌ها</label>
+          <input class="pa-input" id="pa-global-search" type="search" name="q" placeholder="جستجو در فروشگاه‌ها…" value="{{ request.GET.q|default:'' }}">
         </form>
       </div>
-      <div class="pa-left">
+      <div class="pa-end">
         {% include "notifications/partials/bell.html" %}
-        <div class="pa-avatar">{{ request.user.get_username|first|upper }}</div>
-        <div>
-          <b style="font-size:12px">{{ request.user.get_full_name|default:request.user.get_username }}</b>
-          <div class="pa-help">مدیر پلتفرم</div>
+        <div class="pa-user">
+          <span class="pa-avatar" aria-hidden="true">{{ request.user.get_username|first|upper }}</span>
+          <div><b class="pa-ltr">{{ request.user.get_full_name|default:request.user.get_username }}</b><span class="pa-help">مدیر پلتفرم</span></div>
         </div>
-        <form method="post" action="{% url 'portal_platform_admin:logout' %}">{% csrf_token %}<button type="submit" class="pa-btn pa-small">خروج</button></form>
+        <form method="post" action="{% url 'portal_platform_admin:logout' %}" data-no-loading>{% csrf_token %}<button type="submit" class="pa-btn pa-ghost" aria-label="خروج"><svg class="pa-i"><use href="#i-logout"/></svg><span class="pa-logout-text">خروج</span></button></form>
       </div>
     </header>
-    <main class="pa-content">
+    <main class="pa-content {% block page_class %}{% endblock %}" id="pa-main-content">
+      {% pa_breadcrumb as crumb %}{% if crumb %}<nav class="pa-crumb" aria-label="مسیر"><span>{{ crumb.group }}</span><span aria-hidden="true">›</span><a href="{{ crumb.url }}">{{ crumb.item }}</a></nav>{% endif %}
       {% if messages %}
       {% for message in messages %}
-      <div class="pa-alert {% if message.tags == 'error' %}pa-alert-error{% else %}pa-alert-success{% endif %}">{{ message }}</div>
+      <div class="pa-alert {% if message.tags == 'error' %}pa-alert-error{% elif message.tags == 'warning' %}pa-alert-warn{% elif message.tags == 'success' %}pa-alert-success{% endif %}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}"{% if message.tags == 'success' %} data-pa-message="success"{% endif %}>{{ message }}</div>
       {% endfor %}
       {% endif %}
 {% endif %}
@@ -111,25 +56,5 @@
   </section>
 </div>
 {% endif %}
-<script>
-function platformSidebarNav(){
-  return {
-    mobileOpen: false,
-    groups: { subscriptions: false, sms: false },
-    init(){
-      const activeItem = this.$el.querySelector('.pa-nav a.active');
-      if (activeItem) {
-        const group = activeItem.closest('[x-show]');
-        if (group && group.previousElementSibling) {
-          const key = group.previousElementSibling.getAttribute('@click') || '';
-          const match = key.match(/toggle\('([a-z]+)'\)/);
-          if (match) this.groups[match[1]] = true;
-        }
-      }
-    },
-    toggle(key){ this.groups[key] = !this.groups[key]; },
-  };
-}
-</script>
 </body>
 </html>

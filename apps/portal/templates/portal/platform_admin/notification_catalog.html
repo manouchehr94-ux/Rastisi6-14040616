@@ -3,16 +3,16 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>رویدادها و قالب‌های اعلان</h1><p>فهرستِ کاملِ رویدادها. قالبِ پیش‌فرضِ پلتفرم برای همه‌ی فروشگاه‌ها مؤثر است مگر فروشگاه آن را بازنویسی کند (مگر «قفل» باشد).</p></div></div>
 <div class="pa-card"><div class="pa-tablewrap"><table id="event-catalog">
-  <thead><tr><th>رویداد</th><th>دسته</th><th>مخاطب</th><th>فرستنده</th><th>قفل برای فروشگاه</th><th></th></tr></thead>
+  <thead><tr><th>رویداد</th><th>دسته</th><th>مخاطب</th><th>فرستنده</th><th>قفل برای فروشگاه</th><th class="pa-actcol"></th></tr></thead>
   <tbody>
   {% for row in rows %}
     <tr>
-      <td><b>{{ row.event.label }}</b><div class="pa-help" dir="ltr">{{ row.event.key }}</div></td>
+      <td><b>{{ row.event.label }}</b><div class="pa-help"><span class="pa-ltr">{{ row.event.key }}</span></div></td>
       <td>{{ row.category }}</td>
       <td>{{ row.audience }}</td>
       <td>{% if row.event.sender == 'platform' %}راستی‌سی{% else %}دامنه‌ی فروشگاه{% endif %}</td>
-      <td>{% if row.locked %}🔒 قفل{% else %}—{% endif %}</td>
-      <td><a class="pa-btn pa-small" href="{% url 'portal_platform_admin:notification-platform-template' row.event.key %}">ویرایش</a></td>
+      <td>{% if row.locked %}<span class="pa-badge pa-warn">قفل</span>{% else %}—{% endif %}</td>
+      <td class="pa-actcol"><a class="pa-btn" href="{% url 'portal_platform_admin:notification-platform-template' row.event.key %}">ویرایش</a></td>
     </tr>
   {% endfor %}
   </tbody>

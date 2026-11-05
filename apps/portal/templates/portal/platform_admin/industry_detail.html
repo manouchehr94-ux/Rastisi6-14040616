@@ -2,22 +2,22 @@
 {% load persian %}
 {% block title %}{{ template.name }} | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:industries' %}" class="pa-help">← بازگشت به فهرستِ صنف‌ها</a></p>
+<a class="pa-back" href="{% url 'portal_platform_admin:industries' %}">← صنف‌ها و قالب‌ها</a>
 <div class="pa-card"><div class="pa-cardbody pa-detail-header">
-  <div class="pa-store-logo">{{ template.icon|default:"🧱" }}</div>
+  <div class="pa-store-logo" aria-hidden="true">{% if template.icon %}{{ template.icon }}{% else %}<svg class="pa-i"><use href="#i-layers"/></svg>{% endif %}</div>
   <div>
-    <h2 style="margin:0">{{ template.name }} — نسخه‌ی {{ template.version }}</h2>
-    <p class="pa-help" style="direction:ltr;text-align:right">{{ template.slug }} · {{ template.locale }}</p>
-    <div style="margin-top:6px">
+    <h1 class="pa-detail-title">{{ template.name }} — نسخه‌ی {{ template.version }}</h1>
+    <p class="pa-help pa-ltr">{{ template.slug }} · {{ template.locale }}</p>
+    <div class="pa-mt-2">
       {% if template.readiness == "production_ready" %}<span class="pa-badge pa-ok">آماده‌ی تولید</span>
       {% elif template.readiness == "validation_failed" %}<span class="pa-badge pa-off">اعتبارسنجی ناموفق</span>
       {% else %}<span class="pa-badge pa-warn">{{ template.get_readiness_display }}</span>{% endif %}
       {% if template.is_active %}<span class="pa-badge pa-info">فعال</span>{% else %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}
     </div>
   </div>
-  <div class="pa-actions" style="display:flex;gap:8px">
+  <div class="pa-actions pa-row">
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="validate"><button class="pa-btn pa-soft" type="submit">اجرایِ اعتبارسنجی</button></form>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle_active"><button class="pa-btn pa-danger" type="submit">{% if template.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button></form>
+    <form method="post" data-confirm="{% if template.is_active %}این قالب غیرفعال شود؟ فروشگاه‌هایِ جدید دیگر نمی‌توانند آن را انتخاب کنند.{% else %}این قالب دوباره فعال شود؟{% endif %}">{% csrf_token %}<input type="hidden" name="action" value="toggle_active"><button class="pa-btn pa-danger" type="submit">{% if template.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button></form>
   </div>
 </div></div>
 
@@ -25,15 +25,15 @@
 <div class="pa-card"><div class="pa-cardhead"><h3>آخرین نتیجه‌ی اعتبارسنجی</h3></div><div class="pa-cardbody">
   {% if validation_result.status == "valid" %}<span class="pa-badge pa-ok">معتبر</span>{% else %}<span class="pa-badge pa-off">نامعتبر</span>{% endif %}
   {% if validation_result.quality_score %}<span class="pa-help">امتیازِ کیفیت: {{ validation_result.quality_score }}</span>{% endif %}
-  {% if validation_result.errors %}<p style="margin-top:10px"><b>خطاها:</b></p><ul>{% for e in validation_result.errors %}<li class="pa-help">{{ e.message }}</li>{% endfor %}</ul>{% endif %}
-  {% if validation_result.warnings %}<p style="margin-top:10px"><b>هشدارها:</b></p><ul>{% for w in validation_result.warnings %}<li class="pa-help">{{ w.message }}</li>{% endfor %}</ul>{% endif %}
+  {% if validation_result.errors %}<p class="pa-mt-3"><b>خطاها:</b></p><ul>{% for e in validation_result.errors %}<li class="pa-help">{{ e.message }}</li>{% endfor %}</ul>{% endif %}
+  {% if validation_result.warnings %}<p class="pa-mt-3"><b>هشدارها:</b></p><ul>{% for w in validation_result.warnings %}<li class="pa-help">{{ w.message }}</li>{% endfor %}</ul>{% endif %}
 </div></div>
 {% endif %}
 
 <div class="pa-grid2">
   <div class="pa-card"><div class="pa-cardhead"><h3>دسته‌بندی‌ها ({{ template.categories.count }})</h3></div>
     <div class="pa-tablewrap"><table><thead><tr><th>نام</th><th>کد</th></tr></thead><tbody>
-      {% for category in template.categories.all %}<tr><td>{{ category.name }}</td><td style="direction:ltr;text-align:left">{{ category.code }}</td></tr>{% empty %}<tr><td colspan="2" class="pa-help">دسته‌بندی‌ای ثبت نشده.</td></tr>{% endfor %}
+      {% for category in template.categories.all %}<tr><td>{{ category.name }}</td><td class="pa-ltr">{{ category.code }}</td></tr>{% empty %}<tr><td colspan="2" class="pa-help">دسته‌بندی‌ای ثبت نشده.</td></tr>{% endfor %}
     </tbody></table></div>
   </div>
   <div class="pa-card"><div class="pa-cardhead"><h3>ویژگی‌ها ({{ template.attributes.count }})</h3></div>
@@ -59,7 +59,7 @@
   </div>
 </div>
 
-<div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue-ink)">
+<div class="pa-alert">
   ساختِ قالبِ صنفِ تازه/ویرایشِ دسته‌بندی‌ها و ویژگی‌ها از طریقِ ابزارهایِ توسعه (کد/فیکسچر) انجام می‌شود، نه این پنل — این صفحه فقط نظارت/چرخه‌ی عمر (اعتبارسنجی، فعال/غیرفعال‌سازی، مشاهده‌ی نصب‌ها) را پوشش می‌دهد.
 </div>
 {% endblock %}

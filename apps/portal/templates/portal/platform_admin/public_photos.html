@@ -4,7 +4,7 @@
 <div class="pa-pagehead">
   <div><h1>تصاویر سایت عمومی</h1><p>لوگو و تصاویر اصلی صفحات بازاریابی را بدون تغییر فایل‌های پروژه جایگزین کنید. یک تصویر ممکن است در چند بخش استفاده شود.</p></div>
 </div>
-<p class="pa-help">این تصاویر فقط در سایت معرفی راستی‌سی استفاده می‌شوند و هیچ تغییری در تصاویر فروشگاه‌های مشتریان ایجاد نمی‌کنند. تصاویر تازه در فضای رسانهٔ سرور ذخیره می‌شوند؛ از آن‌ها نسخهٔ پشتیبان نگه دارید.</p>
+<div class="pa-alert">این تصاویر فقط در سایت معرفی راستی‌سی استفاده می‌شوند و هیچ تغییری در تصاویر فروشگاه‌های مشتریان ایجاد نمی‌کنند. تصاویر تازه در فضای رسانهٔ سرور ذخیره می‌شوند؛ از آن‌ها نسخهٔ پشتیبان نگه دارید.</div>
 <div class="pa-grid2">
   {% for row in rows %}
     <div class="pa-card">
@@ -13,12 +13,12 @@
         {% else %}<span class="pa-badge pa-info">تصویر پیش‌فرض</span>{% endif %}
       </div>
       <div class="pa-cardbody">
-        <img src="{{ row.preview_url }}" alt="{{ row.photo.alt_text|default:row.label }}" width="280" height="170" style="display:block;width:100%;max-height:210px;object-fit:cover;border-radius:6px;margin-bottom:14px" loading="lazy">
-        <div class="pa-help">شناسه: <code dir="ltr">{{ row.slot }}</code></div>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap">
+        <img class="pa-photo" data-pa-fallback src="{{ row.preview_url }}" alt="{{ row.photo.alt_text|default:row.label }}" width="280" height="170" loading="lazy">
+        <div class="pa-help pa-mt-3">شناسه: <span class="pa-code">{{ row.slot }}</span></div>
+        <div class="pa-row pa-mt-4">
           <a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:public-photo-edit' row.slot %}">بارگذاری / ویرایش</a>
           {% if row.photo %}
-            <form method="post" action="{% url 'portal_platform_admin:public-photo-reset' row.slot %}">
+            <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:public-photo-reset' row.slot %}" data-confirm="تصویرِ سفارشی حذف و تصویرِ پیش‌فرض برگردانده شود؟">
               {% csrf_token %}
               <button class="pa-btn pa-danger" type="submit">بازگشت به تصویر پیش‌فرض</button>
             </form>

@@ -3,16 +3,16 @@
 {% block title %}هویتِ فرستنده‌ی ایمیل فروشگاه‌ها{% endblock %}
 {% block content %}
 <div class="pa-pagehead"><div><h1>هویتِ فرستنده‌ی ایمیل فروشگاه‌ها</h1><p>هر فروشگاه فقط از دامنه‌ی اختصاصیِ خودش ایمیل می‌فرستد؛ اینجا وضعیتِ همه را می‌بینید.</p></div></div>
-<form method="get" class="pa-card" style="padding:10px;margin-bottom:10px">
-  <input name="q" value="{{ filters.q }}" placeholder="نام فروشگاه یا دامنه" aria-label="جستجو">
-  <select name="status" aria-label="وضعیت"><option value="">همه</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-  <button class="pa-btn pa-small" type="submit">فیلتر</button>
-</form>
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="text" name="q" value="{{ filters.q }}"></div>
+  <div class="pa-field"><label for="flt-status">وضعیت</label><select id="flt-status" name="status"><option value="">همه</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:notification-senders' %}">پاک‌کردن</a></div>
+</div></form>
 <div class="pa-card"><div class="pa-tablewrap"><table id="sender-table">
-  <thead><tr><th>فروشگاه</th><th>دامنه</th><th>وضعیت</th><th>علت</th><th>آخرین بررسی</th><th></th></tr></thead>
+  <thead><tr><th>فروشگاه</th><th>دامنه</th><th>وضعیت</th><th>علت</th><th>آخرین بررسی</th><th class="pa-actcol"></th></tr></thead>
   <tbody>{% for i in page %}
-    <tr><td>{{ i.store.name }}</td><td dir="ltr">{{ i.domain_name|default:"—" }}</td><td>{{ i.get_status_display }}{% if i.platform_disabled %} (غیرفعال‌شده توسط پلتفرم){% endif %}</td><td>{{ i.reason_code|default:"—" }}</td><td>{% if i.last_checked_at %}{{ i.last_checked_at|jalali_dt }}{% else %}—{% endif %}</td>
-    <td><form method="post" action="{% url 'portal_platform_admin:notification-sender-toggle' i.pk %}">{% csrf_token %}<button class="pa-btn pa-small" type="submit">{% if i.platform_disabled %}فعال‌سازی مجدد{% else %}غیرفعال‌سازی{% endif %}</button></form></td></tr>
-  {% empty %}<tr><td colspan="6">موردی نیست.</td></tr>{% endfor %}</tbody>
+    <tr><td>{{ i.store.name }}</td><td><span class="pa-ltr">{{ i.domain_name|default:"—" }}</span></td><td>{{ i.get_status_display }}{% if i.platform_disabled %} <span class="pa-badge pa-off">غیرفعال‌شده توسطِ پلتفرم</span>{% endif %}</td><td>{{ i.reason_code|default:"—" }}</td><td>{% if i.last_checked_at %}{{ i.last_checked_at|jalali_dt }}{% else %}—{% endif %}</td>
+    <td class="pa-actcol"><form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:notification-sender-toggle' i.pk %}" {% if not i.platform_disabled %}data-confirm="ارسالِ ایمیلِ این فروشگاه توسطِ پلتفرم غیرفعال شود؟"{% endif %}>{% csrf_token %}<button class="pa-btn {% if not i.platform_disabled %}pa-danger{% endif %}" type="submit">{% if i.platform_disabled %}فعال‌سازی مجدد{% else %}غیرفعال‌سازی{% endif %}</button></form></td></tr>
+  {% empty %}<tr><td colspan="6" class="pa-help">موردی نیست.</td></tr>{% endfor %}</tbody>
 </table></div></div>
 {% endblock %}

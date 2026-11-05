@@ -1,71 +1,66 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}تنظیمات پلتفرم | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<div class="pa-pagehead"><div><h1>تنظیماتِ پلتفرم</h1><p>پیکربندیِ درگاهِ پیامکِ مرکزی در صفحه‌ی جداگانه‌ی «پیامک › تنظیماتِ درگاه» است.</p></div></div>
+<div class="pa-pagehead"><div><h1>تنظیماتِ پلتفرم</h1><p>پیکربندیِ درگاهِ پیامکِ مرکزی در صفحه‌یِ جداگانه‌یِ «پیامک › شرکت‌هایِ پیامکی» است.</p></div></div>
 
-<form method="post" enctype="multipart/form-data">
+<form method="post" enctype="multipart/form-data" class="pa-form" data-pa-dirty>
   {% csrf_token %}
-  <div class="pa-card"><div class="pa-cardhead"><h3>هویتِ پلتفرم</h3></div><div class="pa-cardbody">
-    <div class="pa-grid2">
-      <div class="pa-field"><label>{{ form.temporary_logo_text.label }}</label>{{ form.temporary_logo_text }}</div>
-      <div class="pa-field"><label>{{ form.logo.label }}</label>{{ form.logo }}</div>
-      <div class="pa-field"><label>{{ form.primary_brand_color.label }}</label>{{ form.primary_brand_color }}</div>
-      <div class="pa-field"><label>{{ form.secondary_brand_color.label }}</label>{{ form.secondary_brand_color }}</div>
-      <div class="pa-field"><label>{{ form.support_contact_phone.label }}</label>{{ form.support_contact_phone }}</div>
-      <div class="pa-field"><label>{{ form.support_contact_email.label }}</label>{{ form.support_contact_email }}</div>
+  <fieldset class="pa-fieldset"><legend>هویتِ پلتفرم</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="{{ form.temporary_logo_text.id_for_label }}">{{ form.temporary_logo_text.label }}</label>{{ form.temporary_logo_text }}</div>
+      <div class="pa-field"><label for="{{ form.logo.id_for_label }}">{{ form.logo.label }}</label>{{ form.logo }}</div>
+      <div class="pa-field"><label for="{{ form.primary_brand_color.id_for_label }}">{{ form.primary_brand_color.label }}</label>{{ form.primary_brand_color }}</div>
+      <div class="pa-field"><label for="{{ form.secondary_brand_color.id_for_label }}">{{ form.secondary_brand_color.label }}</label>{{ form.secondary_brand_color }}</div>
+      <div class="pa-field"><label for="{{ form.support_contact_phone.id_for_label }}">{{ form.support_contact_phone.label }}</label>{{ form.support_contact_phone }}</div>
+      <div class="pa-field"><label for="{{ form.support_contact_email.id_for_label }}">{{ form.support_contact_email.label }}</label>{{ form.support_contact_email }}</div>
     </div>
-  </div></div>
+  </fieldset>
 
-  <div class="pa-card"><div class="pa-cardhead"><h3>پیش‌فرض‌هایِ تجاری</h3></div><div class="pa-cardbody">
-    <div class="pa-grid2">
-      <div class="pa-field"><label>{{ form.default_trial_days.label }}</label>{{ form.default_trial_days }}</div>
-      <div class="pa-field"><label>{{ form.deletion_retention_days.label }}</label>{{ form.deletion_retention_days }}
-        {% if form.deletion_retention_days.errors %}<div class="pa-alert pa-alert-error" style="padding:6px 10px;margin:4px 0 0">{{ form.deletion_retention_days.errors.0 }}</div>{% endif %}</div>
-      <div class="pa-field"><label>{{ form.default_payment_provider.label }}</label>{{ form.default_payment_provider }}</div>
+  <fieldset class="pa-fieldset"><legend>پیش‌فرض‌هایِ تجاری</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="{{ form.default_trial_days.id_for_label }}">{{ form.default_trial_days.label }}</label>{{ form.default_trial_days }}</div>
+      <div class="pa-field{% if form.deletion_retention_days.errors %} has-error{% endif %}"><label for="{{ form.deletion_retention_days.id_for_label }}">{{ form.deletion_retention_days.label }}</label>{{ form.deletion_retention_days }}
+        {% if form.deletion_retention_days.errors %}<div class="pa-error">{{ form.deletion_retention_days.errors.0 }}</div>{% endif %}</div>
+      <div class="pa-field"><label for="{{ form.default_payment_provider.id_for_label }}">{{ form.default_payment_provider.label }}</label>{{ form.default_payment_provider }}</div>
     </div>
-  </div></div>
+  </fieldset>
 
-  <div class="pa-card"><div class="pa-cardhead"><h3>اینماد برای rastisi.ir</h3></div><div class="pa-cardbody">
-    <div class="pa-field">
-      <label>۱. {{ form.enamad_verification_meta_tag.label }} (احرازِ فنی)</label>
-      {{ form.enamad_verification_meta_tag }}
-      {% if form.enamad_verification_meta_tag.errors %}<div class="pa-alert pa-alert-error" style="padding:6px 10px;margin:4px 0 0">{{ form.enamad_verification_meta_tag.errors.0 }}</div>{% endif %}
-      <p class="pa-help" style="margin-top:8px">
-        در پنل اینماد روش «افزودن متاتگ در صفحه اصلی» را انتخاب کنید و همان یک تگ
-        <code dir="ltr">&lt;meta name="..." content="..."&gt;</code>
-        را اینجا Paste کنید. RastiSi آن را اعتبارسنجی می‌کند و فقط روی صفحه‌ی اصلی پلتفرم رندر می‌کند؛
-        script، http-equiv و HTML اضافی پذیرفته نمی‌شوند.
-      </p>
+  <fieldset class="pa-fieldset"><legend>اینماد برای rastisi.ir</legend>
+    <p class="pa-help">چهار مرحله: متاتگِ احراز ← احرازِ اینماد ← شناسه و کدِ نماد ← فعال‌سازیِ نماد.</p>
+    <div class="pa-fields">
+      <div class="pa-field pa-full{% if form.enamad_verification_meta_tag.errors %} has-error{% endif %}">
+        <label for="{{ form.enamad_verification_meta_tag.id_for_label }}">۱. {{ form.enamad_verification_meta_tag.label }} (احرازِ فنی)</label>
+        {{ form.enamad_verification_meta_tag }}
+        {% if form.enamad_verification_meta_tag.errors %}<div class="pa-error">{{ form.enamad_verification_meta_tag.errors.0 }}</div>{% endif %}
+        <span class="pa-help">در پنلِ اینماد روشِ «افزودن متاتگ در صفحه اصلی» را انتخاب کنید و همان یک تگ <span class="pa-code">&lt;meta name="..." content="..."&gt;</span> را اینجا Paste کنید. RastiSi آن را اعتبارسنجی می‌کند و فقط روی صفحه‌یِ اصلیِ پلتفرم رندر می‌کند؛ script، http-equiv و HTML اضافی پذیرفته نمی‌شوند.</span>
+      </div>
+      <p class="pa-help pa-full">۲. سپس در اینماد احراز شوید؛ پس از آن فیلدِ بالا را می‌توانید خالی کنید.</p>
+      <div class="pa-field"><label for="{{ form.enamad_id.id_for_label }}">۳. {{ form.enamad_id.label }} (پس از صدور)</label>{{ form.enamad_id }}</div>
+      <div class="pa-field{% if form.enamad_auth_code.errors %} has-error{% endif %}"><label for="{{ form.enamad_auth_code.id_for_label }}">{{ form.enamad_auth_code.label }} (پس از صدور)</label>{{ form.enamad_auth_code }}
+        {% if form.enamad_auth_code.errors %}<div class="pa-error">{{ form.enamad_auth_code.errors.0 }}</div>{% endif %}</div>
+      <label class="pa-check pa-full">{{ form.enamad_badge_enabled }} ۴. {{ form.enamad_badge_enabled.label }}</label>
+      <p class="pa-help pa-full">شناسه/کدِ نمادِ نهایی را اینماد پس از صدور در پنلِ خودش نمایش می‌دهد؛ همین دو مقدار را (نه HTML) اینجا Paste کنید — RastiSi خودش تصویر/لینکِ امن را می‌سازد.</p>
     </div>
-    <div class="pa-grid2" style="margin-top:16px">
-      <div class="pa-field"><label>۲. سپس در اینماد احراز شوید؛ پس از آن این فیلد را می‌توانید خالی کنید.</label></div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>عملیات</legend>
+    <div class="pa-fields">
+      <label class="pa-check pa-full">{{ form.maintenance_mode_enabled }} {{ form.maintenance_mode_enabled.label }}</label>
+      <label class="pa-check pa-full">{{ form.new_store_registration_enabled }} {{ form.new_store_registration_enabled.label }}</label>
     </div>
-    <div class="pa-grid2" style="margin-top:16px">
-      <div class="pa-field"><label>۳. {{ form.enamad_id.label }} (پس از صدور)</label>{{ form.enamad_id }}</div>
-      <div class="pa-field"><label>{{ form.enamad_auth_code.label }} (پس از صدور)</label>{{ form.enamad_auth_code }}</div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>دامنه‌ها (فقط محیطی — از طریقِ استقرار مدیریت می‌شود)</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="cfg-host">میزبانِ اصلیِ پلتفرم</label><input id="cfg-host" class="pa-ltr" type="text" value="{{ request.get_host }}" disabled></div>
+      <div class="pa-field"><label for="cfg-suffix">پسوندِ زیردامنه‌یِ مدیریتِ فروشگاه</label><input id="cfg-suffix" class="pa-ltr" type="text" value="RASTISI_ADMIN_DOMAIN_SUFFIX" disabled></div>
     </div>
-    {% if form.enamad_auth_code.errors %}<div class="pa-alert pa-alert-error" style="padding:6px 10px;margin:4px 0 0">{{ form.enamad_auth_code.errors.0 }}</div>{% endif %}
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:12px">{{ form.enamad_badge_enabled }} ۴. {{ form.enamad_badge_enabled.label }}</label>
-    <p class="pa-help" style="margin-top:8px">شناسه/کدِ نمادِ نهایی را اینماد پس از صدور در پنلِ خودش نمایش می‌دهد؛ همین دو مقدار را (نه HTML) اینجا Paste کنید — RastiSi خودش تصویر/لینکِ امن را می‌سازد.</p>
-  </div></div>
+    <p class="pa-help">این مقادیر از متغیرهایِ محیطی/تنظیماتِ استقرار خوانده می‌شوند و از این پنل قابلِ تغییر نیستند — تغییرشان نیازمندِ استقرارِ تازه است.</p>
+  </fieldset>
 
-  <div class="pa-card"><div class="pa-cardhead"><h3>عملیات</h3></div><div class="pa-cardbody">
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px">{{ form.maintenance_mode_enabled }} {{ form.maintenance_mode_enabled.label }}</label>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px">{{ form.new_store_registration_enabled }} {{ form.new_store_registration_enabled.label }}</label>
-  </div></div>
+  <div class="pa-alert">SECRET_KEY، اعتبارنامه‌یِ دیتابیس و کلیدهایِ رمزنگاری همیشه محیطی (Environment) باقی می‌مانند و هرگز در این فرم یا دیتابیس ذخیره نمی‌شوند.</div>
 
-  <div class="pa-card"><div class="pa-cardhead"><h3>دامنه‌ها (فقط محیطی — از طریقِ استقرار مدیریت می‌شود)</h3></div><div class="pa-cardbody">
-    <div class="pa-grid2">
-      <div class="pa-field"><label>میزبانِ اصلیِ پلتفرم</label><input class="pa-input" type="text" value="{{ request.get_host }}" disabled></div>
-      <div class="pa-field"><label>پسوندِ زیردامنه‌ی مدیریتِ فروشگاه</label><input class="pa-input" type="text" value="RASTISI_ADMIN_DOMAIN_SUFFIX" disabled></div>
-    </div>
-    <p class="pa-help" style="margin-top:8px">این مقادیر از متغیرهایِ محیطی/تنظیماتِ استقرار خوانده می‌شوند و از این پنل قابلِ تغییر نیستند — تغییرشان نیازمندِ استقرارِ تازه است.</p>
-  </div></div>
-
-  <div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue-ink)">
-    SECRET_KEY، اعتبارنامه‌یِ دیتابیس، و کلیدهایِ رمزنگاری همیشه محیطی (Environment) باقی می‌مانند و هرگز در این فرم یا دیتابیس ذخیره نمی‌شوند.
-  </div>
-
-  <button class="pa-btn pa-primary" type="submit">ذخیره‌ی تنظیمات</button>
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ذخیره‌یِ تنظیمات</button></div>
 </form>
 {% endblock %}

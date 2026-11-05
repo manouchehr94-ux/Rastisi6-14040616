@@ -5,11 +5,9 @@
 <div class="pa-pagehead">
   <div><h1>کاربران</h1><p>مالکینِ فروشگاه‌ها — فعال/غیرفعال‌سازیِ حساب و یادداشتِ داخلی.</p></div>
 </div>
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="نام، ایمیل، موبایل..." value="{{ query }}"></div>
-    <button class="pa-btn pa-primary" type="submit">جست‌وجو</button>
-  </div>
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:users' %}">پاک‌کردن</a></div>
 </div></form>
 <div class="pa-card">
   {% if page.object_list %}
@@ -20,8 +18,8 @@
         {% for u in page.object_list %}
         <tr>
           <td>{{ u.owner_profile.full_name|default:"—" }}</td>
-          <td style="direction:ltr;text-align:left">{{ u.email }}</td>
-          <td style="direction:ltr;text-align:left">{{ u.owner_profile.phone|default:"—" }}</td>
+          <td class="pa-ltr">{{ u.email }}</td>
+          <td class="pa-ltr">{{ u.owner_profile.phone|default:"—" }}</td>
           <td>{{ u.owned_store_count }}</td>
           <td>{% if u.is_active %}<span class="pa-badge pa-ok">فعال</span>{% else %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}</td>
           <td>{{ u.date_joined|jalali }}</td>
@@ -33,7 +31,7 @@
   </div>
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">👤</div><p>کاربری یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-users"/></svg></div><p>کاربری یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

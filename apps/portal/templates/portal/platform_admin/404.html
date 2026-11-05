@@ -1,8 +1,10 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}صفحه پیدا نشد | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
-<div class="pa-empty" style="padding:80px 20px">
-  <div class="pa-empty-icon" style="font-size:40px;font-weight:800">۴۰۴</div>
-  <p>این صفحه پیدا نشد.</p>
+<div class="pa-empty">
+  <div class="pa-empty-icon" aria-hidden="true">۴۰۴</div>
+  <h3>صفحه پیدا نشد</h3>
+  <p>نشانیِ واردشده وجود ندارد یا جابه‌جا شده است. از منویِ کناری ادامه دهید.</p>
+  <div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:home' %}">بازگشت به داشبورد</a></div>
 </div>
 {% endblock %}

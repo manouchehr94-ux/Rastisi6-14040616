@@ -629,8 +629,14 @@ def store_detail(request, store_public_id):
     product_count = store.products.filter(status="active").count()
     order_count = store.orders.count()
     tab = request.GET.get("tab", "overview")
+    from apps.subscriptions.models import PlanVersion
+
+    # فهرستِ نسخه‌هایِ منتشرشده برایِ «تغییرِ پلن» (به‌جایِ واردکردنِ دستیِ شناسه)
+    target_versions = (PlanVersion.objects.filter(status=PlanVersion.Status.PUBLISHED, plan__is_active=True)
+                       .select_related("plan").order_by("plan__display_order", "plan__code", "-version_number"))
 
     return render(request, "portal/platform_admin/store_detail.html", {
+        "target_versions": target_versions,
         "store": store, "domains": domains, "memberships": memberships, "owner_membership": owner_membership,
         "current_subscription": current_subscription, "subscription_history": subscription_history,
         "invoices": invoices, "audit_entries": audit_entries, "notes": notes, "sms_balance": sms_balance,
@@ -1177,6 +1183,18 @@ def plan_version_publish(request, plan_id, version_id):
 
 # ---------------------------------------------------------------- محتوایِ صفحه‌ی تعرفه
 
+_PRICING_TABS = ("rows", "faq", "services", "gap")
+
+
+def _pricing_content_redirect(request):
+    """بازگشت به همان تبِ صفحه‌یِ محتوایِ تعرفه پس از ذخیره (تب از نوعِ عمل مشتق می‌شود)."""
+    from django.urls import reverse
+
+    action = request.POST.get("action", "")
+    tab = "faq" if action.startswith("faq") else "services" if action.startswith("service") else "rows"
+    return redirect(f"{reverse('portal_platform_admin:pricing-content')}?tab={tab}")
+
+
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def pricing_content(request):
     """مدیریتِ متنِ نمایشیِ ماتریس، پرسش‌هایِ متداول و خدماتِ اختیاری. ساختارِ ردیف‌ها (دسته/اتصال/وضعیتِ پیاده‌سازی)
@@ -1203,7 +1221,7 @@ def pricing_content(request):
             question, answer = (request.POST.get("question") or "").strip(), (request.POST.get("answer") or "").strip()
             if not question or not answer:
                 messages.error(request, "پرسش و پاسخ الزامی است.")
-                return redirect("portal_platform_admin:pricing-content")
+                return _pricing_content_redirect(request)
             faq.question, faq.answer = question[:240], answer
             faq.plan = Plan.objects.filter(pk=request.POST.get("plan")).first() if request.POST.get("plan") else None
             faq.display_order = int(request.POST["display_order"]) if (request.POST.get("display_order") or "").isdigit() else 0
@@ -1219,7 +1237,7 @@ def pricing_content(request):
             code = (request.POST.get("code") or service.code or "").strip()
             if not title or not code:
                 messages.error(request, "کد و عنوانِ خدمت الزامی است.")
-                return redirect("portal_platform_admin:pricing-content")
+                return _pricing_content_redirect(request)
             service.code, service.title = code[:50], title[:140]
             service.description = (request.POST.get("description") or "").strip()
             raw_price = (request.POST.get("price") or "").strip().replace(",", "")
@@ -1235,13 +1253,13 @@ def pricing_content(request):
             obj_label = f"service:{service.code}"
         else:
             messages.error(request, "عملیاتِ نامعتبر.")
-            return redirect("portal_platform_admin:pricing-content")
+            return _pricing_content_redirect(request)
         record_platform_audit_event(
             actor=request.user, action_code=f"platform_admin.pricing_content_{action}", object_type="PricingContent",
             object_id=0, object_label=obj_label,
         )
         messages.success(request, "ذخیره شد.")
-        return redirect("portal_platform_admin:pricing-content")
+        return _pricing_content_redirect(request)
 
     features = list(PricingFeature.objects.select_related("entitlement").order_by("category", "display_order", "key"))
     for f in features:
@@ -1251,7 +1269,9 @@ def pricing_content(request):
     modes = {(m.service_id, m.plan_id): m.mode for m in PlanOptionalService.objects.all()}
     for service in services:
         service.rows = [(plan, modes.get((service.pk, plan.pk), "unavailable")) for plan in plans_all]
+    tab = request.GET.get("tab") if request.GET.get("tab") in _PRICING_TABS else "rows"
     return render(request, "portal/platform_admin/pricing_content.html", {
+        "tab": tab,
         "features": features, "faqs": PlanFaq.objects.select_related("plan").order_by("display_order", "id"),
         "services": services, "plans_all": plans_all, "gap": gap_report(), "active_nav": "plans",
         "modes": PlanOptionalService.Mode.choices,

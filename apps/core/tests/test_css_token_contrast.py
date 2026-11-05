@@ -235,8 +235,10 @@ class PlatformAdminPanelTokenTests(TokenPairTestCase):
     def test_text_and_primary_buttons(self):
         self.assertPairs(self.props, [
             ("var(--pa-ink)", "var(--pa-card)", AA), ("var(--pa-muted)", "var(--pa-card)", AA), ("var(--pa-muted)", "var(--pa-bg)", AA),
-            ("#ffffff", "var(--pa-purple)", AA), ("#ffffff", "var(--pa-purple2)", AA),  # .pa-primary gradient stops
-            ("var(--pa-purple)", "var(--pa-soft)", AA),                                   # .pa-soft, avatar
+            ("#ffffff", "var(--pa-brand)", AA), ("#ffffff", "var(--pa-brand-hover)", AA),   # .pa-primary (solid brand fill + hover)
+            ("var(--pa-brand)", "var(--pa-brand-soft)", AA), ("var(--pa-brand)", "var(--pa-card)", AA),  # .pa-soft, links, avatar, ghost
+            ("var(--pa-sign-ink)", "var(--pa-sign)", AA), ("#ffffff", "var(--pa-sign)", AA),           # sidebar text + active/summary text
+            ("var(--pa-red-ink)", "var(--pa-redbg)", AA),                                              # .pa-danger
             ("var(--pa-disabled-ink)", "var(--pa-disabled-bg)", DISABLED_TEXT_TARGET),
         ], "platform admin")
 
