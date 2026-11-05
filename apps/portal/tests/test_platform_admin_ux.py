@@ -75,10 +75,15 @@ class NavRegistryTests(SimpleTestCase):
             self.assertTrue(all(g["open"] for g in built["groups"] if any(i["active"] for i in g["items"])))
             self.assertIsNotNone(built["breadcrumb"])
 
-    def test_optional_items_vanish_when_the_route_is_absent(self):
+    def test_optional_items_appear_exactly_when_their_route_exists(self):
+        """PR #40 finance modules are optional: no dead link before the merge, automatic entry after it."""
+        names = set(url_names())
         built = nav.build_nav("home")
         flat = {i["name"] for g in built["groups"] for i in g["items"]}
-        self.assertNotIn("payment-gateways", flat)       # PR #40 module: not in this branch → no dead link
+        for group in nav.NAV:
+            for item in group.items:
+                if item.optional:
+                    self.assertEqual(item.url_name in flat, item.url_name in names, item.url_name)
         self.assertIn("payments", flat)
 
     def test_nav_has_a_single_definition_site(self):
