@@ -2,7 +2,7 @@
 
 شاخه: `pricing/dynamic-plans-20261105` — پایه: `kiro/messaging-settings-ux-20261104` (`0f95379a`)، همان خطِ یکپارچه‌ی تأییدشده که PR #40 هم از آن منشعب است. **روی PR #40 سوار نشده است**؛ فقط مهاجرت‌هایِ `subscriptions` اضافه می‌کند (PR #40 در `portal`/`billing`/`sms` مهاجرت دارد) تا ادغامِ این دو تداخلِ شماره‌ی مهاجرت نداشته باشد. هیچ استقرارِ production، مهاجرتِ production یا ادغام به `main` انجام نشده است.
 
-> **محدودیتِ این تحویل:** فایلِ ZIPِ مرجع (۷۶ ردیف) و `sazito.com` در این نشست در دسترس نبودند؛ جدولِ شکافِ ردیف‌به‌ردیفِ مرجع **انجام نشد و جعل نشد**. ممیزیِ واقعیِ کد و کاتالوگِ ۴۶ ردیفیِ راستی‌سی در `PRICING_AUDIT_AND_GAP_MATRIX_20261105.md` است و برایِ افزودنِ ردیف‌هایِ مرجع آماده است. مرجع فقط برایِ پوششِ کارکردی و ساختارِ اطلاعات بود، نه رنگ/برند/متن.
+> **ممیزیِ ۷۶ ردیف انجام شد:** `PRICING_REFERENCE_76_GAP_MATRIX_20261105.md` (تولیدشده از `reference_matrix.py`؛ ۲۴ Implemented، ۱۴ Partial، ۷ External، ۲۰ Missing، ۱۱ N/A) + کاتالوگِ ۵۷ ردیفیِ عمومی در `PRICING_AUDIT_AND_GAP_MATRIX_20261105.md`. مرجع فقط برایِ پوششِ کارکردی و ساختارِ اطلاعات بود، نه رنگ/برند/متن؛ مقادیرِ پلن‌هایِ مرجع کپی نشده است. **پذیرشِ نهایی منوطِ به بستنِ شکاف‌هایِ واقعی (۲۰ Missing + بخشی از Partial) یا تصمیمِ مالک برایِ هر کدام است.**
 
 ## معماری: یک منبعِ حقیقت
 
@@ -16,8 +16,8 @@ feature_catalog.CATALOG (دسته/وضعیت/مدرک) ───┘            �
 
 * مقدارِ هر خانه‌ی ماتریس با **همان** `has_entitlement` / `get_entitlement_limit` که محصول برایِ اعمال می‌خواند محاسبه می‌شود (تستِ سازگاری: `test_matrix_values_equal_what_the_entitlement_service_enforces`).
 * ردیفِ بدونِ کلیدِ اعمال‌شده «همه‌ی پلن‌ها» نشان داده می‌شود و قابلِ خاموش‌کردن نیست؛ ردیفِ `planned` **هرگز** عمومی نمی‌شود (حتی اگر دستی روشن شود؛ `sync` دوباره پنهانش می‌کند).
-* کلیدِ Entitlementِ اعلام‌شده امّا اعمال‌نشده (۱۶ کلید) در فرمِ پلن غیرفعال با برچسبِ «هنوز اعمال نمی‌شود» است و POST دستی هم ردیفی برایش نمی‌سازد.
-* **`domains.custom` عمداً اعمال نشد:** پلن‌هایِ seed شده‌ی Trial/Basic آن را `False` اعلام کرده‌اند و اعمالش دسترسیِ فعلیِ مشترکانِ موجود را بی‌صدا لغو می‌کرد (regression آن را نشان داد: `test_full_lifecycle`). ردیفِ ماتریس «همه‌ی پلن‌ها» نشان داده می‌شود؛ طرحِ grandfathering در سندِ ممیزی §۴ است و تصمیمِ مالک می‌خواهد. بنابراین **هیچ Entitlementِ موجودی تغییر نکرد**؛ قابلِ‌کنترل‌ترین کلیدها همان ۹ کلیدِ از قبل اعمال‌شده‌اند (کالا، تنوع، انبار، سگمنت، تیم، واردات/صادرات و سقفِ ماهانه‌شان).
+* کلیدِ Entitlementِ اعلام‌شده امّا اعمال‌نشده (۱۵ کلید) در فرمِ پلن غیرفعال با برچسبِ «هنوز اعمال نمی‌شود» است و POST دستی هم ردیفی برایش نمی‌سازد.
+* **`domains.custom` با grandfathering اعمال می‌شود:** پلن‌هایِ seed شده‌ی Trial/Basic آن را `False` اعلام کرده‌اند و اعمالِ بی‌قیدِ آن دسترسیِ مشترکانِ موجود را لغو می‌کرد (regression نشان داد). راه‌حل: `EntitlementDefinition.enforced_from` (مهاجرتِ `0011`، زمانِ اعمال). نسخه‌هایِ منتشرشده **پیش از** آن (یا بدونِ `published_at`) همیشه دسترسی دارند؛ فقط نسخه‌هایِ منتشرشده‌ی *پس از* آن مقدارِ صریحشان اعمال می‌شود؛ نسخه‌ای که کلید را تعریف نکند و فروشگاهِ بدونِ اشتراک fail-open‌اند؛ پایین‌آوردنِ پلن دامنه‌هایِ موجود را هرگز حذف نمی‌کند. اعمال در `request_custom_domain` (لایه‌ی سرویس) است.
 
 ## قابلیت‌هایِ مدیر (Platform Admin → پلن‌های اشتراک)
 
@@ -49,6 +49,8 @@ feature_catalog.CATALOG (دسته/وضعیت/مدرک) ───┘            �
 |---|---|
 | `subscriptions.0009_pricing_options_and_catalog` | افزودنِ فیلدهایِ `Plan` (tagline/badge_text/cta_label)، `PlanVersion.trial_once_per_store`، گزینه‌هایِ دوره، `StoreSubscription.billing_interval` (خالی = دوره‌ی اصلی؛ همه‌ی اشتراک‌هایِ موجود دست‌نخورده)، مدل‌هایِ `PlanVersionPrice`، `PricingFeature`، `PlanFaq`، `OptionalService`، `PlanOptionalService` |
 | `subscriptions.0010_seed_feature_catalog` | داده‌ی اولیه: ردیف‌هایِ ماتریس از کاتالوگ؛ هیچ Entitlement/اشتراکی تغییر نمی‌کند؛ idempotent؛ reverse بی‌اثر |
+| `subscriptions.0011_entitlement_enforced_from` | فیلدِ `EntitlementDefinition.enforced_from` + ثبتِ زمانِ اعمالِ `domains.custom`؛ هیچ `PlanEntitlement`/اشتراکی تغییر نمی‌کند |
+| `subscriptions.0012_catalog_reference_audit_rows` | ردیف‌هایِ تازه‌ی کاتالوگ از ممیزیِ ۷۶ ردیفی + اصلاحِ ردیفِ ریدایرکت (عمومی نمی‌شود)؛ idempotent |
 
 مهاجرتِ `billing` اضافه نشده است (دوره در اسنپ‌شاتِ ردیفِ فاکتور و `StoreSubscription` نگه‌داری می‌شود). ارتقا: پشتیبان → استقرار کد → `migrate subscriptions` → در Platform Admin پلن‌هایِ Base/Advanced/Ultra را با مقادیرِ تصمیمِ مالک بسازید و منتشر کنید. بازگشت: برگرداندنِ کد؛ جدول‌هایِ تازه برایِ کدِ قدیمی بی‌اثرند.
 
@@ -60,7 +62,8 @@ feature_catalog.CATALOG (دسته/وضعیت/مدرک) ───┘            �
 
 | فایل | تعداد | موضوع |
 |---|---|---|
-| `apps/subscriptions/tests/test_pricing_dynamic.py` | ۲۹ | گزینه‌هایِ قیمت، اعتبارسنجی، تغییرناپذیری، محدودیت‌هایِ DB، داده‌ی صفحه (ظهور/پنهان‌بودن پلن‌ها، قیمت/تخفیف/تریال از نسخه‌ی واقعی، سازگاریِ ماتریس با سرویسِ Entitlement، ردیفِ `planned` عمومی نمی‌شود، ماندگاریِ ویرایشِ مدیر پس از sync)، حفظِ مشترکانِ موجود (قیمت و Entitlement)، حفظِ رفتارِ فعلیِ دامنه‌ی اختصاصی، چرخه‌ی صورتحساب (دوره‌ی سالانه/تمدید/ارتقا/تنزل/دوره‌ی جعلی/فاکتورِ بازِ دوره‌ی دیگر/پرداخت ناموفق/واجدیتِ تریال/ثبت‌نام با پلن) |
+| `apps/subscriptions/tests/test_pricing_dynamic.py` | ۳۶ | گزینه‌هایِ قیمت، اعتبارسنجی، تغییرناپذیری، محدودیت‌هایِ DB، داده‌ی صفحه (ظهور/پنهان‌بودن پلن‌ها، قیمت/تخفیف/تریال از نسخه‌ی واقعی، سازگاریِ ماتریس با سرویسِ Entitlement، ردیفِ `planned` عمومی نمی‌شود، ماندگاریِ ویرایشِ مدیر پس از sync)، حفظِ مشترکانِ موجود (قیمت و Entitlement)، حفظِ رفتارِ فعلیِ دامنه‌ی اختصاصی، چرخه‌ی صورتحساب (دوره‌ی سالانه/تمدید/ارتقا/تنزل/دوره‌ی جعلی/فاکتورِ بازِ دوره‌ی دیگر/پرداخت ناموفق/واجدیتِ تریال/ثبت‌نام با پلن) |
+| `apps/subscriptions/tests/test_reference_matrix.py` | ۷ | ۷۶ ردیف کامل، وجودِ مدرک/تست، عدمِ پیشی‌گرفتنِ کاتالوگِ عمومی از واقعیت، گیت‌هایِ plan فقط با Entitlementِ اعمال‌شده، عدمِ driftِ سندِ تولیدشده |
 | `apps/portal/tests/test_pricing_page_http.py` | ۲۵ | صفحه‌ی عمومی (۳ کارت، تریال، ماتریس هفت‌دسته، سقف‌هایِ دقیق، قابلیتِ پیاده‌نشده تبلیغ نمی‌شود، FAQ/خدمات، CTA برایِ مهمان/مالک)، ثبت‌نام با پلن، خریدِ مالک با دوره، Platform Admin (فرمِ یکپارچه، نسخه‌یِ تازه، انتشارِ ناهماهنگ، محتوا، کنترلِ دسترسی)، تغییرِ پلنِ داشبورد با دوره |
 
 نتایجِ کامل (regression گسترده، مرورگر) در بخشِ «نتایج» پایینِ همین سند و در توضیحاتِ PR.
@@ -69,19 +72,19 @@ feature_catalog.CATALOG (دسته/وضعیت/مدرک) ───┘            �
 
 * ZIPِ مرجع + `sazito.com` برایِ مقایسه‌ی ردیف‌به‌ردیفِ ۷۶ ردیف.
 * قیمت‌ها، سقف‌ها، تریال، تخفیف و نشانِ پیشنهادی هر سه پلن (Base/Advanced/Ultra) را مالک تعیین می‌کند؛ هیچ مقداری در کد یا مهاجرت ساخته نشده (مقادیرِ اسکرین‌شات‌ها نمونه‌ی ساختگیِ QA در DB موقت‌اند).
-* ۱۶ کلیدِ Entitlement هنوز در محصول اعمال نمی‌شوند؛ هر کدام پیش از تبلیغ نیازمندِ پیاده‌سازیِ گیت + تست است (فهرست در سندِ ممیزی).
+* ۱۵ کلیدِ Entitlement هنوز در محصول اعمال نمی‌شوند؛ هر کدام پیش از تبلیغ نیازمندِ پیاده‌سازیِ گیت + تست است (فهرست در سندِ ممیزی).
 * برداشتِ خودکار/تمدیدِ خودکار معرفی نشده (طبقِ دستور).
 
 ## نتایج (صادقانه؛ suite کاملاً سبز نیست)
 
 | اجرا | نتیجه |
 |---|---|
-| Regression گسترده `billing sms subscriptions portal dashboard orders stores notifications core cart` (SQLite، parallel 4) — **پیش از اصلاح‌هایِ زیر** | ۶۶۷۸ تست، ۹۳ skip، **۲ failure + ۵ error** |
-| تحلیلِ آن‌ها | **۲ مورد ناشی از همین کار بود و اصلاح شد:** (۱) `test_new_templates_define_no_local_styles_or_colours` — قالبِ تازه `style=` داشت → به کلاس‌هایِ CSS منتقل شد؛ (۲) `JourneyATestCase.test_full_lifecycle` — اعمالِ `domains.custom` دسترسیِ Trial/Basic را لغو می‌کرد → اعمال برگشت داده شد (سندِ ممیزی §۴). **۵ مورد از کار من نیست:** `notifications.tests.test_email_transport` (`asyncore` در Python 3.13 نیست)، `core…ConcurrentRenderTests.setUpClass` (در اجرایِ مختلط)، `portal…test_a_new_ready_template_appears…` (وابسته به ترتیب؛ تنها سبز است)، و دو تستِ `stores…refresh_rasti_mode_demo_visuals_command` که روی شاخه‌ی PR #40 (بدونِ تغییرِ من) هم دقیقاً همین‌طور می‌افتند |
-| پس از اصلاح‌ها: `test_public_site_v2` + `test_pricing_page_http` + `test_end_to_end_journeys` | ۶۹ تست OK |
-| پس از اصلاح‌ها: تست‌هایِ تازه (۲۹ + ۲۵ = ۵۴) روی SQLite | OK |
-| PostgreSQL 16 (موقت): `apps.subscriptions` + تست‌هایِ تازه + `test_renewals` + `test_plan_change_billing` | ۲۲۰ تست OK |
-| مهاجرت‌ها روی PostgreSQL: migrate تازه، reverse به `subscriptions 0008`، اعمالِ دوباره، `makemigrations --check` | OK / «No changes detected» |
-| مرورگر (Chromium، فونتِ Vazirmatn بارگذاری‌شده): `/plans/` و سه صفحه‌ی Platform Admin در ۱۴۴۰، ۱۲۸۰، ۷۶۸، ۳۹۰ | همه HTTP 200، **۰ پیکسل overflow، بدونِ خطای JS**؛ انتخابگرِ دوره و `?plan=&period=` کار می‌کند؛ مقایسه‌ی موبایل با تبِ پلن (`screenshots_20261105/`) |
+| تست‌هایِ تازه (۳۶ + ۲۵ + ۷ = ۶۸) | روی SQLite و PostgreSQL ۱۶ OK |
+| PostgreSQL ۱۶: `apps.subscriptions` + تست‌هایِ تازه + سفرِ کامل + renewals/plan-change/confirmation + domain verification/panel | **۲۹۲ تست OK** |
+| مجموعه‌یِ مرتبط روی SQLite (`subscriptions stores portal-journeys pricing`) | ۹۰۵ تست؛ فقط ۲ شکستِ از قبل موجود: `stores…refresh_rasti_mode_demo_visuals_command` (روی شاخه‌ی PR #40 هم همین‌طور می‌افتد) |
+| Regression گسترده‌ی نوبتِ اول (قبل از grandfathering و اصلاح‌هایِ نهایی) | ۶۶۷۸ تست، ۲ failure + ۵ error؛ ۲ مورد از کارِ من بود و اصلاح شد (inline style در قالب؛ لغوِ دسترسیِ Trial/Basic با اعمالِ `domains.custom` ⇒ اکنون grandfathering). ۵ موردِ دیگر از کارِ من نیست (`asyncore` در Python 3.13، `ConcurrentRenderTests.setUpClass` در اجرایِ مختلط، تستِ وابسته به ترتیبِ `test_public_site_v2`، و دو تستِ stores بالا) |
+| مهاجرت‌ها روی PostgreSQL: migrate تازه، reverse تا `subscriptions 0008`، اعمالِ دوباره، `makemigrations --check` | OK / «No changes detected» |
+| **ادغامِ آزمایشیِ PR #40** (`pr40_integration/README.md`) | ۲ conflict (`portal/views.py`، `billing_plans.html`) + ۱ نقصِ معنایی که بی‌conflict ادغام شد؛ پس از حل: ۷۰۰ تست OK + ۳ تستِ ترکیبی؛ گرافِ مهاجرت بدونِ تعارض |
+| مرورگر (Chromium + Vazirmatn): `/plans/` و سه صفحه‌ی Platform Admin در ۱۴۴۰، ۱۲۸۰، ۷۶۸، ۳۹۰ | ۲۰ بررسی: همه ۲۰۰، **۰ پیکسل overflow، بدونِ خطای JS** |
 
-توجه: regressionِ گسترده پس از اصلاحِ دو مورد **دوباره به‌صورتِ کامل اجرا نشد**؛ فقط زیرمجموعه‌هایِ بالا (که مواردِ شکست‌خورده را پوشش می‌دهند) دوباره اجرا شدند.
+توجه: regressionِ گسترده‌ی کامل پس از grandfathering و ممیزیِ ۷۶ ردیفی **دوباره اجرا نشد**؛ زیرمجموعه‌هایِ بالا که تمامِ نقاطِ تغییر را پوشش می‌دهند اجرا شدند.

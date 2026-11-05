@@ -1,0 +1,196 @@
+diff --git a/apps/portal/templates/portal/app/billing_plans.html b/apps/portal/templates/portal/app/billing_plans.html
+index b42142b9..b5e5be48 100644
+--- a/apps/portal/templates/portal/app/billing_plans.html
++++ b/apps/portal/templates/portal/app/billing_plans.html
+@@ -14,21 +14,22 @@
+   {% if request.GET.payment == "ok" %}<div class="p-alert">پرداخت تأیید شد و اشتراک شما اعمال شد.</div>{% elif request.GET.payment == "failed" %}<div class="p-alert p-alert-error">پرداخت تأیید نشد؛ می‌توانید دوباره تلاش کنید.</div>{% elif request.GET.payment == "action" %}<div class="p-alert p-alert-error">پرداخت شما نیازمند بررسی پشتیبانی است؛ دوباره پرداخت نکنید.</div>{% elif request.GET.payment == "pending" %}<div class="p-alert">پرداخت هنوز تأیید نشده است.</div>{% endif %}
+   {% if messages %}{% for message in messages %}<div class="p-alert p-alert-error">{{ message }}</div>{% endfor %}{% endif %}
+   <div style="display:grid;gap:12px">
+-    {% for version in plan_versions %}
+-    <div style="border:1px solid var(--p-line);border-radius:12px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+-      <div>
+-        <div style="font-weight:600">{{ version.plan.public_title|default:version.plan.name }}</div>
+-        <div style="font-size:12px;color:var(--p-muted)">{{ version.display_price }} تومان / {{ version.get_billing_interval_display }}</div>
+-      </div>
+-      <form method="post" action="{% url 'portal:billing-checkout' store.public_id version.pk %}">
++    {% for offer in plan_offers %}
++    <div style="border:1px solid {% if offer.version.plan_id == selected_plan_id %}var(--p-primary,#6c4cf1){% else %}var(--p-line){% endif %};border-radius:12px;padding:16px;display:grid;gap:10px"{% if offer.version.plan_id == selected_plan_id %} aria-current="true"{% endif %}>
++      <div style="font-weight:600">{{ offer.version.plan.public_title|default:offer.version.plan.name }}{% if offer.version.plan_id == selected_plan_id %} <span style="font-size:11px;color:var(--p-muted)">— انتخابِ شما در صفحه‌ی تعرفه</span>{% endif %}</div>
++      {% for period in offer.periods %}
++      <form method="post" action="{% url 'portal:billing-checkout' store.public_id offer.version.pk %}" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+         {% csrf_token %}
+         {% if gateway_options|length > 1 %}
+         <select name="gateway" aria-label="درگاه پرداخت" style="margin-bottom:6px;width:100%">
+           {% for option in gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+         </select>
+         {% endif %}
++        <input type="hidden" name="billing_interval" value="{{ period.interval }}">
++        <div style="font-size:13px"><b>{{ period.price }}</b> تومان / {{ period.label }}{% if period.savings_percent %} <span style="font-size:11px;color:var(--p-muted)">({{ period.savings_percent }}٪ صرفه‌جویی)</span>{% endif %}</div>
+         <button type="submit" class="p-btn p-btn-primary">خرید</button>
+       </form>
++      {% endfor %}
+     </div>
+     {% empty %}
+     <p style="text-align:center;font-size:13px;color:var(--p-muted)">در حال حاضر پلنِ پولیِ قابلِ‌خریدی موجود نیست.</p>
+diff --git a/apps/portal/views.py b/apps/portal/views.py
+index cba0f7bf..96e750df 100644
+--- a/apps/portal/views.py
++++ b/apps/portal/views.py
+@@ -64,6 +64,7 @@ from .forms import (
+ from apps.core.services.client_ip import get_client_ip_bucket
+ 
+ from .public_site.plans import public_plan_rows
++from apps.subscriptions.services.pricing_page_service import build_pricing_page, resolve_selection
+ from .public_site.rendering import render  # serves portal/public_v2/* when the new design is active
+ from .models import ContactMessage, OwnerOtpChallenge, OwnerTermsAcceptance
+ from .phone import InvalidPhoneError, normalize_iranian_phone
+@@ -159,7 +160,18 @@ def supported_industries(request):
+ 
+ 
+ def plans(request):
+-    return render(request, "portal/public/plans.html", {"plan_rows": public_plan_rows()})
++    page = build_pricing_page()
++    billing_url = ""
++    if request.user.is_authenticated:
++        owned = Store.objects.filter(
++            memberships__user=request.user, memberships__role=StoreMembership.Role.OWNER,
++            memberships__status=StoreMembership.MembershipStatus.ACTIVE,
++        ).order_by("created_at").first()
++        billing_url = reverse("portal:billing-plans", args=[owned.public_id]) if owned else reverse("portal:app-home")
++    return render(request, "portal/public/plans.html", {
++        "plan_rows": public_plan_rows(), "page": page, "is_owner_authenticated": request.user.is_authenticated,
++        "billing_url": billing_url, "recommended_index": page["recommended_index"],
++    })
+ 
+ 
+ def help_center(request):
+@@ -332,6 +344,8 @@ def register(request):
+     if request.user.is_authenticated:
+         return redirect("portal:app-home")
+ 
++    _remember_plan_selection(request)
++
+     if not platform_config_service.is_new_store_registration_enabled():
+         return render(
+             request, "portal/public/register.html",
+@@ -652,6 +666,30 @@ def otp_verify(request):
+     )
+ 
+ 
++_SELECTED_PLAN_KEY = "portal_selected_plan"
++
++
++def _remember_plan_selection(request):
++    """``?plan=<code>&period=<interval>`` از صفحه‌ی تعرفه: فقط اگر همین الان واقعاً قابلِ‌عرضه باشد در نشستِ سرور
++    نگه داشته می‌شود (کدِ نامعتبر بی‌صدا نادیده گرفته می‌شود). هیچ چیزی با این انتخاب خریده/فعال نمی‌شود."""
++    code = request.GET.get("plan")
++    if not code:
++        return
++    resolved = resolve_selection(code, request.GET.get("period", ""))
++    if resolved is None:
++        request.session.pop(_SELECTED_PLAN_KEY, None)
++        return
++    version, interval = resolved
++    request.session[_SELECTED_PLAN_KEY] = {"code": version.plan.code, "interval": interval}
++
++
++def _selected_plan(request):
++    data = request.session.get(_SELECTED_PLAN_KEY)
++    if not isinstance(data, dict):
++        return None
++    return resolve_selection(data.get("code"), data.get("interval", ""))
++
++
+ def _finish_owner_login(request, identity, *, next_url: str, admin_return: str, remember_me: bool):
+     """ورودِ نهایی پس از تعیینِ هویتِ مالک — مشترک بینِ تأییدِ OTP و مرحله‌ی
+     «تکمیل ثبت‌نام». فروشگاهِ آزمایشیِ اول فقط وقتی ساخته می‌شود که همین درخواست
+@@ -665,8 +703,10 @@ def _finish_owner_login(request, identity, *, next_url: str, admin_return: str,
+         # trial Store is provisioned — the owner never sees an empty My
+         # Stores page on their very first visit.
+         try:
++            selection = _selected_plan(request)
+             store, store_created = provisioning_service.provision_initial_trial_store(
+                 owner=identity.user, name=DEFAULT_TRIAL_STORE_NAME,
++                plan_version=selection[0] if selection else None,
+             )
+         except provisioning_service.RegistrationClosedError:
+             messages.error(request, provisioning_service.REGISTRATION_CLOSED_MESSAGE)
+@@ -1729,9 +1769,18 @@ def billing_plans(request, store_public_id):
+             offerable_versions.append(version)
+ 
+     from apps.portal.services import platform_gateway_service
++    from apps.subscriptions.services.pricing_page_service import _period_options
+ 
++    offers = []
++    for version in offerable_versions:
++        periods = [p for p in _period_options(version) if p["price"] > 0]
++        offers.append({"version": version, "periods": periods})
++    selection = _selected_plan(request)
+     return render(request, "portal/app/billing_plans.html", {
+-        "store": store, "plan_versions": offerable_versions, "current_subscription": current_subscription,
++        "store": store, "plan_versions": offerable_versions, "plan_offers": offers,
++        "current_subscription": current_subscription,
++        "selected_plan_id": selection[0].plan_id if selection else None,
++        "selected_interval": selection[1] if selection else "",
+         "gateway_options": platform_gateway_service.checkout_options(platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store),
+     })
+ 
+@@ -1739,9 +1788,10 @@ def billing_plans(request, store_public_id):
+ _STEP_UP_ACTION_SUBSCRIPTION_PURCHASE = "subscription_purchase_confirm"
+ _SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY = "portal_pending_purchase_plan_version_id"
+ _SESSION_PENDING_PURCHASE_GATEWAY_KEY = "portal_pending_purchase_gateway"
++_SESSION_PENDING_PURCHASE_INTERVAL_KEY = "portal_pending_purchase_interval"
+ 
+ 
+-def _start_purchase(request, *, store, plan_version, gateway=""):
++def _start_purchase(request, *, store, plan_version, gateway="", billing_interval=""):
+     """هسته‌ی مشترکِ خرید — چه بلافاصله (وقتی نیازی به تأییدِ گام‌دوم نیست)
+     چه پس از تأییدِ موفقِ OTP گام‌دوم فراخوانی می‌شود. از همان
+     ``plan_change_billing_service``ای عبور می‌کند که تغییرِ پلنِ Merchant
+@@ -1755,7 +1805,7 @@ def _start_purchase(request, *, store, plan_version, gateway=""):
+     token = plan_change_service._preview_token(current, plan_version)
+     try:
+         kind, result = plan_change_billing_service.start_plan_change(
+-            current, plan_version, preview_token=token, actor=request.user,
++            current, plan_version, preview_token=token, actor=request.user, billing_interval=billing_interval or None,
+         )
+     except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
+         # SUB-001 Repair 3: ``start_plan_change`` now also raises
+@@ -1823,6 +1873,11 @@ def billing_checkout(request, store_public_id, plan_version_id):
+         return portal_permission_denied(request)
+     plan_version = get_object_or_404(PlanVersion, pk=plan_version_id, status=PlanVersion.Status.PUBLISHED)
+     gateway = (request.POST.get("gateway") or "").strip()[:40]
++    # دوره‌ی انتخابی فقط وقتی پذیرفته می‌شود که همین نسخه‌ی منتشرشده آن را عرضه کند (ورودیِ کاربر هرگز اعتماد نمی‌شود).
++    billing_interval = (request.POST.get("billing_interval") or "").strip()
++    if billing_interval and not plan_version.offers_interval(billing_interval):
++        messages.error(request, "این پلن دوره‌ی انتخاب‌شده را عرضه نمی‌کند.")
++        return redirect("portal:billing-plans", store_public_id=store.public_id)
+ 
+     target = str(store.public_id)
+     if step_up_service.is_step_up_required(_STEP_UP_ACTION_SUBSCRIPTION_PURCHASE) and not step_up_service.is_verified(
+@@ -1843,9 +1898,10 @@ def billing_checkout(request, store_public_id, plan_version_id):
+             return redirect("portal:billing-plans", store_public_id=store.public_id)
+         request.session[_SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY] = plan_version.pk
+         request.session[_SESSION_PENDING_PURCHASE_GATEWAY_KEY] = gateway
++        request.session[_SESSION_PENDING_PURCHASE_INTERVAL_KEY] = billing_interval
+         return redirect("portal:billing-step-up", store_public_id=store.public_id)
+ 
+-    return _start_purchase(request, store=store, plan_version=plan_version, gateway=gateway)
++    return _start_purchase(request, store=store, plan_version=plan_version, gateway=gateway, billing_interval=billing_interval)
+ 
+ 
+ @owner_required
+@@ -1872,7 +1928,12 @@ def billing_step_up_verify(request, store_public_id):
+             if plan_version is None:
+                 messages.error(request, "درخواستِ خرید یافت نشد؛ دوباره تلاش کنید.")
+                 return redirect("portal:billing-plans", store_public_id=store.public_id)
+-            return _start_purchase(request, store=store, plan_version=plan_version, gateway=pending_gateway)
++            pending_interval = request.session.pop(_SESSION_PENDING_PURCHASE_INTERVAL_KEY, "") or ""
++            if pending_interval and not plan_version.offers_interval(pending_interval):
++                pending_interval = ""
++            return _start_purchase(
++                request, store=store, plan_version=plan_version, gateway=pending_gateway, billing_interval=pending_interval,
++            )
+         messages.error(request, "کدِ واردشده نادرست یا منقضی است.")
+ 
+     return render(request, "portal/app/step_up_verify.html", {"store": store})
