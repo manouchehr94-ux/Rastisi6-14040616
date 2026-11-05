@@ -108,8 +108,9 @@ def start_payment(purchase, *, callback_base_url, return_to="", actor=None, prov
             failure = exc
         else:
             attempt.provider_session_id = session.session_id
+            attempt.provider_extra = payment_flow_service._storable_extra(session.extra)
             attempt.status = SmsPackagePaymentAttempt.Status.PENDING
-            attempt.save(update_fields=["provider_session_id", "status", "return_to", "updated_at"])
+            attempt.save(update_fields=["provider_session_id", "provider_extra", "status", "return_to", "updated_at"])
     if failure is not None:
         raise PaymentFlowError(
             "درگاه پرداخت در دسترس نیست یا پیکربندی نشده است؛ کمی بعد دوباره تلاش کنید "

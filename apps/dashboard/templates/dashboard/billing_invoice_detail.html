@@ -7,7 +7,7 @@
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
   <a class="btn" href="{% url 'dashboard:billing-invoice-print' invoice.pk %}" target="_blank">نسخه‌ی چاپی</a>
   {% if can_pay and invoice.is_payable %}
-  <form method="post" action="{% url 'dashboard:billing-pay' invoice.pk %}">{% csrf_token %}<button class="btn btn-primary" type="submit">پرداختِ فاکتور</button></form>
+  <form method="post" action="{% url 'dashboard:billing-pay' invoice.pk %}">{% csrf_token %}{% if platform_gateway_options|length > 1 %}<select name="gateway" aria-label="درگاه پرداخت" style="margin-inline-end:6px">{% for option in platform_gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% endif %}<button class="btn btn-primary" type="submit">پرداختِ فاکتور</button></form>
   {% endif %}
   <a class="btn" href="{% url 'dashboard:billing-invoices' %}">بازگشت</a>
 </div>

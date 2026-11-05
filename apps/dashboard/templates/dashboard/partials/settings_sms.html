@@ -49,6 +49,19 @@
     </div>
     {% endif %}
 
+    {% if sms_purchase_history %}
+    <details style="margin-top:14px" id="sms-purchase-history"><summary style="cursor:pointer;font-size:12.5px;font-weight:700">تاریخچه‌ی خریدهای اعتبار</summary>
+      <div class="table-wrap" style="margin-top:8px"><table style="font-size:12px">
+        <thead><tr><th>بسته</th><th>اعتبار</th><th>مبلغ</th><th>وضعیت</th><th>پرداختِ آنلاین</th><th>تاریخ</th></tr></thead><tbody>
+        {% for purchase in sms_purchase_history %}
+        <tr><td>{{ purchase.package.name }}</td><td>{{ purchase.credit_amount|fa_number }}</td><td>{{ purchase.price|toman }}</td>
+          <td>{{ purchase.get_status_display }}</td>
+          <td>{% for attempt in purchase.payment_attempts.all %}<div>{{ attempt.get_status_display }}</div>{% empty %}—{% endfor %}</td>
+          <td>{{ purchase.created_at|jalali:"%Y/%m/%d %H:%M" }}</td></tr>
+        {% endfor %}</tbody></table></div>
+    </details>
+    {% endif %}
+
     <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)">
       <b style="font-size:12.5px;display:block;margin-bottom:10px">خریدِ بسته‌ی اعتبار</b>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">

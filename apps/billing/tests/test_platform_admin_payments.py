@@ -26,7 +26,7 @@ _HOST = "platformadmins.rastisi.localhost"
 SECRET_FIELD_VALUE = "TYPED-SECRET-MERCHANT-VALUE-XYZ"
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", ALLOWED_HOSTS=[_HOST, "testserver"])
 class PlatformAdminPaymentsBase(TestCase):
     def setUp(self):
         self.addCleanup(cache.clear)
@@ -45,6 +45,7 @@ class PlatformAdminPaymentsBase(TestCase):
         return self.client.post(path, data or {}, HTTP_HOST=_HOST)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class AccessControlTests(PlatformAdminPaymentsBase):
     PATHS = ["/payments/gateways/", "/payments/transactions/", "/payments/reconciliation/", "/payments/sms-purchases/", "/payments/zibal/"]
 
@@ -72,12 +73,14 @@ class AccessControlTests(PlatformAdminPaymentsBase):
         self.assertEqual(creds["merchant"], PLATFORM_MERCHANT)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class GatewayPageTests(PlatformAdminPaymentsBase):
     def test_page_lists_eligible_and_blocked_gateways_with_actionable_state(self):
         html = self.get("/payments/gateways/").content.decode()
         self.assertIn("gw-zibal", html)
         self.assertIn("gw-zarinpal", html)
-        self.assertIn("غیرقابل‌استفاده برای پلتفرم", html)          # blocked ones are read-only with a reason
+        self.assertIn('data-status="pending_contract"', html)        # BNPL: implemented, contract pending
+        self.assertIn('data-status="not_implemented"', html)         # PSP skeletons: no functional adapter
         self.assertIn("غیرفعال", html)
 
     def test_saving_a_gateway_enables_it_audits_it_and_never_echoes_the_secret(self):
@@ -126,6 +129,7 @@ class GatewayPageTests(PlatformAdminPaymentsBase):
         self.assertNotIn(SECRET_FIELD_VALUE, self.get("/payments/zibal/").content.decode())
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class TransactionsAndReconciliationTests(PlatformAdminPaymentsBase):
     def setUp(self):
         super().setUp()
@@ -182,6 +186,7 @@ class TransactionsAndReconciliationTests(PlatformAdminPaymentsBase):
         self.assertEqual(SmsBalance.objects.get(store=self.store).credits, 100)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class ReconcileCommandTests(PlatformAdminPaymentsBase):
     def setUp(self):
         super().setUp()

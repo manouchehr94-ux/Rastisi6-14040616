@@ -21,7 +21,7 @@ class Command(BaseCommand):
     help = "Verify stale pending platform payments (subscription + SMS packages) server-to-server; idempotent."
 
     def add_arguments(self, parser):
-        parser.add_argument("--min-age-minutes", type=int, default=10)
+        parser.add_argument("--min-age-minutes", type=int, default=5)
         parser.add_argument("--max-age-hours", type=int, default=72)
         parser.add_argument("--dry-run", action="store_true")
 

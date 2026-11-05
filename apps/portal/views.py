@@ -1794,7 +1794,7 @@ def _start_purchase(request, *, store, plan_version, gateway=""):
 
     if not billing_registry.get_provider(attempt.provider).supports_automatic_capture:
         return redirect("portal:billing-return", store_public_id=store.public_id, attempt_public_token=attempt.public_token)
-    return redirect(session.redirect_url)
+    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url)
 
 
 @owner_required

@@ -23,7 +23,7 @@ _HOST = "rastisi.localhost"
 S = SubscriptionPaymentAttempt.Status
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual")
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual")
 class PlatformSubscriptionPaymentTests(TestCase):
     PRICE = 490_000
 

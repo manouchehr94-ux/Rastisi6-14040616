@@ -73,4 +73,7 @@ class ServiceAndViewTests(RedirectIntegrationBase):
                                       status=PaymentAttempt.Status.REDIRECT_READY, gateway_track_id="T3",
                                       gateway_redirect_url="https://pep.shaparak.ir/dorsa1/pay?urlId=9")
         response = self._post_initiate(order)
-        self.assertEqual((response.status_code, response["Location"]), (302, "https://pep.shaparak.ir/dorsa1/pay?urlId=9"))
+        # Pasargad requires Referer = merchant domain on the browser navigation ⇒ origin-referrer interstitial (same safe URL).
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('content="origin"', response.content.decode())
+        self.assertIn("https://pep.shaparak.ir/dorsa1/pay?urlId=9", response.content.decode())

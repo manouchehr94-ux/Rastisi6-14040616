@@ -4330,6 +4330,9 @@ def _settings_context(
         "sms_packages": balance_service.list_active_packages(),
         "sms_package_purchase_form": SmsPackagePurchaseForm(),
         "platform_gateway_options": SimpleLazyObject(lambda: _platform_gateway_options()),
+        "sms_purchase_history": SimpleLazyObject(lambda: list(
+            store.sms_package_purchases.select_related("package").prefetch_related("payment_attempts").order_by("-created_at")[:10]
+        )),
         "sms_pending_purchases": store.sms_package_purchases.filter(
             status=SmsPackagePurchase.Status.PENDING
         ).select_related("package"),
@@ -4862,7 +4865,7 @@ def _platform_gateway_options():
 def _start_sms_purchase_payment(request, purchase):
     """پرداختِ آنلاینِ یک خریدِ pending از درگاهِ **پلتفرم** (نه درگاهِ Store). اگر درگاهِ آماده‌ای نیست
     ``None`` برمی‌گرداند (مسیرِ قدیمیِ تأییدِ دستی)؛ در غیرِ این صورت ریدایرکت به درگاه یا پیامِ خطا."""
-    from apps.billing.services import sms_purchase_payment_service
+    from apps.billing.services import payment_flow_service, sms_purchase_payment_service
     from apps.billing.services.payment_flow_service import PaymentFlowError
     from apps.portal.services import platform_gateway_service
 
@@ -4875,7 +4878,7 @@ def _start_sms_purchase_payment(request, purchase):
         messages.error(request, str(exc))
         return redirect(_SMS_SETTINGS_PATH)
     try:
-        _attempt, session = sms_purchase_payment_service.start_payment(
+        attempt, session = sms_purchase_payment_service.start_payment(
             purchase, callback_base_url=platform_gateway_service.callback_base_url(request),
             return_to=request.build_absolute_uri(_SMS_SETTINGS_PATH),
             actor=request.user, provider=provider,
@@ -4885,7 +4888,7 @@ def _start_sms_purchase_payment(request, purchase):
         return redirect(_SMS_SETTINGS_PATH)
     if session is None:                       # تکرارِ idempotent: جلسه‌ی قبلی؛ به صفحه برگرد
         return redirect(_SMS_SETTINGS_PATH)
-    return redirect(session.redirect_url)
+    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url)
 
 
 @require_POST
@@ -8498,6 +8501,7 @@ def billing_overview(request):
         "can_manage_account": membership_has_permission(request.store_membership, BILLING_ACCOUNT_MANAGE),
         "can_pay": membership_has_permission(request.store_membership, BILLING_PAYMENT_MANAGE),
         "can_cancel": membership_has_permission(request.store_membership, SUBSCRIPTION_CANCEL),
+        "platform_gateway_options": _platform_gateway_options(),
     })
 
 
@@ -8556,6 +8560,7 @@ def billing_invoice_detail(request, pk):
         "credit_notes": invoice.credit_notes.all(),
         "active_page": "billing",
         "can_pay": membership_has_permission(request.store_membership, BILLING_PAYMENT_MANAGE),
+        "platform_gateway_options": _platform_gateway_options(),
     })
 
 
@@ -8585,7 +8590,7 @@ def billing_pay(request, pk):
         messages.error(request, str(exc))
         return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
     request.session["billing_last_attempt"] = attempt.public_token
-    return redirect(session.redirect_url)
+    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url)
 
 
 @staff_required

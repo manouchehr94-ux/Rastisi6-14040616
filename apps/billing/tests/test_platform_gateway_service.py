@@ -4,7 +4,7 @@ and the HARD isolation between platform merchant credentials and store merchant 
 from pathlib import Path
 
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.billing.providers import registry
 from apps.billing.tests.platform_payment_support import (
@@ -18,12 +18,13 @@ from apps.portal.services.platform_config_service import get_platform_configurat
 from apps.stores.models import Store
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class EligibilityTests(TestCase):
     def test_only_verified_psp_adapters_are_eligible(self):
-        self.assertEqual({c for c in pgs.ELIGIBLE_CODES if pgs.is_eligible(c)}, {"zibal", "zarinpal"})
+        self.assertEqual({c for c in pgs.ELIGIBLE_CODES if pgs.is_eligible(c)}, {"zibal", "zarinpal", "pasargad"})
 
     def test_blocked_bnpl_offline_and_unverified_gateways_are_refused_with_a_reason(self):
-        for code in ("saman", "parsian", "mellat", "sadad", "tejarat", "pasargad", "snappay", "torobpay", "cod", "card_to_card", "nope"):
+        for code in ("saman", "parsian", "mellat", "sadad", "tejarat", "snappay", "torobpay", "cod", "card_to_card", "nope"):
             self.assertFalse(pgs.is_eligible(code), code)
             self.assertTrue(pgs.ineligibility_reason(code), code)
             with self.assertRaises(pgs.PlatformGatewayError, msg=code):
@@ -32,12 +33,13 @@ class EligibilityTests(TestCase):
 
     def test_catalog_shows_blocked_gateways_read_only(self):
         states = {s.code: s for s in pgs.catalog()}
-        self.assertTrue(states["zibal"].eligible and states["zarinpal"].eligible)
+        self.assertTrue(all(states[c].eligible for c in ("zibal", "zarinpal", "pasargad")))
         self.assertFalse(states["saman"].eligible)
         self.assertFalse(states["saman"].ready)
-        self.assertNotIn("cod", states)                       # offline methods are not online gateways
+        self.assertEqual(states["cod"].status, pgs.NOT_ELIGIBLE)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class ReadinessTests(TestCase):
     def setUp(self):
         self.addCleanup(cache.clear)
@@ -94,6 +96,7 @@ class ReadinessTests(TestCase):
                 pgs.resolve_checkout_provider(bad)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class SecretHandlingTests(TestCase):
     def setUp(self):
         self.addCleanup(cache.clear)
@@ -119,6 +122,7 @@ class SecretHandlingTests(TestCase):
         self.assertNotIn(PLATFORM_MERCHANT, blob)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class LegacyZibalCompatibilityTests(TestCase):
     """QA databases may already hold the pre-existing Zibal platform credentials in PlatformConfiguration."""
 
@@ -155,6 +159,7 @@ class LegacyZibalCompatibilityTests(TestCase):
         self.assertEqual(session.redirect_url, "https://gateway.zibal.ir/start/777")
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class CredentialIsolationTests(TestCase):
     """A platform purchase must never use a store's merchant; a store order must never use the platform's."""
 

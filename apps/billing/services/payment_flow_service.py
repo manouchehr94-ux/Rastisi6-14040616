@@ -26,6 +26,24 @@ class PaymentFlowError(Exception):
     """خطای قابل‌نمایش هنگام شروعِ پرداخت."""
 
 
+def _storable_extra(extra) -> dict:
+    """فقط مقدارهای ساده‌ی JSON از جلسه‌ی Provider (مثلاً ``urlId``)؛ بدونِ هیچ رازی."""
+    return {str(k)[:40]: v for k, v in dict(extra or {}).items() if isinstance(v, (str, int, bool)) and len(str(v)) <= 200}
+
+
+def gateway_redirect(provider_code: str, url: str):
+    """پاسخِ هدایتِ مرورگر به صفحه‌ی پرداختِ درگاه. درگاه‌هایی که Referer=دامنه‌ی پذیرنده می‌خواهند (پاسارگاد) از
+    صفحه‌ی میانیِ ``referrer=origin`` عبور می‌کنند؛ بقیه یک ۳۰۲ ساده."""
+    from apps.orders.gateways.redirects import gateway_redirect_response
+    from apps.orders.gateways.registry import get_adapter
+
+    try:
+        adapter = get_adapter(provider_code)
+    except KeyError:
+        adapter = None
+    return gateway_redirect_response(url, adapter=adapter)
+
+
 def callback_url_for(callback_base_url: str, attempt) -> str:
     """آدرسِ بازگشتِ عمومیِ یک تلاش (``/billing/return/<token>/``) — توکنِ غیرقابلِ‌حدس؛ احرازِ
     نشست لازم نیست (وضعیت فقط با verify سرور-به-سرور تعیین می‌شود)."""
@@ -111,8 +129,9 @@ def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now
             failure = exc
         else:
             attempt.provider_session_id = session.session_id
+            attempt.provider_extra = _storable_extra(session.extra)
             attempt.status = SubscriptionPaymentAttempt.Status.PENDING
-            attempt.save(update_fields=["provider_session_id", "status", "return_to", "updated_at"])
+            attempt.save(update_fields=["provider_session_id", "provider_extra", "status", "return_to", "updated_at"])
             if locked.status in (SubscriptionInvoice.Status.OPEN, SubscriptionInvoice.Status.PAST_DUE):
                 locked.status = SubscriptionInvoice.Status.PAYMENT_PENDING
                 locked.save(update_fields=["status", "updated_at"])

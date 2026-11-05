@@ -114,3 +114,60 @@ def open_invoice_for(store, *, code, price="490000"):
         sub, kind=SubscriptionInvoice.Kind.INITIAL, lines=[invoice_service.plan_line_spec(version)],
     )
     return sub, invoice_service.open_invoice(invoice)
+
+
+class FakePasargad:
+    """In-process stand-in for the Dorsa IPG REST API (https://pep.shaparak.ir/dorsa1/…). Mirrors the documented
+    contract: getToken(Bearer) · purchase → data.urlId/url · payment-inquiry → data.status/amount · verify-transactions ·
+    reverse-transactions. Synthetic ids only."""
+
+    URL_ID = "URLID-SYNTHETIC-0001"
+
+    def __init__(self):
+        self.calls = []
+        self.inquiry = {"status": 2}                       # 2 = unknown/not paid (documented code)
+        self.purchase_result = {"resultCode": 0, "data": {"urlId": self.URL_ID, "url": f"https://pep.shaparak.ir/dorsa1/{self.URL_ID}"}}
+        self.verify_result = {"resultCode": 0, "data": {"referenceNumber": "REF-1", "maskedCardNumber": "603799******0019"}}
+        self.reverse_result = {"resultCode": 0}
+        self.token_result = {"resultCode": 0, "token": "TOKEN-SYNTHETIC"}
+
+    def paid(self, *, amount_rial, status=13029):
+        self.inquiry = {"status": status, "amount": amount_rial, "referenceNumber": "REF-1", "cardNumber": "603799******0019"}
+
+    def __call__(self, url, json=None, headers=None, timeout=None, **kwargs):
+        name = url.rstrip("/").rsplit("/", 1)[-1]
+        self.calls.append((name, dict(json or {}), dict(headers or {})))
+        if name == "getToken":
+            return _Resp(dict(self.token_result))
+        if name == "purchase":
+            return _Resp(dict(self.purchase_result))
+        if name == "payment-inquiry":
+            return _Resp({"resultCode": 0, "data": dict(self.inquiry)})
+        if name == "verify-transactions":
+            return _Resp(dict(self.verify_result))
+        if name == "reverse-transactions":
+            return _Resp(dict(self.reverse_result))
+        raise AssertionError(f"unexpected dorsa call {url}")
+
+    def calls_to(self, name):
+        return [payload for (n, payload, _h) in self.calls if n == name]
+
+
+PASARGAD_CREDS = {"username": "synthetic-user", "password": "synthetic-pass-NEVER-SHOWN", "terminalNumber": "000111", "serviceCode": "8"}
+
+
+def patch_pasargad(case):
+    fake = FakePasargad()
+    patcher = patch("apps.orders.gateways.pasargad.requests.post", fake)
+    patcher.start()
+    case.addCleanup(patcher.stop)
+    return fake
+
+
+def ready_platform_pasargad(case, *, creds=None, default=False):
+    case.addCleanup(cache.clear)
+    cache.clear()
+    pgs.save_gateway("pasargad", credentials=dict(creds or PASARGAD_CREDS), sandbox=False, enabled=True)
+    if default:
+        pgs.set_default("pasargad")
+    cache.clear()

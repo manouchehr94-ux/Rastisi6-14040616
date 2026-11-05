@@ -1329,6 +1329,11 @@ def payment_gateways(request):
             elif action == "set_default":
                 pgs.set_default(code, actor=request.user)
                 messages.success(request, "درگاهِ پیش‌فرض تغییر کرد.")
+            elif action == "test":
+                from apps.portal.services.platform_gateway_service import callback_base_url
+
+                result = pgs.run_connection_test(code, callback_base=callback_base_url(request), actor=request.user)
+                (messages.success if result.ok else messages.error)(request, f"تستِ پیکربندی: {result.message}")
             else:
                 messages.error(request, "عملیاتِ نامعتبر.")
         except (pgs.PlatformGatewayError, ValueError) as exc:
@@ -1336,9 +1341,13 @@ def payment_gateways(request):
         return redirect("portal_platform_admin:payment-gateways")
 
     config = get_platform_configuration()
+    states = pgs.catalog()
     return render(request, "portal/platform_admin/payment_gateways.html", {
-        "states": pgs.catalog(), "default_code": config.default_payment_provider,
+        "states": states, "default_code": config.default_payment_provider,
         "effective_default": pgs.default_code(),
+        "default_choices": [{"code": s.code, "label": s.label, "ready": s.ready, "status_label": s.status_label}
+                            for s in states if s.eligible],
+        "summary": {"ready": sum(1 for s in states if s.ready), "total": len(states)},
         "audit": pgs.audit_trail(15), "active_nav": "payment-gateways",
     })
 

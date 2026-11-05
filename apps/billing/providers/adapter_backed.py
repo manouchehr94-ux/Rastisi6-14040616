@@ -22,6 +22,7 @@ from apps.billing.providers.base import (
 )
 from apps.orders.gateways.base import (
     GatewayAmountMismatchError,
+    PaymentOperation,
     GatewayConnectionError,
     GatewayCredentialError,
     GatewayError,
@@ -69,6 +70,22 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
             return BillingProviderError("درگاه پرداختی با مبلغِ متفاوت تأیید کرد.", code="amount_mismatch")
         return ProviderResponseError("پاسخِ درگاه نامعتبر یا رد شد.", code=exc.code or context)
 
+    def order_code(self, attempt) -> str:
+        """شناسه‌ی سفارشی که به درگاه داده می‌شود. پیش‌فرض: توکنِ تلاش. درگاه‌هایی که «شماره‌ی فاکتور» عددی/یکتا
+        می‌خواهند (پاسارگاد) یک کدِ فقط‌رقمی می‌گیرند: ``1``+pk اشتراک، ``2``+pk پیامک (``9…`` برای تستِ پیکربندی)."""
+        from apps.portal.services import platform_gateway_matrix as matrix
+
+        facts = matrix.facts_for(self.code)
+        if facts is not None and facts.order_code_style == "numeric":
+            kind = {"SmsPackagePaymentAttempt": "2", "_ConfigTestAttempt": "9"}.get(type(attempt).__name__, "1")
+            return f"{kind}{int(attempt.pk):09d}"
+        return attempt.public_token
+
+    def _callback_hints(self, attempt, callback_data) -> dict:
+        """داده‌ی بازگشتِ مرورگر (فقط راهنما) + داده‌ی ذخیره‌شده‌ی سمتِ سرور. **داده‌ی سرور همیشه برنده است**:
+        مرورگر نمی‌تواند ``urlId`` و مانندِ آن را جایگزین کند."""
+        return {**dict(callback_data or {}), **dict(getattr(attempt, "provider_extra", None) or {})}
+
     # -- contract --------------------------------------------------------------------------------
     def create_payment_session(self, *, attempt, invoice, return_url: str) -> PaymentSessionResult:
         from apps.orders.services.gateway_payment_service import is_safe_gateway_redirect
@@ -81,14 +98,16 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
         try:
             result = adapter.create_payment(
                 amount=Decimal(attempt.amount), currency=ADAPTER_CURRENCY, callback_url=return_url,
-                credentials=creds, order_code=attempt.public_token, description=description[:255], sandbox=sandbox,
+                credentials=creds, order_code=self.order_code(attempt), description=description[:255], sandbox=sandbox,
             )
         except GatewayError as exc:
             raise self._translate(exc, context="create") from exc
         url = result.gateway_url or adapter.build_redirect_url(result.track_id, sandbox=sandbox)
         if not is_safe_gateway_redirect(url, adapter, sandbox=sandbox):
             raise ProviderResponseError("آدرسِ بازگشتیِ درگاه ایمن نیست؛ پرداخت شروع نشد.", code="unsafe_redirect")
-        return PaymentSessionResult(session_id=str(result.track_id), redirect_url=url, extra={"sandbox": sandbox})
+        extra = {k: v for k, v in dict(result.extra or {}).items() if isinstance(v, (str, int, bool)) and k != "paymentPageUrl"}
+        extra["sandbox"] = sandbox
+        return PaymentSessionResult(session_id=str(result.track_id), redirect_url=url, extra=extra)
 
     def verify_attempt(self, *, attempt, callback_data=None) -> PaymentStatusResult:
         adapter = self._adapter()
@@ -96,7 +115,7 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
         try:
             result = adapter.verify_payment(
                 track_id=attempt.provider_session_id, expected_amount=Decimal(attempt.amount),
-                currency=ADAPTER_CURRENCY, credentials=creds, callback_data=dict(callback_data or {}), sandbox=sandbox,
+                currency=ADAPTER_CURRENCY, credentials=creds, callback_data=self._callback_hints(attempt, callback_data), sandbox=sandbox,
             )
         except GatewayAmountMismatchError as exc:
             raise self._translate(exc, context="verify") from exc
@@ -122,6 +141,8 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
 
     def callback_claims_failure(self, callback_data) -> bool:
         data = callback_data or {}
+        if self.code == "pasargad":     # status = success | failed | unknown | cancel | expire (docs, 2026-11-05)
+            return str(data.get("status", "")).strip().lower() in ("failed", "cancel", "expire")
         return str(data.get("Status", data.get("status", ""))).strip().upper() == "NOK"
 
     def fetch_payment_status(self, *, provider_payment_id: str) -> PaymentStatusResult:
@@ -137,8 +158,50 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
 
     def refund_payment(self, *, provider_payment_id: str, amount: Decimal, currency: str,
                        idempotency_key: str) -> RefundResult:
-        # آداپترِ تأییدشده بازپرداختِ خودکار را اعلام نکرده ⇒ صادقانه «پردازشِ دستی».
-        return RefundResult(
+        """بازپرداخت. فقط اگر قراردادِ آداپتر ``CANCEL`` (reverse در مهلت) را اعلام کرده و مبلغ کاملِ همان پرداخت است،
+        reverse تلاش می‌شود؛ در غیرِ این صورت یا اگر درگاه نپذیرفت (مهلت گذشته) صادقانه «پردازشِ دستی» برمی‌گردد
+        — هرگز خطای پرتاب‌شده یا موفقیتِ جعلی."""
+        manual = RefundResult(
             provider_refund_id=f"{self.code}-manual-refund-{idempotency_key}", succeeded=False,
             raw_summary={"manual": True, "reason": "بازپرداختِ این درگاه نیازمندِ پردازشِ دستی در پنلِ درگاه است."},
         )
+        try:
+            adapter = self._adapter()
+        except BillingProviderError:
+            return manual
+        if not adapter.supports(PaymentOperation.CANCEL):
+            return manual
+        attempt = self._attempt_for_payment(provider_payment_id)
+        url_id = str((getattr(attempt, "provider_extra", None) or {}).get("urlId", "")) if attempt is not None else ""
+        if attempt is None or not url_id or Decimal(amount) != Decimal(attempt.amount):
+            return manual
+        try:
+            creds, sandbox = self._credentials(adapter)
+            result = adapter.cancel_payment(
+                track_id=attempt.provider_session_id, credentials={**creds, "_urlId": url_id}, sandbox=sandbox,
+            )
+        except (GatewayError, BillingProviderError) as exc:
+            logger.warning("%s reverse not accepted: %s", self.code, getattr(exc, "code", type(exc).__name__))
+            return manual
+        if not result.success:
+            return RefundResult(
+                provider_refund_id=f"{self.code}-manual-refund-{idempotency_key}", succeeded=False,
+                raw_summary={"manual": True, "reason": "درگاه reverse را نپذیرفت (احتمالاً مهلت گذشته)؛ پردازشِ دستی.",
+                             "status_code": result.status_code},
+            )
+        return RefundResult(
+            provider_refund_id=f"{self.code}-reverse-{idempotency_key}", succeeded=True,
+            raw_summary={"reversed": True, "status_code": result.status_code},
+        )
+
+    def _attempt_for_payment(self, provider_payment_id: str):
+        from apps.billing.models import SubscriptionPaymentAttempt
+        from apps.sms.models import SmsPackagePaymentAttempt
+
+        if not provider_payment_id:
+            return None
+        for model in (SubscriptionPaymentAttempt, SmsPackagePaymentAttempt):
+            attempt = model.objects.filter(provider=self.code, provider_payment_id=provider_payment_id).first()
+            if attempt is not None:
+                return attempt
+        return None

@@ -5,17 +5,43 @@
 <div class="pa-pagehead">
   <div>
     <h1>درگاه‌های پرداختِ پلتفرم</h1>
-    <p>درگاه‌هایی که راستیسی با آن‌ها از صاحبانِ فروشگاه پول می‌گیرد (اشتراک، بسته‌ی پیامک). این اعتبارنامه‌ها <b>کاملاً جدا</b> از درگاهِ پرداختِ سفارشِ هر فروشگاه‌اند و هرگز با آن‌ها مخلوط نمی‌شوند.</p>
+    <p>درگاه‌هایی که راستیسی با آن‌ها از صاحبانِ فروشگاه پول می‌گیرد (اشتراک، بسته‌ی پیامک). این اعتبارنامه‌ها <b>کاملاً جدا</b> از درگاهِ پرداختِ سفارشِ هر فروشگاه‌اند و هرگز با آن‌ها مخلوط نمی‌شوند. وضعیتِ هر درگاه بر پایه‌ی شواهدِ قراردادی و پیاده‌سازیِ واقعی تعیین شده است.</p>
   </div>
 </div>
 
 {% if messages %}{% for message in messages %}<div class="pa-alert {% if message.tags == 'error' %}pa-alert-error{% endif %}" role="status">{{ message }}</div>{% endfor %}{% endif %}
 
 <div class="pa-card"><div class="pa-cardbody">
-  <b>درگاهِ پیش‌فرضِ تسویه:</b>
-  {% if effective_default == "manual" %}<span class="pa-badge pa-off">دستی (بدونِ درگاهِ آنلاین)</span>
-  {% else %}<span class="pa-badge pa-ok">{{ effective_default }}</span>{% endif %}
-  <p class="pa-help" style="margin-top:6px">فقط درگاهِ «آماده» (فعال + اعتبارنامه‌ی کامل + قراردادِ تأییدشده) به صاحبانِ فروشگاه نمایش داده می‌شود. موفقیتِ پرداخت فقط با verify سرور-به-سرور اعلام می‌شود؛ بازگشتِ مرورگر مدرک نیست.</p>
+  <form method="post" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="set_default">
+    <div class="pa-field" style="min-width:260px">
+      <label for="default-gateway">درگاهِ پیش‌فرضِ تسویه</label>
+      <select class="pa-input" id="default-gateway" name="gateway_code">
+        <option value="manual" {% if effective_default == "manual" %}selected{% endif %}>دستی (بدونِ درگاهِ آنلاین)</option>
+        {% for choice in default_choices %}
+        <option value="{{ choice.code }}" {% if not choice.ready %}disabled{% endif %} {% if choice.code == effective_default %}selected{% endif %}>
+          {{ choice.label }} — {{ choice.status_label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="pa-btn pa-primary" type="submit">ثبتِ پیش‌فرض</button>
+    <span class="pa-help">فقط درگاهِ «آماده» قابلِ انتخاب است؛ سرور هم همین را اعمال می‌کند. {{ summary.ready }} درگاه آماده است.</span>
+  </form>
+  {% if default_code != "manual" and effective_default == "manual" %}<div class="pa-alert" style="margin-top:10px">درگاهِ پیش‌فرضِ انتخاب‌شده آماده نیست؛ تا آماده‌شدنِ آن، تسویه دستی می‌ماند.</div>{% endif %}
+  <p class="pa-help" style="margin-top:8px">موفقیتِ پرداخت فقط با verify سرور-به-سرور اعلام می‌شود؛ بازگشتِ مرورگر مدرک نیست.</p>
+</div></div>
+
+<div class="pa-card"><div class="pa-cardbody" style="font-size:12.5px;line-height:2">
+  <b>راهنمای وضعیت‌ها:</b>
+  <span class="pa-badge pa-ok">آماده</span> فعال و کامل ·
+  <span class="pa-badge pa-off">غیرفعال‌شده توسط مدیر</span> کامل امّا خاموش ·
+  <span class="pa-badge pa-warn">اعتبارنامه‌ی پذیرنده ناقص است</span> ·
+  <span class="pa-badge pa-warn">پیکربندیِ لازم ناقص است</span> (مثلاً دامنه‌ی بازگشت) ·
+  <span class="pa-badge pa-info">در انتظارِ تأییدِ قرارداد/تأیید</span> آداپتر هست، مجوزِ استفاده برای SaaS نه ·
+  <span class="pa-badge pa-off">پیاده‌سازیِ فنی وجود ندارد</span> ·
+  <span class="pa-badge pa-off">برای پرداختِ پلتفرم مجاز نیست</span>
 </div></div>
 
 {% for state in states %}
@@ -23,20 +49,22 @@
   <div class="pa-cardhead">
     <h3>{{ state.label }} <small style="direction:ltr;display:inline-block">({{ state.code }})</small></h3>
     <div>
-      {% if not state.eligible %}<span class="pa-badge pa-off">غیرقابل‌استفاده برای پلتفرم</span>
-      {% elif state.ready %}<span class="pa-badge pa-ok">آماده</span>
-      {% elif state.enabled %}<span class="pa-badge pa-warn">فعال امّا ناقص</span>
-      {% else %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}
+      <span class="pa-badge pa-{{ state.tone }}" data-status="{{ state.status }}">{{ state.status_label }}</span>
       {% if state.is_default %}<span class="pa-badge pa-info">پیش‌فرض</span>{% endif %}
       {% if state.sandbox %}<span class="pa-badge pa-warn">Sandbox</span>{% endif %}
+      {% if state.eligible %}
+        {% if state.last_test_ok is True %}<span class="pa-badge pa-ok">تست موفق</span>
+        {% elif state.last_test_ok is False %}<span class="pa-badge pa-warn">تست ناموفق</span>
+        {% else %}<span class="pa-badge pa-off">تست‌نشده</span>{% endif %}
+      {% endif %}
     </div>
   </div>
   <div class="pa-cardbody">
-    {% if not state.eligible %}
-      <p class="pa-help">{{ state.blocked_reason }}</p>
-    {% else %}
-      {% if state.errors %}<ul class="pa-help" style="color:var(--pa-red-ink,#b42318)">{% for error in state.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
-      <p class="pa-help">{{ state.onboarding_help }}</p>
+    <p style="margin-top:0"><b>{{ state.status_label }}:</b> {{ state.status_detail }}</p>
+    {% if state.last_test_message %}<p class="pa-help">آخرین تست ({{ state.last_test_at|jalali:"%Y/%m/%d %H:%M" }}): {{ state.last_test_message }}</p>{% endif %}
+
+    {% if state.eligible %}
+      {% if state.onboarding_help %}<p class="pa-help">{{ state.onboarding_help }}</p>{% endif %}
       <form method="post" autocomplete="off">
         {% csrf_token %}
         <input type="hidden" name="action" value="save">
@@ -62,25 +90,42 @@
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
           <input type="checkbox" name="sandbox_mode" {% if state.sandbox %}checked{% endif %}> حالتِ آزمایشی (Sandbox) — بدونِ پرداختِ واقعی
         </label>
+        {% else %}
+        <p class="pa-help" style="margin-top:6px">Sandbox: {{ state.sandbox_note|default:"برای این درگاه در مستنداتِ رسمی Sandbox مشخص نشده است." }}</p>
         {% endif %}
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="pa-btn pa-primary" type="submit">ذخیره</button>
         </div>
       </form>
-      {% if state.ready and not state.is_default %}
+      {% if state.can_test %}
       <form method="post" style="margin-top:8px">{% csrf_token %}
-        <input type="hidden" name="action" value="set_default"><input type="hidden" name="gateway_code" value="{{ state.code }}">
-        <button class="pa-btn pa-soft" type="submit">انتخاب به‌عنوانِ پیش‌فرض</button>
+        <input type="hidden" name="action" value="test"><input type="hidden" name="gateway_code" value="{{ state.code }}">
+        <button class="pa-btn pa-soft" type="submit">تستِ پیکربندی (بدونِ حرکتِ پول)</button>
+        <span class="pa-help">احرازِ هویت (در صورتِ وجود) و ساختِ یک درخواستِ پرداختِ آزمایشیِ پرداخت‌نشده؛ هیچ ردیفِ پرداخت و هیچ ریدایرکتی ساخته نمی‌شود.</span>
       </form>
       {% endif %}
     {% endif %}
+
+    {% if state.setup_steps %}
+    <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">راهنمای راه‌اندازی</summary>
+      <ol style="line-height:2">{% for step in state.setup_steps %}<li>{{ step }}</li>{% endfor %}</ol>
+      {% if state.prerequisites %}<div class="pa-help"><b>پیش‌نیازهای بیرونی:</b> {% for item in state.prerequisites %}{{ item }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+    </details>
+    {% endif %}
+    {% if state.eligible and state.verify_note %}
+    <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:600">تأیید، تطبیق و بازپرداخت</summary>
+      <div class="pa-help" style="line-height:2">
+        <div><b>تأیید:</b> {{ state.verify_note }}</div>
+        <div><b>تطبیقِ بازگشتِ ازدست‌رفته:</b> {{ state.reconciliation_note }}</div>
+        <div><b>بازپرداخت:</b> {% if state.refund_mode == "api" %}خودکار از طریقِ API{% else %}پردازشِ دستی در پنلِ درگاه (مگر reverse در مهلت که آداپتر پشتیبانی کند){% endif %}</div>
+      </div>
+    </details>
+    {% endif %}
+    {% if state.evidence %}<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--pa-muted,#667)">شواهدِ قراردادی</summary><p class="pa-help" dir="ltr" style="text-align:left">{{ state.evidence }}</p></details>{% endif %}
   </div>
 </div>
 {% endfor %}
 
-{% if default_code != "manual" and effective_default == "manual" %}
-<div class="pa-alert">درگاهِ پیش‌فرضِ انتخاب‌شده آماده نیست؛ تا آماده‌شدنِ آن، تسویه دستی می‌ماند.</div>
-{% endif %}
 <div class="pa-card"><div class="pa-cardhead"><h3>تاریخچه‌ی تغییراتِ درگاه‌ها</h3></div>
 <div class="pa-cardbody">
   {% for entry in audit %}

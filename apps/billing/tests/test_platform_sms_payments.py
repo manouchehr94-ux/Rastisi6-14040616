@@ -4,7 +4,7 @@ added exactly once with a ledger trail; cancel / refund / duplicate / mismatch /
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,6 +26,7 @@ P = SmsPackagePurchase.Status
 PAY_URL = "/admin-portal/settings/?section=sms"
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class SmsPaymentBase(TestCase):
     PRICE = 150_000
     CREDITS = 500
@@ -65,6 +66,7 @@ class SmsPaymentBase(TestCase):
         self.fake.paid(amount_rial=rial if rial is not None else self.PRICE * 10, order_id=attempt.public_token)
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class SmsCheckoutTests(SmsPaymentBase):
     def test_purchase_redirects_to_the_platform_gateway_and_adds_no_credit_yet(self):
         response, purchase, attempt = self.purchase_and_attempt()
@@ -131,6 +133,7 @@ class SmsCheckoutTests(SmsPaymentBase):
         self.assertFalse(SmsPackagePaymentAttempt.objects.exists())
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class SmsFulfilmentTests(SmsPaymentBase):
     def test_verified_payment_adds_credits_once_with_a_full_ledger_trail(self):
         _r, purchase, attempt = self.purchase_and_attempt()
@@ -245,6 +248,7 @@ class SmsFulfilmentTests(SmsPaymentBase):
         self.assertEqual((entry.balance_before, entry.balance_after), (99, 99 + self.CREDITS))
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class SmsRefundAndCancelTests(SmsPaymentBase):
     def completed(self):
         _r, purchase, attempt = self.purchase_and_attempt()
@@ -301,6 +305,7 @@ class SmsRefundAndCancelTests(SmsPaymentBase):
         self.assertEqual(SmsPackagePaymentAttempt.objects.get(pk=attempt.pk).status, S.SUCCEEDED)   # history preserved
 
 
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class StoreSideIsolationTests(SmsPaymentBase):
     def test_the_stores_own_gateway_config_is_never_used_or_modified_by_sms_purchases(self):
         config = PaymentGatewayConfig.objects.create(store=self.store, gateway_code="zibal", is_active=True)

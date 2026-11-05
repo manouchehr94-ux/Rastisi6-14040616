@@ -15,6 +15,7 @@ _PROVIDERS = {
     ManualProvider.code: ManualProvider(),
     ZibalBillingProvider.code: ZibalBillingProvider(),
     "zarinpal": AdapterBackedBillingProvider("zarinpal"),
+    "pasargad": AdapterBackedBillingProvider("pasargad"),
 }
 
 

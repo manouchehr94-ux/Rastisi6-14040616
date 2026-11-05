@@ -422,6 +422,10 @@ class PlatformGatewayConfig(TimeStampedModel):
         "اعتبارنامه‌ی رمزنگاری‌شده", blank=True, default="",
         help_text="مقدارِ رمزنگاری‌شده — هرگز مستقیم خوانده نمی‌شود",
     )
+    # نتیجه‌ی آخرین «تستِ پیکربندی» (بدونِ حرکتِ پول). جدا از «آماده‌بودن»: تست‌نشده ≠ ناآماده.
+    last_test_at = models.DateTimeField("زمانِ آخرین تست", null=True, blank=True)
+    last_test_ok = models.BooleanField("آخرین تست موفق بود", null=True, blank=True)
+    last_test_message = models.CharField("پیامِ آخرین تست", max_length=300, blank=True, default="")
 
     class Meta:
         verbose_name = "درگاهِ پرداختِ پلتفرم"

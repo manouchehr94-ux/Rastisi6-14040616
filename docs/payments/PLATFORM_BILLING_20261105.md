@@ -47,7 +47,7 @@ Platform gateway registry/readiness/audit, adapter-backed Zarinpal, public callb
 ## 2. Design
 
 ### 2.1 Platform gateway management — `apps/portal/services/platform_gateway_service.py`
-* **Eligibility is an explicit allow-list** (`ELIGIBLE_CODES = zibal, zarinpal`) *and* adapter facts: online, `documentation_blocked=False`, category PSP/facilitator, declares `CREATE`+`VERIFY`. BNPL (SnappPay/TorobPay), card-to-card, COD and every `DOCUMENTATION_BLOCKED` skeleton (Saman, Parsian, Mellat, Sadad, Tejarat, Pasargad) are refused with a reason and cannot be configured even by a forged POST.
+* **Eligibility is derived from the evidence matrix** (`platform_gateway_matrix.py` → `ELIGIBLE_CODES = zibal, zarinpal, pasargad`; see `PLATFORM_PROVIDER_MATRIX_20261105.md`) *and* adapter facts: online, `documentation_blocked=False`, category PSP/facilitator, declares `CREATE`+`VERIFY`. BNPL (SnappPay/TorobPay — *pending contract*), card-to-card, COD and the five `not_implemented` PSP skeletons (Saman, Parsian, Mellat, Sadad, Tejarat) are refused with a provider-specific status and cannot be configured even by a forged POST.
 * **State model:** *enabled* = owner's permission; *configured* = adapter credential validation passes; **ready = enabled ∧ configured ∧ eligible**. Only ready gateways reach checkout. Enabling an incomplete gateway is rejected with an actionable message.
 * **Storage:** `portal.PlatformGatewayConfig` (no `store` column; Fernet-encrypted JSON; secrets are write-only — blank = unchanged — and never rendered, logged or audited; audit records only booleans).
 * **Legacy compatibility:** existing QA data holds Zibal credentials in `PlatformConfiguration`. With no row present they are read through (`source="legacy"`); the first save through the new UI keeps the legacy merchant and mirrors writes back to the legacy fields so the previous code path still works (rollback-safe).
@@ -90,16 +90,19 @@ New: `portal.PlatformGatewayConfig`; `portal/services/platform_gateway_service.p
 Modified: `billing/views.py` (+`payment_return`), `billing/urls.py`, `billing/services/payment_flow_service.py` (central callback, safe failure handling, shared `verify_and_confirm`, `safe_return_to`), `confirmation_service.py` (duplicate payment flag), `providers/{base,zibal,registry}.py`, `sms/services/balance_service.py` (locked + ledgered `complete_purchase`, `reverse_purchase_credits`), `portal/views.py` (checkout redirects to the gateway; gateway choice; `billing_return_latest`), `dashboard/views.py` + templates (invoice pay, SMS purchase/pay), `shop_core/urls_platform.py` (`billing/` on the platform host), platform-admin nav.
 
 ## 4. Migrations and safe upgrade
-All three are **additive and reversible**; no data migration, no destructive operation.
+All six are **additive and reversible**; no data migration, no destructive operation. The first three shipped in the original PR #40 commit; the last three were added by the provider-coverage pass (new files, existing migrations untouched).
 
 | Migration | Content |
 |---|---|
 | `portal.0015_platform_gateway_config` | create `PlatformGatewayConfig`; drop static `choices` on `PlatformConfiguration.default_payment_provider` (no DB change) |
 | `billing.0008_attempt_return_to` | add `SubscriptionPaymentAttempt.return_to` (default `""`) |
-| `sms.0010_sms_purchase_payments_and_ledger` | add `SmsPackagePurchase.refunded_at`, status choice `refunded`; create `SmsPackagePaymentAttempt`, `SmsCreditLedger` (+ indexes, unique constraints) |
+| `sms.0010_sms_purchase_payments_and_ledger` | add `SmsPackagePurchase.refunded_at` + `refunded` status; create `SmsPackagePaymentAttempt`, `SmsCreditLedger` (+ indexes/constraints) |
+| `portal.0016_platform_gateway_last_test` | add `last_test_at`, `last_test_ok`, `last_test_message` to `PlatformGatewayConfig` (nullable/blank) |
+| `billing.0009_attempt_provider_extra` | add `SubscriptionPaymentAttempt.provider_extra` JSON (default `{}`) — server-side session data such as Pasargad `urlId` |
+| `sms.0011_attempt_provider_extra` | add `SmsPackagePaymentAttempt.provider_extra` JSON (default `{}`) |
 
 Upgrade (per environment, **after** owner approval — nothing has been applied by this work):
-1. Back up the database. 2. Deploy code. 3. `python manage.py migrate portal billing sms`. 4. `python manage.py makemigrations --check` (expect "No changes"). 5. Open Platform Admin → *درگاه‌های پرداختِ پلتفرم*. If Zibal was already configured it appears as `legacy` and **ready** with the same behaviour as before; press *Save* once to move it to the new store (the legacy fields stay mirrored). 6. Schedule `python manage.py reconcile_platform_payments` every 10 minutes. 7. Roll back: revert code; the new tables are unused by old code and legacy Zibal fields are still current.
+1. Back up the database. 2. Deploy code. 3. `python manage.py migrate portal billing sms`. 4. `python manage.py makemigrations --check` (expect "No changes"). 5. Open Platform Admin → *درگاه‌های پرداختِ پلتفرم*. If Zibal was already configured it appears as `legacy` and **ready** with the same behaviour as before; press *Save* once to move it to the new store (the legacy fields stay mirrored). 6. Schedule `python manage.py reconcile_platform_payments` every **5 minutes** (Pasargad's verify deadline is 25 minutes). 7. Roll back: revert code; the new tables are unused by old code and legacy Zibal fields are still current.
 
 Historical note: SMS purchases completed *before* this change have no ledger rows (the ledger starts here). No backfill is performed (it would assert history we cannot prove).
 
@@ -111,10 +114,12 @@ Everything below uses a **sandbox / fake merchant**; no real money moves. Use th
 
 1. Pull the branch `financial/platform-billing-20261105`; activate the venv; `python manage.py migrate` (QA DB only).
 2. Start: `python manage.py runserver 8000`. Hosts (add to `C:\Windows\System32\drivers\etc\hosts` if needed): `rastisi.localhost` (owner portal), `platformadmins.rastisi.localhost` (Platform Admin), `<store>.rastisi.localhost` (store admin).
-3. **Configure the platform gateway:** log in to Platform Admin as superuser → *اشتراک‌ها ▸ درگاه‌های پرداختِ پلتفرم* → Zibal → tick *حالتِ آزمایشی (Sandbox)* + *فعال* → Save → *انتخاب به‌عنوان پیش‌فرض*. Badge must read **آماده**. (Sandbox uses Zibal's documented fixed test merchant; no secret needed.) Confirm the page never shows the merchant value after saving.
+3. **Configure the platform gateway:** log in to Platform Admin as superuser → *اشتراک‌ها ▸ درگاه‌های پرداختِ پلتفرم*. Every provider shows its own status (see `PLATFORM_PROVIDER_MATRIX_20261105.md`). For **Zibal**: tick *Sandbox* + *فعال* → Save → **تستِ پیکربندی** (must say تست موفق) → in the default selector choose Zibal → ثبتِ پیش‌فرض. The badge must read **آماده**, the merchant value must never appear, and the default selector must show non-ready gateways as disabled. (Sandbox uses Zibal's documented fixed test merchant; no secret is needed.)
+   *Pasargad / Zarinpal* have **no documented sandbox**: configure them only with real terminal/merchant credentials from the bank/provider, use **تستِ پیکربندی** (auth check + one unpaid test request — no money moves), and perform the first real transaction yourself with the minimum amount. If the test says `13028` the callback domain does not match the contract domain.
 4. **Subscription:** as a store owner open `http://rastisi.localhost:8000/app/stores/<store id>/billing/` → *خرید* on a paid plan (complete the OTP step-up if enabled). Expect a redirect to `gateway.zibal.ir/start/…`; pay with the Zibal sandbox page; you are returned to the plans page with *پرداخت تأیید شد*; the subscription turns **active**. Refresh/Back/re-open the return URL several times — nothing changes (applied once).
+4b. **Pasargad redirect check (only with a real terminal):** the browser must pass through the short *«در حال انتقال به درگاه پرداخت…»* page (it carries `Referer = https://<platform host>/`, a Pasargad requirement) and then reach `pep.shaparak.ir`.
 5. **SMS package:** store admin → *تنظیمات ▸ پیامک* → *خرید و پرداخت* on a package → pay in sandbox → returned with ✅; credit increases by exactly the package size; Platform Admin → *خریدهای بسته پیامک* shows the purchase *تکمیل‌شده* and *تراکنش‌های پلتفرم* shows the attempt *موفق*.
-6. **Failure paths:** cancel on the gateway page → returned with ⛔, no credit/activation, retry works. Close the tab after paying (don't return) → within 10 minutes run `python manage.py reconcile_platform_payments` → fulfilled once.
+6. **Failure paths:** cancel on the gateway page → returned with ⛔, no credit/activation, retry works. Close the tab after paying (don't return) → after ≥5 minutes run `python manage.py reconcile_platform_payments` → fulfilled once.
 7. **Isolation check:** configure a *different* Zibal merchant in the store's own finance settings; confirm the platform requests above still show only the platform flow (Platform Admin → *تراکنش‌های پلتفرم*), and that store checkout still uses the store's gateway.
 8. **Reconciliation page:** *تطبیق و مغایرت‌ها* must list nothing after clean runs; use *بررسی با درگاه* only to re-verify.
 
@@ -130,22 +135,30 @@ Policy (not invented; implemented conservatively):
 External (live activation blockers — none are code defects):
 * Live merchant credentials for Zibal and/or Zarinpal and the **callback domain registered** with each merchant account (`RASTISI_PLATFORM_PRIMARY_HOST`).
 * Zibal / Zarinpal expose no documented automatic **refund** API in the verified adapters ⇒ money refunds remain manual in the gateway panel.
-* Pasargad/Dorsa has an implemented store adapter but is deliberately **not** on the platform allow-list: its use for platform billing needs a separate review of its verify contract against the bridge. Saman, Parsian, Mellat, Sadad, Tejarat remain documentation-blocked. BNPL providers are intentionally excluded from platform billing.
+* **Pasargad/Dorsa** is now approved technically (official docs re-read 2026-11-05) but needs RastiSi's own terminal credentials, server-IP whitelisting and a callback domain matching the contract; no sandbox is documented.
+* **SnappPay / TorobPay (BNPL)** stay *pending contract*: no evidence the contracts cover SaaS subscriptions/SMS credit; written provider confirmation needed.
+* Saman, Parsian, Mellat, Sadad and Tejarat stay *not implemented* (official contracts not obtained; Tejarat's underlying PSP unknown).
+* This session could not reach provider documentation hosts or provider APIs (network policy), so **no real sandbox transaction was run here**; sandbox runs are part of the Windows QA below.
 * A first live transaction must be performed by the owner with a minimal amount before announcing.
 
 ## 8. Test evidence (synthetic credentials, mocked gateways; no real payment, no persistent DB touched)
 
-New tests (89): `test_platform_gateway_service` 20 · `test_platform_subscription_payments` 22 · `test_platform_sms_payments` 24 · `test_platform_admin_payments` 18 · `test_platform_payment_concurrency` 5 (PostgreSQL).
-They cover: platform-admin configuration (eligibility, readiness, secret hygiene, default reassignment, legacy Zibal read-through, access control); merchant-credential isolation (runtime + AST); subscription purchase through Zibal and Zarinpal; SMS credit purchase; callback success/failure/declined/forged/amount-mismatch/order-mismatch/late-payment; duplicate and repeated callbacks; manual-completion-vs-online races; cancel-then-pay; refund (once, blocked when credits consumed); tenant and permission isolation; reconcile command; open-redirect hardening.
+New tests: **140** — gateway service 20 · subscription payments 22 · SMS payments 24 · platform admin + reconcile 18 · PostgreSQL concurrency 5 · **provider coverage 51** (matrix pinned to adapters, status taxonomy, Pasargad end-to-end incl. Referer/urlId/refund-reverse/reconcile, secure config test, merchant availability, renewal + history, Zibal sandbox-mode flow, admin UI).
+They cover: platform-admin configuration (eligibility, readiness, secret hygiene, default reassignment, legacy Zibal read-through, access control); merchant-credential isolation (runtime + AST); subscription **purchase and renewal** through Zibal, Zarinpal and Pasargad; SMS credit purchase; callback success/failure/declined/forged/amount-mismatch/order-mismatch/late-payment; duplicate and repeated callbacks; manual-completion-vs-online races; cancel-then-pay; refund lifecycle (once, blocked when credits consumed, Pasargad reverse, manual fallback, idempotent, audited); tenant and permission isolation; reconcile command; open-redirect hardening.
 
 | Run | Result |
 |---|---|
-| `apps.billing apps.sms` (SQLite), after final change | 402 tests OK (7 skipped) |
-| Broad regression `billing sms subscriptions portal dashboard orders notifications core cart` (SQLite) | 6000 tests, 6 errors — see below, **0 failures** |
-| PostgreSQL 16 (throwaway): platform concurrency + the existing concurrent-recovery/approval/render classes | 8/8 OK |
-| Mutation check: removing the row locks from `complete_purchase`/`confirm_payment` | concurrency test **fails** (tests are not vacuous) |
-| Migrations on throwaway PostgreSQL: fresh `migrate`, reverse `sms 0009`/`billing 0007`/`portal 0014`, re-apply, `makemigrations --check` | OK / "No changes detected" |
+| Broad regression `billing sms subscriptions portal dashboard orders notifications core cart` (SQLite), provider-coverage pass | **6051 tests, 1 failure, 6 errors** (see below) |
+| After fixing the 1 failure (sandbox + local callback domain), re-run `portal billing sms` | 1712 tests, **1 error** (the known order-dependent one) |
+| PostgreSQL 16 (throwaway), each run on its own: platform concurrency 5 · ConcurrentRecoveryTests · ConcurrentMerchantApprovalTests · ConcurrentRenderTests | all OK |
+| Migrations on throwaway PostgreSQL: fresh `migrate`, reverse `sms 0009` / `billing 0007` / `portal 0014`, re-apply (all six), `makemigrations --check` | OK / "No changes detected" |
+| Mutation check (earlier): removing the row locks from `complete_purchase`/`confirm_payment` | concurrency test **fails** |
+| Real-browser check (Chromium, throwaway PostgreSQL + dev server): Platform Admin gateways page at 1440 and 390 px | every provider shows its own status; default selector disables non-ready gateways (`docs/payments/screenshots_20261105/`) |
 
-The 6 errors in the combined SQLite run are not caused by this change: `notifications.test_email_transport` (`asyncore` missing in the runtime — pre-existing environment issue), `portal.test_public_site_v2…test_a_new_ready_template_appears…` (order-dependent; passes alone), and four `setUpClass` errors in PostgreSQL-oriented concurrency classes (`django_content_type` duplicate on test-DB deserialisation in the large mixed run); each passes when run on its own (SQLite: OK/skipped; PostgreSQL: OK).
+The failure found by this pass and fixed: `portal…BillingZibalSettingsViewTests.test_superuser_can_view_and_save` — the new "local callback domain" configuration check blocked a sandbox save in the test environment. Sandbox mode (no money) now tolerates a local callback domain; live mode still requires a real domain.
 
-Pre-existing store-payment suites (`apps.orders`, incl. card-transfer and BNPL settlement) and the card-number correction (`2b88bae`) are included in the regression run and unchanged.
+The 6 errors that remain in the large combined SQLite run are **not** caused by this work and the suite is **not** fully green: `notifications.test_email_transport` (`asyncore` missing in the runtime — pre-existing environment issue); `portal…test_public_site_v2…test_a_new_ready_template_appears…` (order-dependent; passes alone); four `setUpClass` errors in PostgreSQL-oriented concurrency classes (`django_content_type` duplicate while deserialising the test DB in the large mixed run) — each passes when run on its own.
+
+Store changes made by this pass (all other store behaviour untouched): Pasargad store redirect now uses the Referer interstitial (two store tests that asserted the bare 302 were updated). Existing store suites (`apps.orders` incl. card-transfer and BNPL settlement) are in the regression run.
+
+**Not demonstrated here (blocked by this session's network policy):** a real Zibal sandbox transaction. Provider hosts return HTTP 403 from the session proxy, so the Zibal sandbox flow is proven only against a mock here; the real sandbox run is the first step of the Windows QA (§6).

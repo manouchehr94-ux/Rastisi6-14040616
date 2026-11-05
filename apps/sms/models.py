@@ -271,6 +271,8 @@ class SmsPackagePaymentAttempt(TimeStampedModel):
     started_at = models.DateTimeField("زمانِ شروع", null=True, blank=True)
     completed_at = models.DateTimeField("زمانِ پایان", null=True, blank=True)
     return_to = models.CharField("مقصد بازگشت", max_length=500, blank=True, default="")
+    #: داده‌ی غیرحساسِ جلسه‌ی Provider که برای verify لازم است (مثلاً ``urlId`` پاسارگاد) — فقط سمتِ سرور، هرگز از مرورگر.
+    provider_extra = models.JSONField("داده‌ی جلسه‌ی Provider", blank=True, default=dict)
 
     class Meta:
         verbose_name = "تلاشِ پرداختِ بسته‌ی پیامک"
