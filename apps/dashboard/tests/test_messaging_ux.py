@@ -34,19 +34,37 @@ class UnifiedSubNavigationTests(CouponViewsTestCase):
         super().setUp()
         FakeTransport.reset()
 
-    def test_every_messaging_page_shows_the_same_five_subsection_bar(self):
-        for name, args in MESSAGING_PAGES:
+    #: the single shared subsection bar is the framework Level-3 nav (dashboard/partials/_admin_section_tabs.html),
+    #: rendered once by base_admin for every page whose nav resolves into the «پیام‌رسانی» tab. There is no second,
+    #: page-level copy (the old per-page ``notification_tabs.html`` include was removed).
+    SUBNAV_MARKER = 'data-testid="admin-subtabs"'
+
+    def test_every_messaging_page_shows_the_shared_subsection_bar_exactly_once(self):
+        for name, args in MESSAGING_PAGES + (("dashboard:settings-messaging", ()),):
             r = self.client.get(reverse(name, args=args))
             self.assertEqual(r.status_code, 200, name)
-            self.assertContains(r, 'class="msg-subnav"', msg_prefix=name)
+            body = r.content.decode()
+            self.assertEqual(body.count(self.SUBNAV_MARKER), 1,
+                             f"{name}: subsection nav must render exactly once, found {body.count(self.SUBNAV_MARKER)}")
             for label in SUBSECTION_LABELS:
                 self.assertContains(r, label, msg_prefix=f"{name}:{label}")
 
+    def test_messaging_center_landing_renders_one_subsection_bar(self):
+        """Regression for the duplicate-row defect: the Messaging Center landing must show the shared bar once only."""
+        r = self.client.get(reverse("dashboard:settings-messaging"))
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode()
+        self.assertEqual(body.count(self.SUBNAV_MARKER), 1, "duplicate subsection navigation on the Messaging Center")
+        # and the old page-level bar class must be gone entirely
+        self.assertNotIn("msg-subnav", body)
+
     def test_sms_provider_settings_page_is_part_of_the_same_messaging_section(self):
-        """The SMS provider/credits page was the fragmented outlier; it must now carry the identical sub-navigation."""
+        """The SMS provider/credits page was the fragmented outlier; it must sit in the same messaging section and show
+        the single shared subsection bar exactly once."""
         r = self.client.get(reverse("dashboard:settings") + "?section=sms")
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'class="msg-subnav"')
+        body = r.content.decode()
+        self.assertEqual(body.count(self.SUBNAV_MARKER), 1)
         for label in SUBSECTION_LABELS:
             self.assertContains(r, label)
         self.assertContains(r, "سرویس پیامک و اعتبار")
@@ -54,12 +72,14 @@ class UnifiedSubNavigationTests(CouponViewsTestCase):
     def test_subsection_links_point_at_the_real_working_views(self):
         r = self.client.get(reverse("dashboard:notification-templates"))
         for target in ("dashboard:notification-templates", "dashboard:notification-channels",
-                       "dashboard:notification-sender", "dashboard:notification-history"):
+                       "dashboard:notification-sender", "dashboard:notification-history", "dashboard:settings-messaging"):
             self.assertContains(r, reverse(target))
         self.assertContains(r, reverse("dashboard:settings") + "?section=sms")
 
     def test_active_subsection_is_marked_for_screen_readers(self):
         r = self.client.get(reverse("dashboard:notification-channels"))
+        # the framework subtab bar marks the active child with aria-current + the active class
+        self.assertContains(r, 'class="admin-subtab active"')
         self.assertContains(r, 'aria-current="page"')
 
 

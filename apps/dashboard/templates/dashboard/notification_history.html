@@ -4,7 +4,6 @@
 {% block page_title %}تاریخچه و صف ارسال{% endblock %}
 {% block page_sub %}همه‌ی پیامک‌ها و ایمیل‌هایِ صف‌شده و ارسال‌شده با وضعیت و خطا{% endblock %}
 {% block content %}
-{% include "dashboard/partials/notification_tabs.html" with tab="history" %}
 <div class="card" style="margin-bottom:14px"><div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
   <span style="font-size:12.5px;color:var(--muted)">صف‌هایِ اختصاصیِ درگاهِ پیامک:</span>
   <a class="btn btn-sm" href="{% url 'dashboard:sms-log-list' %}">📋 گزارشِ کاملِ پیامک‌ها</a>

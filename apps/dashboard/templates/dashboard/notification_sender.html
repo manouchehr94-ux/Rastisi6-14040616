@@ -4,7 +4,6 @@
 {% block page_title %}فرستنده‌ی ایمیل و دامنه{% endblock %}
 {% block page_sub %}ایمیل‌هایِ فروشگاه فقط از دامنه‌ی اختصاصیِ خودِ شما ارسال می‌شوند؛ نیازی به SMTP یا حساب ایمیلِ جداگانه نیست{% endblock %}
 {% block content %}
-{% include "dashboard/partials/notification_tabs.html" with tab="sender" %}
 
 <div class="card" style="margin-bottom:14px"><div class="card-body" id="sender-status" data-status="{{ diag.status }}">
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
