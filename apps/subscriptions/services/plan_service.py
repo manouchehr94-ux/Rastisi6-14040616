@@ -5,7 +5,9 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.subscriptions.models import EntitlementDefinition, PlanEntitlement, PlanVersion
+from decimal import Decimal, InvalidOperation
+
+from apps.subscriptions.models import EntitlementDefinition, PlanEntitlement, PlanVersion, PlanVersionPrice
 
 # ``actor`` روی امضایِ توابع نگه داشته شده تا وقتی یک Audit Logِ پلتفرمی
 # اضافه شد بدونِ تغییرِ فراخوان‌ها وصل شود؛ عملیاتِ platform-level فعلاً از
@@ -47,6 +49,66 @@ def set_plan_entitlement(plan_version, entitlement_key, **values) -> PlanEntitle
     return obj
 
 
+def _require_draft(plan_version):
+    current_status = PlanVersion.objects.filter(pk=plan_version.pk).values_list("status", flat=True).first()
+    if current_status != PlanVersion.Status.DRAFT:
+        raise PlanServiceError("فقط نسخه‌ی «پیش‌نویس» قابلِ ویرایش است؛ برایِ تغییر نسخه‌ی تازه بسازید.")
+
+
+def _money(value, field):
+    try:
+        amount = Decimal(str(value).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        raise PlanServiceError(f"{field} معتبر نیست.")
+    if amount < 0 or amount != amount.to_integral_value():
+        raise PlanServiceError(f"{field} باید عددِ صحیحِ غیرمنفی باشد.")
+    return amount
+
+
+@transaction.atomic
+def set_version_price(plan_version, billing_interval, *, price, compare_at_price=None, label="") -> PlanVersionPrice:
+    """قیمتِ *اضافیِ* یک دوره را رویِ نسخه‌ی پیش‌نویس تنظیم می‌کند. دوره‌ی اصلیِ نسخه همان
+    ``billing_interval/display_price`` است و اینجا ثبت نمی‌شود. نسخه‌ی منتشرشده تغییرناپذیر است (ADR-63)."""
+    _require_draft(plan_version)
+    if billing_interval not in PlanVersion.PAID_INTERVALS:
+        raise PlanServiceError("دوره‌ی نامعتبر.")
+    version = PlanVersion.objects.get(pk=plan_version.pk)
+    amount = _money(price, "قیمت")
+    if billing_interval == version.billing_interval and amount != Decimal(version.display_price):
+        raise PlanServiceError("قیمتِ گزینه‌ی اصلی باید با قیمتِ خودِ نسخه برابر باشد.")
+    compare = _money(compare_at_price, "قیمتِ قبل از تخفیف") if compare_at_price not in (None, "") else None
+    from django.core.exceptions import ValidationError
+
+    row = PlanVersionPrice.objects.filter(plan_version=version, billing_interval=billing_interval).first() or PlanVersionPrice(
+        plan_version=version, billing_interval=billing_interval,
+    )
+    row.price, row.compare_at_price, row.label = amount, compare, (label or "")[:60]
+    try:
+        row.full_clean()
+    except ValidationError as exc:
+        raise PlanServiceError("؛ ".join(m for msgs in exc.message_dict.values() for m in msgs)) from exc
+    row.save()
+    return row
+
+
+@transaction.atomic
+def clear_version_price(plan_version, billing_interval) -> None:
+    _require_draft(plan_version)
+    PlanVersionPrice.objects.filter(plan_version_id=plan_version.pk, billing_interval=billing_interval).delete()
+
+
+def validate_for_publication(plan_version) -> list:
+    """خطاهایِ مانعِ انتشار (فهرستِ پیام). انتشار فقط وقتی مجاز است که همه‌ی قیمت‌ها منسجم باشند."""
+    errors = []
+    version = PlanVersion.objects.get(pk=plan_version.pk)
+    options = version.price_options()
+    for interval, option in options.items():
+        compare = option.get("compare_at")
+        if compare is not None and compare < option["price"]:
+            errors.append(f"قیمتِ قبل از تخفیفِ دوره‌ی «{interval}» کمتر از قیمتِ فعلی است.")
+    return errors
+
+
 @transaction.atomic
 def publish_plan_version(plan_version, *, actor=None) -> PlanVersion:
     """نسخه‌ی پیش‌نویس را منتشر می‌کند — پس از این، شرایطِ آن تغییرناپذیر
@@ -57,6 +119,9 @@ def publish_plan_version(plan_version, *, actor=None) -> PlanVersion:
         return locked
     if locked.status != PlanVersion.Status.DRAFT:
         raise PlanServiceError("فقط نسخه‌ی «پیش‌نویس» قابلِ انتشار است.")
+    problems = validate_for_publication(locked)
+    if problems:
+        raise PlanServiceError("؛ ".join(problems))
     locked.status = PlanVersion.Status.PUBLISHED
     locked.published_at = timezone.now()
     if locked.effective_from is None:

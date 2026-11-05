@@ -26,29 +26,48 @@ class InvoiceError(Exception):
     """خطای قابل‌نمایش هنگام ساخت/تغییرِ فاکتور."""
 
 
-def plan_version_snapshot(plan_version) -> dict:
-    """اسنپ‌شاتِ تغییرناپذیر از شرایطِ نسخه‌ی پلن برایِ درج در فاکتور."""
+def plan_version_snapshot(plan_version, billing_interval=None) -> dict:
+    """اسنپ‌شاتِ تغییرناپذیر از شرایطِ نسخه‌ی پلن برایِ درج در فاکتور. ``billing_interval`` دوره‌ی خریداری‌شده است
+    (پیش‌فرض: گزینه‌ی اصلیِ نسخه — رفتارِ قبلی)؛ قیمتِ ثبت‌شده همان قیمتِ همان دوره است."""
+    interval = billing_interval or plan_version.billing_interval
     return {
         "plan_code": plan_version.plan.code,
         "plan_name": plan_version.plan.name,
         "version_number": plan_version.version_number,
         "currency": plan_version.currency,
-        "billing_interval": plan_version.billing_interval,
-        "display_price": str(plan_version.display_price),
+        "billing_interval": interval,
+        "display_price": str(plan_version.price_for(interval)),
     }
 
 
-def plan_line_spec(plan_version, *, period_start=None, period_end=None, description="") -> dict:
-    """یک ردیفِ «پلن» برایِ مبلغِ نسخه‌ی پلن می‌سازد."""
+def invoice_billing_interval(invoice) -> str:
+    """دوره‌ی خریداری‌شده‌ی یک فاکتور از اسنپ‌شاتِ ردیفِ پلن؛ فاکتورِ قدیمی/بدونِ اسنپ‌شات ⇒ دوره‌ی اصلیِ نسخه."""
+    for line in invoice.lines.all():
+        if line.line_type == SubscriptionInvoiceLine.LineType.PLAN:
+            interval = (line.plan_version_snapshot or {}).get("billing_interval")
+            if interval and invoice.plan_version.offers_interval(interval):
+                return interval
+    return invoice.plan_version.billing_interval
+
+
+def plan_line_spec(plan_version, *, period_start=None, period_end=None, description="", billing_interval=None) -> dict:
+    """یک ردیفِ «پلن» برایِ مبلغِ نسخه‌ی پلن (در دوره‌ی انتخابی) می‌سازد."""
+    interval = billing_interval or plan_version.billing_interval
+    if not plan_version.offers_interval(interval):
+        raise InvoiceError("این نسخه‌ی پلن دوره‌ی انتخاب‌شده را عرضه نمی‌کند.")
+    period_label = dict(plan_version.BillingInterval.choices).get(interval, "")
+    default_description = f"اشتراکِ {plan_version.plan.name} (نسخه {plan_version.version_number})"
+    if interval != plan_version.billing_interval and period_label:
+        default_description += f" — {period_label}"
     return {
         "line_type": SubscriptionInvoiceLine.LineType.PLAN,
-        "description": description or f"اشتراکِ {plan_version.plan.name} (نسخه {plan_version.version_number})",
+        "description": description or default_description,
         "quantity": Decimal("1"),
-        "unit_amount": Decimal(plan_version.display_price),
+        "unit_amount": Decimal(plan_version.price_for(interval)),
         "discount": ZERO,
         "tax": ZERO,
         "plan_code_snapshot": plan_version.plan.code,
-        "plan_version_snapshot": plan_version_snapshot(plan_version),
+        "plan_version_snapshot": plan_version_snapshot(plan_version, interval),
         "service_period_start": period_start,
         "service_period_end": period_end,
         "metadata": {},

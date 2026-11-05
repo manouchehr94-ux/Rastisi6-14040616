@@ -76,6 +76,7 @@
     {% csrf_token %}
     <input type="hidden" name="version_id" value="{{ preview.target_version.pk }}">
     <input type="hidden" name="preview_token" value="{{ preview.token }}">
+    <input type="hidden" name="billing_interval" value="{{ preview.billing_interval }}">
     {% if preview.is_upgrade %}
     <button type="submit" class="btn btn-primary">ایجادِ فاکتور و ادامه به پرداخت</button>
     {% else %}

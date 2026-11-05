@@ -408,8 +408,20 @@ def resolve_default_plan_version():
     )
 
 
+def trial_eligible(store, plan_version) -> bool:
+    """آیا این فروشگاه می‌تواند تریالِ این نسخه را بگیرد؟ نسخه باید تریال داشته باشد؛ و اگر ``trial_once_per_store``
+    روشن است، فروشگاهی که قبلاً تریالِ *همین پلن* (هر نسخه‌ای) را شروع کرده واجد نیست."""
+    if plan_version is None or not plan_version.trial_days:
+        return False
+    if not plan_version.trial_once_per_store:
+        return True
+    return not StoreSubscription.objects.filter(
+        store=store, plan_version__plan=plan_version.plan_id, trial_start_at__isnull=False,
+    ).exists()
+
+
 @transaction.atomic
-def provision_default_subscription(store, *, actor=None, with_trial=None):
+def provision_default_subscription(store, *, actor=None, with_trial=None, plan_version=None):
     """اشتراکِ پیش‌فرض را برایِ یک Storeِ تازه می‌سازد و (بسته به تنظیمات و
     وجودِ ``trial_days``) آن را trialing یا active می‌کند. idempotent: اگر
     Store از قبل اشتراکِ جاری دارد همان برمی‌گردد. اگر پلنِ پیش‌فرض پیکربندی
@@ -422,6 +434,14 @@ def provision_default_subscription(store, *, actor=None, with_trial=None):
     if existing is not None:
         return existing
     version = resolve_default_plan_version()
+    if plan_version is not None:
+        # ثبت‌نام با پلنِ انتخاب‌شده: فقط اگر همان نسخه‌ی منتشرشده تریالِ واقعی دارد و فروشگاه واجد است، تریال روی
+        # *همان* پلن شروع می‌شود؛ وگرنه فروشگاه مثلِ همیشه روی پلنِ پیش‌فرض می‌ماند و انتخاب فقط یادآوری می‌شود
+        # (هرگز پلنِ پولی بدونِ پرداخت داده نمی‌شود).
+        fresh = PlanVersion.objects.filter(pk=plan_version.pk, status=PlanVersion.Status.PUBLISHED, plan__is_active=True).first()
+        if fresh is not None and fresh.plan.is_publicly_selectable and trial_eligible(store, fresh):
+            subscription = create_subscription(store, fresh, source=StoreSubscription.Source.SELF_SERVICE, actor=actor)
+            return start_trial(subscription, actor=actor)
     if version is None:
         return None
     if with_trial is None:

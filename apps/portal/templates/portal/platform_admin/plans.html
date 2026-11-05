@@ -3,7 +3,7 @@
 {% block content %}
 <div class="pa-pagehead">
   <div><h1>پلن‌های اشتراک</h1><p>ویرایشِ یک پلن همیشه یک نسخه‌ی پیش‌نویسِ تازه می‌سازد — نسخه‌های منتشرشده هرگز تغییر نمی‌کنند.</p></div>
-  <a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}">+ پلنِ تازه</a>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pa-btn" href="{% url 'portal_platform_admin:pricing-content' %}">محتوای صفحه‌ی تعرفه</a><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}">+ پلنِ تازه</a></div>
 </div>
 
 {% if plans %}

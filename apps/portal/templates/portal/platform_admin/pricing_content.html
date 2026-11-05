@@ -1,0 +1,64 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}محتوای صفحه‌ی تعرفه | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:plans' %}" class="pa-help">← بازگشت به پلن‌ها</a></p>
+<div class="pa-pagehead"><div><h1>محتوای صفحه‌ی تعرفه</h1><p>ماتریسِ مقایسه از «کاتالوگِ قابلیت‌ها» و مقادیرِ واقعیِ نسخه‌هایِ منتشرشده ساخته می‌شود. اینجا فقط متنِ نمایشی را ویرایش می‌کنید؛ وضعیتِ پیاده‌سازی را کد تعیین می‌کند و قابلیتِ پیاده‌نشده هرگز عمومی نمی‌شود.</p></div></div>
+{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
+
+<div class="pa-card"><div class="pa-cardhead"><h3>ردیف‌هایِ ماتریس ({{ features|length }})</h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>عنوان و توضیح</th><th>دسته</th><th>وضعیتِ پیاده‌سازی</th><th>کنترل</th><th>ترتیب</th><th>نمایش</th><th></th></tr></thead><tbody>
+  {% for f in features %}
+  <tr>
+    <td><input form="f{{ f.pk }}" class="pa-input" type="text" name="title" value="{{ f.title }}" aria-label="عنوان"><textarea form="f{{ f.pk }}" class="pa-input" name="description" rows="2" aria-label="توضیح" style="margin-top:6px">{{ f.description }}</textarea>{% if f.note %}<div class="pa-help">{{ f.note }}</div>{% endif %}</td>
+    <td>{{ f.get_category_display }}</td>
+    <td><span class="pa-badge {% if f.availability == 'implemented' %}pa-ok{% elif f.availability == 'planned' %}pa-off{% else %}pa-warn{% endif %}">{{ f.get_availability_display }}</span></td>
+    <td>{{ f.control }}</td>
+    <td><input form="f{{ f.pk }}" class="pa-input" style="width:70px" type="number" name="display_order" value="{{ f.display_order }}" aria-label="ترتیب"></td>
+    <td><input form="f{{ f.pk }}" type="checkbox" name="is_visible" {% if f.is_visible %}checked{% endif %} {% if not f.is_publishable %}disabled{% endif %} aria-label="نمایش"></td>
+    <td><form id="f{{ f.pk }}" method="post">{% csrf_token %}<input type="hidden" name="action" value="feature"><input type="hidden" name="id" value="{{ f.pk }}"><button class="pa-btn pa-small" type="submit">ذخیره</button></form></td></tr>
+  {% endfor %}
+</tbody></table></div></div>
+
+<div class="pa-card"><div class="pa-cardhead"><h3>پرسش‌هایِ متداول</h3></div><div class="pa-cardbody">
+  {% for faq in faqs %}
+  <form method="post" style="border-bottom:1px dashed var(--pa-line,#ddd);padding:10px 0">{% csrf_token %}<input type="hidden" name="action" value="faq_save"><input type="hidden" name="id" value="{{ faq.pk }}">
+    <input class="pa-input" type="text" name="question" value="{{ faq.question }}" aria-label="پرسش">
+    <textarea class="pa-input" name="answer" rows="2" aria-label="پاسخ" style="margin-top:6px">{{ faq.answer }}</textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;align-items:center">
+      <select class="pa-input" name="plan" style="width:auto" aria-label="پلن"><option value="">سراسری</option>{% for plan in plans_all %}<option value="{{ plan.pk }}" {% if faq.plan_id == plan.pk %}selected{% endif %}>{{ plan.name }}</option>{% endfor %}</select>
+      <input class="pa-input" style="width:80px" type="number" name="display_order" value="{{ faq.display_order }}" aria-label="ترتیب">
+      <label style="font-size:13px"><input type="checkbox" name="is_published" {% if faq.is_published %}checked{% endif %}> منتشرشده</label>
+      <button class="pa-btn pa-small" type="submit">ذخیره</button>
+      <button class="pa-btn pa-small pa-danger" type="submit" name="action" value="faq_delete" formnovalidate>حذف</button>
+    </div></form>
+  {% empty %}<p class="pa-help">هنوز پرسشی ثبت نشده؛ صفحه‌ی عمومی بخشِ پرسش‌ها را نشان نمی‌دهد.</p>{% endfor %}
+  <h4 style="margin-top:14px">پرسشِ تازه</h4>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="faq_save">
+    <input class="pa-input" type="text" name="question" placeholder="پرسش" required>
+    <textarea class="pa-input" name="answer" rows="2" placeholder="پاسخ" required style="margin-top:6px"></textarea>
+    <div style="display:flex;gap:10px;margin-top:6px;align-items:center"><select class="pa-input" name="plan" style="width:auto"><option value="">سراسری</option>{% for plan in plans_all %}<option value="{{ plan.pk }}">{{ plan.name }}</option>{% endfor %}</select>
+    <label style="font-size:13px"><input type="checkbox" name="is_published" checked> منتشرشده</label><button class="pa-btn pa-primary pa-small" type="submit">افزودن</button></div></form>
+</div></div>
+
+<div class="pa-card"><div class="pa-cardhead"><h3>خدماتِ حرفه‌ایِ اختیاری</h3></div><div class="pa-cardbody">
+  <p class="pa-help">هیچ خدمتی پیش‌فرض ساخته نمی‌شود و هیچ تعهدی استنباط نمی‌شود. فقط خدماتِ «فعال» در صفحه‌ی عمومی دیده می‌شوند.</p>
+  {% for service in services %}
+  <form method="post" style="border-bottom:1px dashed var(--pa-line,#ddd);padding:10px 0">{% csrf_token %}<input type="hidden" name="action" value="service_save"><input type="hidden" name="id" value="{{ service.pk }}">
+    <div class="pa-grid3"><input class="pa-input" type="text" name="code" value="{{ service.code }}" readonly aria-label="کد"><input class="pa-input" type="text" name="title" value="{{ service.title }}" aria-label="عنوان"><input class="pa-input" type="number" min="0" name="price" value="{{ service.price|default_if_none:'' }}" placeholder="قیمت (تومان)"></div>
+    <textarea class="pa-input" name="description" rows="2" style="margin-top:6px" aria-label="توضیح">{{ service.description }}</textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;align-items:center"><input class="pa-input" style="width:200px" type="text" name="price_note" value="{{ service.price_note }}" placeholder="توضیحِ قیمت (مثلاً استعلام)">
+      {% for plan, mode in service.rows %}<label style="font-size:12px">{{ plan.name }}: <select class="pa-input" style="width:auto;display:inline-block" name="mode_{{ plan.pk }}">{% for value, label in modes %}<option value="{{ value }}" {% if mode == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endfor %}
+      <label style="font-size:13px"><input type="checkbox" name="is_active" {% if service.is_active %}checked{% endif %}> فعال</label><button class="pa-btn pa-small" type="submit">ذخیره</button></div></form>
+  {% empty %}<p class="pa-help">هنوز خدمتی تعریف نشده.</p>{% endfor %}
+  <h4 style="margin-top:14px">خدمتِ تازه</h4>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="service_save">
+    <div class="pa-grid3"><input class="pa-input" type="text" name="code" placeholder="کد (انگلیسی)" required><input class="pa-input" type="text" name="title" placeholder="عنوان" required><input class="pa-input" type="number" min="0" name="price" placeholder="قیمت (تومان، اختیاری)"></div>
+    <textarea class="pa-input" name="description" rows="2" placeholder="توضیح" style="margin-top:6px"></textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;align-items:center">{% for plan in plans_all %}<label style="font-size:12px">{{ plan.name }}: <select class="pa-input" style="width:auto;display:inline-block" name="mode_{{ plan.pk }}">{% for value, label in modes %}<option value="{{ value }}" {% if value == "unavailable" %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endfor %}<button class="pa-btn pa-primary pa-small" type="submit">افزودن</button></div></form>
+</div></div>
+
+<div class="pa-card"><div class="pa-cardhead"><h3>گزارشِ شکاف: هر قابلیت چه وضعیتی دارد؟</h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>قابلیت</th><th>پیاده‌سازی</th><th>کنترل</th><th>مدرک در کد</th></tr></thead><tbody>
+  {% for row in gap %}<tr><td>{{ row.title }}</td><td>{{ row.availability }}</td><td>{{ row.control }}</td><td dir="ltr" style="font-size:11px">{{ row.evidence }}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

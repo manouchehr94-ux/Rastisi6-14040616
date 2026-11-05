@@ -99,11 +99,19 @@ def mark_invoice_paid_manually(invoice, *, actor=None, now=None, note=""):
     )
 
 
+def _remember_interval(subscription, interval):
+    """دوره‌ی خریداری‌شده را روی اشتراک ثبت می‌کند تا تمدیدها با همان دوره/قیمتِ نسخه‌ی تغییرناپذیر صادر شوند."""
+    subscription.refresh_from_db(fields=["billing_interval"])
+    if subscription.billing_interval != interval:
+        subscription.billing_interval = interval
+        subscription.save(update_fields=["billing_interval", "updated_at"])
+
+
 def _activate_or_renew(invoice, *, actor, now):
     """پس از پرداختِ کاملِ فاکتور، اشتراک را فعال یا تمدید می‌کند. تغییرِ پلن
     (kind=plan_change) در commit 8 مدیریت می‌شود."""
     subscription = StoreSubscription.objects.select_for_update().get(pk=invoice.subscription_id)
-    interval = invoice.plan_version.billing_interval
+    interval = invoice_service.invoice_billing_interval(invoice)
     period_start = invoice.billing_period_start or now
     period_end = invoice.billing_period_end or next_period_end(period_start, interval)
     idem = f"invoice-{invoice.pk}"
@@ -112,6 +120,7 @@ def _activate_or_renew(invoice, *, actor, now):
         # پرداختِ اولین فاکتور: pending/trialing → active (هرگز پیش از تأیید).
         if subscription.status in (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING):
             sub_svc.activate_subscription(subscription, actor=actor, period_end=period_end, idempotency_key=idem)
+            _remember_interval(subscription, interval)
     elif invoice.kind == SubscriptionInvoice.Kind.RENEWAL:
         sub_svc.renew_subscription(
             subscription, period_start=period_start, period_end=period_end, actor=actor, idempotency_key=idem,
@@ -148,4 +157,5 @@ def _activate_or_renew(invoice, *, actor, now):
             sub_svc.activate_subscription(
                 subscription, actor=actor, period_end=period_end, idempotency_key=f"{idem}-activate",
             )
+        _remember_interval(subscription, interval)
     ent.clear_entitlement_cache()

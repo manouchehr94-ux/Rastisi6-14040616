@@ -47,6 +47,7 @@ urlpatterns = [
 
     # --- پلن‌های اشتراک ---
     path("plans/", views.plans, name="plans"),
+    path("plans/content/", views.pricing_content, name="pricing-content"),
     path("plans/add/", views.plan_form, name="plan-add"),
     path("plans/<int:plan_id>/edit/", views.plan_form, name="plan-edit"),
     path("plans/<int:plan_id>/archive/", views.plan_archive, name="plan-archive"),

@@ -64,6 +64,7 @@ from .forms import (
 from apps.core.services.client_ip import get_client_ip_bucket
 
 from .public_site.plans import public_plan_rows
+from apps.subscriptions.services.pricing_page_service import build_pricing_page, resolve_selection
 from .public_site.rendering import render  # serves portal/public_v2/* when the new design is active
 from .models import ContactMessage, OwnerOtpChallenge, OwnerTermsAcceptance
 from .phone import InvalidPhoneError, normalize_iranian_phone
@@ -159,7 +160,18 @@ def supported_industries(request):
 
 
 def plans(request):
-    return render(request, "portal/public/plans.html", {"plan_rows": public_plan_rows()})
+    page = build_pricing_page()
+    billing_url = ""
+    if request.user.is_authenticated:
+        owned = Store.objects.filter(
+            memberships__user=request.user, memberships__role=StoreMembership.Role.OWNER,
+            memberships__status=StoreMembership.MembershipStatus.ACTIVE,
+        ).order_by("created_at").first()
+        billing_url = reverse("portal:billing-plans", args=[owned.public_id]) if owned else reverse("portal:app-home")
+    return render(request, "portal/public/plans.html", {
+        "plan_rows": public_plan_rows(), "page": page, "is_owner_authenticated": request.user.is_authenticated,
+        "billing_url": billing_url, "recommended_index": page["recommended_index"],
+    })
 
 
 def help_center(request):
@@ -331,6 +343,8 @@ def register(request):
     ``/login/`` وارد می‌شوند."""
     if request.user.is_authenticated:
         return redirect("portal:app-home")
+
+    _remember_plan_selection(request)
 
     if not platform_config_service.is_new_store_registration_enabled():
         return render(
@@ -652,6 +666,30 @@ def otp_verify(request):
     )
 
 
+_SELECTED_PLAN_KEY = "portal_selected_plan"
+
+
+def _remember_plan_selection(request):
+    """``?plan=<code>&period=<interval>`` از صفحه‌ی تعرفه: فقط اگر همین الان واقعاً قابلِ‌عرضه باشد در نشستِ سرور
+    نگه داشته می‌شود (کدِ نامعتبر بی‌صدا نادیده گرفته می‌شود). هیچ چیزی با این انتخاب خریده/فعال نمی‌شود."""
+    code = request.GET.get("plan")
+    if not code:
+        return
+    resolved = resolve_selection(code, request.GET.get("period", ""))
+    if resolved is None:
+        request.session.pop(_SELECTED_PLAN_KEY, None)
+        return
+    version, interval = resolved
+    request.session[_SELECTED_PLAN_KEY] = {"code": version.plan.code, "interval": interval}
+
+
+def _selected_plan(request):
+    data = request.session.get(_SELECTED_PLAN_KEY)
+    if not isinstance(data, dict):
+        return None
+    return resolve_selection(data.get("code"), data.get("interval", ""))
+
+
 def _finish_owner_login(request, identity, *, next_url: str, admin_return: str, remember_me: bool):
     """ورودِ نهایی پس از تعیینِ هویتِ مالک — مشترک بینِ تأییدِ OTP و مرحله‌ی
     «تکمیل ثبت‌نام». فروشگاهِ آزمایشیِ اول فقط وقتی ساخته می‌شود که همین درخواست
@@ -665,8 +703,10 @@ def _finish_owner_login(request, identity, *, next_url: str, admin_return: str, 
         # trial Store is provisioned — the owner never sees an empty My
         # Stores page on their very first visit.
         try:
+            selection = _selected_plan(request)
             store, store_created = provisioning_service.provision_initial_trial_store(
                 owner=identity.user, name=DEFAULT_TRIAL_STORE_NAME,
+                plan_version=selection[0] if selection else None,
             )
         except provisioning_service.RegistrationClosedError:
             messages.error(request, provisioning_service.REGISTRATION_CLOSED_MESSAGE)
@@ -1728,16 +1768,27 @@ def billing_plans(request, store_public_id):
         if version is not None:
             offerable_versions.append(version)
 
+    from apps.subscriptions.services.pricing_page_service import _period_options
+
+    offers = []
+    for version in offerable_versions:
+        periods = [p for p in _period_options(version) if p["price"] > 0]
+        offers.append({"version": version, "periods": periods})
+    selection = _selected_plan(request)
     return render(request, "portal/app/billing_plans.html", {
-        "store": store, "plan_versions": offerable_versions, "current_subscription": current_subscription,
+        "store": store, "plan_versions": offerable_versions, "plan_offers": offers,
+        "current_subscription": current_subscription,
+        "selected_plan_id": selection[0].plan_id if selection else None,
+        "selected_interval": selection[1] if selection else "",
     })
 
 
 _STEP_UP_ACTION_SUBSCRIPTION_PURCHASE = "subscription_purchase_confirm"
 _SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY = "portal_pending_purchase_plan_version_id"
+_SESSION_PENDING_PURCHASE_INTERVAL_KEY = "portal_pending_purchase_interval"
 
 
-def _start_purchase(request, *, store, plan_version):
+def _start_purchase(request, *, store, plan_version, billing_interval=""):
     """هسته‌ی مشترکِ خرید — چه بلافاصله (وقتی نیازی به تأییدِ گام‌دوم نیست)
     چه پس از تأییدِ موفقِ OTP گام‌دوم فراخوانی می‌شود. از همان
     ``plan_change_billing_service``ای عبور می‌کند که تغییرِ پلنِ Merchant
@@ -1751,7 +1802,7 @@ def _start_purchase(request, *, store, plan_version):
     token = plan_change_service._preview_token(current, plan_version)
     try:
         kind, result = plan_change_billing_service.start_plan_change(
-            current, plan_version, preview_token=token, actor=request.user,
+            current, plan_version, preview_token=token, actor=request.user, billing_interval=billing_interval or None,
         )
     except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
         # SUB-001 Repair 3: ``start_plan_change`` now also raises
@@ -1792,6 +1843,11 @@ def billing_checkout(request, store_public_id, plan_version_id):
     if not portal_actions_allowed(request, store, SUBSCRIPTION_CHANGE, BILLING_PAYMENT_MANAGE):
         return portal_permission_denied(request)
     plan_version = get_object_or_404(PlanVersion, pk=plan_version_id, status=PlanVersion.Status.PUBLISHED)
+    # دوره‌ی انتخابی فقط وقتی پذیرفته می‌شود که همین نسخه‌ی منتشرشده آن را عرضه کند (ورودیِ کاربر هرگز اعتماد نمی‌شود).
+    billing_interval = (request.POST.get("billing_interval") or "").strip()
+    if billing_interval and not plan_version.offers_interval(billing_interval):
+        messages.error(request, "این پلن دوره‌ی انتخاب‌شده را عرضه نمی‌کند.")
+        return redirect("portal:billing-plans", store_public_id=store.public_id)
 
     target = str(store.public_id)
     if step_up_service.is_step_up_required(_STEP_UP_ACTION_SUBSCRIPTION_PURCHASE) and not step_up_service.is_verified(
@@ -1811,9 +1867,10 @@ def billing_checkout(request, store_public_id, plan_version_id):
             messages.error(request, str(exc))
             return redirect("portal:billing-plans", store_public_id=store.public_id)
         request.session[_SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY] = plan_version.pk
+        request.session[_SESSION_PENDING_PURCHASE_INTERVAL_KEY] = billing_interval
         return redirect("portal:billing-step-up", store_public_id=store.public_id)
 
-    return _start_purchase(request, store=store, plan_version=plan_version)
+    return _start_purchase(request, store=store, plan_version=plan_version, billing_interval=billing_interval)
 
 
 @owner_required
@@ -1839,7 +1896,10 @@ def billing_step_up_verify(request, store_public_id):
             if plan_version is None:
                 messages.error(request, "درخواستِ خرید یافت نشد؛ دوباره تلاش کنید.")
                 return redirect("portal:billing-plans", store_public_id=store.public_id)
-            return _start_purchase(request, store=store, plan_version=plan_version)
+            pending_interval = request.session.pop(_SESSION_PENDING_PURCHASE_INTERVAL_KEY, "") or ""
+            if pending_interval and not plan_version.offers_interval(pending_interval):
+                pending_interval = ""
+            return _start_purchase(request, store=store, plan_version=plan_version, billing_interval=pending_interval)
         messages.error(request, "کدِ واردشده نادرست یا منقضی است.")
 
     return render(request, "portal/app/step_up_verify.html", {"store": store})

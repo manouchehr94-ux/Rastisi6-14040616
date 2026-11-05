@@ -78,8 +78,9 @@ def _generate_one(subscription, *, now):
         subscription.refresh_from_db()
 
     version = subscription.plan_version
+    interval = subscription.effective_billing_interval            # دوره‌ی خریداری‌شده (یا اصلیِ نسخه)
     period_start = subscription.current_period_end
-    period_end = next_period_end(period_start, version.billing_interval)
+    period_end = next_period_end(period_start, interval)
 
     existing = SubscriptionInvoice.objects.filter(
         subscription=subscription, kind=SubscriptionInvoice.Kind.RENEWAL,
@@ -92,7 +93,9 @@ def _generate_one(subscription, *, now):
         invoice = invoice_service.create_invoice(
             subscription, kind=SubscriptionInvoice.Kind.RENEWAL, plan_version=version,
             currency=version.currency, period_start=period_start, period_end=period_end,
-            lines=[invoice_service.plan_line_spec(version, period_start=period_start, period_end=period_end)],
+            lines=[invoice_service.plan_line_spec(
+                version, period_start=period_start, period_end=period_end, billing_interval=interval,
+            )],
             now=now,
         )
     except IntegrityError:
