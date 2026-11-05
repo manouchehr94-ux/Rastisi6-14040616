@@ -121,6 +121,12 @@
   /* ---- ۷. عددی: چرخِ ماوس مقدار را عوض نکند ---- */
   doc.addEventListener("wheel", function (e) { var t = e.target; if (t && t.type === "number" && doc.activeElement === t) t.blur(); }, { passive: true });
 
+  /* ---- صفحه‌هایِ Inbox (قالبِ مشترکِ notifications) h1 ندارند: عنوانِ h2 به‌عنوانِ h1 معرفی می‌شود (بدونِ دست‌زدن به قالبِ مشترک) ---- */
+  if (!qs("h1")) { var ih = qs(".nt-head h2"); if (ih) { ih.setAttribute("role", "heading"); ih.setAttribute("aria-level", "1"); } }
+
+  /* ---- لینکِ مستقیم به یک کارتِ جمع‌شونده (#gw-code) آن را باز می‌کند ---- */
+  if (location.hash) { var tgt = qs(location.hash.replace(/[^#\w-]/g, "")); var dd = tgt && qs("details[data-gw-details]", tgt); if (dd) dd.open = true; }
+
   /* ---- ۸. ارتباطِ label↔کنترل (اگر for/id نبود) و ستاره‌یِ فیلدِ الزامی ---- */
   var uid = 0;
   qsa(".pa-field").forEach(function (field) {

@@ -1,0 +1,30 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}بررسیِ کارت‌به‌کارت | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead"><div><h1>بررسیِ پرداختِ کارت‌به‌کارت</h1>
+  <p>ادعاهایی که صاحبانِ فروشگاه برایِ واریز به کارتِ <b>پلتفرم</b> ثبت کرده‌اند. <b>رسید مدرکِ پرداخت نیست</b> — فقط پس از دیدنِ واردشدنِ پول در صورتحسابِ بانکی تأیید کنید.</p></div></div>
+
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field"><label for="flt-status">وضعیت</label>
+    <select id="flt-status" name="status">{% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:manual-claims' %}">پاک‌کردن</a></div>
+</div></form>
+
+<div class="pa-card">
+  {% if page.object_list %}
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th class="pa-num">#</th><th>فروشگاه</th><th>هدف</th><th class="pa-num">مبلغ</th><th>شماره‌یِ پیگیری</th><th>وضعیت</th><th>نشانه‌ها</th><th>ثبت</th><th class="pa-actcol"></th></tr></thead><tbody>
+    {% for claim in page.object_list %}
+    <tr>
+      <td class="pa-num">{{ claim.pk }}</td><td>{{ claim.store.name }}</td><td>{{ claim.target_label }}</td><td class="pa-num">{{ claim.expected_amount }}</td>
+      <td><span class="pa-ltr">{{ claim.reference_raw }}</span></td>
+      <td><span class="pa-badge {% if claim.status == 'approved' %}pa-ok{% elif claim.status == 'pending_review' %}pa-warn{% elif claim.status == 'needs_action' or claim.status == 'rejected' %}pa-off{% else %}pa-info{% endif %}">{{ claim.get_status_display }}</span></td>
+      <td>{% for flag in claim.flags %}<span class="pa-badge pa-warn">{{ flag }}</span> {% endfor %}</td>
+      <td>{{ claim.created_at|jalali }}</td>
+      <td class="pa-actcol"><a class="pa-btn" href="{% url 'portal_platform_admin:manual-claim-detail' claim.pk %}">بررسی</a></td>
+    </tr>{% endfor %}</tbody></table></div>
+  {% include "portal/platform_admin/_pagination.html" %}
+  {% else %}<div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-card"/></svg></div><h3>ادعایی در این وضعیت نیست</h3><p>وضعیتِ دیگری را انتخاب کنید.</p></div>{% endif %}
+</div>
+{% endblock %}

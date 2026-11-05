@@ -29,6 +29,27 @@
   </div>
 </div>
 
+<section class="pa-card" id="refunds">
+  <div class="pa-cardhead"><h3>بازپرداخت‌ها (دفتر مالی)</h3></div>
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th class="pa-num">مبلغ</th><th>وضعیت</th><th>ارائه‌دهنده</th><th>دلیل</th><th class="pa-actcol"></th></tr></thead><tbody>
+    {% for refund in invoice.refunds.all %}
+    <tr><td class="pa-num">{{ refund.amount }}</td><td>{{ refund.get_status_display }}</td><td>{{ refund.provider }}</td><td>{{ refund.reason }}</td>
+      <td class="pa-actcol">{% if refund.status == "pending" or refund.status == "requested" %}
+        <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-refund-complete' refund.pk %}" data-confirm="فقط پس از انتقالِ واقعیِ پول به مالک تأیید کنید.">{% csrf_token %}<button class="pa-btn" type="submit">تکمیلِ دستی</button></form>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5" class="pa-help">بازپرداختی ثبت نشده.</td></tr>{% endfor %}
+    </tbody></table></div>
+  {% if invoice.amount_paid > 0 %}
+  <form method="post" class="pa-cardfoot pa-stack" action="{% url 'portal_platform_admin:payment-invoice-refund' invoice.pk %}">{% csrf_token %}
+    <div class="pa-fields">
+      <div class="pa-field"><label for="rf-amount">مبلغ</label><input id="rf-amount" class="pa-ltr" name="amount" required inputmode="numeric"></div>
+      <div class="pa-field"><label for="rf-reason">دلیل</label><input id="rf-reason" name="reason" required><span class="pa-help">الزامی.</span></div>
+    </div>
+    <div><button class="pa-btn" type="submit">درخواستِ بازپرداخت</button></div>
+    <p class="pa-help">کارت‌به‌کارت/زیبال/زرین‌پال بازپرداخت را «در انتظارِ پردازشِ دستی» می‌گذارند؛ پس از انتقالِ واقعیِ پول «تکمیلِ دستی» را بزنید.</p></form>
+  {% endif %}
+</section>
+
 <div class="pa-card">
   <div class="pa-cardhead"><h3>تلاش‌های پرداخت</h3></div>
   <div class="pa-tablewrap">

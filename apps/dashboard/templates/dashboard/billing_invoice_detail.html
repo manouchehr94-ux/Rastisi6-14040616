@@ -7,10 +7,19 @@
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
   <a class="btn" href="{% url 'dashboard:billing-invoice-print' invoice.pk %}" target="_blank">نسخه‌ی چاپی</a>
   {% if can_pay and invoice.is_payable %}
-  <form method="post" action="{% url 'dashboard:billing-pay' invoice.pk %}">{% csrf_token %}<button class="btn btn-primary" type="submit">پرداختِ فاکتور</button></form>
+  <form method="post" action="{% url 'dashboard:billing-pay' invoice.pk %}">{% csrf_token %}{% if platform_gateway_options|length > 1 %}<select name="gateway" aria-label="درگاه پرداخت" style="margin-inline-end:6px">{% for option in platform_gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% elif platform_gateway_options|length == 1 %}<input type="hidden" name="gateway" value="{{ platform_gateway_options.0.code }}">{% endif %}<button class="btn btn-primary" type="submit">پرداختِ فاکتور</button></form>
   {% endif %}
   <a class="btn" href="{% url 'dashboard:billing-invoices' %}">بازگشت</a>
 </div>
+
+{% if manual_claims %}
+<div class="card" style="margin-bottom:16px"><div class="card-head"><b>ادعاهایِ پرداختِ کارت‌به‌کارت</b></div><div class="card-body">
+  {% for claim in manual_claims %}
+  <div style="padding:6px 0;border-bottom:1px dashed var(--border)"><span class="badge {% if claim.status == 'approved' %}b-green{% elif claim.status == 'pending_review' %}b-amber{% else %}b-red{% endif %}">{{ claim.get_status_display }}</span>
+    <span dir="ltr">{{ claim.reference_raw }}</span>{% if claim.status == 'rejected' and claim.review_note %} — {{ claim.review_note }}{% endif %}</div>
+  {% endfor %}
+</div></div>
+{% endif %}
 
 <div class="card" style="margin-bottom:16px">
   <div class="card-head"><b>ردیف‌ها</b></div>

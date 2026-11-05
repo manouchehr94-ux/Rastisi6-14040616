@@ -1,0 +1,62 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}ادعای کارت‌به‌کارت #{{ claim.pk }} | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
+{% block content %}
+<a class="pa-back" href="{% url 'portal_platform_admin:manual-claims' %}">← صفِ ادعاها</a>
+<div class="pa-pagehead">
+  <div><h1>ادعا <span class="pa-num">#{{ claim.pk }}</span> — {{ claim.target_label }}</h1></div>
+  <div class="pa-actions"><span class="pa-badge {% if claim.status == 'approved' %}pa-ok{% elif claim.status == 'pending_review' %}pa-warn{% else %}pa-off{% endif %}">{{ claim.get_status_display }}</span></div>
+</div>
+
+<section class="pa-card" aria-labelledby="cl-info">
+  <div class="pa-cardhead"><h3 id="cl-info">جزئیاتِ ادعا</h3></div>
+  <div class="pa-cardbody">
+    <dl class="pa-dl">
+      <dt>فروشگاه</dt><dd>{{ claim.store.name }}</dd>
+      <dt>ثبت‌کننده</dt><dd>{{ claim.submitted_by.username|default:"—" }}</dd>
+      <dt>مبلغِ موردانتظارِ سمتِ سرور</dt><dd><b class="pa-num">{{ claim.expected_amount }}</b> {{ claim.currency }}</dd>
+      <dt>شماره‌یِ پیگیری</dt><dd><span class="pa-ltr">{{ claim.reference_raw }}</span> <span class="pa-help">(کلید: <span class="pa-ltr">{{ claim.reference_key }}</span>)</span></dd>
+      <dt>زمانِ ادعاییِ انتقال</dt><dd>{{ claim.transferred_at|jalali }}</dd>
+      <dt>۴ رقمِ آخرِ کارتِ پرداخت‌کننده</dt><dd><span class="pa-num">{{ claim.payer_card_last4|default:"—" }}</span></dd>
+      <dt>رسید</dt><dd>{% if claim.receipt %}<a href="{% url 'portal_platform_admin:manual-claim-receipt' claim.pk %}" target="_blank" rel="noopener">مشاهده ({{ claim.receipt_content_type }})</a> <span class="pa-help pa-ltr">sha256 {{ claim.receipt_sha256|slice:":16" }}…</span>{% else %}ندارد{% endif %}</dd>
+      <dt>مهلتِ بررسی</dt><dd>{{ claim.expires_at|jalali }}</dd>
+      {% if claim.flags %}<dt>نشانه‌هایِ مشکوک</dt><dd>{% for flag in claim.flags %}<span class="pa-badge pa-warn">{{ flag }}</span> {% endfor %}</dd>{% endif %}
+      {% if claim.reviewed_by %}<dt>بررسی‌کننده</dt><dd>{{ claim.reviewed_by.username }} · {{ claim.reviewed_at|jalali }} · ارجاعِ صورتحسابِ بانکی: <span class="pa-ltr">{{ claim.bank_confirmation_reference|default:"—" }}</span> · مبلغِ تأییدشده: <span class="pa-num">{{ claim.confirmed_amount|default:"—" }}</span> · {{ claim.review_note }}</dd>{% endif %}
+    </dl>
+    {% if same_reference_elsewhere %}<div class="pa-alert pa-alert-warn pa-mt-4" role="status">همین شماره‌یِ پیگیری در {{ same_reference_elsewhere }} ادعایِ دیگر (قبلی/ردشده) هم آمده است.</div>{% endif %}
+    {% if store_rejected %}<p class="pa-help pa-mt-3">این فروشگاه {{ store_rejected }} ادعایِ ردشده از {{ store_total }} ادعایِ دیگر دارد.</p>{% endif %}
+  </div>
+</section>
+
+{% if claim.status == "pending_review" %}
+{% if not can_review %}<div class="pa-alert pa-alert-warn" role="status">شما دسترسیِ «تأییدِ پرداختِ کارت‌به‌کارتِ پلتفرم» را ندارید.</div>
+{% elif is_self %}<div class="pa-alert pa-alert-warn" role="status">این ادعا را خودتان ثبت کرده‌اید؛ تأیید/رد مجاز نیست (تضادِ منافع).</div>
+{% else %}
+<form method="post" action="{% url 'portal_platform_admin:manual-claim-action' claim.pk 'approve' %}" class="pa-form" data-confirm="تأییدِ نهایی و فعال‌سازیِ خدمت؟ این کار بازگشت‌پذیر نیست.">{% csrf_token %}
+  <fieldset class="pa-fieldset"><legend>تأییدِ مالی</legend>
+    <p class="pa-help">پیش از تأیید، واردشدنِ دقیقاً <b class="pa-num">{{ claim.expected_amount }}</b> تومان را در صورتحسابِ بانکیِ مستقل ببینید و ارجاعِ آن را وارد کنید.</p>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="cl-bank">ارجاعِ صورتحسابِ بانکی</label><input id="cl-bank" class="pa-ltr" name="bank_reference" required minlength="6"><span class="pa-help">الزامی و یکتا.</span></div>
+      <div class="pa-field"><label for="cl-amount">مبلغِ دیده‌شده در صورتحساب</label><input id="cl-amount" class="pa-ltr" name="confirmed_amount" required inputmode="numeric"></div>
+      <div class="pa-field pa-full"><label for="cl-note">یادداشت</label><input id="cl-note" name="note"><span class="pa-help">اختیاری.</span></div>
+    </div>
+  </fieldset>
+  <div class="pa-formbar pa-static"><button class="pa-btn pa-primary" type="submit">تأییدِ مالی و اعمال</button></div>
+</form>
+<form method="post" action="{% url 'portal_platform_admin:manual-claim-action' claim.pk 'reject' %}" class="pa-form pa-mt-4" data-confirm="این ادعا رد شود؟ مالک می‌تواند ادعایِ اصلاح‌شده ثبت کند.">{% csrf_token %}
+  <fieldset class="pa-fieldset"><legend>ردِ ادعا / درخواستِ اصلاح</legend>
+    <div class="pa-fields"><div class="pa-field pa-full"><label for="cl-reason">دلیلِ رد / اصلاحِ لازم</label><input id="cl-reason" name="reason" required minlength="5"><span class="pa-help">الزامی؛ برایِ مالک نمایش داده می‌شود.</span></div></div>
+  </fieldset>
+  <div class="pa-formbar pa-static"><button class="pa-btn pa-danger" type="submit">رد (مالک می‌تواند ادعایِ اصلاح‌شده ثبت کند)</button></div>
+</form>
+{% endif %}
+{% endif %}
+
+<section class="pa-card"><div class="pa-cardhead"><h3>تاریخچه‌یِ کامل (فقط‌افزودنی)</h3></div>
+  <div class="pa-cardbody pa-stack">
+    {% for event in events %}<div class="pa-sm">{{ event.created_at|jalali }} — <b>{{ event.action_label }}</b> — {{ event.actor.username|default:"سامانه" }} <span class="pa-help pa-ltr">{{ event.detail_text }}</span></div>
+    {% empty %}<p class="pa-help">رخدادی نیست.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

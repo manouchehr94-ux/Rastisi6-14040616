@@ -1,0 +1,63 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}تطبیق و مغایرت‌ها | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead">
+  <div><h1>تطبیق و مغایرت‌هایِ پرداخت</h1><p>مواردی که پول و اثرِ آن با هم نمی‌خوانند. هیچ اقدامِ این صفحه موفقیتِ پرداخت را جعل نمی‌کند — «بررسی با درگاه» همیشه verifyِ سرور-به-سرور است.</p></div>
+  <div class="pa-actions"><a class="pa-btn" href="{% url 'portal_platform_admin:payment-transactions' %}">همه‌یِ تراکنش‌ها</a></div>
+</div>
+
+<section class="pa-card" aria-label="خلاصه"><div class="pa-cardbody pa-row">
+  <span class="pa-badge {% if totals.requires_action %}pa-warn{% else %}pa-ok{% endif %}">نیازمندِ اقدام: {{ totals.requires_action }}</span>
+  <span class="pa-badge {% if totals.stale_pending %}pa-warn{% else %}pa-ok{% endif %}">در انتظارِ کهنه (> {{ stale_minutes }} دقیقه): {{ totals.stale_pending }}</span>
+  <span class="pa-badge {% if totals.paid_without_effect %}pa-warn{% else %}pa-ok{% endif %}">پرداخت‌شده بدونِ اثر: {{ totals.paid_without_effect }}</span>
+  <span class="pa-badge {% if totals.verified_unsettled %}pa-warn{% else %}pa-ok{% endif %}">تأییدشده امّا تسویه‌نشده: {{ totals.verified_unsettled }}</span>
+  <span class="pa-badge {% if snapshot.manual_claims.pending %}pa-warn{% else %}pa-ok{% endif %}">ادعاهایِ کارت‌به‌کارتِ در انتظار: {{ snapshot.manual_claims.pending }}{% if snapshot.manual_claims.overdue %} ({{ snapshot.manual_claims.overdue }} بیش از ۲۴ ساعت){% endif %}</span>
+</div></section>
+
+<section class="pa-card"><div class="pa-cardhead"><h3>تأییدشده امّا تسویه‌نشده <span class="pa-help">(BNPL / ملت — پول نزدِ درگاه، اثر هنوز اعمال نشده)</span></h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>نوع</th><th>مرجع</th><th>درگاه</th><th>فروشگاه</th><th class="pa-num">مبلغ</th><th class="pa-actcol"></th></tr></thead><tbody>
+  {% for a in snapshot.verified_unsettled.0 %}<tr><td>اشتراک</td><td><span class="pa-ltr">{{ a.invoice.number }}</span></td><td><span class="pa-ltr">{{ a.provider }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td>
+    <td class="pa-actcol"><form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-verify-now' 'subscription' a.pk %}">{% csrf_token %}<button class="pa-btn" type="submit">استعلام و تسویه</button></form></td></tr>{% endfor %}
+  {% for a in snapshot.verified_unsettled.1 %}<tr><td>پیامک</td><td><span class="pa-ltr">SMS-{{ a.purchase_id }}</span></td><td><span class="pa-ltr">{{ a.provider }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td>
+    <td class="pa-actcol"><form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-verify-now' 'sms' a.pk %}">{% csrf_token %}<button class="pa-btn" type="submit">استعلام و تسویه</button></form></td></tr>{% endfor %}
+  {% if not totals.verified_unsettled %}<tr><td colspan="6" class="pa-help">موردی نیست.</td></tr>{% endif %}
+</tbody></table></div></section>
+
+<section class="pa-card"><div class="pa-cardhead"><h3>کارت‌به‌کارت — ادعاهایِ نیازمندِ اقدام</h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>مرجع</th><th>فروشگاه</th><th class="pa-num">مبلغ</th><th class="pa-actcol"></th></tr></thead><tbody>
+  {% for c in snapshot.manual_claims.needs_action %}<tr><td><span class="pa-ltr">{{ c.reference_raw }}</span></td><td>{{ c.store.name }}</td><td class="pa-num">{{ c.expected_amount }}</td><td class="pa-actcol"><a class="pa-btn" href="{% url 'portal_platform_admin:manual-claim-detail' c.pk %}">بررسی</a></td></tr>{% endfor %}
+  {% if not totals.claims_needs_action %}<tr><td colspan="4" class="pa-help">موردی نیست. صفِ بررسی: <a href="{% url 'portal_platform_admin:manual-claims' %}">ادعاهایِ کارت‌به‌کارت</a>.</td></tr>{% endif %}
+</tbody></table></div></section>
+
+<section class="pa-card"><div class="pa-cardhead"><h3>نیازمندِ اقدام <span class="pa-help">(مبلغ/پرداختِ تکراری/خریدِ لغوشده)</span></h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>نوع</th><th>مرجع</th><th>فروشگاه</th><th class="pa-num">مبلغ</th><th>دلیل</th><th>تاریخ</th></tr></thead><tbody>
+  {% for a in snapshot.requires_action.0 %}<tr><td>اشتراک</td><td><span class="pa-ltr">{{ a.invoice.number }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td><td><span class="pa-ltr">{{ a.failure_code }}</span></td><td>{{ a.updated_at|jalali }}</td></tr>{% endfor %}
+  {% for a in snapshot.requires_action.1 %}<tr><td>پیامک</td><td><span class="pa-ltr">SMS-{{ a.purchase_id }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td><td><span class="pa-ltr">{{ a.failure_code }}</span></td><td>{{ a.updated_at|jalali }}</td></tr>{% endfor %}
+  {% if not totals.requires_action %}<tr><td colspan="6" class="pa-help">موردی نیست.</td></tr>{% endif %}
+</tbody></table></div></section>
+
+<section class="pa-card"><div class="pa-cardhead"><h3>در انتظارِ کهنه <span class="pa-help">(احتمالاً پرداخت شده امّا بازگشت ثبت نشده)</span></h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>نوع</th><th>مرجع</th><th>فروشگاه</th><th class="pa-num">مبلغ</th><th>تاریخ</th><th class="pa-actcol"></th></tr></thead><tbody>
+  {% for a in snapshot.stale_pending.0 %}<tr><td>اشتراک</td><td><span class="pa-ltr">{{ a.invoice.number }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td><td>{{ a.created_at|jalali }}</td>
+    <td class="pa-actcol"><form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-verify-now' 'subscription' a.pk %}">{% csrf_token %}<button class="pa-btn" type="submit">بررسی با درگاه</button></form></td></tr>{% endfor %}
+  {% for a in snapshot.stale_pending.1 %}<tr><td>پیامک</td><td><span class="pa-ltr">SMS-{{ a.purchase_id }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td><td>{{ a.created_at|jalali }}</td>
+    <td class="pa-actcol"><form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-verify-now' 'sms' a.pk %}">{% csrf_token %}<button class="pa-btn" type="submit">بررسی با درگاه</button></form></td></tr>{% endfor %}
+  {% if not totals.stale_pending %}<tr><td colspan="6" class="pa-help">موردی نیست.</td></tr>{% endif %}
+</tbody></table></div></section>
+
+<section class="pa-card"><div class="pa-cardhead"><h3>پرداختِ موفق بدونِ اثر <span class="pa-help">(باید فوراً بررسی شود)</span></h3></div><div class="pa-tablewrap"><table>
+  <thead><tr><th>نوع</th><th>مرجع</th><th>فروشگاه</th><th class="pa-num">مبلغ</th></tr></thead><tbody>
+  {% for a in snapshot.paid_without_effect.0 %}<tr><td>اشتراک</td><td><span class="pa-ltr">{{ a.invoice.number }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td></tr>{% endfor %}
+  {% for a in snapshot.paid_without_effect.1 %}<tr><td>پیامک</td><td><span class="pa-ltr">SMS-{{ a.purchase_id }}</span></td><td>{{ a.store.name }}</td><td class="pa-num">{{ a.amount }}</td></tr>{% endfor %}
+  {% if not totals.paid_without_effect %}<tr><td colspan="4" class="pa-help">موردی نیست.</td></tr>{% endif %}
+</tbody></table></div></section>
+
+<section class="pa-card"><div class="pa-cardhead"><h3>سایر</h3></div><div class="pa-cardbody">
+  <dl class="pa-dl">
+    <dt>خریدِ پیامکِ تکمیل‌شده بدونِ ردیفِ دفترِ اعتبار</dt><dd><b class="pa-num">{{ snapshot.sms_completed_without_ledger|length }}</b></dd>
+    <dt>رخدادهایِ Webhook ناموفق</dt><dd><b class="pa-num">{{ snapshot.failed_webhooks|length }}</b></dd>
+    <dt>بازپرداخت‌هایِ باز</dt><dd><b class="pa-num">{{ snapshot.open_refunds|length }}</b></dd>
+  </dl>
+</div></section>
+{% endblock %}

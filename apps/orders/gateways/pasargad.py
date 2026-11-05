@@ -242,6 +242,17 @@ class PasargadAdapter(PaymentGatewayAdapter):
         return False
 
     @property
+    def redirect_requires_referer(self) -> bool:
+        # api-reference.md (verified 2026-11-05): "when redirecting the customer you must fill the request header
+        # `referer` with your domain address".
+        return True
+
+    def check_connection(self, *, credentials: dict[str, str], sandbox: bool = False) -> str:
+        """Authentication-only check: ``POST /token/getToken`` (no purchase, no money, no stored state)."""
+        self._get_token(credentials)
+        return "احراز هویت درگاه پاسارگاد موفق بود."
+
+    @property
     def supports_sandbox(self) -> bool:
         # The verified docs expose a single production host and no separate
         # sandbox base URL, so no unverified sandbox host is offered.
