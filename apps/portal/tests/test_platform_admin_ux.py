@@ -4,6 +4,7 @@ Covers: nav registry integrity (no orphan/hidden pages), single sidebar on every
 permission checks, CSRF on every POST form, shared button/numeric-input/namespace rules, and the changed workflows."""
 
 import re
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
@@ -38,8 +39,11 @@ POST_ONLY = {
     "subscription-cancel", "subscription-suspend", "subscription-resume", "sms-package-archive", "sms-credit-adjust",
     "domain-check", "domain-set-primary", "notification-sender-toggle", "notification-platform-template-preview",
     "notification-platform-template-test",
+    # PR #40 finance actions
+    "payment-verify-now", "manual-claim-action", "payment-invoice-refund", "payment-refund-complete", "sms-purchase-action",
 }
-NOT_IN_SIDEBAR = POST_ONLY | {"login"}
+FILE_DOWNLOADS = {"manual-claim-receipt"}          # streams a private receipt file; not an HTML page
+NOT_IN_SIDEBAR = POST_ONLY | FILE_DOWNLOADS | {"login"}
 INBOX_NAMES = {"inbox-home", "inbox-summary", "inbox-preferences", "inbox-read-all", "inbox-push-subscribe",
                "inbox-push-unsubscribe", "inbox-sw", "inbox-detail", "inbox-open", "inbox-read"}
 
@@ -184,6 +188,37 @@ class DesignSystemCssTests(SimpleTestCase):
         self.assertRegex(self.css, r"\.pa-input[^{]*\{[^}]*height:var\(--pa-ctl-h\)")
 
 
+FINANCE_PAGES = ("payment-gateways", "payment-transactions", "payment-reconciliation", "manual-claims", "manual-claim-detail", "sms-purchases")
+FINANCE_TEMPLATES = ("payment_gateways", "payment_transactions", "payment_reconciliation", "manual_claims", "manual_claim_detail",
+                     "sms_purchases", "payment_invoice_detail")
+
+
+class FinanceTemplateContractTests(SimpleTestCase):
+    """The PR #40 finance pages use the very same design system — no second styling system for finance."""
+
+    def test_finance_templates_extend_the_shared_shell_and_use_shared_components_only(self):
+        for name in FINANCE_TEMPLATES:
+            text = (TEMPLATES / f"{name}.html").read_text()
+            self.assertIn('{% extends "portal/platform_admin/base.html" %}', text, name)
+            self.assertIn('class="pa-pagehead"', text, name)
+            self.assertNotRegex(text, r'\sstyle="|<style\b|\sonclick=|\sonsubmit=', name)
+            self.assertNotIn("{% if messages %}", text, f"{name}: flash messages are rendered once by the shell")
+
+    def test_money_moving_actions_confirm_before_submitting(self):
+        confirms = {
+            "payment_invoice_detail": ["payment-refund-complete"],
+            "sms_purchases": ["'complete'", "'cancel'", "'refund'"],
+            "manual_claim_detail": ["'approve'", "'reject'"],
+            "payment_gateways": ["revoke_gate"],
+        }
+        for name, markers in confirms.items():
+            text = (TEMPLATES / f"{name}.html").read_text()
+            for marker in markers:
+                i = text.index(marker)
+                form_start = text.rfind("<form", 0, i)
+                self.assertIn("data-confirm=", text[form_start:text.index(">", form_start)], f"{name}: {marker}")
+
+
 @override_settings(ALLOWED_HOSTS=[ADMIN, "testserver"])
 class OwnerPagesTests(TestCase):
     @classmethod
@@ -205,6 +240,11 @@ class OwnerPagesTests(TestCase):
                                                 verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
         cls.template = IndustryTemplate.objects.create(slug="uxind", name="صنفِ تست", version=1)
         cls.package = SmsPackage.objects.create(name="بسته‌یِ تست", credit_amount=100, price=10000)
+        from apps.billing.models import PlatformManualPaymentClaim
+
+        cls.claim = PlatformManualPaymentClaim.objects.create(
+            store=cls.store, invoice=cls.invoice, expected_amount=100000, reference_raw="TRK-UX-1", reference_key="trkux1",
+            transferred_at=timezone.now(), expires_at=timezone.now() + timedelta(days=2))
 
     def params(self):
         from apps.notifications import events as notif_events
@@ -214,7 +254,7 @@ class OwnerPagesTests(TestCase):
         return {
             "store_public_id": str(self.store.public_id), "user_id": self.owner.pk, "plan_id": self.plan.pk, "version_id": self.version.pk,
             "subscription_id": self.sub.pk, "invoice_id": self.invoice.pk, "template_id": self.template.pk, "domain_id": self.domain.pk,
-            "package_id": self.package.pk, "feature_id": self._feature_id(),
+            "package_id": self.package.pk, "feature_id": self._feature_id(), "claim_id": self.claim.pk,
             "event_key": None, "slot": PublicSitePhoto.SLOT_CHOICES[0][0], "slug": registry.GROUPS[0].slug,
             "sms_event": SmsTemplate.objects.order_by("event_key").first().event_key, "notif_event": next(iter(notif_events.EVENTS)), "pk": 1,
         }
@@ -229,7 +269,7 @@ class OwnerPagesTests(TestCase):
         out = []
         for pattern in admin_urls.urlpatterns:
             name = pattern.name
-            if not name or name in POST_ONLY or name in ("logout",) or name in ("inbox-sw",) or name.startswith("inbox-") and name != "inbox-home" and name != "inbox-preferences":
+            if not name or name in POST_ONLY or name in ("logout",) or name in FILE_DOWNLOADS or name in ("inbox-sw",) or name.startswith("inbox-") and name != "inbox-home" and name != "inbox-preferences":
                 continue
             route = str(pattern.pattern)
             def fill(m):
@@ -352,3 +392,40 @@ class OwnerPagesTests(TestCase):
         html = self.client.get(f"/notifications/{key}/", HTTP_HOST=ADMIN).content.decode()
         self.assertIn("htmx.min.js", html)
         self.assertIn("hx-post=", html)
+
+    # ---------------------------------------------------------------- PR #40 finance pages (same shell, same components)
+    def test_finance_pages_render_inside_the_shared_shell_with_finance_nav_active(self):
+        self.client.force_login(self.owner)
+        p = self.params()
+        for name in FINANCE_PAGES:
+            route = next(str(x.pattern) for x in admin_urls.urlpatterns if x.name == name)
+            path = "/" + re.sub(r"<(\w+):(\w+)>", lambda m: str(p[m.group(2)]), route)
+            html = self.client.get(path, HTTP_HOST=ADMIN).content.decode()
+            self.assertEqual(html.count("data-pa-sidebar"), 1, name)
+            self.assertIn('aria-current="page"', html, name)
+            self.assertIn("مالی و پرداخت", html, name)
+            self.assertNotIn(' style="', html, name)
+
+    def test_gateway_credentials_stay_masked_and_never_leak_into_the_page(self):
+        self.client.force_login(self.owner)
+        html = self.client.get("/payments/gateways/", HTTP_HOST=ADMIN).content.decode()
+        self.assertIn('id="default-gateway"', html)
+        for m in re.finditer(r'<input[^>]*type="password"[^>]*>', html):
+            self.assertNotRegex(m.group(0), r'value="[^"]+"', "secret inputs must never carry a value")
+            self.assertIn('autocomplete="new-password"', m.group(0))
+        self.assertIn("pa-fieldset", html)
+
+    def test_claim_review_page_keeps_the_conflict_of_interest_and_permission_guards(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(f"/payments/card-claims/{self.claim.pk}/", HTTP_HOST=ADMIN).content.decode()
+        self.assertIn("جزئیاتِ ادعا", html)
+        self.assertIn("pa-dl", html)
+        self.assertIn('name="bank_reference"', html)           # approve form present for a different reviewer
+        self.assertIn("data-confirm=", html)
+
+    def test_finance_filters_use_the_shared_filter_bar(self):
+        self.client.force_login(self.owner)
+        for path in ("/payments/transactions/", "/payments/card-claims/", "/payments/sms-purchases/"):
+            html = self.client.get(path, HTTP_HOST=ADMIN).content.decode()
+            self.assertIn("pa-filters", html, path)
+            self.assertIn("<label", html, path)

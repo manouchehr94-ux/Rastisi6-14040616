@@ -1,0 +1,10 @@
+const { chromium } = require('playwright'); const fs = require('fs'); const V = JSON.parse(fs.readFileSync('/tmp/rs_reg/ux_vals.json'));
+const PAGES = { 'payment-gateways': '/payments/gateways/', 'payment-transactions': '/payments/transactions/', 'payment-reconciliation': '/payments/reconciliation/', 'manual-claims': '/payments/card-claims/', 'manual-claim-detail': `/payments/card-claims/${V.vals.claim_id}/`, 'sms-purchases': '/payments/sms-purchases/', 'payment-invoice-detail': `/payments/invoice/${V.vals.invoice_id}/` };
+(async () => { const b = await chromium.launch(); const rep = {};
+  for (const [label, port] of [['before', 8034], ['after', 8033]]) { fs.mkdirSync(`${process.argv[2]}/${label}`, { recursive: true });
+    for (const w of [1440, 1280, 768, 390, 320]) { const c = await b.newContext({ viewport: { width: w, height: 900 }, locale: 'fa-IR' }); await c.addCookies([{ name: 'sessionid', value: V.session, domain: 'platformadmins.rastisi.localhost', path: '/' }]); const p = await c.newPage();
+      for (const [name, path] of Object.entries(PAGES)) { await p.goto(`http://platformadmins.rastisi.localhost:${port}${path}`, { waitUntil: 'networkidle' });
+        const m = await p.evaluate(() => { const de = document.documentElement; const hs = {}; document.querySelectorAll('main button, main .pa-btn, main a.pa-btn').forEach(x => { if (x.offsetParent) { const h = Math.round(x.getBoundingClientRect().height); hs[h] = (hs[h] || 0) + 1; } }); return { overflow: de.scrollWidth - de.clientWidth, inline: document.querySelectorAll('[style]').length, asides: document.querySelectorAll('aside').length, heights: hs, spin: [...document.querySelectorAll('input[type=number]')].filter(i => getComputedStyle(i).appearance !== 'textfield').length }; });
+        rep[`${label}-${name}-${w}`] = m; await p.screenshot({ path: `${process.argv[2]}/${label}/${name}-${w}.jpg`, fullPage: true, type: 'jpeg', quality: 60 }); }
+      await c.close(); } }
+  fs.writeFileSync('/tmp/rs_reg/finance_shots_metrics.json', JSON.stringify(rep, null, 1)); await b.close(); })();

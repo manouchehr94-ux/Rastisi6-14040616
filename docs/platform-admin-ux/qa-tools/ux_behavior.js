@@ -1,5 +1,5 @@
 const { chromium } = require('playwright'); const fs = require('fs');
-const V = JSON.parse(fs.readFileSync('/tmp/rs_reg/ux_vals.json')); const H = 'http://platformadmins.rastisi.localhost:8032';
+const V = JSON.parse(fs.readFileSync('/tmp/rs_reg/ux_vals.json')); const H = 'http://platformadmins.rastisi.localhost:' + (process.env.PORT || 8032);
 const res = []; const ok = (name, cond, extra = '') => { res.push({ name, pass: !!cond, extra }); console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? ' — ' + extra : '')); };
 (async () => {
   const b = await chromium.launch();

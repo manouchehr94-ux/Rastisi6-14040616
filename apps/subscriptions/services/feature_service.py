@@ -135,7 +135,7 @@ def update_feature(*, actor, feature, **fields):
 
 @transaction.atomic
 def set_technical_status(*, actor, feature, status):
-    feature = PricingFeature.objects.select_for_update().select_related("entitlement").get(pk=feature.pk)
+    feature = PricingFeature.objects.select_related("entitlement").select_for_update(of=("self",)).get(pk=feature.pk)
     if status not in TS.values:
         raise FeatureError("وضعیتِ فنیِ نامعتبر.")
     if not feature.is_custom:
@@ -159,7 +159,7 @@ def set_technical_status(*, actor, feature, status):
 
 @transaction.atomic
 def set_commercial_status(*, actor, feature, status, planned_release_on=None):
-    feature = PricingFeature.objects.select_for_update().select_related("entitlement").get(pk=feature.pk)
+    feature = PricingFeature.objects.select_related("entitlement").select_for_update(of=("self",)).get(pk=feature.pk)
     if status not in CS.values:
         raise FeatureError("وضعیتِ تجاریِ نامعتبر.")
     before = snapshot(feature)
