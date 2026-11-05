@@ -38,6 +38,7 @@ class Plan(TimeStampedModel):
     tagline = models.CharField("شعارِ کوتاه", max_length=160, blank=True, default="")
     badge_text = models.CharField("متنِ نشانِ پیشنهادی", max_length=40, blank=True, default="")
     cta_label = models.CharField("متنِ دکمه", max_length=40, blank=True, default="")
+    promo_label = models.CharField("برچسبِ تبلیغاتی (مثلاً «تخفیفِ ویژه»)", max_length=40, blank=True, default="")
 
     class Meta:
         verbose_name = "پلن"
@@ -529,19 +530,52 @@ class PricingFeature(TimeStampedModel):
         EXTERNAL = "external", "نیازمندِ سرویسِ بیرونی"
         PLANNED = "planned", "پیاده نشده (عمومی نمی‌شود)"
 
-    key = models.SlugField("کلید", max_length=70, unique=True)
+    class TechnicalStatus(models.TextChoices):
+        PLANNED = "planned", "برنامه‌ریزی‌شده (پیاده نشده)"
+        IN_DEVELOPMENT = "in_development", "در حالِ توسعه"
+        READY = "ready", "آماده (گیتِ Backend ثبت و تست شده)"
+
+    class CommercialStatus(models.TextChoices):
+        PLANNED = "planned", "در برنامه"
+        COMING_SOON = "coming_soon", "به‌زودی"
+        AVAILABLE = "available", "در دسترس (قابلِ‌فروش)"
+        WITHDRAWN = "withdrawn", "جمع‌شده (دسترسیِ نسخه‌هایِ قبلی حفظ می‌شود)"
+
+    class ValueType(models.TextChoices):
+        BOOLEAN = "boolean", "روشن/خاموش"
+        INTEGER_LIMIT = "integer_limit", "سقفِ عددی"
+        DECIMAL_LIMIT = "decimal_limit", "سقفِ اعشاری"
+        TEXT = "text", "مقدارِ متنی"
+
+    # --- هویت ---
+    key = models.SlugField("کلیدِ پایدار", max_length=70, unique=True)
     category = models.CharField("دسته", max_length=20, choices=Category.choices, db_index=True)
-    title = models.CharField("عنوانِ نمایشی", max_length=140)
+    title = models.CharField("نامِ فارسی", max_length=140)
     description = models.TextField("توضیحِ قابلِ‌بازشدن", blank=True, default="")
+    help_text = models.TextField("راهنما/مستندات", blank=True, default="")
+    icon = models.CharField("آیکون/نشانِ بصری (ایموجی یا نامِ کوتاه)", max_length=24, blank=True, default="")
     unit_label = models.CharField("واحدِ سقف", max_length=30, blank=True, default="")
+    value_type = models.CharField("نوعِ مقدار", max_length=14, choices=ValueType.choices, default=ValueType.BOOLEAN)
+    config_schema = models.JSONField(
+        "طرحِ سهمیه/پیکربندی", blank=True, default=dict,
+        help_text="مثلاً {\"min\": 0, \"max\": 100000, \"step\": 1}؛ مقدارِ هر پلن با آن اعتبارسنجی می‌شود.",
+    )
+    is_custom = models.BooleanField("تعریفِ ساخته‌شده توسطِ مالک", default=False)
+    # --- چهار وضعیتِ جدا: فنی / تجاری / دسترسیِ پلن (در نسخه‌هایِ پلن) / نمایشِ عمومی ---
+    technical_status = models.CharField("آمادگیِ فنی", max_length=14, choices=TechnicalStatus.choices, default=TechnicalStatus.PLANNED)
+    commercial_status = models.CharField("وضعیتِ تجاری", max_length=12, choices=CommercialStatus.choices, default=CommercialStatus.PLANNED)
+    planned_release_on = models.DateField("تاریخِ برنامه‌ریزی‌شده‌ی انتشار", null=True, blank=True)
+    activated_at = models.DateTimeField("زمانِ در‌دسترس‌شدن", null=True, blank=True)
+    kill_switch = models.BooleanField("قطعِ اضطراریِ دسترسی", default=False)
+    is_visible = models.BooleanField("نمایش در صفحه‌ی عمومی", default=True)
+    # --- طبقه‌بندیِ ممیزی (کد-مالک) ---
     entitlement = models.ForeignKey(
         EntitlementDefinition, verbose_name="حق‌دسترسیِ مرتبط", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="pricing_features",
     )
-    availability = models.CharField("وضعیتِ پیاده‌سازی", max_length=12, choices=Availability.choices, default=Availability.IMPLEMENTED)
+    availability = models.CharField("وضعیتِ پیاده‌سازی (ممیزی)", max_length=12, choices=Availability.choices, default=Availability.IMPLEMENTED)
     note = models.CharField("یادداشتِ شفاف‌سازی", max_length=200, blank=True, default="")
     display_order = models.PositiveIntegerField("ترتیب", default=0)
-    is_visible = models.BooleanField("نمایش در صفحه‌ی عمومی", default=True)
 
     class Meta:
         verbose_name = "ردیفِ ماتریسِ تعرفه"
@@ -552,9 +586,41 @@ class PricingFeature(TimeStampedModel):
         return self.title
 
     @property
+    def is_registered(self) -> bool:
+        """آیا کلیدِ Entitlementِ مرتبط در رجیستریِ کد ثبت شده؟ (فقط ثبت‌شده‌ها می‌توانند دسترسی بدهند.)"""
+        from apps.subscriptions import capability_registry
+
+        return bool(self.entitlement_id) and capability_registry.is_registered(self.entitlement.key)
+
+    @property
+    def is_technically_ready(self) -> bool:
+        """آمادگیِ فنیِ *واقعی*: وضعیتِ «آماده» + (اگر به Entitlement وصل است) ثبتِ آن در رجیستریِ کد. هرگز صرفاً با یک فیلدِ DB ادعا نمی‌شود."""
+        if self.technical_status != self.TechnicalStatus.READY:
+            return False
+        return self.is_registered if self.entitlement_id else True
+
+    @property
+    def public_state(self) -> str:
+        """``available`` | ``coming_soon`` | ``hidden`` — هرگز «available» نمی‌گوید مگر آمادگیِ فنیِ واقعی و وضعیتِ تجاریِ «در دسترس»."""
+        if not self.is_visible:
+            return "hidden"
+        if self.commercial_status == self.CommercialStatus.WITHDRAWN:
+            return "hidden"
+        if self.commercial_status == self.CommercialStatus.AVAILABLE and self.is_technically_ready and not self.kill_switch:
+            return "available"
+        return "coming_soon"
+
+    @property
     def is_publishable(self) -> bool:
-        """فقط قابلیت‌هایِ واقعاً موجود (کاملِ، جزئی، یا نیازمندِ سرویسِ بیرونی با برچسبِ صادقانه) عمومی می‌شوند."""
-        return self.availability != self.Availability.PLANNED
+        return self.public_state != "hidden"
+
+    @property
+    def grants_access(self) -> bool:
+        """آیا این قابلیت (برایِ نسخه‌هایی که آن را فعال کرده‌اند) اکنون دسترسیِ واقعی می‌دهد؟"""
+        return (
+            self.is_technically_ready and not self.kill_switch
+            and self.commercial_status in (self.CommercialStatus.AVAILABLE, self.CommercialStatus.WITHDRAWN)
+        )
 
 
 class PlanFaq(TimeStampedModel):

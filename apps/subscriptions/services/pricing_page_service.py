@@ -3,7 +3,8 @@
 * پلن‌ها/نسخه‌هایِ منتشرشده + قیمت‌هایِ دوره‌ای (``PlanVersion.price_options``)،
 * مقدارِ هر ردیفِ ماتریس از ``PlanEntitlement`` همان نسخه از طریقِ همان توابعِ ``entitlement_service`` که محصول با آن‌ها
   دسترسی را اعمال می‌کند (نه یک کپیِ جدا)،
-* ردیف‌ها از کاتالوگِ کانونی (``feature_catalog``) — قابلیتِ ``planned`` هرگز عمومی نمی‌شود.
+* ردیف‌ها از کاتالوگِ قابلیت‌ها (``PricingFeature``، مالکِ پلتفرم آن را مدیریت می‌کند)؛ قابلیتِ آماده‌نشده فقط «به‌زودی» نشان
+  داده می‌شود و هرگز دسترسی/آمادگی ادعا نمی‌کند.
 
 هیچ عددِ فرضی ساخته نمی‌شود: کمبودِ داده یعنی «—» یا نبودِ ردیف، نه یک پیش‌فرضِ زیبا."""
 
@@ -83,10 +84,44 @@ def _period_options(version):
     return out
 
 
-def _cell(feature, version):
-    """مقدارِ یک ردیف برایِ یک نسخه: ``{"kind": check|none|unlimited|value|all, "text": str}``."""
+def _planned_date_label(feature):
+    """تاریخِ برنامه‌ریزی‌شده به شمسی (فقط اگر مالک تعیین کرده)؛ وگرنه خالی — هرگز تاریخِ حدسی ساخته نمی‌شود."""
+    if not feature.planned_release_on:
+        return ""
+    import jdatetime
+
+    jd = jdatetime.date.fromgregorian(date=feature.planned_release_on)
+    months = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
+    return f"{months[jd.month - 1]} {to_fa_digits(jd.year)}"
+
+
+def _entitlement_key(feature):
+    if feature.entitlement_id:
+        return feature.entitlement.key
     spec = catalog.BY_KEY.get(feature.key)
-    key = spec.entitlement if spec else ""
+    return spec.entitlement if spec else ""
+
+
+def _planned_cell(feature, version, key):
+    """سلولِ «به‌زودی»: فقط اگر *نسخه‌ی منتشرشده‌ی پلن* این قابلیت را برنامه‌ریزی (فعال) کرده باشد. دسترسی نمی‌دهد و ادعای دسترسی نمی‌کند."""
+    when = _planned_date_label(feature)
+    if not key:
+        return {"kind": "soon", "text": "به‌زودی", "when": when}
+    from apps.subscriptions.models import PlanEntitlement
+
+    row = PlanEntitlement.objects.filter(plan_version=version, entitlement__key=key).first()
+    if row is None or not row.is_enabled:
+        return {"kind": "none", "text": "—"}
+    return {"kind": "soon", "text": "به‌زودی", "when": when}
+
+
+def _cell(feature, version):
+    """مقدارِ یک ردیف برایِ یک نسخه: ``{"kind": check|none|unlimited|value|all|soon, "text": str}``.
+
+    ردیفِ «در دسترس» از همان توابعِ اعمالِ محصول (``entitlement_service``) می‌خواند؛ ردیفِ «به‌زودی» فقط برنامه‌ی نسخه را نشان می‌دهد."""
+    key = _entitlement_key(feature)
+    if feature.public_state == "coming_soon":
+        return _planned_cell(feature, version, key)
     if not key:
         return {"kind": "all", "text": "همه‌ی پلن‌ها"}
     definition = EntitlementDefinition.objects.filter(key=key).first()
@@ -108,7 +143,7 @@ def _cell(feature, version):
 
 def _matrix(plan_versions):
     features = [
-        f for f in PricingFeature.objects.filter(is_visible=True).order_by("category", "display_order", "key")
+        f for f in PricingFeature.objects.filter(is_visible=True).select_related("entitlement").order_by("category", "display_order", "key")
         if f.is_publishable
     ]
     by_cat = {}
@@ -119,10 +154,14 @@ def _matrix(plan_versions):
     for cat in CATEGORY_ORDER:
         rows = []
         for f in by_cat.get(cat, []):
+            cells = [_cell(f, v) for _plan, v in plan_versions]
+            state = f.public_state
+            if state == "coming_soon" and not any(c["kind"] == "soon" for c in cells):
+                continue          # هیچ پلنی آن را برنامه‌ریزی نکرده ⇒ ردیفِ بی‌معنا نمایش داده نمی‌شود
             rows.append({
-                "feature": f, "title": f.title, "description": f.description, "note": f.note,
-                "availability": f.availability, "availability_label": f.get_availability_display(),
-                "cells": [_cell(f, v) for _plan, v in plan_versions],
+                "feature": f, "title": f.title, "description": f.description, "help_text": f.help_text, "icon": f.icon,
+                "note": f.note, "state": state, "is_soon": state == "coming_soon", "when": _planned_date_label(f) if state == "coming_soon" else "",
+                "availability": f.availability, "availability_label": f.get_availability_display(), "cells": cells,
             })
         if rows:
             out.append({"key": cat, "label": labels[cat], "rows": rows})
@@ -154,7 +193,7 @@ def _highlights(plan_versions):
         items = []
         for key in wanted:
             f = feats.get(key)
-            if f is None or not f.is_visible:
+            if f is None or f.public_state != "available":
                 continue
             cell = _cell(f, version)
             if cell["kind"] in ("value", "unlimited"):
@@ -175,7 +214,7 @@ def build_pricing_page() -> dict:
         cards.append({
             "plan": plan, "version": version, "title": plan.public_title or plan.name, "tagline": plan.tagline,
             "description": plan.description, "is_recommended": plan.is_recommended,
-            "badge": plan.badge_text or "پیشنهادی", "cta_label": plan.cta_label, "periods": periods,
+            "badge": plan.badge_text or "پیشنهادی", "promo_label": plan.promo_label, "cta_label": plan.cta_label, "periods": periods,
             "default_interval": default["interval"] if default else "", "is_free": free,
             "trial_days": version.trial_days, "highlights": highlights[index],
             "purchasable": bool(periods) and any(p["price"] > 0 for p in periods),

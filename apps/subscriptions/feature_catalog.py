@@ -18,6 +18,7 @@
 
 from dataclasses import dataclass
 
+from apps.subscriptions import capability_registry
 from apps.subscriptions import entitlements as ekeys
 
 STORE, INFRA, SEO, PAY, DESIGN, MARKETING, SERVICES = (
@@ -25,17 +26,11 @@ STORE, INFRA, SEO, PAY, DESIGN, MARKETING, SERVICES = (
 )
 IMPL, PARTIAL, EXTERNAL, PLANNED = "implemented", "partial", "external", "planned"
 
-DOMAINS_CUSTOM = "domains.custom"
+DOMAINS_CUSTOM = capability_registry.DOMAINS_CUSTOM
 
-#: کلیدهایی که *الان* در لایه‌ی سرویس اعمال می‌شوند (و تستِ رفتاری دارند). فقط این‌ها در فرمِ پلن قابلِ‌تنظیم‌اند.
-ENFORCED_ENTITLEMENT_KEYS = frozenset({
-    ekeys.CATALOG_PRODUCTS, ekeys.CATALOG_VARIANTS, ekeys.CATALOG_IMPORT, ekeys.CATALOG_EXPORT,
-    ekeys.CATALOG_IMPORT_ROWS_MONTHLY, ekeys.CATALOG_EXPORTS_MONTHLY, ekeys.INVENTORY_WAREHOUSES,
-    ekeys.CUSTOMERS_SEGMENTS, ekeys.STAFF_MEMBERS, DOMAINS_CUSTOM,
-})
-# DOMAINS_CUSTOM با grandfathering اعمال می‌شود: Trial/Basicِ seed شده آن را False دارند و دسترسیِ مشترکانِ فعلی نباید لغو شود،
-# پس فقط نسخه‌هایِ منتشرشده‌ی *پس از* ``EntitlementDefinition.enforced_from`` مقدارِ صریحشان اعمال می‌شود.
-
+#: کلیدهایِ اعمال‌شده = رجیستریِ کد (``capability_registry``). *Snapshot* در زمانِ import؛ کدی که باید قابلیت‌هایِ ثبت‌شده‌یِ
+#: همین لحظه را ببیند از ``capability_registry.registered_keys()`` استفاده می‌کند.
+ENFORCED_ENTITLEMENT_KEYS = capability_registry.registered_keys()
 
 @dataclass(frozen=True)
 class Feature:
@@ -125,22 +120,39 @@ UNENFORCED_ENTITLEMENT_KEYS = frozenset(k for k, *_ in ekeys.ENTITLEMENT_DEFINIT
 
 
 def sync_feature_catalog():
-    """ردیف‌هایِ ``PricingFeature`` را idempotent همگام می‌کند. فیلدهایِ ساختاری (دسته/اتصال/وضعیت) از کد
-    می‌آیند و هر بار به‌روز می‌شوند؛ متنِ نمایشی/ترتیب/نمایش فقط هنگامِ ساخت مقداردهی می‌شود تا ویرایشِ مدیر
-    پایدار بماند. ردیفی که از کاتالوگ حذف شده پنهان می‌شود (حذف نمی‌شود)."""
+    """ردیف‌هایِ ``PricingFeature`` را idempotent با کاتالوگِ کد همگام می‌کند.
+
+    * فیلدهایِ ساختاری (دسته/اتصال/طبقه‌بندیِ ممیزی/یادداشت) و برایِ ردیف‌هایِ *کد-مالک* آمادگیِ فنی از کد می‌آیند.
+    * متنِ نمایشی، ترتیب، نمایشِ عمومی، وضعیتِ تجاری، تاریخِ انتشار و راهنما **مالِ مدیر** است و فقط هنگامِ ساخت مقدار می‌گیرد.
+    * ردیفِ ساخته‌شده توسطِ مالک (``is_custom``) هرگز بازنویسی نمی‌شود. ردیفی که از کاتالوگ حذف شده پنهان می‌شود (حذف نمی‌شود)."""
     from apps.subscriptions.models import EntitlementDefinition, PricingFeature
 
+    TS, CS, VT = PricingFeature.TechnicalStatus, PricingFeature.CommercialStatus, PricingFeature.ValueType
     seen = set()
     for order, f in enumerate(CATALOG, start=1):
         definition = EntitlementDefinition.objects.filter(key=f.entitlement).first() if f.entitlement else None
+        ready = f.availability != PLANNED
+        value_type = VT.BOOLEAN
+        if definition is not None and definition.entitlement_type == "integer_limit":
+            value_type = VT.INTEGER_LIMIT
         obj, created = PricingFeature.objects.get_or_create(
             key=f.key,
             defaults={"category": f.category, "title": f.title, "description": f.description, "unit_label": f.unit,
-                      "display_order": order * 10, "is_visible": f.availability != PLANNED},
+                      "display_order": order * 10, "is_visible": ready, "value_type": value_type,
+                      "technical_status": TS.READY if ready else TS.PLANNED,
+                      "commercial_status": CS.AVAILABLE if ready else CS.PLANNED},
         )
+        if obj.is_custom:
+            seen.add(f.key)
+            continue
         obj.category, obj.entitlement, obj.availability, obj.note = f.category, definition, f.availability, f.note
-        if f.availability == PLANNED:
-            obj.is_visible = False        # هرگز عمومی نمی‌شود، حتی اگر دستی روشن شده باشد
+        if not created:
+            if ready and obj.technical_status == TS.PLANNED:
+                obj.technical_status = TS.READY            # توسعه‌دهنده ردیف را «پیاده‌شده» کرد
+            if not ready and obj.technical_status == TS.READY:
+                obj.technical_status = TS.PLANNED          # عقب‌گرد در کد ⇒ دیگر آماده نیست
+                if obj.commercial_status == CS.AVAILABLE:
+                    obj.commercial_status = CS.PLANNED
         obj.save()
         seen.add(f.key)
-    PricingFeature.objects.exclude(key__in=seen).update(is_visible=False)
+    PricingFeature.objects.exclude(key__in=seen).filter(is_custom=False).update(is_visible=False)

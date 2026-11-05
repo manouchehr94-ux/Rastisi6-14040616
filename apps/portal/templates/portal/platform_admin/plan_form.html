@@ -18,6 +18,7 @@
     <div class="pa-grid3" style="margin-top:12px">
       <div class="pa-field"><label>شعارِ کوتاهِ کارت</label><input class="pa-input" type="text" name="tagline" maxlength="160" value="{{ plan.tagline|default:'' }}"></div>
       <div class="pa-field"><label>متنِ نشانِ پیشنهادی</label><input class="pa-input" type="text" name="badge_text" maxlength="40" placeholder="پیشنهادی" value="{{ plan.badge_text|default:'' }}"></div>
+      <div class="pa-field"><label>برچسبِ تبلیغاتیِ پلن</label><input class="pa-input" type="text" name="promo_label" maxlength="60" placeholder="مثلاً: ۲ ماه رایگان" value="{{ plan.promo_label|default:'' }}"></div>
       <div class="pa-field"><label>متنِ دکمه‌ی کارت</label><input class="pa-input" type="text" name="cta_label" maxlength="40" placeholder="شروع با این پلن" value="{{ plan.cta_label|default:'' }}"></div>
     </div>
     <p class="pa-help">متنِ بازاریابی غیرِ قراردادی است و زنده اعمال می‌شود؛ قیمت و حق‌دسترسی‌ها فقط با نسخه‌ی تازه تغییر می‌کنند.</p>

@@ -160,15 +160,23 @@ class PricingPageDataTests(TestCase):
         self.assertEqual((products[0]["text"], products[1]["kind"]), ("۵۰ کالا", "unlimited"))
         self.assertEqual([c["kind"] for c in rows["import"]["cells"]], ["none", "check"])
 
-    def test_unimplemented_features_are_never_public_even_if_forced_visible(self):
+    def test_unimplemented_features_are_hidden_by_default_and_never_shown_as_available(self):
         api = PricingFeature.objects.get(key="api")
-        self.assertEqual(api.availability, "planned")
-        self.assertFalse(api.is_visible)
-        PricingFeature.objects.filter(pk=api.pk).update(is_visible=True)
+        self.assertEqual((api.availability, api.technical_status, api.is_visible), ("planned", "planned", False))
+        self.assertFalse(api.grants_access)
         keys = {r["feature"].key for cat in page.build_pricing_page()["matrix"] for r in cat["rows"]}
         self.assertNotIn("api", keys)
+        # the owner may deliberately surface it: it is then labelled «به‌زودی» — never a check / never available
+        PricingFeature.objects.filter(pk=api.pk).update(is_visible=True)
+        self.assertEqual(PricingFeature.objects.get(pk=api.pk).public_state, "coming_soon")
+        for cat in page.build_pricing_page()["matrix"]:
+            for row in cat["rows"]:
+                if row["feature"].key == "api":
+                    self.assertTrue(row["is_soon"])
+                    self.assertNotIn(row["cells"][0]["kind"], ("check", "all", "value", "unlimited"))
         catalog.sync_feature_catalog()
-        self.assertFalse(PricingFeature.objects.get(key="api").is_visible)               # sync re-hides it
+        api = PricingFeature.objects.get(key="api")
+        self.assertEqual((api.technical_status, api.commercial_status), ("planned", "planned"))   # sync never promotes it
 
     def test_owner_edits_to_text_and_visibility_survive_catalog_sync(self):
         row = PricingFeature.objects.get(key="coupons")

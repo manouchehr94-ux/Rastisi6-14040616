@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.notifications.inbox_views import VIEWS_PLAT, url_patterns as _inbox_patterns
 from . import platform_admin_views as views
+from . import platform_admin_features as feature_views
 from . import platform_admin_photo_views as photo_views
 from . import platform_admin_site_views as site_views
 from . import notification_admin_views as notif_views
@@ -48,6 +49,11 @@ urlpatterns = [
     # --- پلن‌های اشتراک ---
     path("plans/", views.plans, name="plans"),
     path("plans/content/", views.pricing_content, name="pricing-content"),
+    path("plans/assignments/", feature_views.assignment_matrix, name="assignment-matrix"),
+    path("plans/<int:plan_id>/migrate/", feature_views.plan_migration, name="plan-migration"),
+    path("features/", feature_views.features, name="features"),
+    path("features/add/", feature_views.feature_form, name="feature-add"),
+    path("features/<int:feature_id>/edit/", feature_views.feature_form, name="feature-edit"),
     path("plans/add/", views.plan_form, name="plan-add"),
     path("plans/<int:plan_id>/edit/", views.plan_form, name="plan-edit"),
     path("plans/<int:plan_id>/archive/", views.plan_archive, name="plan-archive"),

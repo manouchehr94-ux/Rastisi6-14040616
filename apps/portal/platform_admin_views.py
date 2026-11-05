@@ -993,10 +993,11 @@ def plan_form(request, plan_id=None):
     """ساختِ پلن + نسخه‌ی پیش‌نویسِ آن، یا افزودنِ یک نسخه‌ی تازه به پلنِ
     موجود — هرگز شرایطِ یک نسخه‌ی ``published`` را ویرایش نمی‌کند (ADR-63)؛
     ویرایشِ یک پلنِ موجود همیشه یک نسخه‌ی پیش‌نویسِ تازه می‌سازد."""
-    from apps.subscriptions.feature_catalog import ENFORCED_ENTITLEMENT_KEYS
+    from apps.subscriptions import capability_registry
     from apps.subscriptions.models import EntitlementDefinition, Plan, PlanVersion
     from apps.subscriptions.services.plan_service import (
-        PlanServiceError, create_plan_version, set_plan_entitlement, set_version_price,
+        PlanServiceError, clear_version_price, create_plan_version, get_or_create_draft, set_plan_entitlement,
+        set_version_price, update_draft_version,
     )
 
     plan = get_object_or_404(Plan, pk=plan_id) if plan_id else None
@@ -1015,6 +1016,7 @@ def plan_form(request, plan_id=None):
         is_recommended = request.POST.get("is_recommended") == "on"
         tagline = (request.POST.get("tagline") or "").strip()[:160]
         badge_text = (request.POST.get("badge_text") or "").strip()[:40]
+        promo_label = (request.POST.get("promo_label") or "").strip()[:60]
         cta_label = (request.POST.get("cta_label") or "").strip()[:40]
         # فرم‌هایِ قدیمی/تست‌ها این فیلدها را نمی‌فرستند؛ مقدارِ فعلی حفظ می‌شود.
         marketing_submitted = "marketing_submitted" in request.POST
@@ -1039,13 +1041,14 @@ def plan_form(request, plan_id=None):
                 "price_rows": [], "primary_interval": "monthly",
             })
 
+        plan_is_new = plan is None
         if plan is None:
             plan = Plan.objects.create(
                 code=code, name=name, public_title=public_title, description=description,
                 display_order=int(display_order) if display_order.isdigit() else 0,
                 is_recommended=is_recommended,
                 is_publicly_selectable=is_publicly_selectable,
-                tagline=tagline, badge_text=badge_text, cta_label=cta_label,
+                tagline=tagline, badge_text=badge_text, cta_label=cta_label, promo_label=promo_label,
             )
             action_code = "platform_admin.plan_created"
         else:
@@ -1057,23 +1060,34 @@ def plan_form(request, plan_id=None):
             plan.is_publicly_selectable = is_publicly_selectable
             fields = ["name", "public_title", "description", "display_order", "is_recommended", "is_publicly_selectable", "updated_at"]
             if marketing_submitted:
-                plan.tagline, plan.badge_text, plan.cta_label = tagline, badge_text, cta_label
-                fields += ["tagline", "badge_text", "cta_label"]
+                plan.tagline, plan.badge_text, plan.cta_label, plan.promo_label = tagline, badge_text, cta_label, promo_label
+                fields += ["tagline", "badge_text", "cta_label", "promo_label"]
             plan.save(update_fields=fields)
             action_code = "platform_admin.plan_updated"
 
         # قیمتِ گزینه‌ی اصلی: ``price_<دوره>`` اگر فرمِ تازه فرستاده باشد، وگرنه ``display_price`` (فرم/تستِ قدیمی).
         primary_price = (request.POST.get(f"price_{billing_interval}") or "").strip() or display_price
-        version = create_plan_version(
-            plan,
-            display_price=primary_price or 0, trial_days=trial_days or 0,
-            billing_interval=billing_interval,
-            trial_once_per_store=request.POST.get("trial_once_per_store", "on" if "trial_once_submitted" not in request.POST else "") == "on",
-        )
+        trial_once = request.POST.get("trial_once_per_store", "on" if "trial_once_submitted" not in request.POST else "") == "on"
+        try:
+            if plan_is_new:
+                version = create_plan_version(plan, display_price=primary_price or 0, trial_days=trial_days or 0,
+                                              billing_interval=billing_interval, trial_once_per_store=trial_once)
+            else:
+                # ویرایشِ پلنِ موجود: همان پیش‌نویس در جا ویرایش می‌شود؛ اگر پیش‌نویسی نبود از آخرین نسخه کپی می‌شود (نسخه‌ی
+                # منتشرشده هرگز دست نمی‌خورد و پیش‌نویسِ اضافه ساخته نمی‌شود).
+                version = get_or_create_draft(plan, actor=request.user)
+                version = update_draft_version(version, actor=request.user, display_price=primary_price or 0, trial_days=trial_days or 0,
+                                               billing_interval=billing_interval, trial_once_per_store=trial_once)
+        except PlanServiceError as exc:
+            messages.error(request, str(exc))
+            return redirect("portal_platform_admin:plan-edit", plan.pk) if not plan_is_new else redirect("portal_platform_admin:plans")
+        prices_submitted = any(f"price_{i}" in request.POST for i in PlanVersion.PAID_INTERVALS)
         try:
             for interval in PlanVersion.PAID_INTERVALS:
                 raw_price = (request.POST.get(f"price_{interval}") or "").strip()
                 if not raw_price:
+                    if prices_submitted and interval != billing_interval:
+                        clear_version_price(version, interval)
                     continue
                 set_version_price(
                     version, interval, price=raw_price,
@@ -1082,9 +1096,10 @@ def plan_form(request, plan_id=None):
                 )
         except PlanServiceError as exc:
             messages.error(request, f"قیمتِ دوره‌ها ذخیره نشد: {exc}")
+        # فقط کلیدهایی که *در رجیستریِ کد* ثبت‌اند از این فرم قابلِ‌تنظیم‌اند؛ قابلیت‌هایِ آینده در «ماتریسِ تخصیص» مدیریت می‌شوند.
         for entitlement in entitlements:
-            if entitlement.key not in ENFORCED_ENTITLEMENT_KEYS:
-                continue          # فقط قابلیت‌هایی که واقعاً اعمال می‌شوند قابلِ‌تنظیم‌اند
+            if not capability_registry.is_registered(entitlement.key):
+                continue
             field_prefix = f"entitlement_{entitlement.key}"
             if entitlement.entitlement_type == EntitlementDefinition.EntitlementType.BOOLEAN:
                 set_plan_entitlement(version, entitlement.key, is_enabled=request.POST.get(field_prefix) == "on")
@@ -1095,9 +1110,7 @@ def plan_form(request, plan_id=None):
                     set_plan_entitlement(version, entitlement.key, is_unlimited=True)
                 elif raw_limit.isdigit():
                     set_plan_entitlement(version, entitlement.key, is_unlimited=False, integer_limit=int(raw_limit))
-                # نه «نامحدود» و نه مقداری وارد شده — این حق‌دسترسی برایِ این
-                # نسخه نامشخص می‌ماند (رفتارِ پیش‌فرضِ معماریِ Entitlement)،
-                # به‌جایِ ساختِ یک ردیفِ نامعتبر با هردو مقدار خالی.
+                # نه «نامحدود» و نه مقداری وارد شده — بدونِ تغییر می‌ماند.
 
         record_platform_audit_event(
             actor=request.user, action_code=action_code,
@@ -1112,7 +1125,7 @@ def plan_form(request, plan_id=None):
         existing_entitlements = {pe.entitlement_id: pe for pe in latest_version.plan_entitlements.all()}
     for entitlement in entitlements:
         entitlement.existing = existing_entitlements.get(entitlement.pk)
-        entitlement.enforced = entitlement.key in ENFORCED_ENTITLEMENT_KEYS
+        entitlement.enforced = capability_registry.is_registered(entitlement.key)
     price_rows = []
     options = latest_version.price_options() if latest_version else {}
     primary = latest_version.billing_interval if latest_version else "monthly"
@@ -1132,22 +1145,18 @@ def plan_form(request, plan_id=None):
 @require_POST
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def plan_archive(request, plan_id):
-    from apps.subscriptions.models import Plan, StoreSubscription as _StoreSub
+    """بایگانی/بازگردانیِ پلن. بایگانی حتی برایِ پلنِ دارایِ مشترک مجاز است: فقط فروشِ تازه/نمایشِ عمومی بسته می‌شود و
+    اشتراک‌ها، تمدیدها و دسترسیِ مشترکانِ فعلی دست‌نخورده می‌ماند."""
+    from apps.subscriptions.models import Plan
+    from apps.subscriptions.services.plan_service import PlanServiceError, set_plan_archived
 
     plan = get_object_or_404(Plan, pk=plan_id)
-    in_use = _StoreSub.objects.filter(
-        plan_version__plan=plan, is_current=True,
-    ).exists()
-    if in_use:
-        messages.error(request, "این پلن هم‌اکنون توسطِ فروشگاه‌هایی استفاده می‌شود؛ به‌جایِ حذف، غیرفعالش کنید.")
+    try:
+        updated = set_plan_archived(plan, archived=plan.is_active, actor=request.user)
+    except PlanServiceError as exc:
+        messages.error(request, str(exc))
         return redirect("portal_platform_admin:plans")
-    plan.is_active = not plan.is_active
-    plan.save(update_fields=["is_active", "updated_at"])
-    record_platform_audit_event(
-        actor=request.user, action_code="platform_admin.plan_archived" if not plan.is_active else "platform_admin.plan_unarchived",
-        object_type="Plan", object_id=plan.pk, object_label=plan.name,
-    )
-    messages.success(request, f"پلن «{plan.name}» {'غیرفعال' if not plan.is_active else 'فعال'} شد.")
+    messages.success(request, f"پلن «{updated.name}» {'بایگانی شد؛ مشترکانِ فعلی بدونِ تغییر ادامه می‌دهند' if not updated.is_active else 'دوباره فعال شد'}.")
     return redirect("portal_platform_admin:plans")
 
 

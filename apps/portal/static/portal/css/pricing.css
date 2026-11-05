@@ -107,3 +107,11 @@
   .pz-desc,.pz-flag{margin-inline-start:0;margin-inline-end:0}
 }
 @media (prefers-reduced-motion:reduce){.pz-seg button,.pz-cat>summary::after,.pz-d>summary i{transition:none}.pz-tag.pop{transform:none}}
+
+/* قابلیت‌هایِ «به‌زودی» (برنامه‌ریزی‌شده؛ بدونِ دسترسیِ واقعی) و آیکون/نشانِ پلن */
+.pz-soon{display:inline-block;font-size:12.5px;font-weight:800;color:var(--saffron-ink);background:var(--paper-2);border:1px dashed var(--saffron-ink);padding:1px 10px;border-radius:999px}
+.pz-soon-flag{border-style:dashed;color:var(--saffron-ink)}
+.pz-row.soon .pz-plain,.pz-row.soon .pz-d summary{color:var(--ink-2)}
+.pz-ico{display:inline-block;margin-inline-end:6px}
+.pz-help{font-style:normal;opacity:.9}
+.pz-promo{display:inline-block;align-self:flex-start;font-size:12.5px;font-weight:800;padding:2px 12px;border-radius:999px;background:var(--paper-2);border:1px solid var(--saffron-ink);color:var(--saffron-ink)}

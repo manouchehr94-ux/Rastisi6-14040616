@@ -26,6 +26,7 @@
     <article class="pz-tag{% if card.is_recommended %} pop{% endif %}" data-plan="{{ card.plan.code }}" data-offered="{{ card.offered|join:',' }}" data-default="{{ card.default_interval }}">
       {% if card.is_recommended %}<span class="ribbon">{{ card.plan.badge_text|default:"پیشنهاد ما" }}</span>{% endif %}
       <h3>{{ card.title }}</h3>
+      {% if card.promo_label %}<span class="pz-promo">{{ card.promo_label }}</span>{% endif %}
       <p class="pz-sub">{{ card.tagline|default:card.description|truncatechars:110 }}</p>
 
       <div class="pz-price">
@@ -76,11 +77,14 @@
     <details class="pz-cat" open data-category="{{ cat.key }}">
       <summary>{{ cat.label }}</summary>
       {% for row in cat.rows %}
-      <div class="pz-row" data-feature="{{ row.feature.key }}">
+      <div class="pz-row{% if row.is_soon %} soon{% endif %}" data-feature="{{ row.feature.key }}" data-state="{{ row.state }}">
         <div class="pz-name">
-          {% if row.description %}
-          <details class="pz-d"><summary><i aria-hidden="true">+</i>{{ row.title }}</summary><p class="pz-desc">{{ row.description }}</p></details>
-          {% else %}<span class="pz-plain">{{ row.title }}</span>{% endif %}
+          {% if row.description or row.help_text %}
+          <details class="pz-d"><summary><i aria-hidden="true">+</i>{% if row.icon %}<span class="pz-ico" aria-hidden="true">{{ row.icon }}</span>{% endif %}{{ row.title }}</summary>
+            {% if row.description %}<p class="pz-desc">{{ row.description }}</p>{% endif %}
+            {% if row.help_text %}<p class="pz-desc pz-help">{{ row.help_text }}</p>{% endif %}</details>
+          {% else %}<span class="pz-plain">{% if row.icon %}<span class="pz-ico" aria-hidden="true">{{ row.icon }}</span>{% endif %}{{ row.title }}</span>{% endif %}
+          {% if row.is_soon %}<span class="pz-flag pz-soon-flag">به‌زودی{% if row.when %} · {{ row.when }}{% endif %}</span>{% endif %}
           {% if row.note %}<span class="pz-flag">{{ row.note }}</span>{% endif %}
         </div>
         {% for cell in row.cells %}
@@ -89,6 +93,7 @@
           {% elif cell.kind == "all" %}<span class="pz-all">✓ همه‌ی پلن‌ها</span>
           {% elif cell.kind == "unlimited" %}<span class="pz-unl">نامحدود</span>
           {% elif cell.kind == "value" %}<span class="num">{{ cell.text }}</span>
+          {% elif cell.kind == "soon" %}<span class="pz-soon" title="هنوز فعال نیست؛ با آماده‌شدن اعلام می‌شود">به‌زودی</span>
           {% else %}<span class="pz-none" role="img" aria-label="ندارد">—</span>{% endif %}
         </div>
         {% endfor %}

@@ -10,6 +10,7 @@
 from dataclasses import dataclass, field
 
 from apps.subscriptions.models import EntitlementDefinition, PlanEntitlement, StoreSubscription
+from apps.subscriptions.services import feature_gate
 
 
 class EntitlementError(Exception):
@@ -106,8 +107,9 @@ def _entitlement_map(plan_version):
 
 
 def clear_entitlement_cache():
-    """کشِ نقشه‌ی Entitlement را پاک می‌کند — برایِ تست/پس از تغییرِ پلن."""
+    """کشِ نقشه‌ی Entitlement (و گیتِ انتشار) را پاک می‌کند — برایِ تست/پس از تغییرِ پلن."""
     _ENTITLEMENT_MAP_CACHE.clear()
+    feature_gate.invalidate()
 
 
 # ================================================================== خواندنِ اشتراک
@@ -149,6 +151,8 @@ def has_entitlement(store, key, *, plan_version=None) -> bool:
     وجود نداشته باشد (ADR-64). کلیدهایِ دارایِ grandfathering برایِ نسخه‌هایِ منتشرشده‌ی پیش از تاریخِ اعمال همیشه True‌اند."""
     if plan_version is None:
         plan_version = get_effective_plan_version(store)
+    if not feature_gate.allows(key, plan_version):
+        return False  # قابلیتِ برنامه‌ریزی‌شده/ثبت‌نشده/قطع‌شده هرگز دسترسی نمی‌دهد (feature_gate)
     if plan_version is None:
         return True  # بدونِ اشتراک → fail-open (نگاه کنید به docstring ماژول)
     if _is_grandfathered(plan_version, key):
@@ -176,6 +180,8 @@ def get_entitlement_limit(store, key, *, plan_version=None):
     نیست). fail-open (None) وقتی اشتراک/تعریف نبود."""
     if plan_version is None:
         plan_version = get_effective_plan_version(store)
+    if not feature_gate.allows(key, plan_version):
+        return 0  # گیتِ انتشار: هیچ ساختِ تازه‌ای مجاز نیست
     if plan_version is None:
         return None
     mapping = _entitlement_map(plan_version)

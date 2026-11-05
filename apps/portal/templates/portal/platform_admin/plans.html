@@ -2,19 +2,20 @@
 {% block title %}پلن‌های اشتراک | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead">
-  <div><h1>پلن‌های اشتراک</h1><p>ویرایشِ یک پلن همیشه یک نسخه‌ی پیش‌نویسِ تازه می‌سازد — نسخه‌های منتشرشده هرگز تغییر نمی‌کنند.</p></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pa-btn" href="{% url 'portal_platform_admin:pricing-content' %}">محتوای صفحه‌ی تعرفه</a><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}">+ پلنِ تازه</a></div>
+  <div><h1>پلن‌های اشتراک</h1><p>ویرایشِ پلن روی نسخه‌ی «پیش‌نویس» انجام می‌شود (اگر نبود از آخرین نسخه کپی می‌شود) — نسخه‌های منتشرشده هرگز تغییر نمی‌کنند. بایگانیِ پلن مشترکانِ فعلی را تغییر نمی‌دهد.</p></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pa-btn" href="{% url 'portal_platform_admin:features' %}">کاتالوگِ قابلیت‌ها</a><a class="pa-btn" href="{% url 'portal_platform_admin:assignment-matrix' %}">تخصیصِ قابلیت به پلن</a><a class="pa-btn" href="{% url 'portal_platform_admin:pricing-content' %}">محتوای صفحه‌ی تعرفه</a><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}">+ پلنِ تازه</a></div>
 </div>
 
 {% if plans %}
 {% for plan in plans %}
 <div class="pa-card">
   <div class="pa-cardhead">
-    <h3>{{ plan.name }} {% if not plan.is_active %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}{% if plan.is_recommended %}<span class="pa-badge pa-info">پیشنهادی</span>{% endif %}{% if not plan.is_publicly_selectable %}<span class="pa-badge pa-off">پنهان از صفحه عمومی</span>{% endif %}</h3>
+    <h3>{{ plan.name }} {% if not plan.is_active %}<span class="pa-badge pa-off">بایگانی‌شده</span>{% endif %}{% if plan.promo_label %}<span class="pa-badge pa-info">{{ plan.promo_label }}</span>{% endif %}{% if plan.is_recommended %}<span class="pa-badge pa-info">پیشنهادی</span>{% endif %}{% if not plan.is_publicly_selectable %}<span class="pa-badge pa-off">پنهان از صفحه عمومی</span>{% endif %}</h3>
     <div style="display:flex;gap:8px">
-      <a class="pa-btn pa-small" href="{% url 'portal_platform_admin:plan-edit' plan.pk %}">افزودنِ نسخه/ویرایش</a>
+      <a class="pa-btn pa-small" href="{% url 'portal_platform_admin:plan-edit' plan.pk %}">ویرایشِ پیش‌نویس / نسخه‌ی تازه</a>
+      <a class="pa-btn pa-small" href="{% url 'portal_platform_admin:plan-migration' plan.pk %}">مهاجرتِ مشترکان</a>
       <form method="post" action="{% url 'portal_platform_admin:plan-archive' plan.pk %}">
-        {% csrf_token %}<button class="pa-btn pa-small pa-danger" type="submit">{% if plan.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button>
+        {% csrf_token %}<button class="pa-btn pa-small pa-danger" type="submit">{% if plan.is_active %}بایگانی{% else %}بازگردانی{% endif %}</button>
       </form>
     </div>
   </div>

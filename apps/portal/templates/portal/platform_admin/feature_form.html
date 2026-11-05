@@ -1,0 +1,54 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}{% if feature %}مدیریتِ قابلیت{% else %}قابلیتِ تازه{% endif %} | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:features' %}" class="pa-help">← کاتالوگِ قابلیت‌ها</a></p>
+<div class="pa-pagehead"><div><h1>{% if feature %}{{ feature.title }}{% else %}قابلیتِ تازه{% endif %}</h1>
+  <p>{% if feature %}کلیدِ قابلیت پایدار است و تغییر نمی‌کند.{% else %}قابلیت را می‌توانید پیش از پیاده‌سازی ثبت و به پلن‌ها نسبت دهید؛ تا وقتی کدِ گیت ثبت و تأیید نشده هیچ دسترسیِ واقعی نمی‌دهد و عمومی فقط «به‌زودی» دیده می‌شود.{% endif %}</p></div></div>
+{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
+
+<form method="post" class="pa-card"><div class="pa-cardhead"><h3>مشخصات</h3></div><div class="pa-cardbody">{% csrf_token %}<input type="hidden" name="action" value="save">
+  <div class="pa-grid2">
+    <div class="pa-field"><label>کلیدِ پایدار (انگلیسی)</label><input class="pa-input" type="text" name="key" dir="ltr" {% if feature %}readonly value="{{ feature.key }}"{% else %}required value="{{ post.key|default:'' }}" placeholder="ai_assistant"{% endif %}></div>
+    <div class="pa-field"><label>نامِ فارسی</label><input class="pa-input" type="text" name="title" required value="{% if feature %}{{ feature.title }}{% else %}{{ post.title|default:'' }}{% endif %}"></div>
+    <div class="pa-field"><label>دسته</label><select class="pa-input" name="category" {% if feature and not feature.is_custom %}disabled{% endif %}>{% for value, label in categories %}<option value="{{ value }}" {% if feature.category == value or post.category == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="pa-field"><label>آیکون / نشانِ بصری (ایموجی یا نامِ کوتاه)</label><input class="pa-input" type="text" name="icon" maxlength="24" value="{% if feature %}{{ feature.icon }}{% else %}{{ post.icon|default:'' }}{% endif %}"></div>
+    <div class="pa-field"><label>کلیدِ حق‌دسترسی (Entitlement)</label><input class="pa-input" type="text" name="entitlement_key" dir="ltr" {% if feature %}readonly value="{{ feature.entitlement.key|default:'' }}"{% else %}value="{{ post.entitlement_key|default:'' }}" placeholder="ai.assistant"{% endif %}><div class="pa-help">{% if not feature %}خالی = <code>custom.&lt;کلید&gt;</code>. برایِ اعمال، همین کلید باید در رجیستریِ کد ثبت شود.{% endif %}</div></div>
+    <div class="pa-field"><label>نوعِ مقدار</label><select class="pa-input" name="value_type" {% if feature %}disabled{% endif %}>{% for value, label in value_types %}<option value="{{ value }}" {% if feature.value_type == value or post.value_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="pa-field"><label>واحدِ سقف</label><input class="pa-input" type="text" name="unit_label" maxlength="30" value="{% if feature %}{{ feature.unit_label }}{% else %}{{ post.unit_label|default:'' }}{% endif %}"></div>
+    <div class="pa-field"><label>تاریخِ برنامه‌ریزی‌شده‌ی انتشار (میلادی، اختیاری)</label><input class="pa-input" type="date" name="planned_release_on" value="{{ feature.planned_release_on|date:'Y-m-d' }}"></div>
+    <div class="pa-field"><label>ترتیب</label><input class="pa-input" type="number" min="0" name="display_order" value="{{ feature.display_order|default:'' }}"></div>
+  </div>
+  <div class="pa-field"><label>توضیحِ کوتاه (عمومی)</label><textarea class="pa-input" name="description" rows="2">{% if feature %}{{ feature.description }}{% else %}{{ post.description|default:'' }}{% endif %}</textarea></div>
+  <div class="pa-field"><label>راهنما / مستندات</label><textarea class="pa-input" name="help_text" rows="2">{% if feature %}{{ feature.help_text }}{% else %}{{ post.help_text|default:'' }}{% endif %}</textarea></div>
+  {% if not feature or feature.is_custom %}
+  <div class="pa-grid3">
+    <div class="pa-field"><label>طرحِ سهمیه — حداقل</label><input class="pa-input" type="number" step="any" name="schema_min" value="{{ schema.min|default:'' }}"></div>
+    <div class="pa-field"><label>حداکثر</label><input class="pa-input" type="number" step="any" name="schema_max" value="{{ schema.max|default:'' }}"></div>
+    <div class="pa-field"><label>گام</label><input class="pa-input" type="number" step="any" name="schema_step" value="{{ schema.step|default:'' }}"></div>
+  </div>
+  {% endif %}
+  {% if not feature %}
+  <div class="pa-field"><label>وضعیتِ تجاری اولیه</label><select class="pa-input" name="commercial_status"><option value="coming_soon">به‌زودی</option><option value="planned">در برنامه</option></select></div>
+  {% endif %}
+  <label style="font-size:13px"><input type="checkbox" name="is_visible" {% if not feature or feature.is_visible %}checked{% endif %}> نمایش در صفحه‌ی عمومی (به‌زودی/در دسترس)</label>
+  <div style="margin-top:12px"><button class="pa-btn pa-primary" type="submit">{% if feature %}ذخیره{% else %}ساختِ قابلیت{% endif %}</button></div>
+</div></form>
+
+{% if feature %}
+<div class="pa-card"><div class="pa-cardhead"><h3>وضعیتِ فنی و تجاری</h3></div><div class="pa-cardbody">
+  <p>دسترسیِ واقعی: {% if feature.grants_access %}<span class="pa-badge pa-ok">فعال</span>{% else %}<span class="pa-badge pa-off">هیچ دسترسیِ واقعی نمی‌دهد</span>{% endif %}
+     · کلید در رجیستریِ کد: {% if registered %}<span class="pa-badge pa-ok">ثبت‌شده</span>{% else %}<span class="pa-badge pa-off">ثبت نشده</span>{% endif %}</p>
+  {% if feature.is_custom %}
+  <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="hidden" name="action" value="technical">
+    <label>آمادگیِ فنی</label><select class="pa-input" style="width:auto" name="technical_status">{% for value, label in technical_choices %}<option value="{{ value }}" {% if feature.technical_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="pa-btn pa-small" type="submit">ثبت</button>
+    <span class="pa-help">«آماده» فقط وقتی پذیرفته می‌شود که کلید در رجیستریِ کد ثبت شده باشد.</span></form>
+  {% else %}<p class="pa-help">آمادگیِ فنیِ این ردیف از کاتالوگِ کد می‌آید: {{ feature.get_technical_status_display }}.</p>{% endif %}
+  <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">{% csrf_token %}<input type="hidden" name="action" value="commercial">
+    <label>وضعیتِ تجاری</label><select class="pa-input" style="width:auto" name="commercial_status">{% for value, label in commercial_choices %}<option value="{{ value }}" {% if feature.commercial_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <input class="pa-input" style="width:auto" type="date" name="planned_release_on" value="{{ feature.planned_release_on|date:'Y-m-d' }}" aria-label="تاریخِ برنامه‌ریزی‌شده"><button class="pa-btn pa-small" type="submit">ثبت</button>
+    <span class="pa-help">«در دسترس» فقط پس از آمادگیِ فنیِ واقعی ممکن است؛ برگشت از «در دسترس» به «به‌زودی» مجاز نیست (از «جمع‌شده» استفاده کنید).</span></form>
+  <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">{% csrf_token %}<input type="hidden" name="action" value="kill"><input type="hidden" name="on" value="{% if feature.kill_switch %}0{% else %}1{% endif %}">
+    <input class="pa-input" style="width:260px" type="text" name="reason" placeholder="دلیلِ قطعِ اضطراری" {% if not feature.kill_switch %}required{% endif %}><button class="pa-btn pa-small pa-danger" type="submit">{% if feature.kill_switch %}رفعِ قطعِ اضطراری{% else %}قطعِ اضطراریِ دسترسی{% endif %}</button></form>
+</div></div>
+{% endif %}
+{% endblock %}
