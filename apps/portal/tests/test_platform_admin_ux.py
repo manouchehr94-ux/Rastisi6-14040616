@@ -182,6 +182,15 @@ class DesignSystemCssTests(SimpleTestCase):
                 users.append(tpl.relative_to(ROOT.parents[1]).as_posix())
         self.assertEqual(users, ["apps/portal/templates/portal/platform_admin/base.html"])
 
+    def test_sr_only_text_is_contained_by_its_scroll_container_and_stays_readable_by_screen_readers(self):
+        """Regression (mobile overflow): an absolutely positioned .pa-sr inside a wide table must be anchored to the table wrapper/card."""
+        self.assertRegex(self.css, r"\.pa-tablewrap,\.pa-card\{position:relative\}")
+        rule = re.search(r"\.pa-sr\{([^}]*)\}", self.css).group(1)
+        for needed in ("position:absolute", "width:1px", "height:1px", "overflow:hidden", "clip:rect(0 0 0 0)", "white-space:nowrap"):
+            self.assertIn(needed, rule)
+        self.assertNotIn("display:none", rule)               # removing it from the accessibility tree would break screen readers
+        self.assertNotIn("visibility:hidden", rule)
+
     def test_one_control_height_token_drives_buttons_and_inputs(self):
         self.assertIn("--pa-ctl-h:38px", self.css)
         self.assertRegex(self.css, r"\.pa-btn\{[^}]*height:var\(--pa-ctl-h\)")

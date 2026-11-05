@@ -352,8 +352,6 @@ dialog.pa-dialog .pa-modalbox{width:min(560px,calc(100vw - 32px))}
 .pa .nt-head h2{font-size:22px;font-weight:800}
 .pa .nt-filters{border-radius:var(--pa-r3)}
 .pa .nt-row{border-radius:var(--pa-r3)}
-/* عنصرِ مخفیِ صفحه‌خوان (.pa-sr, absolute) باید درونِ ظرفِ اسکرول بماند تا موقعیتِ ایستایش (انتهایِ جدولِ عریض) overflowِ صفحه نسازد */
-.pa-tablewrap,.pa-card{position:relative}
 /* کارتِ جمع‌شونده‌یِ درگاه: سرصفحه همان summary است */
 .pa-gw>summary{list-style:none;cursor:pointer}
 .pa-gw>summary::-webkit-details-marker{display:none}
@@ -361,3 +359,6 @@ dialog.pa-dialog .pa-modalbox{width:min(560px,calc(100vw - 32px))}
 .pa-gw[open]>summary::after{transform:rotate(-135deg)}
 .pa-gw[open]>summary{border-bottom:1px solid var(--pa-line)}
 .pa-gw:not([open])>summary{border-bottom:0}
+/* عنصرِ مخفیِ صفحه‌خوان (.pa-sr) absolute است؛ اگر نیای positioned نداشته باشد، موقعیتِ ایستایش (مثلاً انتهایِ یک جدولِ عریض) overflowِ افقیِ صفحه می‌سازد.
+   ظرفِ اسکرول/کارت ریشه‌یِ آن می‌شود؛ خودِ .pa-sr دست‌نخورده می‌ماند (clip، نه display:none) تا صفحه‌خوان همچنان بخواندش. */
+.pa-tablewrap,.pa-card{position:relative}
