@@ -201,17 +201,17 @@ class SmsPackage(TimeStampedModel):
 class SmsPackagePurchase(TimeStampedModel):
     """رکوردِ درخواستِ خریدِ یک بسته توسطِ یک Store.
 
-    ``PENDING`` یعنی درخواست ثبت شده اما هنوز اعتباری افزوده نشده —
-    تکمیلِ واقعیِ پرداخت و افزودنِ اعتبار فقط از مسیرِ Platform Admin
-    (``apps.sms.services.balance_service.complete_purchase``) انجام
-    می‌شود، نه خودکار در لحظه‌ی ثبتِ درخواست (اتصالِ کاملِ درگاهِ پرداخت
-    برایِ خریدِ بسته هنوز پیاده‌سازی نشده — نگاه کنید به یادداشتِ TODO در
-    گزارشِ نهایی)."""
+    ``PENDING`` یعنی درخواست ثبت شده اما هنوز اعتباری افزوده نشده. اعتبار فقط از
+    ``balance_service.complete_purchase`` افزوده می‌شود: یا پس از **پرداختِ آنلاینِ تأییدشده**
+    توسطِ درگاهِ پلتفرم (``apps.billing.services.sms_purchase_payment_service``)، یا با
+    تکمیلِ دستیِ مدیرِ پلتفرم. هر دو از یک قفل و یک دفترِ تغییرناپذیر (``SmsCreditLedger``)
+    عبور می‌کنند؛ بازگشتِ مرورگر هرگز مدرکِ پرداخت نیست."""
 
     class Status(models.TextChoices):
         PENDING = "pending", "در انتظارِ تکمیل"
         COMPLETED = "completed", "تکمیل‌شده"
         CANCELED = "canceled", "لغوشده"
+        REFUNDED = "refunded", "بازپرداخت‌شده"
 
     store = models.ForeignKey(
         "stores.Store", verbose_name="فروشگاه", on_delete=models.CASCADE, related_name="sms_package_purchases",
@@ -223,6 +223,7 @@ class SmsPackagePurchase(TimeStampedModel):
     price = models.DecimalField("قیمت (اسنپ‌شات، تومان)", max_digits=12, decimal_places=0)
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING)
     completed_at = models.DateTimeField("زمانِ تکمیل", null=True, blank=True)
+    refunded_at = models.DateTimeField("زمانِ بازپرداخت", null=True, blank=True)
 
     class Meta:
         verbose_name = "خریدِ بسته‌ی پیامک"
@@ -231,6 +232,110 @@ class SmsPackagePurchase(TimeStampedModel):
 
     def __str__(self):
         return f"{self.store.name} ← {self.package.name} ({self.get_status_display()})"
+
+
+class SmsPackagePaymentAttempt(TimeStampedModel):
+    """یک تلاشِ پرداختِ آنلاینِ **پلتفرم** برای یک ``SmsPackagePurchase`` — زمینهٔ مالیِ صریح و جدا از
+    پرداختِ سفارشِ فروشگاه (``orders.PaymentAttempt``) و از فاکتورِ اشتراک. مبلغ/ارز از اسنپ‌شاتِ سمتِ
+    سرورِ خرید می‌آید، نه مرورگر. هر Retry یک ردیفِ تازه است؛ تلاش‌ها تاریخی‌اند و
+    «موفق»شدنِ آن‌ها فقط از مسیرِ ``sms_purchase_payment_service`` ممکن است."""
+
+    class Status(models.TextChoices):
+        CREATED = "created", "ایجادشده"
+        PENDING = "pending", "در انتظار"
+        REQUIRES_ACTION = "requires_action", "نیازمندِ اقدام"
+        SUCCEEDED = "succeeded", "موفق"
+        FAILED = "failed", "ناموفق"
+        CANCELLED = "cancelled", "لغوشده"
+        EXPIRED = "expired", "منقضی‌شده"
+
+    FINAL_STATUSES = frozenset({Status.SUCCEEDED, Status.FAILED, Status.CANCELLED, Status.EXPIRED})
+
+    store = models.ForeignKey(
+        "stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="sms_purchase_payment_attempts",
+    )
+    purchase = models.ForeignKey(
+        SmsPackagePurchase, verbose_name="خرید", on_delete=models.PROTECT, related_name="payment_attempts",
+    )
+    provider = models.CharField("Provider", max_length=40)
+    status = models.CharField("وضعیت", max_length=16, choices=Status.choices, default=Status.CREATED, db_index=True)
+    amount = models.DecimalField("مبلغ (تومان)", max_digits=14, decimal_places=0)
+    currency = models.CharField("ارز", max_length=8, default="IRT")
+    public_token = models.CharField("توکنِ عمومی", max_length=44, unique=True, editable=False)
+    provider_payment_id = models.CharField("شناسه‌ی پرداختِ Provider", max_length=120, blank=True, default="")
+    provider_session_id = models.CharField("شناسه‌ی جلسه‌ی Provider", max_length=120, blank=True, default="")
+    idempotency_key = models.CharField("کلیدِ یکتا", max_length=100, unique=True)
+    attempt_number = models.PositiveIntegerField("شماره‌ی تلاش", default=1)
+    failure_code = models.CharField("کدِ خطا", max_length=64, blank=True, default="")
+    failure_message = models.CharField("پیامِ خطا", max_length=300, blank=True, default="")
+    started_at = models.DateTimeField("زمانِ شروع", null=True, blank=True)
+    completed_at = models.DateTimeField("زمانِ پایان", null=True, blank=True)
+    return_to = models.CharField("مقصد بازگشت", max_length=500, blank=True, default="")
+
+    class Meta:
+        verbose_name = "تلاشِ پرداختِ بسته‌ی پیامک"
+        verbose_name_plural = "تلاش‌هایِ پرداختِ بسته‌ی پیامک"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "provider_payment_id"], condition=~models.Q(provider_payment_id=""),
+                name="uniq_smspay_provider_payment_id",
+            ),
+            models.CheckConstraint(check=models.Q(amount__gte=0), name="smspay_amount_non_negative"),
+        ]
+        indexes = [
+            models.Index(fields=["purchase", "status"], name="idx_smspay_purchase_status"),
+            models.Index(fields=["store", "status"], name="idx_smspay_store_status"),
+        ]
+
+    def __str__(self):
+        return f"SmsPay<{self.public_token}> {self.get_status_display()}"
+
+    @property
+    def is_final(self) -> bool:
+        return self.status in self.FINAL_STATUSES
+
+
+class SmsCreditLedger(TimeStampedModel):
+    """دفترِ **تغییرناپذیرِ** اعتبارِ پیامکِ ناشی از خرید/بازپرداختِ بسته. هر تغییرِ اعتبار با مقدارِ
+    قبل/تغییر/بعد و پیوند به خرید و تلاشِ پرداخت ثبت می‌شود. قیدِ یکتا ``(purchase, kind)`` تضمینِ
+    **سطحِ پایگاه‌داده** است که اعتبارِ یک خرید دقیقاً یک‌بار افزوده و دقیقاً یک‌بار برگردانده شود،
+    حتی با callbackِ تکراری یا درخواست‌های هم‌زمان. (اصلاح‌هایِ دستی در ``SmsCreditAdjustment`` می‌مانند.)"""
+
+    class Kind(models.TextChoices):
+        PURCHASE = "purchase", "افزودنِ اعتبار (خرید)"
+        PURCHASE_REVERSAL = "purchase_reversal", "بازگشتِ اعتبار (بازپرداخت)"
+
+    store = models.ForeignKey(
+        "stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="sms_credit_ledger",
+    )
+    purchase = models.ForeignKey(
+        SmsPackagePurchase, verbose_name="خرید", on_delete=models.PROTECT, related_name="ledger_entries",
+    )
+    payment_attempt = models.ForeignKey(
+        SmsPackagePaymentAttempt, verbose_name="تلاشِ پرداخت", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="ledger_entries",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="انجام‌دهنده", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="sms_credit_ledger_entries",
+    )
+    kind = models.CharField("نوع", max_length=20, choices=Kind.choices)
+    delta = models.IntegerField("مقدارِ تغییر")
+    balance_before = models.IntegerField("اعتبارِ پیش از تغییر")
+    balance_after = models.IntegerField("اعتبارِ پس از تغییر")
+    note = models.CharField("یادداشت", max_length=300, blank=True, default="")
+
+    class Meta:
+        verbose_name = "ردیفِ دفترِ اعتبارِ پیامک"
+        verbose_name_plural = "دفترِ اعتبارِ پیامک"
+        ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["purchase", "kind"], name="uniq_smsledger_purchase_kind"),
+        ]
+
+    def __str__(self):
+        return f"{self.store_id}: {self.get_kind_display()} {self.delta:+d}"
 
 
 class SmsCreditAdjustment(TimeStampedModel):

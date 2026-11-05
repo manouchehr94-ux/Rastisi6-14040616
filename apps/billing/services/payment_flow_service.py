@@ -17,6 +17,7 @@ from apps.billing.models import (
     SubscriptionPaymentAttempt,
 )
 from apps.billing.providers import registry
+from apps.billing.providers.base import BillingProviderError
 from apps.billing.services import attempt_service, webhook_service
 from apps.billing.services.confirmation_service import ConfirmationError, confirm_payment
 
@@ -25,8 +26,38 @@ class PaymentFlowError(Exception):
     """خطای قابل‌نمایش هنگام شروعِ پرداخت."""
 
 
-@transaction.atomic
-def start_payment(invoice, *, return_url, actor=None, idempotency_key="", now=None):
+def callback_url_for(callback_base_url: str, attempt) -> str:
+    """آدرسِ بازگشتِ عمومیِ یک تلاش (``/billing/return/<token>/``) — توکنِ غیرقابلِ‌حدس؛ احرازِ
+    نشست لازم نیست (وضعیت فقط با verify سرور-به-سرور تعیین می‌شود)."""
+    return f"{callback_base_url.rstrip('/')}/billing/return/{attempt.public_token}/"
+
+
+def safe_return_to(value: str) -> str:
+    """مقصدِ بازگشتِ کاربر پس از verify: مسیرِ نسبیِ هم‌میزبان، یا URLِ مطلقِ http(s) که میزبانش در
+    ``ALLOWED_HOSTS`` باشد (داشبوردِ هر فروشگاه روی میزبانِ خودش است و callback روی میزبانِ پلتفرم).
+    هر چیزِ دیگر (میزبانِ بیگانه، ``//``، backslash، کاراکترِ کنترلی، userinfo) رد می‌شود ⇒ open-redirect ممنوع."""
+    from urllib.parse import urlsplit
+
+    from django.conf import settings
+    from django.http.request import validate_host
+
+    value = (value or "").strip()
+    if not value or len(value) > 500 or "\\" in value or any(ord(c) < 32 for c in value):
+        return ""
+    if value.startswith("/"):
+        return "" if value.startswith("//") else value
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname or ""
+    except ValueError:
+        return ""
+    if parts.scheme not in ("http", "https") or not host or parts.username is not None or parts.password is not None:
+        return ""
+    return value if validate_host(host, settings.ALLOWED_HOSTS) else ""
+
+
+def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now=None,
+                  callback_base_url="", return_to="", provider=None):
     """یک تلاشِ پرداخت و جلسه‌ی Provider برایِ یک فاکتورِ قابلِ‌پرداخت می‌سازد و
     فاکتور را به ``payment_pending`` می‌برد. ``(attempt, session)`` را برمی‌گرداند.
 
@@ -44,67 +75,115 @@ def start_payment(invoice, *, return_url, actor=None, idempotency_key="", now=No
     ترتیبِ قفلی معکوس نمی‌شود و رفتارِ ``INITIAL``/``RENEWAL`` دست‌نخورده
     می‌ماند (این بررسی فقط برایِ ``kind == PLAN_CHANGE`` اجرا می‌شود)."""
     now = now or timezone.now()
-    locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
-    if not locked.is_payable:
-        raise PaymentFlowError("این فاکتور در وضعیتِ قابلِ‌پرداخت نیست.")
+    failure = None
+    with transaction.atomic():
+        locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
+        if not locked.is_payable:
+            raise PaymentFlowError("این فاکتور در وضعیتِ قابلِ‌پرداخت نیست.")
 
-    if locked.kind == SubscriptionInvoice.Kind.PLAN_CHANGE:
-        from apps.subscriptions.models import StoreSubscription
-        from apps.subscriptions.services import plan_change_service as pcs
+        if locked.kind == SubscriptionInvoice.Kind.PLAN_CHANGE:
+            from apps.subscriptions.models import StoreSubscription
+            from apps.subscriptions.services import plan_change_service as pcs
 
-        current_subscription = StoreSubscription.objects.get(pk=locked.subscription_id)
-        expected = pcs._preview_token(current_subscription, locked.plan_version)
-        if not locked.idempotency_key or locked.idempotency_key != expected:
-            raise PaymentFlowError(
-                "این فاکتورِ تغییرِ پلن دیگر تصمیمِ معتبرِ فعلی نیست (اشتراک از "
-                "زمانِ ساختنِ این فاکتور تغییر کرده)؛ پرداخت شروع نمی‌شود."
-            )
+            current_subscription = StoreSubscription.objects.get(pk=locked.subscription_id)
+            expected = pcs._preview_token(current_subscription, locked.plan_version)
+            if not locked.idempotency_key or locked.idempotency_key != expected:
+                raise PaymentFlowError(
+                    "این فاکتورِ تغییرِ پلن دیگر تصمیمِ معتبرِ فعلی نیست (اشتراک از "
+                    "زمانِ ساختنِ این فاکتور تغییر کرده)؛ پرداخت شروع نمی‌شود."
+                )
 
-    attempt = attempt_service.create_attempt(locked, idempotency_key=idempotency_key, actor=actor, now=now)
-    provider = registry.get_provider(attempt.provider)
-    session = provider.create_payment_session(attempt=attempt, invoice=locked, return_url=return_url)
-
-    attempt.provider_session_id = session.session_id
-    attempt.status = SubscriptionPaymentAttempt.Status.PENDING
-    attempt.save(update_fields=["provider_session_id", "status", "updated_at"])
-
-    if locked.status in (SubscriptionInvoice.Status.OPEN, SubscriptionInvoice.Status.PAST_DUE):
-        locked.status = SubscriptionInvoice.Status.PAYMENT_PENDING
-        locked.save(update_fields=["status", "updated_at"])
+        attempt = attempt_service.create_attempt(
+            locked, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now,
+        )
+        attempt.return_to = safe_return_to(return_to)
+        callback = callback_url_for(callback_base_url, attempt) if callback_base_url else return_url
+        try:
+            provider_obj = registry.get_provider(attempt.provider)
+            session = provider_obj.create_payment_session(attempt=attempt, invoice=locked, return_url=callback)
+        except BillingProviderError as exc:
+            # شکستِ شروعِ پرداخت: تلاش به‌صورتِ ناموفق (با کدِ امن) ثبت می‌ماند؛ بدونِ هیچ رازی.
+            attempt.status = SubscriptionPaymentAttempt.Status.FAILED
+            attempt.failure_code = (exc.code or "provider_error")[:64]
+            attempt.failure_message = "شروع پرداخت ناموفق بود."
+            attempt.completed_at = now
+            attempt.save(update_fields=["status", "failure_code", "failure_message", "completed_at", "return_to", "updated_at"])
+            failure = exc
+        else:
+            attempt.provider_session_id = session.session_id
+            attempt.status = SubscriptionPaymentAttempt.Status.PENDING
+            attempt.save(update_fields=["provider_session_id", "status", "return_to", "updated_at"])
+            if locked.status in (SubscriptionInvoice.Status.OPEN, SubscriptionInvoice.Status.PAST_DUE):
+                locked.status = SubscriptionInvoice.Status.PAYMENT_PENDING
+                locked.save(update_fields=["status", "updated_at"])
+    if failure is not None:
+        raise PaymentFlowError(
+            "درگاه پرداخت در دسترس نیست یا پیکربندی نشده است؛ کمی بعد دوباره تلاش کنید "
+            f"(کد: {failure.code or 'provider_error'})."
+        )
     return attempt, session
 
 
-def confirm_from_provider_verification(attempt, *, actor=None, now=None):
-    """برایِ Providerهایی که Webhookِ فشاری ندارند (مثلِ زیبال — ADR-77
-    گسترش‌یافته برایِ Phase 3): پس از بازگشتِ کاربر، سرور مستقیماً وضعیتِ
-    پرداخت را از Provider استعلام می‌کند (``fetch_payment_status`` —
-    verify سرور-به-سرورِ واقعی، نه پارامترهایِ Query) و در صورتِ موفقیت از
-    همان ``confirm_payment`` عبور می‌دهد که مسیرِ Webhook هم استفاده
-    می‌کند — پس idempotent/تراکنشی/بررسیِ مبلغ همه یک‌جا تضمین می‌شوند.
+def flag_requires_action(attempt, *, code, now):
+    """پولی که درگاه تأیید کرده امّا با رکوردِ ما نمی‌خواند (مبلغ/سفارش/پرداختِ تکراری): تلاش به
+    «نیازمندِ اقدام» می‌رود تا در فهرستِ تطبیقِ مدیر دیده شود؛ هیچ اعمالِ مالی انجام نمی‌شود."""
+    model = type(attempt)
+    model.objects.filter(pk=attempt.pk).exclude(status=model.Status.SUCCEEDED).update(
+        status=model.Status.REQUIRES_ACTION, failure_code=code[:64],
+        failure_message="پرداخت تأیید شد امّا با رکورد مطابقت ندارد؛ نیازمندِ بررسیِ مدیر.",
+        completed_at=now, updated_at=now,
+    )
 
-    بازگشتِ مرورگر هرگز به‌تنهایی مدرکِ پرداخت نیست؛ این تابع فقط زمانی
-    وضعیتِ نهایی را عوض می‌کند که خودِ Provider صراحتاً موفقیت را تأیید
-    کرده باشد. برایِ Providerِ بدونِ ``supports_automatic_capture`` (مثلِ
-    manual) کاری نمی‌کند — تأییدِ آن‌ها فقط از راهِ Webhook/اقدامِ مدیر است."""
+
+def verify_and_confirm(attempt, *, confirm, confirmation_error, actor=None, now=None, callback_data=None):
+    """هسته‌یِ مشترکِ تأییدِ سرور-به-سرور برایِ هر «تلاشِ پرداختِ پلتفرم» (اشتراک یا بسته‌ی پیامک).
+
+    بازگشتِ مرورگر هرگز مدرک نیست؛ فقط ``provider.verify_attempt`` موفقیت را اعلام می‌کند و سپس
+    ``confirm`` (قفل، idempotent، بررسیِ مبلغ/ارز، اعمالِ یک‌بارِ اثر) صدا زده می‌شود. ``callback_data``
+    فقط یک راهنماست: ادعای «ناموفق» در بازگشت *همراهِ* «verify سرور هم تأیید نکرد» تلاش را ناموفق
+    علامت می‌زند (و بعداً هنوز قابلِ تأییدِ موفق است)."""
     now = now or timezone.now()
-    if attempt.status == SubscriptionPaymentAttempt.Status.SUCCEEDED:
+    model = type(attempt)
+    S = model.Status
+    if attempt.status == S.SUCCEEDED:
         return attempt
 
     provider = registry.get_provider(attempt.provider)
-    if not provider.supports_automatic_capture:
-        return attempt
-    if not attempt.provider_session_id:
+    if not provider.supports_automatic_capture or not attempt.provider_session_id:
         return attempt
 
-    status = provider.fetch_payment_status(provider_payment_id=attempt.provider_session_id)
+    try:
+        status = provider.verify_attempt(attempt=attempt, callback_data=callback_data)
+    except BillingProviderError as exc:
+        if exc.code in ("amount_mismatch", "order_mismatch"):
+            flag_requires_action(attempt, code=exc.code, now=now)
+        raise
     if not status.succeeded:
+        if provider.callback_claims_failure(callback_data) and attempt.status in (S.CREATED, S.PENDING):
+            model.objects.filter(pk=attempt.pk, status__in=(S.CREATED, S.PENDING)).update(
+                status=S.FAILED, failure_code="gateway_declined",
+                failure_message="پرداخت توسطِ درگاه تأیید نشد.", completed_at=now, updated_at=now,
+            )
+            return model.objects.get(pk=attempt.pk)
         return attempt
 
-    confirm_payment(
-        attempt=attempt, amount=status.amount, currency=status.currency or attempt.currency,
-        provider_payment_id=status.provider_payment_id, actor=actor, now=now,
+    try:
+        confirm(
+            attempt=attempt, amount=status.amount, currency=status.currency or attempt.currency,
+            provider_payment_id=status.provider_payment_id, actor=actor, now=now,
+        )
+    except confirmation_error:
+        flag_requires_action(attempt, code="amount_mismatch", now=now)
+        raise
+    return model.objects.get(pk=attempt.pk)
+
+
+def confirm_from_provider_verification(attempt, *, actor=None, now=None, callback_data=None):
+    """تأییدِ سرور-به-سرورِ تلاشِ پرداختِ **اشتراک** (نگاه کنید به ``verify_and_confirm``)."""
+    return verify_and_confirm(
+        attempt, confirm=confirm_payment, confirmation_error=ConfirmationError,
+        actor=actor, now=now, callback_data=callback_data,
     )
-    return SubscriptionPaymentAttempt.objects.get(pk=attempt.pk)
 
 
 def process_webhook_event(event, *, actor=None, now=None):

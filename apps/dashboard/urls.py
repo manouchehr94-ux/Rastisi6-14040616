@@ -260,6 +260,7 @@ urlpatterns = [
 
     path("settings/sms/connection/", views.settings_sms_connection, name="settings-sms-connection"),
     path("settings/sms/package/purchase/", views.settings_sms_package_purchase, name="settings-sms-package-purchase"),
+    path("settings/sms/package/purchase/<int:pk>/pay/", views.settings_sms_purchase_pay, name="settings-sms-purchase-pay"),
     path(
         "settings/sms/smsrasti/regenerate-token/",
         views.settings_smsrasti_regenerate_token, name="settings-smsrasti-regenerate-token",

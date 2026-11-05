@@ -277,6 +277,8 @@ class SubscriptionPaymentAttempt(TimeStampedModel):
     failure_message = models.CharField("پیامِ خطا", max_length=300, blank=True, default="")
     started_at = models.DateTimeField("زمانِ شروع", null=True, blank=True)
     completed_at = models.DateTimeField("زمانِ پایان", null=True, blank=True)
+    #: مقصدِ بازگشتِ کاربر پس از verify (مسیرِ نسبی یا URLِ مطلق با میزبانِ مجاز — ``safe_return_to``).
+    return_to = models.CharField("مقصد بازگشت", max_length=500, blank=True, default="")
 
     class Meta:
         verbose_name = "تلاشِ پرداختِ اشتراک"

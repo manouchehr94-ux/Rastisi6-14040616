@@ -1269,13 +1269,10 @@ def payment_manual_add(request):
 
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def billing_zibal_settings(request):
-    """پیکربندیِ زیبال برایِ پرداختِ اشتراکِ خودِ پلتفرم (Phase 3) — کاملاً جدا
-    از اعتبارنامه‌ی زیبالِ هر Store برایِ سفارش‌هایِ مشتریانش
-    (``apps.orders.PaymentGatewayConfig`` / Merchant Admin › درگاه‌ها).
-    Secretِ خالی یعنی «بدون تغییر» (همان الگویِ تنظیماتِ پیامک)."""
-    from django.core.cache import cache
-
+    """صفحهٔ قدیمیِ زیبال (سازگاری) — اکنون روی همان ``platform_gateway_service`` می‌نویسد تا منبعِ
+    حقیقتِ درگاه‌ها یکی باشد. جایگزین: «درگاه‌های پرداختِ پلتفرم»."""
     from apps.billing.providers import registry as billing_registry
+    from apps.portal.services import platform_gateway_service as pgs
 
     config = get_platform_configuration()
     if request.method == "POST":
@@ -1283,36 +1280,245 @@ def billing_zibal_settings(request):
         if active_provider not in {"manual", "zibal"}:
             messages.error(request, "درگاهِ انتخاب‌شده معتبر نیست.")
         else:
-            before = {
-                "default_payment_provider": config.default_payment_provider,
-                "zibal_sandbox_mode": config.zibal_sandbox_mode,
-            }
-            config.default_payment_provider = active_provider
-            config.zibal_sandbox_mode = "zibal_sandbox_mode" in request.POST
             merchant = (request.POST.get("zibal_merchant") or "").strip()
-            config.set_zibal_credentials(merchant=merchant)
-            config.save(update_fields=[
-                "default_payment_provider", "zibal_sandbox_mode",
-                "encrypted_zibal_credentials", "updated_at",
-            ])
-            cache.delete("portal:platform_configuration")
-            record_platform_audit_event(
-                actor=request.user, action_code="platform_billing_zibal.updated",
-                object_type="PlatformConfiguration", object_id=1,
-                before=before,
-                after={"default_payment_provider": active_provider, "zibal_sandbox_mode": config.zibal_sandbox_mode},
-                metadata={"merchant_configured": bool(merchant)},
-            )
-            messages.success(request, "تنظیماتِ زیبالِ پلتفرم ذخیره شد.")
-            return redirect("portal_platform_admin:billing-zibal-settings")
+            try:
+                pgs.save_gateway(
+                    "zibal", credentials={"merchant": merchant},
+                    sandbox="zibal_sandbox_mode" in request.POST, enabled=(active_provider == "zibal"),
+                    actor=request.user,
+                )
+                pgs.set_default(active_provider, actor=request.user)
+            except pgs.PlatformGatewayError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "تنظیماتِ زیبالِ پلتفرم ذخیره شد.")
+                return redirect("portal_platform_admin:billing-zibal-settings")
 
-    credentials = config.get_zibal_credentials()
+    config = get_platform_configuration()
+    state = pgs.gateway_state("zibal")
     return render(request, "portal/platform_admin/billing_zibal_settings.html", {
         "config": config,
-        "merchant_is_configured": bool(credentials.get("merchant")),
+        "merchant_is_configured": bool(state.fields and state.fields[0]["configured"]),
         "active_provider_code": billing_registry.active_provider_code(),
         "active_nav": "payments",
     })
+
+
+# ------------------------------------------------- درگاه‌های پرداختِ پلتفرم (مدیریت یکپارچه)
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_gateways(request):
+    """Platform Admin → درگاه‌های پرداخت: پیکربندی، فعال/غیرفعال‌سازی، آمادگی و خطاهای قابلِ‌اقدام.
+
+    اعتبارنامه‌ها فقط نوشته می‌شوند (خالی = بدون تغییر) و هرگز در HTML/پاسخ برنمی‌گردند. فقط
+    درگاه‌های تأییدشده قابلِ پیکربندی‌اند؛ بقیه فقط‌خواندنی با دلیل."""
+    from apps.portal.services import platform_gateway_service as pgs
+
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        code = (request.POST.get("gateway_code") or "").strip()
+        try:
+            if action == "save":
+                adapter_fields = [f["name"] for f in pgs.gateway_state(code).fields]
+                pgs.save_gateway(
+                    code, credentials={n: request.POST.get(f"cred_{n}", "") for n in adapter_fields},
+                    sandbox="sandbox_mode" in request.POST, enabled="is_enabled" in request.POST,
+                    actor=request.user, display_order=request.POST.get("display_order") or None,
+                )
+                messages.success(request, "تنظیماتِ درگاه ذخیره شد.")
+            elif action == "set_default":
+                pgs.set_default(code, actor=request.user)
+                messages.success(request, "درگاهِ پیش‌فرض تغییر کرد.")
+            else:
+                messages.error(request, "عملیاتِ نامعتبر.")
+        except (pgs.PlatformGatewayError, ValueError) as exc:
+            messages.error(request, str(exc))
+        return redirect("portal_platform_admin:payment-gateways")
+
+    config = get_platform_configuration()
+    return render(request, "portal/platform_admin/payment_gateways.html", {
+        "states": pgs.catalog(), "default_code": config.default_payment_provider,
+        "effective_default": pgs.default_code(),
+        "audit": pgs.audit_trail(15), "active_nav": "payment-gateways",
+    })
+
+
+def _attempt_rows(*, kind="", status="", provider="", query="", limit=300):
+    from apps.billing.models import SubscriptionPaymentAttempt
+    from apps.sms.models import SmsPackagePaymentAttempt
+
+    rows = []
+    if kind in ("", "subscription"):
+        qs = SubscriptionPaymentAttempt.objects.select_related("store", "invoice").order_by("-created_at")
+        if status:
+            qs = qs.filter(status=status)
+        if provider:
+            qs = qs.filter(provider=provider)
+        if query:
+            qs = qs.filter(Q(store__name__icontains=query) | Q(invoice__number__icontains=query) | Q(public_token__icontains=query))
+        for a in qs[:limit]:
+            rows.append({"kind": "subscription", "kind_label": "اشتراک", "attempt": a, "ref": a.invoice.number,
+                         "store": a.store, "created_at": a.created_at})
+    if kind in ("", "sms"):
+        qs = SmsPackagePaymentAttempt.objects.select_related("store", "purchase__package").order_by("-created_at")
+        if status:
+            qs = qs.filter(status=status)
+        if provider:
+            qs = qs.filter(provider=provider)
+        if query:
+            qs = qs.filter(Q(store__name__icontains=query) | Q(public_token__icontains=query))
+        for a in qs[:limit]:
+            rows.append({"kind": "sms", "kind_label": "بسته پیامک", "attempt": a, "ref": f"SMS-{a.purchase_id}",
+                         "store": a.store, "created_at": a.created_at})
+    rows.sort(key=lambda r: r["created_at"], reverse=True)
+    return rows
+
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_transactions(request):
+    """همهٔ تراکنش‌های پلتفرم (اشتراک + بستهٔ پیامک): موفق، ناموفق، در انتظار، نیازمندِ اقدام. فقط‌خواندنی."""
+    kind = (request.GET.get("kind") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    provider = (request.GET.get("provider") or "").strip()
+    query = (request.GET.get("q") or "").strip()
+    rows = _attempt_rows(kind=kind if kind in ("subscription", "sms") else "", status=status, provider=provider, query=query)
+    page = Paginator(rows, 25).get_page(request.GET.get("page"))
+    from apps.billing.models import SubscriptionPaymentAttempt
+
+    return render(request, "portal/platform_admin/payment_transactions.html", {
+        "page": page, "kind": kind, "status": status, "provider": provider, "query": query,
+        "status_choices": SubscriptionPaymentAttempt.Status.choices, "active_nav": "payment-transactions",
+    })
+
+
+STALE_PENDING_MINUTES = 15
+
+
+def reconciliation_snapshot():
+    """فهرست‌های تطبیق: پرداخت‌هایِ نیازمندِ اقدام، در انتظارِ کهنه، موفقِ بدونِ اثر، رخدادهایِ ناموفق، خریدهایِ
+    پیامکِ بدونِ ردیفِ دفتر و بازپرداخت‌هایِ باز."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.billing.models import BillingWebhookEvent, SubscriptionInvoice, SubscriptionPaymentAttempt, SubscriptionRefund
+    from apps.sms.models import SmsCreditLedger, SmsPackagePaymentAttempt, SmsPackagePurchase
+
+    cutoff = timezone.now() - timedelta(minutes=STALE_PENDING_MINUTES)
+    sub_s, sms_s = SubscriptionPaymentAttempt.Status, SmsPackagePaymentAttempt.Status
+    return {
+        "requires_action": (
+            list(SubscriptionPaymentAttempt.objects.filter(status=sub_s.REQUIRES_ACTION).select_related("store", "invoice")[:100]),
+            list(SmsPackagePaymentAttempt.objects.filter(status=sms_s.REQUIRES_ACTION).select_related("store", "purchase")[:100]),
+        ),
+        "stale_pending": (
+            list(SubscriptionPaymentAttempt.objects.filter(status__in=(sub_s.CREATED, sub_s.PENDING), created_at__lt=cutoff)
+                 .exclude(provider_session_id="").select_related("store", "invoice")[:100]),
+            list(SmsPackagePaymentAttempt.objects.filter(status__in=(sms_s.CREATED, sms_s.PENDING), created_at__lt=cutoff)
+                 .exclude(provider_session_id="").select_related("store", "purchase")[:100]),
+        ),
+        "paid_without_effect": (
+            list(SubscriptionPaymentAttempt.objects.filter(status=sub_s.SUCCEEDED)
+                 .exclude(invoice__status__in=(SubscriptionInvoice.Status.PAID, SubscriptionInvoice.Status.REFUNDED,
+                                               SubscriptionInvoice.Status.PARTIALLY_REFUNDED)).select_related("store", "invoice")[:100]),
+            list(SmsPackagePaymentAttempt.objects.filter(status=sms_s.SUCCEEDED)
+                 .exclude(purchase__status__in=(SmsPackagePurchase.Status.COMPLETED, SmsPackagePurchase.Status.REFUNDED))
+                 .select_related("store", "purchase")[:100]),
+        ),
+        "sms_completed_without_ledger": list(
+            SmsPackagePurchase.objects.filter(status=SmsPackagePurchase.Status.COMPLETED, payment_attempts__status=sms_s.SUCCEEDED)
+            .exclude(ledger_entries__kind=SmsCreditLedger.Kind.PURCHASE).select_related("store", "package").distinct()[:100]
+        ),
+        "failed_webhooks": list(BillingWebhookEvent.objects.filter(processing_status=BillingWebhookEvent.ProcessingStatus.FAILED)[:50]),
+        "open_refunds": list(SubscriptionRefund.objects.filter(status__in=SubscriptionRefund.OPEN_STATUSES).select_related("store", "invoice")[:50]),
+    }
+
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_reconciliation(request):
+    snapshot = reconciliation_snapshot()
+    totals = {
+        "requires_action": sum(len(x) for x in snapshot["requires_action"]),
+        "stale_pending": sum(len(x) for x in snapshot["stale_pending"]),
+        "paid_without_effect": sum(len(x) for x in snapshot["paid_without_effect"]),
+    }
+    return render(request, "portal/platform_admin/payment_reconciliation.html", {
+        "snapshot": snapshot, "totals": totals, "stale_minutes": STALE_PENDING_MINUTES,
+        "active_nav": "payment-reconciliation",
+    })
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_verify_now(request, kind, attempt_id):
+    """بررسیِ دستیِ یک تلاش با verify سرور-به-سرور (همان مسیرِ بازگشت). هیچ موفقیتِ دستی/جعلی نمی‌سازد."""
+    from apps.billing.models import SubscriptionPaymentAttempt
+    from apps.billing.providers.base import BillingProviderError
+    from apps.billing.services import payment_flow_service, sms_purchase_payment_service
+    from apps.billing.services.confirmation_service import ConfirmationError
+    from apps.sms.models import SmsPackagePaymentAttempt
+
+    try:
+        if kind == "sms":
+            attempt = get_object_or_404(SmsPackagePaymentAttempt, pk=attempt_id)
+            result = sms_purchase_payment_service.verify_and_fulfill(attempt, actor=request.user)
+        else:
+            attempt = get_object_or_404(SubscriptionPaymentAttempt, pk=attempt_id)
+            result = payment_flow_service.confirm_from_provider_verification(attempt, actor=request.user)
+    except (BillingProviderError, ConfirmationError, sms_purchase_payment_service.SmsPaymentConfirmationError) as exc:
+        messages.error(request, f"بررسی ناموفق بود ({getattr(exc, 'code', '') or type(exc).__name__}).")
+    else:
+        messages.success(request, f"وضعیتِ تلاش پس از بررسی: {result.get_status_display()}")
+    record_platform_audit_event(
+        actor=request.user, action_code="platform_payment.verify_now", object_type=f"{kind}_attempt", object_id=attempt_id,
+    )
+    return redirect(request.POST.get("next") if (request.POST.get("next") or "").startswith("/") and not (request.POST.get("next") or "").startswith("//") else reverse("portal_platform_admin:payment-reconciliation"))
+
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def sms_purchases(request):
+    """خریدهای بستهٔ پیامک با اقدام‌های مالیِ ایمن: تکمیلِ دستی، لغو، بازپرداخت (با دفترِ اعتبار)."""
+    from apps.sms.models import SmsPackagePurchase
+
+    status = (request.GET.get("status") or "").strip()
+    qs = SmsPackagePurchase.objects.select_related("store", "package").prefetch_related("payment_attempts", "ledger_entries")
+    if status in SmsPackagePurchase.Status.values:
+        qs = qs.filter(status=status)
+    page = Paginator(qs.order_by("-created_at"), 25).get_page(request.GET.get("page"))
+    return render(request, "portal/platform_admin/sms_purchases.html", {
+        "page": page, "status": status, "status_choices": SmsPackagePurchase.Status.choices, "active_nav": "sms-purchases",
+    })
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def sms_purchase_action(request, purchase_id, action):
+    from apps.billing.services import sms_purchase_payment_service as svc
+    from apps.sms.models import SmsPackagePurchase
+    from apps.sms.services import balance_service
+
+    purchase = get_object_or_404(SmsPackagePurchase, pk=purchase_id)
+    try:
+        if action == "complete":
+            balance_service.complete_purchase(purchase=purchase, actor=request.user)
+            messages.success(request, "خرید تکمیل و اعتبار افزوده شد.")
+        elif action == "cancel":
+            balance_service.cancel_purchase(purchase=purchase)
+            messages.success(request, "خرید لغو شد.")
+        elif action == "refund":
+            svc.refund_purchase(purchase, actor=request.user, reason=(request.POST.get("reason") or "").strip())
+            messages.success(request, "بازپرداخت ثبت شد؛ اعتبار برگردانده شد (بازپرداختِ پول طبقِ وضعیتِ درگاه).")
+        else:
+            messages.error(request, "عملیاتِ نامعتبر.")
+            return redirect("portal_platform_admin:sms-purchases")
+    except (balance_service.PurchaseNotPendingError, svc.SmsRefundError) as exc:
+        messages.error(request, str(exc))
+    else:
+        record_platform_audit_event(
+            actor=request.user, action_code=f"platform_sms_purchase.{action}", object_type="SmsPackagePurchase",
+            object_id=purchase.pk, object_label=str(purchase.pk),
+        )
+    return redirect("portal_platform_admin:sms-purchases")
 
 
 # ---------------------------------------------------------------- بسته‌های پیامک

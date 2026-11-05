@@ -6,6 +6,7 @@ Providerِ فعال از ``settings.RASTISI_BILLING_PROVIDER`` تعیین می�
 
 from django.conf import settings
 
+from apps.billing.providers.adapter_backed import AdapterBackedBillingProvider
 from apps.billing.providers.base import BillingProviderError
 from apps.billing.providers.manual import ManualProvider
 from apps.billing.providers.zibal import ZibalBillingProvider
@@ -13,6 +14,7 @@ from apps.billing.providers.zibal import ZibalBillingProvider
 _PROVIDERS = {
     ManualProvider.code: ManualProvider(),
     ZibalBillingProvider.code: ZibalBillingProvider(),
+    "zarinpal": AdapterBackedBillingProvider("zarinpal"),
 }
 
 

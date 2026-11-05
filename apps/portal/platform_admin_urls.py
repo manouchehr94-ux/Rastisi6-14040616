@@ -63,6 +63,12 @@ urlpatterns = [
     path("payments/invoice/<int:invoice_id>/", views.payment_invoice_detail, name="payment-invoice-detail"),
     path("payments/manual/", views.payment_manual_add, name="payment-manual-add"),
     path("payments/zibal/", views.billing_zibal_settings, name="billing-zibal-settings"),
+    path("payments/gateways/", views.payment_gateways, name="payment-gateways"),
+    path("payments/transactions/", views.payment_transactions, name="payment-transactions"),
+    path("payments/reconciliation/", views.payment_reconciliation, name="payment-reconciliation"),
+    path("payments/verify/<str:kind>/<int:attempt_id>/", views.payment_verify_now, name="payment-verify-now"),
+    path("payments/sms-purchases/", views.sms_purchases, name="sms-purchases"),
+    path("payments/sms-purchases/<int:purchase_id>/<str:action>/", views.sms_purchase_action, name="sms-purchase-action"),
 
     # --- پیامک ---
     path("sms/settings/", views.sms_settings, name="sms-settings"),  # legacy alias

@@ -71,6 +71,7 @@ urlpatterns = [
         "app/stores/<uuid:store_public_id>/billing/step-up/",
         views.billing_step_up_verify, name="billing-step-up",
     ),
+    path("app/stores/<uuid:store_public_id>/billing/return/", views.billing_return_latest, name="billing-return-latest"),
     path(
         "app/stores/<uuid:store_public_id>/billing/return/<str:attempt_public_token>/",
         views.billing_return, name="billing-return",

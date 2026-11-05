@@ -1728,16 +1728,20 @@ def billing_plans(request, store_public_id):
         if version is not None:
             offerable_versions.append(version)
 
+    from apps.portal.services import platform_gateway_service
+
     return render(request, "portal/app/billing_plans.html", {
         "store": store, "plan_versions": offerable_versions, "current_subscription": current_subscription,
+        "gateway_options": platform_gateway_service.checkout_options(),
     })
 
 
 _STEP_UP_ACTION_SUBSCRIPTION_PURCHASE = "subscription_purchase_confirm"
 _SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY = "portal_pending_purchase_plan_version_id"
+_SESSION_PENDING_PURCHASE_GATEWAY_KEY = "portal_pending_purchase_gateway"
 
 
-def _start_purchase(request, *, store, plan_version):
+def _start_purchase(request, *, store, plan_version, gateway=""):
     """هسته‌ی مشترکِ خرید — چه بلافاصله (وقتی نیازی به تأییدِ گام‌دوم نیست)
     چه پس از تأییدِ موفقِ OTP گام‌دوم فراخوانی می‌شود. از همان
     ``plan_change_billing_service``ای عبور می‌کند که تغییرِ پلنِ Merchant
@@ -1767,13 +1771,30 @@ def _start_purchase(request, *, store, plan_version):
         return redirect("portal:billing-plans", store_public_id=store.public_id)
 
     invoice = result
-    return_url = request.build_absolute_uri(reverse("portal:billing-plans", args=[store.public_id]))
+    from apps.portal.services import platform_gateway_service
+
     try:
-        attempt, _session = payment_flow_service.start_payment(invoice, return_url=return_url, actor=request.user)
+        provider = platform_gateway_service.resolve_checkout_provider(gateway) if gateway else None
+    except platform_gateway_service.PlatformGatewayError as exc:
+        messages.error(request, str(exc))
+        return redirect("portal:billing-plans", store_public_id=store.public_id)
+    status_path = reverse("portal:billing-return-latest", args=[store.public_id])
+    try:
+        attempt, session = payment_flow_service.start_payment(
+            invoice, actor=request.user, provider=provider,
+            callback_base_url=platform_gateway_service.callback_base_url(request),
+            return_to=request.build_absolute_uri(status_path),
+        )
     except payment_flow_service.PaymentFlowError as exc:
         messages.error(request, str(exc))
         return redirect("portal:billing-plans", store_public_id=store.public_id)
-    return redirect("portal:billing-return", store_public_id=store.public_id, attempt_public_token=attempt.public_token)
+    # گام حیاتی: مالک را به **درگاه** می‌بریم (قبلاً فقط به یک صفحهٔ وضعیت می‌رفت و هرگز به درگاه نمی‌رسید).
+    # Providerِ دستی درگاهِ واقعی ندارد ⇒ همان رفتارِ قبلی: مستقیم به صفحهٔ وضعیتِ همین تلاش.
+    from apps.billing.providers import registry as billing_registry
+
+    if not billing_registry.get_provider(attempt.provider).supports_automatic_capture:
+        return redirect("portal:billing-return", store_public_id=store.public_id, attempt_public_token=attempt.public_token)
+    return redirect(session.redirect_url)
 
 
 @owner_required
@@ -1792,6 +1813,7 @@ def billing_checkout(request, store_public_id, plan_version_id):
     if not portal_actions_allowed(request, store, SUBSCRIPTION_CHANGE, BILLING_PAYMENT_MANAGE):
         return portal_permission_denied(request)
     plan_version = get_object_or_404(PlanVersion, pk=plan_version_id, status=PlanVersion.Status.PUBLISHED)
+    gateway = (request.POST.get("gateway") or "").strip()[:40]
 
     target = str(store.public_id)
     if step_up_service.is_step_up_required(_STEP_UP_ACTION_SUBSCRIPTION_PURCHASE) and not step_up_service.is_verified(
@@ -1811,9 +1833,10 @@ def billing_checkout(request, store_public_id, plan_version_id):
             messages.error(request, str(exc))
             return redirect("portal:billing-plans", store_public_id=store.public_id)
         request.session[_SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY] = plan_version.pk
+        request.session[_SESSION_PENDING_PURCHASE_GATEWAY_KEY] = gateway
         return redirect("portal:billing-step-up", store_public_id=store.public_id)
 
-    return _start_purchase(request, store=store, plan_version=plan_version)
+    return _start_purchase(request, store=store, plan_version=plan_version, gateway=gateway)
 
 
 @owner_required
@@ -1835,14 +1858,25 @@ def billing_step_up_verify(request, store_public_id):
         code = request.POST.get("code", "")
         if step_up_service.confirm_challenge(request, code=code):
             plan_version_id = request.session.pop(_SESSION_PENDING_PURCHASE_PLAN_VERSION_KEY, None)
+            pending_gateway = request.session.pop(_SESSION_PENDING_PURCHASE_GATEWAY_KEY, "")
             plan_version = PlanVersion.objects.filter(pk=plan_version_id).first() if plan_version_id else None
             if plan_version is None:
                 messages.error(request, "درخواستِ خرید یافت نشد؛ دوباره تلاش کنید.")
                 return redirect("portal:billing-plans", store_public_id=store.public_id)
-            return _start_purchase(request, store=store, plan_version=plan_version)
+            return _start_purchase(request, store=store, plan_version=plan_version, gateway=pending_gateway)
         messages.error(request, "کدِ واردشده نادرست یا منقضی است.")
 
     return render(request, "portal/app/step_up_verify.html", {"store": store})
+
+
+@owner_required
+def billing_return_latest(request, store_public_id):
+    """مقصدِ بازگشتِ بعد از درگاه: آخرین تلاشِ پرداختِ همین Store (فقط خواندنی؛ وضعیت از رکوردِ سرور)."""
+    store = _get_owned_store_or_404(request, store_public_id)
+    attempt = SubscriptionPaymentAttempt.objects.filter(store=store).order_by("-created_at").first()
+    if attempt is None:
+        return redirect("portal:billing-plans", store_public_id=store.public_id)
+    return redirect("portal:billing-return", store_public_id=store.public_id, attempt_public_token=attempt.public_token)
 
 
 @owner_required

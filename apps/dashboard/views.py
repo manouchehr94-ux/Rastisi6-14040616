@@ -4329,6 +4329,7 @@ def _settings_context(
         "sms_billing_policy": SmsBillingPolicy.load(),
         "sms_packages": balance_service.list_active_packages(),
         "sms_package_purchase_form": SmsPackagePurchaseForm(),
+        "platform_gateway_options": SimpleLazyObject(lambda: _platform_gateway_options()),
         "sms_pending_purchases": store.sms_package_purchases.filter(
             status=SmsPackagePurchase.Status.PENDING
         ).select_related("package"),
@@ -4849,21 +4850,81 @@ def settings_sms_connection(request):
     return render(request, "dashboard/settings.html", context)
 
 
+_SMS_SETTINGS_PATH = "/admin-portal/settings/?section=sms"
+
+
+def _platform_gateway_options():
+    from apps.portal.services import platform_gateway_service
+
+    return platform_gateway_service.checkout_options()
+
+
+def _start_sms_purchase_payment(request, purchase):
+    """پرداختِ آنلاینِ یک خریدِ pending از درگاهِ **پلتفرم** (نه درگاهِ Store). اگر درگاهِ آماده‌ای نیست
+    ``None`` برمی‌گرداند (مسیرِ قدیمیِ تأییدِ دستی)؛ در غیرِ این صورت ریدایرکت به درگاه یا پیامِ خطا."""
+    from apps.billing.services import sms_purchase_payment_service
+    from apps.billing.services.payment_flow_service import PaymentFlowError
+    from apps.portal.services import platform_gateway_service
+
+    if not platform_gateway_service.ready_codes():
+        return None
+    requested = (request.POST.get("gateway") or "").strip()[:40]
+    try:
+        provider = platform_gateway_service.resolve_checkout_provider(requested)
+    except platform_gateway_service.PlatformGatewayError as exc:
+        messages.error(request, str(exc))
+        return redirect(_SMS_SETTINGS_PATH)
+    try:
+        _attempt, session = sms_purchase_payment_service.start_payment(
+            purchase, callback_base_url=platform_gateway_service.callback_base_url(request),
+            return_to=request.build_absolute_uri(_SMS_SETTINGS_PATH),
+            actor=request.user, provider=provider,
+        )
+    except PaymentFlowError as exc:
+        messages.error(request, str(exc))
+        return redirect(_SMS_SETTINGS_PATH)
+    if session is None:                       # تکرارِ idempotent: جلسه‌ی قبلی؛ به صفحه برگرد
+        return redirect(_SMS_SETTINGS_PATH)
+    return redirect(session.redirect_url)
+
+
 @require_POST
 @staff_required
 @permission_required(SMS_SETTINGS_MANAGE)
 def settings_sms_package_purchase(request):
-    """درخواستِ خریدِ یک بستهِ اعتبارِ پیامک را با وضعیتِ «در انتظار» ثبت
-    می‌کند — اعتبار فقط پس از تکمیلِ آن از Platform Admin افزوده می‌شود
-    (نگاه کنید به ``apps.sms.services.balance_service``)."""
+    """خریدِ بسته‌ی اعتبارِ پیامک: خریدِ «در انتظار» ثبت می‌شود و — اگر درگاهِ پرداختِ پلتفرم آماده باشد —
+    مالک مستقیماً به درگاه می‌رود؛ اعتبار **فقط پس از verify سرور-به-سرور** (دقیقاً یک‌بار) افزوده
+    می‌شود. بدونِ درگاهِ آماده، همان مسیرِ قدیمیِ تأییدِ دستیِ Platform Admin می‌ماند."""
     form = SmsPackagePurchaseForm(request.POST)
-    if form.is_valid():
-        package = get_object_or_404(SmsPackage, pk=form.cleaned_data["package_id"], is_active=True)
-        balance_service.request_purchase(store=_resolve_dashboard_store(request), package=package)
-        messages.success(request, "درخواستِ خرید ثبت شد؛ پس از تأیید، اعتبار به حساب شما افزوده می‌شود")
-    else:
+    if not form.is_valid():
         messages.error(request, "بسته‌ی انتخاب‌شده نامعتبر است")
-    return redirect("/admin-portal/settings/?section=sms")
+        return redirect(_SMS_SETTINGS_PATH)
+    store = _resolve_dashboard_store(request)
+    package = get_object_or_404(SmsPackage, pk=form.cleaned_data["package_id"], is_active=True)
+    # خریدِ pendingِ همان بسته دوباره استفاده می‌شود (انباشتِ ردیفِ تکراری ممنوع).
+    purchase = (
+        store.sms_package_purchases.filter(package=package, status=SmsPackagePurchase.Status.PENDING)
+        .order_by("-created_at").first()
+    ) or balance_service.request_purchase(store=store, package=package)
+    started = _start_sms_purchase_payment(request, purchase)
+    if started is not None:
+        return started
+    messages.success(request, "درخواستِ خرید ثبت شد؛ پس از تأیید، اعتبار به حساب شما افزوده می‌شود")
+    return redirect(_SMS_SETTINGS_PATH)
+
+
+@require_POST
+@staff_required
+@permission_required(SMS_SETTINGS_MANAGE)
+def settings_sms_purchase_pay(request, pk):
+    """پرداختِ آنلاینِ یک خریدِ pendingِ **موجود** (مثلاً ثبت‌شده پیش از وصلِ درگاه). فقط خریدِ همین Store."""
+    store = _resolve_dashboard_store(request)
+    purchase = get_object_or_404(SmsPackagePurchase, pk=pk, store=store, status=SmsPackagePurchase.Status.PENDING)
+    started = _start_sms_purchase_payment(request, purchase)
+    if started is not None:
+        return started
+    messages.error(request, "درگاهِ پرداختِ آنلاین هنوز فعال نشده است؛ خرید پس از تأییدِ مدیر تکمیل می‌شود.")
+    return redirect(_SMS_SETTINGS_PATH)
 
 
 @require_POST
@@ -8504,12 +8565,21 @@ def billing_invoice_detail(request, pk):
 def billing_pay(request, pk):
     from apps.billing.services import payment_flow_service
 
+    from apps.portal.services import platform_gateway_service
+
     store = _resolve_dashboard_store(request)
     invoice = _billing_invoice_or_404(store, pk)
-    return_url = request.build_absolute_uri(reverse("dashboard:billing-payment-result"))
+    requested = (request.POST.get("gateway") or "").strip()[:40]
+    try:
+        provider = platform_gateway_service.resolve_checkout_provider(requested) if requested else None
+    except platform_gateway_service.PlatformGatewayError as exc:
+        messages.error(request, str(exc))
+        return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
     try:
         attempt, session = payment_flow_service.start_payment(
-            invoice, return_url=return_url, actor=request.user,
+            invoice, actor=request.user, provider=provider,
+            callback_base_url=platform_gateway_service.callback_base_url(request),
+            return_to=request.build_absolute_uri(reverse("dashboard:billing-invoice-detail", args=[invoice.pk])),
         )
     except payment_flow_service.PaymentFlowError as exc:
         messages.error(request, str(exc))

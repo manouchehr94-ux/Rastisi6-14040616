@@ -241,7 +241,6 @@ class PlatformConfiguration(TimeStampedModel):
     )
     default_payment_provider = models.CharField(
         "درگاه پرداخت پیش‌فرض", max_length=40, default="manual",
-        choices=[("manual", "دستی (بدونِ درگاهِ واقعی)"), ("zibal", "زیبال")],
         help_text="Providerِ فعالِ پرداختِ اشتراکِ خودِ پلتفرم — جدا از درگاهِ پرداختِ سفارشِ هر Store.",
     )
     enabled_payment_providers = models.JSONField(
@@ -402,6 +401,64 @@ class PlatformConfiguration(TimeStampedModel):
         if not self.enabled_payment_providers:
             self.enabled_payment_providers = [self.default_payment_provider]
         super().save(*args, **kwargs)
+
+
+class PlatformGatewayConfig(TimeStampedModel):
+    """پیکربندیِ یک درگاهِ پرداختِ **خودِ پلتفرم** (راستیسی) — برای دریافتِ پول از
+    صاحبانِ فروشگاه (اشتراک، بسته‌ی پیامک، ...).
+
+    کاملاً جدا از ``apps.orders.models.PaymentGatewayConfig`` (درگاهِ هر Store برای
+    سفارش‌های مشتریانش): این مدل هیچ ``store`` ای ندارد، و هیچ کدِ پرداختِ سفارش آن را
+    نمی‌خواند. اعتبارنامه‌ها با همان Fernet رمزنگاری می‌شوند و هرگز در HTML/API/لاگ
+    برگردانده نمی‌شوند. وضعیتِ «فعال» اینجا فقط یعنی مدیرِ پلتفرم اجازه داده؛ آماده‌بودنِ
+    واقعی از ``platform_gateway_service`` مشتق می‌شود (اعتبارنامه کامل + آداپتر تأییدشده).
+    """
+
+    gateway_code = models.CharField("کدِ درگاه", max_length=40, unique=True)
+    is_enabled = models.BooleanField("فعال برای پرداخت از صاحبانِ فروشگاه", default=False)
+    sandbox_mode = models.BooleanField("حالتِ آزمایشی (Sandbox)", default=False)
+    display_order = models.PositiveIntegerField("ترتیبِ نمایش", default=0)
+    encrypted_credentials = models.TextField(
+        "اعتبارنامه‌ی رمزنگاری‌شده", blank=True, default="",
+        help_text="مقدارِ رمزنگاری‌شده — هرگز مستقیم خوانده نمی‌شود",
+    )
+
+    class Meta:
+        verbose_name = "درگاهِ پرداختِ پلتفرم"
+        verbose_name_plural = "درگاه‌هایِ پرداختِ پلتفرم"
+        ordering = ["display_order", "gateway_code"]
+
+    def __str__(self):
+        return f"PlatformGateway<{self.gateway_code}> {'on' if self.is_enabled else 'off'}"
+
+    def get_credentials(self) -> dict:
+        import json
+
+        from apps.orders.encryption import decrypt_credential
+
+        if not self.encrypted_credentials:
+            return {}
+        plaintext = decrypt_credential(self.encrypted_credentials)
+        if not plaintext:
+            return {}
+        try:
+            data = json.loads(plaintext)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def set_credentials(self, *, remove_keys=(), **updates) -> None:
+        """ادغام و رمزنگاری — مقدارِ خالی یعنی «بدون تغییر» (الگویِ تنظیماتِ پیامک/زیبال)."""
+        import json
+
+        from apps.orders.encryption import encrypt_credential
+
+        merged = dict(self.get_credentials())
+        for key in remove_keys:
+            merged.pop(key, None)
+        merged.update({k: v for k, v in updates.items() if v is not None and v != ""})
+        clean = {k: v for k, v in merged.items() if v is not None and v != ""}
+        self.encrypted_credentials = encrypt_credential(json.dumps(clean, ensure_ascii=False)) if clean else ""
 
 
 class PlatformAuditLogEntry(models.Model):

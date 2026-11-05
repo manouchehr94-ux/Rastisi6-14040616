@@ -1,0 +1,38 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}خریدهای بسته پیامک | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead">
+  <div><h1>خریدهای بسته‌ی پیامک</h1><p>اعتبار فقط پس از پرداختِ آنلاینِ <b>verify‌شده</b> یا تکمیلِ دستیِ مدیر افزوده می‌شود؛ هر تغییر یک ردیفِ دفترِ اعتبار دارد.</p></div>
+</div>
+{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
+<form method="get" class="pa-card"><div class="pa-cardbody"><div class="pa-toolbar">
+  <select class="pa-input" name="status" style="max-width:200px"><option value="">همه‌ی وضعیت‌ها</option>
+    {% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <button class="pa-btn pa-primary" type="submit">فیلتر</button>
+</div></div></form>
+<div class="pa-card">
+  {% if page.object_list %}
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th>#</th><th>فروشگاه</th><th>بسته</th><th>اعتبار</th><th>قیمت</th><th>وضعیت</th><th>پرداخت آنلاین</th><th>اقدام</th></tr></thead><tbody>
+    {% for purchase in page.object_list %}
+    <tr>
+      <td>{{ purchase.pk }}</td><td>{{ purchase.store.name }}</td><td>{{ purchase.package.name }}</td>
+      <td>{{ purchase.credit_amount }}</td><td>{{ purchase.price }}</td>
+      <td><span class="pa-badge {% if purchase.status == 'completed' %}pa-ok{% elif purchase.status == 'pending' %}pa-warn{% else %}pa-off{% endif %}">{{ purchase.get_status_display }}</span></td>
+      <td>{% for attempt in purchase.payment_attempts.all %}<div style="font-size:11.5px;direction:ltr;text-align:left">{{ attempt.provider }} · {{ attempt.status }}</div>{% empty %}—{% endfor %}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        {% if purchase.status == "pending" %}
+          <form method="post" action="{% url 'portal_platform_admin:sms-purchase-action' purchase.pk 'complete' %}" onsubmit="return confirm('اعتبار بدونِ پرداختِ آنلاین افزوده می‌شود. مطمئنید؟')">{% csrf_token %}<button class="pa-btn pa-small pa-soft" type="submit">تکمیلِ دستی</button></form>
+          <form method="post" action="{% url 'portal_platform_admin:sms-purchase-action' purchase.pk 'cancel' %}">{% csrf_token %}<button class="pa-btn pa-small pa-soft" type="submit">لغو</button></form>
+        {% elif purchase.status == "completed" %}
+          <form method="post" action="{% url 'portal_platform_admin:sms-purchase-action' purchase.pk 'refund' %}">{% csrf_token %}
+            <input class="pa-input" name="reason" placeholder="دلیل بازپرداخت" required style="max-width:160px"><button class="pa-btn pa-small pa-soft" type="submit">بازپرداخت</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}</tbody></table></div>
+  {% include "portal/platform_admin/_pagination.html" %}
+  {% else %}<div class="pa-empty"><div class="pa-empty-icon">📲</div><p>خریدی یافت نشد.</p></div>{% endif %}
+</div>
+{% endblock %}

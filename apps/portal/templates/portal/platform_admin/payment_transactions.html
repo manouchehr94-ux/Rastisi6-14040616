@@ -1,0 +1,46 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}تراکنش‌های پلتفرم | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead">
+  <div><h1>تراکنش‌های پلتفرم</h1><p>همه‌ی تلاش‌های پرداختِ صاحبانِ فروشگاه به راستیسی (اشتراک و بسته‌ی پیامک) — موفق، ناموفق، در انتظار.</p></div>
+  <a class="pa-btn pa-soft" href="{% url 'portal_platform_admin:payment-reconciliation' %}">تطبیق و مغایرت‌ها</a>
+</div>
+{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
+<form method="get" class="pa-card"><div class="pa-cardbody"><div class="pa-toolbar">
+  <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="فروشگاه، شماره‌ی فاکتور یا توکن..." value="{{ query }}"></div>
+  <select class="pa-input" name="kind" style="max-width:170px"><option value="">همه‌ی انواع</option>
+    <option value="subscription" {% if kind == "subscription" %}selected{% endif %}>اشتراک</option>
+    <option value="sms" {% if kind == "sms" %}selected{% endif %}>بسته پیامک</option></select>
+  <select class="pa-input" name="status" style="max-width:170px"><option value="">همه‌ی وضعیت‌ها</option>
+    {% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <input class="pa-input" name="provider" placeholder="درگاه" value="{{ provider }}" style="max-width:130px" dir="ltr">
+  <button class="pa-btn pa-primary" type="submit">فیلتر</button>
+</div></div></form>
+<div class="pa-card">
+  {% if page.object_list %}
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th>نوع</th><th>مرجع</th><th>فروشگاه</th><th>درگاه</th><th>مبلغ</th><th>وضعیت</th><th>کد خطا</th><th>تاریخ</th><th></th></tr></thead>
+    <tbody>
+    {% for row in page.object_list %}
+      <tr>
+        <td>{{ row.kind_label }}</td>
+        <td style="direction:ltr;text-align:left">{{ row.ref }}</td>
+        <td>{{ row.store.name }}</td>
+        <td style="direction:ltr;text-align:left">{{ row.attempt.provider }}</td>
+        <td>{{ row.attempt.amount }} {{ row.attempt.currency }}</td>
+        <td>{% if row.attempt.status == "succeeded" %}<span class="pa-badge pa-ok">موفق</span>
+            {% elif row.attempt.status == "failed" or row.attempt.status == "expired" or row.attempt.status == "cancelled" %}<span class="pa-badge pa-off">{{ row.attempt.get_status_display }}</span>
+            {% elif row.attempt.status == "requires_action" %}<span class="pa-badge pa-warn">نیازمندِ اقدام</span>
+            {% else %}<span class="pa-badge pa-info">{{ row.attempt.get_status_display }}</span>{% endif %}</td>
+        <td style="direction:ltr;text-align:left">{{ row.attempt.failure_code }}</td>
+        <td>{{ row.created_at|jalali }}</td>
+        <td>{% if row.attempt.status == "pending" or row.attempt.status == "created" %}
+          <form method="post" action="{% url 'portal_platform_admin:payment-verify-now' row.kind row.attempt.pk %}">{% csrf_token %}<button class="pa-btn pa-small pa-soft" type="submit">بررسی با درگاه</button></form>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% include "portal/platform_admin/_pagination.html" %}
+  {% else %}<div class="pa-empty"><div class="pa-empty-icon">💳</div><p>تراکنشی یافت نشد.</p></div>{% endif %}
+</div>
+{% endblock %}

@@ -11,6 +11,7 @@
     ({{ current_subscription.get_status_display }})
   </p>
   {% endif %}
+  {% if request.GET.payment == "ok" %}<div class="p-alert">پرداخت تأیید شد و اشتراک شما اعمال شد.</div>{% elif request.GET.payment == "failed" %}<div class="p-alert p-alert-error">پرداخت تأیید نشد؛ می‌توانید دوباره تلاش کنید.</div>{% elif request.GET.payment == "action" %}<div class="p-alert p-alert-error">پرداخت شما نیازمند بررسی پشتیبانی است؛ دوباره پرداخت نکنید.</div>{% elif request.GET.payment == "pending" %}<div class="p-alert">پرداخت هنوز تأیید نشده است.</div>{% endif %}
   {% if messages %}{% for message in messages %}<div class="p-alert p-alert-error">{{ message }}</div>{% endfor %}{% endif %}
   <div style="display:grid;gap:12px">
     {% for version in plan_versions %}
@@ -21,6 +22,11 @@
       </div>
       <form method="post" action="{% url 'portal:billing-checkout' store.public_id version.pk %}">
         {% csrf_token %}
+        {% if gateway_options|length > 1 %}
+        <select name="gateway" aria-label="درگاه پرداخت" style="margin-bottom:6px;width:100%">
+          {% for option in gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+        </select>
+        {% endif %}
         <button type="submit" class="p-btn p-btn-primary">خرید</button>
       </form>
     </div>
