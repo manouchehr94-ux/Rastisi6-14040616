@@ -42,9 +42,15 @@ class CatalogTests(TestCase):
         self.assertEqual(get_adapter("snappay").category, GatewayCategory.BNPL)
         self.assertEqual(get_adapter("torobpay").category, GatewayCategory.BNPL)
 
-    def test_blocked_providers_declare_no_operations(self):
-        for code in ("saman", "parsian", "mellat", "sadad", "tejarat"):
+    def test_skeleton_providers_declare_no_operations(self):
+        for code in ("parsian", "sadad", "tejarat"):
             self.assertEqual(get_adapter(code).capabilities, frozenset(), code)
+
+    def test_saman_and_mellat_are_implemented_but_remain_blocked_for_stores_until_their_contract_is_verified(self):
+        for code in ("saman", "mellat"):
+            adapter = get_adapter(code)
+            self.assertTrue(adapter.capabilities, code)
+            self.assertTrue(adapter.documentation_blocked, code)
 
 
 class CheckoutListingTests(TestCase):

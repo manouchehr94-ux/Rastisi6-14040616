@@ -584,7 +584,9 @@ def payment_initiate(request, code):
         if not is_safe_gateway_redirect(redirect_url, get_adapter(gateway_config.gateway_code), sandbox=gateway_config.is_sandbox):
             logger.error("Refusing empty/malformed payment redirect: order=%s attempt=%s", order.code, attempt.public_id)
             return _pending_page()
-        return redirect(redirect_url)
+        from apps.orders.gateways.redirects import gateway_redirect_response
+
+        return gateway_redirect_response(redirect_url, adapter=get_adapter(gateway_config.gateway_code))
 
     # Card-to-card: the customer reports the transfer; an admin confirms it (the order stays unpaid until then)
     if get_adapter(gateway_config.gateway_code).requires_manual_confirmation:
