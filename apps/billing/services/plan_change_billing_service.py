@@ -25,8 +25,26 @@ class PlanChangeBillingError(Exception):
     """خطای قابل‌نمایش هنگام صورتحسابِ تغییرِ پلن."""
 
 
-def is_upgrade(current_version, target_version) -> bool:
-    return Decimal(target_version.display_price) > Decimal(current_version.display_price)
+def is_upgrade(current_version, target_version, *, current_interval=None, target_interval=None) -> bool:
+    """ارتقا یعنی قیمتِ هدف بیشتر از قیمتِ فعلی است. وقتی دو دوره یکسان‌اند (همه‌ی رفتارِ قبلی) همان مقایسه‌ی خامِ
+    قیمت است؛ فقط برایِ دوره‌هایِ متفاوت قیمتِ ماهانه‌یِ معادل مقایسه می‌شود تا «سالانه ۱۲ میلیون» با «ماهانه ۵
+    میلیون» به‌اشتباه ارتقا حساب نشود."""
+    current_interval = current_interval or current_version.billing_interval
+    target_interval = target_interval or target_version.billing_interval
+    if current_interval == target_interval:
+        return Decimal(target_version.price_for(target_interval)) > Decimal(current_version.price_for(current_interval))
+    return target_version.monthly_equivalent(target_interval) > current_version.monthly_equivalent(current_interval)
+
+
+def resolve_target_interval(subscription, target_version, requested=None) -> str:
+    """دوره‌ی هدف: انتخابِ صریحِ تاجر (باید در نسخه‌ی هدف عرضه شود)، وگرنه دوره‌ی فعلیِ اشتراک اگر هدف عرضه‌اش
+    کند، وگرنه گزینه‌ی اصلیِ هدف. هرگز دوره‌ای که نسخه عرضه نمی‌کند را حدس نمی‌زند."""
+    if requested:
+        if not target_version.offers_interval(requested):
+            raise PlanChangeBillingError("این پلن دوره‌ی انتخاب‌شده را عرضه نمی‌کند.")
+        return requested
+    current = subscription.effective_billing_interval
+    return current if target_version.offers_interval(current) else target_version.billing_interval
 
 
 def supersede_scheduled_plan_change(subscription, *, actor=None, reason="", replacement_intent=""):
@@ -73,19 +91,24 @@ def supersede_scheduled_plan_change(subscription, *, actor=None, reason="", repl
     return scheduled
 
 
-def preview(subscription, target_version) -> dict:
+def preview(subscription, target_version, *, billing_interval=None) -> dict:
     """پیش‌نمایشِ 5A را با اطلاعاتِ صورتحساب (ارتقا/تنزل + مبلغِ قابلِ‌پرداخت)
     غنی می‌کند."""
     base = pcs.preview_plan_change(subscription.store, target_version)
-    upgrade = is_upgrade(base["current_version"], target_version)
+    interval = resolve_target_interval(subscription, target_version, billing_interval)
+    upgrade = is_upgrade(
+        base["current_version"], target_version,
+        current_interval=subscription.effective_billing_interval, target_interval=interval,
+    )
     base["is_upgrade"] = upgrade
+    base["billing_interval"] = interval
     base["billing_effect"] = "upgrade_requires_payment" if upgrade else "downgrade_next_period"
-    base["payable_amount"] = Decimal(target_version.display_price) if upgrade else Decimal("0")
+    base["payable_amount"] = Decimal(target_version.price_for(interval)) if upgrade else Decimal("0")
     return base
 
 
 @transaction.atomic
-def start_plan_change(subscription, target_version, *, preview_token, actor=None, now=None):
+def start_plan_change(subscription, target_version, *, preview_token, actor=None, now=None, billing_interval=None):
     """تغییرِ پلن را آغاز می‌کند. برایِ ارتقا ``("invoice", invoice)`` و برایِ
     تنزل ``("scheduled", scheduled_change)`` برمی‌گرداند. توکنِ کهنه رد می‌شود.
 
@@ -149,7 +172,11 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
     if not preview_token or preview_token != expected:
         raise pcs.StalePreviewError("پیش‌نمایش دیگر معتبر نیست؛ دوباره پیش‌نمایش بگیرید.")
 
-    if is_upgrade(current.plan_version, target_version):
+    interval = resolve_target_interval(current, target_version, billing_interval)
+    if is_upgrade(
+        current.plan_version, target_version,
+        current_interval=current.effective_billing_interval, target_interval=interval,
+    ):
         # ارتقا: یک فاکتورِ قابلِ‌پرداختِ تغییرِ پلن که متعلق به همینِ *تصمیمِ
         # منبع* است (همینِ اشتراک + همینِ اثرانگشتِ وضعیتِ منبع/هدف، یعنی
         # ``expected`` که همین بالا محاسبه و تأیید شد) را دوباره برمی‌گرداند
@@ -209,6 +236,11 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
         )
 
         if existing_payable is not None:
+            if invoice_service.invoice_billing_interval(existing_payable) != interval:
+                # همین تصمیم با دوره‌ی دیگری باز است؛ سندِ مالیِ باز هرگز بی‌صدا عوض یا دوباره‌تعبیر نمی‌شود.
+                raise PlanChangeBillingError(
+                    "برایِ همین پلن یک فاکتورِ حل‌نشده با دوره‌ی پرداختِ دیگری وجود دارد؛ آن را پرداخت یا باطل کنید."
+                )
             return "invoice", existing_payable
 
         # ``idempotency_key`` عمداً به ``invoice_service.create_invoice``
@@ -222,7 +254,7 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
             current, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=target_version,
             currency=target_version.currency,
             lines=[invoice_service.plan_line_spec(
-                target_version, description=f"ارتقا به {target_version.plan.name}",
+                target_version, description=f"ارتقا به {target_version.plan.name}", billing_interval=interval,
             )],
             now=now,
         )

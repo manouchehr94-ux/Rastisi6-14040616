@@ -1,0 +1,46 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}تخصیصِ قابلیت به پلن | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:plans' %}" class="pa-help">← پلن‌ها</a></p>
+<div class="pa-pagehead"><div><h1>تخصیصِ قابلیت به پلن</h1>
+  <p>ستون‌ها نسخه‌ی <b>پیش‌نویسِ</b> هر پلن‌اند؛ تغییر فقط روی پیش‌نویس ذخیره می‌شود و با «انتشار» نسخه‌ی تازه و تغییرناپذیر می‌شود. زیرِ هر خانه وضعیتِ <b>نسخه‌ی منتشرشده</b> دیده می‌شود: «فعال» یعنی دسترسیِ واقعی، «برنامه‌ریزی‌شده» یعنی انتخاب شده امّا هنوز دسترسی نمی‌دهد.</p></div></div>
+{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
+
+{% for col in columns %}{% if not col.draft %}<form id="draft-{{ col.plan.pk }}" method="post">{% csrf_token %}<input type="hidden" name="action" value="create_draft"><input type="hidden" name="plan_id" value="{{ col.plan.pk }}"></form>{% endif %}{% endfor %}
+
+<form method="post" class="pa-card">{% csrf_token %}<input type="hidden" name="action" value="save">
+  {% for col in columns %}{% if col.draft %}<input type="hidden" name="present_{{ col.draft.pk }}" value="1">{% endif %}{% endfor %}
+  <div class="pa-tablewrap"><table id="assignment-matrix">
+    <thead><tr><th>قابلیت</th>{% for col in columns %}<th>{{ col.plan.name }}<div class="pa-help">{% if col.draft %}پیش‌نویس v{{ col.draft.version_number }}{% else %}بدونِ پیش‌نویس{% endif %}{% if col.published %} · منتشرشده v{{ col.published.version_number }}{% endif %}</div>
+      {% if col.draft %}<a class="pa-help" href="{% url 'portal_platform_admin:plan-edit' col.plan.pk %}">ویرایشِ پیش‌نویس</a>{% else %}<button class="pa-btn pa-small" type="submit" form="draft-{{ col.plan.pk }}">ساختِ پیش‌نویس</button>{% endif %}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr data-feature="{{ r.f.key }}">
+      <td>{% if r.f.icon %}<span aria-hidden="true">{{ r.f.icon }}</span> {% endif %}<b>{{ r.f.title }}</b>
+        <div class="pa-help">{{ r.category }} · {{ r.f.get_technical_status_display }} · {{ r.f.get_commercial_status_display }}</div>
+        {% if not r.f.grants_access %}<span class="pa-badge pa-warn">تا آماده‌شدن دسترسی نمی‌دهد</span>{% endif %}</td>
+      {% for cell in r.cells %}
+      <td data-col="{{ forloop.counter0 }}">
+        {% if cell.draft %}
+        <input type="hidden" name="cell_{{ cell.draft.pk }}_{{ r.f.pk }}" value="1">
+        <label style="font-size:13px"><input type="checkbox" name="en_{{ cell.draft.pk }}_{{ r.f.pk }}" {% if cell.draft.enabled %}checked{% endif %}> فعال در پیش‌نویس</label>
+        {% if r.limited %}
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px"><input class="pa-input" style="width:90px" type="number" min="0" step="any" name="lim_{{ cell.draft.pk }}_{{ r.f.pk }}" value="{{ cell.draft.limit }}" aria-label="سقف">{% if r.f.unit_label %}<span class="pa-help">{{ r.f.unit_label }}</span>{% endif %}
+        <label style="font-size:12px"><input type="checkbox" name="un_{{ cell.draft.pk }}_{{ r.f.pk }}" {% if cell.draft.unlimited %}checked{% endif %}> نامحدود</label></div>
+        {% endif %}
+        {% endif %}
+        {% if cell.published %}
+        <div class="pa-help" style="margin-top:4px">منتشرشده:
+          {% if cell.published.state == "active" %}<span class="pa-badge pa-ok">فعال</span>
+          {% elif cell.published.state == "planned" %}<span class="pa-badge pa-warn">برنامه‌ریزی‌شده — بدونِ دسترسی</span><div>{{ cell.published.reason }}</div>
+          {% else %}<span class="pa-badge pa-off">ندارد</span>{% endif %}</div>
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% empty %}<tr><td colspan="9" class="pa-help">قابلیتِ قابلِ‌تخصیصی وجود ندارد.</td></tr>{% endfor %}
+    </tbody></table></div>
+  <div class="pa-cardbody"><button class="pa-btn pa-primary" type="submit">ذخیره روی پیش‌نویس‌ها</button>
+    <p class="pa-help">{{ not_assignable_count }} ردیفِ دیگرِ کاتالوگ حق‌دسترسیِ قابلِ‌کنترل ندارند (همراهِ همه‌ی پلن‌ها یا هنوز پیاده‌نشده)؛ تخصیصِ آن‌ها معنا ندارد و ادعای دروغ نمی‌سازیم.</p></div>
+</form>
+{% endblock %}

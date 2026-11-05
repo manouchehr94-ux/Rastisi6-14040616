@@ -70,6 +70,15 @@ def _normalize_or_raise(raw_hostname: str) -> str:
 @transaction.atomic
 def request_custom_domain(*, store: Store, hostname: str, actor) -> StoreDomain:
     """اولین گام: ثبتِ خودِ دامنه، بدونِ هیچ تأییدی هنوز."""
+    # گیتِ پلن در لایه‌ی سرویس (پنلِ فروشگاه و پورتالِ مالک هر دو از اینجا عبور می‌کنند). grandfathering: اشتراک‌هایِ نسخه‌هایِ
+    # منتشرشده پیش از ``enforced_from`` و فروشگاهِ بدونِ اشتراک همچنان مجازند (fail-open)؛ دامنه‌هایِ موجود هرگز حذف نمی‌شوند.
+    from apps.subscriptions.feature_catalog import DOMAINS_CUSTOM
+    from apps.subscriptions.services import enforcement
+
+    try:
+        enforcement.enforce_feature(store, DOMAINS_CUSTOM)
+    except enforcement.FeatureNotAvailable as exc:
+        raise DomainVerificationError("دامنه‌ی اختصاصی در پلنِ فعلیِ شما فعال نیست؛ برایِ استفاده پلنِ خود را ارتقا دهید.") from exc
     normalized = _normalize_or_raise(hostname)
     try:
         domain = StoreDomain.objects.create(

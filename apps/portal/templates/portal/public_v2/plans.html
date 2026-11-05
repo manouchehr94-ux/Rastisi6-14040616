@@ -1,15 +1,134 @@
 {% extends "portal/public_v2/base.html" %}
-{% load public_site %}
+{% load static public_site persian %}
 {% block title %}{% ps 'plans.meta_title' %}{% endblock %}
 {% block meta_description %}<meta name="description" content="{% ps 'plans.meta_description' %}">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'portal/css/pricing.css' %}?v=20261105">{% endblock %}
 {% block content %}
 {% ps 'plans.crumb' as crumb %}{% ps 'plans.title' as title %}{% ps 'plans.lead' as lead %}
 {% include "portal/public_v2/_pghead.html" %}
-<div class="sec"><div class="wrap">
+{% with cards=page.cards %}
+<div class="sec"><div class="wrap pz" data-pricing data-initial="{{ page.default_interval }}" data-recommended="{{ recommended_index }}" data-testid="pricing-page">
+
+  {% if cards %}
+  {% if page.intervals|length > 1 %}
+  <div class="pz-controls">
+    <div class="pz-seg" role="radiogroup" aria-label="دوره‌ی پرداخت">
+      {% for item in page.intervals %}
+      <button type="button" role="radio" data-period="{{ item.interval }}" aria-checked="{% if item.interval == page.default_interval %}true{% else %}false{% endif %}">{{ item.label }}{% if item.max_saving %}<small>تا {{ item.max_saving|fa_number }}٪ صرفه‌جویی</small>{% endif %}</button>
+      {% endfor %}
+    </div>
+    <p class="pz-hint">قیمتِ هر پلن برای دوره‌ای که انتخاب می‌کنید نمایش داده می‌شود.</p>
+  </div>
+  {% endif %}
+
+  <div class="pz-cards">
+    {% for card in cards %}
+    <article class="pz-tag{% if card.is_recommended %} pop{% endif %}" data-plan="{{ card.plan.code }}" data-offered="{{ card.offered|join:',' }}" data-default="{{ card.default_interval }}">
+      {% if card.is_recommended %}<span class="ribbon">{{ card.plan.badge_text|default:"پیشنهاد ما" }}</span>{% endif %}
+      <h3>{{ card.title }}</h3>
+      {% if card.promo_label %}<span class="pz-promo">{{ card.promo_label }}</span>{% endif %}
+      <p class="pz-sub">{{ card.tagline|default:card.description|truncatechars:110 }}</p>
+
+      <div class="pz-price">
+        {% if card.is_free or not card.purchasable %}
+          <b>رایگان</b>
+        {% else %}
+          {% for p in card.periods %}
+          <div data-price="{{ p.interval }}"{% if p.interval != card.initial_interval %} hidden{% endif %}>
+            {% if p.compare_at %}<span class="pz-was num">{{ p.compare_at|toman_raw }}</span>{% endif %}
+            <b class="num">{{ p.price|toman_raw }}</b>
+            <span class="pz-unit">تومان · {{ p.label }}</span>
+            {% if p.discount_percent %}<span class="pz-chip">{{ p.discount_percent|fa_number }}٪ تخفیف</span>
+            {% elif p.savings_percent %}<span class="pz-chip">{{ p.savings_percent|fa_number }}٪ صرفه‌جویی نسبت به ماهانه</span>{% endif %}
+            {% if p.custom_label %}<span class="pz-chip">{{ p.custom_label }}</span>{% endif %}
+            {% if p.interval != "monthly" and p.monthly_equivalent %}<span class="pz-eq">معادلِ ماهانه {{ p.monthly_equivalent|toman }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      {% if card.trial_days %}<div class="pz-trial">{{ card.trial_days|fa_number }} روز دوره آزمایشی</div>
+      {% else %}<div class="pz-trial none">دوره‌ی آزمایشی برایِ این پلن تعریف نشده است</div>{% endif %}
+
+      <ul>{% for h in card.highlights %}<li><span>{{ h.title }}</span><b>{{ h.text }}</b></li>{% endfor %}</ul>
+
+      {% if card.is_free or not card.purchasable %}
+        <a href="{% url 'portal:register' %}?plan={{ card.plan.code }}" class="btn btn-leaf btn-block" data-cta="register">{{ card.cta_label|default:"شروع با این پلن" }}</a>
+      {% elif is_owner_authenticated %}
+        <a href="{{ billing_url }}" class="btn btn-leaf btn-block" data-cta="upgrade">{{ card.cta_label|default:"انتخاب و ارتقا در پنل" }}</a>
+      {% else %}
+        <a href="{% url 'portal:register' %}?plan={{ card.plan.code }}&amp;period={{ card.initial_interval }}" data-cta="register" data-base="{% url 'portal:register' %}?plan={{ card.plan.code }}" class="btn btn-leaf btn-block">{% if card.cta_label %}{{ card.cta_label }}{% elif card.trial_days %}شروع دوره آزمایشی{% else %}شروع با این پلن{% endif %}</a>
+      {% endif %}
+      <p class="pz-note" data-note hidden>این پلن در دوره‌ی انتخابی عرضه نمی‌شود؛ دوره‌ی «{{ card.default_label }}» نمایش داده شد.</p>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="pz-honest">پرداختِ اشتراک تک‌مرحله‌ای و بدونِ برداشتِ خودکار است؛ پیش از هر پرداخت فاکتورِ دقیق را می‌بینید. تغییرِ قیمت یا امکاناتِ یک پلن، مشترکانِ فعلی را بی‌خبر تغییر نمی‌دهد.</p>
+
+  <div class="pz-head pz-head-gap"><h2 id="pz-compare">مقایسه‌ی کاملِ امکانات</h2>
+    <p>هر ردیف همان قابلیتی است که محصول اعمال می‌کند. عدد یعنی سقفِ واقعیِ آن پلن؛ «نامحدود» یعنی بدونِ سقف؛ «—» یعنی در آن پلن نیست؛ «همه‌ی پلن‌ها» یعنی قابلیت به پلن بستگی ندارد. روی عنوانِ هر ردیف بزنید تا توضیحش باز شود.</p></div>
+
+  <div class="pz-matrix" data-sel="{{ recommended_index }}" data-cols="{{ cards|length }}" aria-labelledby="pz-compare">
+    <div class="pz-tabs" role="tablist" aria-label="انتخابِ پلن برایِ مقایسه">
+      {% for card in cards %}<button type="button" role="tab" data-tab="{{ forloop.counter0 }}" aria-selected="{% if forloop.counter0 == recommended_index %}true{% else %}false{% endif %}">{{ card.title }}</button>{% endfor %}
+    </div>
+    <div class="pz-mh" aria-hidden="true"><div>امکان</div>{% for card in cards %}<div{% if card.is_recommended %} class="pop"{% endif %}>{{ card.title }}</div>{% endfor %}</div>
+
+    {% for cat in page.matrix %}
+    <details class="pz-cat" open data-category="{{ cat.key }}">
+      <summary>{{ cat.label }}</summary>
+      {% for row in cat.rows %}
+      <div class="pz-row{% if row.is_soon %} soon{% endif %}" data-feature="{{ row.feature.key }}" data-state="{{ row.state }}">
+        <div class="pz-name">
+          {% if row.description or row.help_text %}
+          <details class="pz-d"><summary><i aria-hidden="true">+</i>{% if row.icon %}<span class="pz-ico" aria-hidden="true">{{ row.icon }}</span>{% endif %}{{ row.title }}</summary>
+            {% if row.description %}<p class="pz-desc">{{ row.description }}</p>{% endif %}
+            {% if row.help_text %}<p class="pz-desc pz-help">{{ row.help_text }}</p>{% endif %}</details>
+          {% else %}<span class="pz-plain">{% if row.icon %}<span class="pz-ico" aria-hidden="true">{{ row.icon }}</span>{% endif %}{{ row.title }}</span>{% endif %}
+          {% if row.is_soon %}<span class="pz-flag pz-soon-flag">به‌زودی{% if row.when %} · {{ row.when }}{% endif %}</span>{% endif %}
+          {% if row.note %}<span class="pz-flag">{{ row.note }}</span>{% endif %}
+        </div>
+        {% for cell in row.cells %}
+        <div class="pz-cell{% if cell.rec %} pop{% endif %}" data-col="{{ forloop.counter0 }}">
+          {% if cell.kind == "check" %}<span class="pz-yes" role="img" aria-label="دارد">✓</span>
+          {% elif cell.kind == "all" %}<span class="pz-all">✓ همه‌ی پلن‌ها</span>
+          {% elif cell.kind == "unlimited" %}<span class="pz-unl">نامحدود</span>
+          {% elif cell.kind == "value" %}<span class="num">{{ cell.text }}</span>
+          {% elif cell.kind == "soon" %}<span class="pz-soon" title="هنوز فعال نیست؛ با آماده‌شدن اعلام می‌شود">به‌زودی</span>
+          {% else %}<span class="pz-none" role="img" aria-label="ندارد">—</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </details>
+    {% endfor %}
+
+    {% if page.services %}
+    <details class="pz-cat" open data-category="services">
+      <summary>خدماتِ حرفه‌ایِ اختیاری</summary>
+      {% for row in page.services %}
+      <div class="pz-row" data-service="{{ row.service.code }}">
+        <div class="pz-name"><span class="pz-plain">{{ row.service.title }}</span>
+          {% if row.service.description %}<p class="pz-desc pz-flush">{{ row.service.description }}</p>{% endif %}
+          {% if row.service.price %}<span class="pz-flag pz-flush">{{ row.service.price|toman }}</span>{% elif row.service.price_note %}<span class="pz-flag pz-flush">{{ row.service.price_note }}</span>{% endif %}</div>
+        {% for cell in row.cells %}<div class="pz-cell" data-col="{{ forloop.counter0 }}">{% if cell.kind == "check" %}<span class="pz-yes" role="img" aria-label="{{ cell.text }}">✓</span>{% elif cell.kind == "paid" %}<span class="pz-paid">{{ cell.text }}</span>{% else %}<span class="pz-none" role="img" aria-label="ندارد">—</span>{% endif %}</div>{% endfor %}
+      </div>
+      {% endfor %}
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
   {% include "portal/public_v2/_plans.html" %}
+  {% endif %}
+
   <div class="promises">{% ps_items 'promises' as promises %}{% for p in promises %}<div><b>{{ p.b }}</b><span>{{ p.s }}</span></div>{% endfor %}</div>
 </div></div>
+{% endwith %}
 <div class="sec sec-band"><div class="wrap faq-grid"><div><h2 class="h2-sm h2">{% ps 'plans.faq_title' %}</h2></div>
-  <div class="faq">{% ps_items 'faq' as faqs %}{% for f in faqs %}{% if f.billing %}{% include "portal/public_v2/_faq_item.html" %}{% endif %}{% endfor %}</div>
+  <div class="faq">
+    {% for faq in page.faqs %}<details><summary>{{ faq.question }}</summary><p class="pz-pre">{{ faq.answer }}</p></details>{% endfor %}
+    {% for faq in page.plan_faqs %}<details><summary><span>{{ faq.question }}<span class="pz-faqtag">درباره‌ی پلنِ {{ faq.plan.public_title|default:faq.plan.name }}</span></span></summary><p class="pz-pre">{{ faq.answer }}</p></details>{% endfor %}
+    {% ps_items 'faq' as faqs %}{% for f in faqs %}{% if f.billing %}{% include "portal/public_v2/_faq_item.html" %}{% endif %}{% endfor %}
+  </div>
 </div></div>
+<script src="{% static 'portal/js/pricing.js' %}?v=20261105" defer></script>
 {% endblock %}

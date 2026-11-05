@@ -10,6 +10,7 @@
 from dataclasses import dataclass, field
 
 from apps.subscriptions.models import EntitlementDefinition, PlanEntitlement, StoreSubscription
+from apps.subscriptions.services import feature_gate
 
 
 class EntitlementError(Exception):
@@ -106,8 +107,9 @@ def _entitlement_map(plan_version):
 
 
 def clear_entitlement_cache():
-    """کشِ نقشه‌ی Entitlement را پاک می‌کند — برایِ تست/پس از تغییرِ پلن."""
+    """کشِ نقشه‌ی Entitlement (و گیتِ انتشار) را پاک می‌کند — برایِ تست/پس از تغییرِ پلن."""
     _ENTITLEMENT_MAP_CACHE.clear()
+    feature_gate.invalidate()
 
 
 # ================================================================== خواندنِ اشتراک
@@ -129,13 +131,32 @@ def get_effective_plan_version(store):
 
 # ================================================================== قابلیت (boolean)
 
+#: کلیدهایِ اعمال‌شده‌یِ *تازه* که grandfathering دارند (``EntitlementDefinition.enforced_from``). برایِ بقیه‌ی کلیدها هیچ
+#: پرس‌وجوی اضافه‌ای انجام نمی‌شود.
+GRANDFATHERED_KEYS = frozenset({"domains.custom"})
+
+
+def _is_grandfathered(plan_version, key) -> bool:
+    """نسخه‌ی منتشرشده پیش از ``enforced_from`` (یا بدونِ ``published_at`` = قدیمی/دستی) رفتارِ قبلیِ fail-open را حفظ می‌کند."""
+    if key not in GRANDFATHERED_KEYS or plan_version is None:
+        return False
+    effective = EntitlementDefinition.objects.filter(key=key).values_list("enforced_from", flat=True).first()
+    if effective is None:
+        return False
+    return plan_version.published_at is None or plan_version.published_at < effective
+
+
 def has_entitlement(store, key, *, plan_version=None) -> bool:
     """آیا قابلیتِ ``key`` برایِ Store فعال است؟ fail-open وقتی اشتراک/تعریف
-    وجود نداشته باشد (ADR-64)."""
+    وجود نداشته باشد (ADR-64). کلیدهایِ دارایِ grandfathering برایِ نسخه‌هایِ منتشرشده‌ی پیش از تاریخِ اعمال همیشه True‌اند."""
     if plan_version is None:
         plan_version = get_effective_plan_version(store)
+    if not feature_gate.allows(key, plan_version):
+        return False  # قابلیتِ برنامه‌ریزی‌شده/ثبت‌نشده/قطع‌شده هرگز دسترسی نمی‌دهد (feature_gate)
     if plan_version is None:
         return True  # بدونِ اشتراک → fail-open (نگاه کنید به docstring ماژول)
+    if _is_grandfathered(plan_version, key):
+        return True
     mapping = _entitlement_map(plan_version)
     pe = mapping.get(key)
     if pe is not None:
@@ -159,6 +180,8 @@ def get_entitlement_limit(store, key, *, plan_version=None):
     نیست). fail-open (None) وقتی اشتراک/تعریف نبود."""
     if plan_version is None:
         plan_version = get_effective_plan_version(store)
+    if not feature_gate.allows(key, plan_version):
+        return 0  # گیتِ انتشار: هیچ ساختِ تازه‌ای مجاز نیست
     if plan_version is None:
         return None
     mapping = _entitlement_map(plan_version)

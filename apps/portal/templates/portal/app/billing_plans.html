@@ -13,16 +13,17 @@
   {% endif %}
   {% if messages %}{% for message in messages %}<div class="p-alert p-alert-error">{{ message }}</div>{% endfor %}{% endif %}
   <div style="display:grid;gap:12px">
-    {% for version in plan_versions %}
-    <div style="border:1px solid var(--p-line);border-radius:12px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <div>
-        <div style="font-weight:600">{{ version.plan.public_title|default:version.plan.name }}</div>
-        <div style="font-size:12px;color:var(--p-muted)">{{ version.display_price }} تومان / {{ version.get_billing_interval_display }}</div>
-      </div>
-      <form method="post" action="{% url 'portal:billing-checkout' store.public_id version.pk %}">
+    {% for offer in plan_offers %}
+    <div style="border:1px solid {% if offer.version.plan_id == selected_plan_id %}var(--p-primary,#6c4cf1){% else %}var(--p-line){% endif %};border-radius:12px;padding:16px;display:grid;gap:10px"{% if offer.version.plan_id == selected_plan_id %} aria-current="true"{% endif %}>
+      <div style="font-weight:600">{{ offer.version.plan.public_title|default:offer.version.plan.name }}{% if offer.version.plan_id == selected_plan_id %} <span style="font-size:11px;color:var(--p-muted)">— انتخابِ شما در صفحه‌ی تعرفه</span>{% endif %}</div>
+      {% for period in offer.periods %}
+      <form method="post" action="{% url 'portal:billing-checkout' store.public_id offer.version.pk %}" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         {% csrf_token %}
+        <input type="hidden" name="billing_interval" value="{{ period.interval }}">
+        <div style="font-size:13px"><b>{{ period.price }}</b> تومان / {{ period.label }}{% if period.savings_percent %} <span style="font-size:11px;color:var(--p-muted)">({{ period.savings_percent }}٪ صرفه‌جویی)</span>{% endif %}</div>
         <button type="submit" class="p-btn p-btn-primary">خرید</button>
       </form>
+      {% endfor %}
     </div>
     {% empty %}
     <p style="text-align:center;font-size:13px;color:var(--p-muted)">در حال حاضر پلنِ پولیِ قابلِ‌خریدی موجود نیست.</p>

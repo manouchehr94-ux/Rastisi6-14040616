@@ -117,7 +117,7 @@ def latest_offerable_industry_templates():
 
 
 @transaction.atomic
-def provision_trial_store(*, owner, name: str, industry_template: IndustryTemplate | None = None) -> Store:
+def provision_trial_store(*, owner, name: str, industry_template: IndustryTemplate | None = None, plan_version=None) -> Store:
     """فروشگاهِ آزمایشیِ ``owner`` را می‌سازد و بلافاصله فعال و قابل‌استفاده
     برمی‌گرداند. مراحل: سقفِ تعدادِ فروشگاه → Store (با platform_code و
     admin_subdomain خودکار) → عضویتِ OWNER فعال → دامنه‌ی آزمایشیِ
@@ -163,7 +163,7 @@ def provision_trial_store(*, owner, name: str, industry_template: IndustryTempla
     if industry_template is not None:
         install_industry_template(store, industry_template)
 
-    provision_default_subscription(store, actor=owner)
+    provision_default_subscription(store, actor=owner, plan_version=plan_version)
 
     record_audit_event(
         store=store, actor=owner, action_code="store.trial_provisioned",
@@ -173,7 +173,7 @@ def provision_trial_store(*, owner, name: str, industry_template: IndustryTempla
     return store
 
 
-def provision_initial_trial_store(*, owner, name: str) -> tuple[Store, bool]:
+def provision_initial_trial_store(*, owner, name: str, plan_version=None) -> tuple[Store, bool]:
     """فروشگاهِ آزمایشیِ **اولِ** یک مالکِ تازه — idempotent و ایمن در برابرِ
     مسابقه. ردیفِ ``User`` مالک در تراکنش قفل می‌شود (PostgreSQL:
     ``SELECT ... FOR UPDATE``)؛ اگر مالک از قبل عضوِ فعالِ OWNER یک Store باشد،
@@ -191,4 +191,4 @@ def provision_initial_trial_store(*, owner, name: str) -> tuple[Store, bool]:
         )
         if existing is not None:
             return existing, False
-        return provision_trial_store(owner=owner, name=name), True
+        return provision_trial_store(owner=owner, name=name, plan_version=plan_version), True

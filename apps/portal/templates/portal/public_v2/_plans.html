@@ -12,7 +12,7 @@
     </div>
     <div class="price-sub">{% if row.version.trial_days %}{% ps 'plans.trial' days=row.version.trial_days %}{% endif %}</div>
     {% if row.features %}<ul>{% for feature in row.features %}<li><svg aria-hidden="true"><use href="#i-check"/></svg>{{ feature }}</li>{% endfor %}</ul>{% endif %}
-    <a href="{% url 'portal:register' %}" class="btn btn-leaf btn-block">{% ps 'plans.cta' %}</a>
+    <a href="{% url 'portal:register' %}?plan={{ row.plan.code }}" class="btn btn-leaf btn-block">{% ps 'plans.cta' %}</a>
   </div>
   {% endfor %}
 </div>

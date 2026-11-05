@@ -168,14 +168,17 @@ class PlansTests(PlatformAdminExtendedTestCase):
         draft.refresh_from_db()
         self.assertEqual(draft.status, PlanVersion.Status.PUBLISHED)
 
-    def test_in_use_plan_cannot_be_deactivated(self):
+    def test_in_use_plan_can_be_archived_without_breaking_its_subscribers(self):
         plan, version = _make_plan_version(code="inuse")
         subscription = StoreSubscription.objects.create(
             store=self.store, plan_version=version, status=StoreSubscription.Status.ACTIVE, is_current=True,
         )
         self.client.post(f"/plans/{plan.pk}/archive/", {}, HTTP_HOST=_HOST)
         plan.refresh_from_db()
-        self.assertTrue(plan.is_active)
+        subscription.refresh_from_db()
+        self.assertFalse(plan.is_active)                                   # closed to new sales
+        self.assertTrue(subscription.is_current)                           # existing subscription untouched
+        self.assertEqual(subscription.plan_version_id, version.pk)
         subscription.delete()
 
     def test_unused_plan_can_be_deactivated(self):

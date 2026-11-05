@@ -8282,8 +8282,11 @@ def subscription_plans(request):
     store = _resolve_dashboard_store(request)
     current_version = ent.get_effective_plan_version(store)
     current_plan_id = current_version.plan_id if current_version else None
+    from apps.subscriptions.services.pricing_page_service import _period_options
+
     plans = [
-        {"plan": plan, "version": version, "is_current": plan.pk == current_plan_id}
+        {"plan": plan, "version": version, "is_current": plan.pk == current_plan_id,
+         "periods": [p for p in _period_options(version) if p["price"] > 0]}
         for plan, version in _publicly_selectable_versions(store)
     ]
     return render(request, "dashboard/subscription_plans.html", {
@@ -8320,9 +8323,13 @@ def subscription_plan_preview(request):
     if current_subscription is None:
         messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
         return redirect("dashboard:subscription-plans")
+    billing_interval = (request.POST.get("billing_interval") or "").strip()
+    if billing_interval and not target_version.offers_interval(billing_interval):
+        messages.error(request, "این پلن دوره‌ی انتخاب‌شده را عرضه نمی‌کند.")
+        return redirect("dashboard:subscription-plans")
     try:
-        preview = pcb.preview(current_subscription, target_version)
-    except pcs.PlanChangeError as exc:
+        preview = pcb.preview(current_subscription, target_version, billing_interval=billing_interval or None)
+    except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
     return render(request, "dashboard/subscription_plan_preview.html", {
@@ -8363,8 +8370,10 @@ def subscription_plan_execute(request):
         return redirect("dashboard:subscription-plans")
 
     try:
+        billing_interval = (request.POST.get("billing_interval") or "").strip()
         kind, result = pcb.start_plan_change(
             current_subscription, target_version, preview_token=token, actor=request.user,
+            billing_interval=billing_interval or None,
         )
     except pcs.StalePreviewError as exc:
         messages.error(request, str(exc))

@@ -19,8 +19,7 @@ def _add_months(dt, months):
 def next_period_end(start, billing_interval):
     """پایانِ دوره را از ``start`` بر اساسِ فاصله برمی‌گرداند؛ برایِ فاصله‌ی
     ``none`` (رایگان/legacy) ``None`` برمی‌گرداند."""
-    if billing_interval == PlanVersion.BillingInterval.MONTHLY:
-        return _add_months(start, 1)
-    if billing_interval == PlanVersion.BillingInterval.YEARLY:
-        return _add_months(start, 12)
+    months = PlanVersion.INTERVAL_MONTHS.get(billing_interval)
+    if months:
+        return _add_months(start, months)
     return None
