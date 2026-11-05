@@ -39,19 +39,46 @@ SECRET = PASARGAD_CREDS["password"]
 class MatrixIsPinnedToAdaptersTests(SimpleTestCase):
     """The provider matrix is evidence; it must never contradict what the adapters themselves declare."""
 
-    def test_every_registered_gateway_has_exactly_one_matrix_row(self):
-        self.assertEqual(set(registered_codes()) - set(matrix.MATRIX), set(), "an adapter without platform-eligibility evidence")
-        self.assertEqual(set(matrix.MATRIX) - set(registered_codes()), set())
+    def test_every_registered_gateway_has_a_matrix_row_except_store_only_methods(self):
+        self.assertEqual(set(registered_codes()) - set(matrix.MATRIX), set(matrix.STORE_ONLY))
+        self.assertEqual(set(matrix.STORE_ONLY), {"cod", "card_to_card"})
+        self.assertEqual({c for c, f in matrix.MATRIX.items() if f.kind == matrix.KIND_ONLINE} - set(registered_codes()), set())
 
-    def test_approved_rows_are_real_verified_online_adapters(self):
-        for code in matrix.APPROVED_CODES:
+    def test_cod_and_store_card_transfer_are_not_platform_methods_at_all(self):
+        for code in matrix.STORE_ONLY:
+            self.assertNotIn(code, matrix.MATRIX)
+            self.assertNotIn(code, matrix.IMPLEMENTED_CODES)
+            self.assertNotIn(code, pgs.ELIGIBLE_CODES)
+            self.assertFalse(pgs.is_eligible(code))
+
+    def test_approved_online_rows_are_real_verified_adapters_without_gates(self):
+        for code, facts in matrix.MATRIX.items():
+            if facts.platform == matrix.APPROVED and facts.kind == matrix.KIND_ONLINE:
+                adapter = get_adapter(code)
+                self.assertTrue(adapter.is_online, code)
+                self.assertFalse(adapter.documentation_blocked, code)
+                self.assertEqual(facts.gates, (), code)
+                self.assertIn(adapter.category, (GatewayCategory.PSP, GatewayCategory.FACILITATOR), code)
+                self.assertTrue(adapter.supports(PaymentOperation.CREATE) and adapter.supports(PaymentOperation.VERIFY), code)
+                self.assertTrue(facts.evidence and facts.setup_steps, code)
+
+    def test_gated_rows_have_real_adapters_and_the_right_gates(self):
+        for code, facts in matrix.MATRIX.items():
+            if facts.platform != matrix.GATED:
+                continue
             adapter = get_adapter(code)
-            self.assertTrue(adapter.is_online, code)
-            self.assertFalse(adapter.documentation_blocked, code)
-            self.assertIn(adapter.category, (GatewayCategory.PSP, GatewayCategory.FACILITATOR), code)
             self.assertTrue(adapter.supports(PaymentOperation.CREATE) and adapter.supports(PaymentOperation.VERIFY), code)
-            self.assertTrue(matrix.MATRIX[code].evidence, code)
-            self.assertTrue(matrix.MATRIX[code].setup_steps, code)
+            self.assertIn(matrix.GATE_LIVE_VERIFICATION, facts.gates, code)                 # mocked tests never make anything "ready"
+            if adapter.category == GatewayCategory.BNPL:
+                self.assertEqual(facts.default_purchase_types, (), code)                     # no purchase type until explicitly approved
+                self.assertIn(matrix.GATE_PROVIDER_APPROVAL, facts.gates, code)             # written approval for SaaS purchases
+                self.assertTrue(adapter.supports(PaymentOperation.SETTLE), code)
+                self.assertFalse(adapter.supports_dry_run_session, code)                     # never invents a cart for a test
+            else:
+                self.assertIn(matrix.GATE_CONTRACT_VERIFICATION, facts.gates, code)
+                self.assertTrue(adapter.documentation_blocked, code)                         # unverified contract stays blocked for stores
+            self.assertTrue(facts.blocker and facts.evidence, code)
+        self.assertTrue(get_adapter("mellat").supports(PaymentOperation.SETTLE))             # SETTLE is a DISTINCT capability
 
     def test_not_implemented_rows_are_really_skeletons(self):
         for code, facts in matrix.MATRIX.items():
@@ -61,23 +88,15 @@ class MatrixIsPinnedToAdaptersTests(SimpleTestCase):
                 self.assertFalse(adapter.supports(PaymentOperation.CREATE), code)
                 self.assertTrue(facts.blocker, code)
 
-    def test_pending_contract_rows_are_implemented_bnpl_adapters(self):
-        for code, facts in matrix.MATRIX.items():
-            if facts.platform == matrix.PENDING_CONTRACT:
-                adapter = get_adapter(code)
-                self.assertEqual(adapter.category, GatewayCategory.BNPL, code)
-                self.assertFalse(adapter.documentation_blocked, code)         # the adapter is real…
-                self.assertIn("SaaS", facts.evidence + facts.blocker + facts.summary)   # …the blocker is the SaaS contract
-                self.assertTrue(facts.blocker, code)
+    def test_the_manual_card_row_is_a_first_class_manual_method_without_any_adapter(self):
+        facts = matrix.MATRIX[matrix.PLATFORM_CARD]
+        self.assertEqual((facts.kind, facts.platform, facts.gates), (matrix.KIND_MANUAL, matrix.APPROVED, ()))
+        self.assertNotIn(matrix.PLATFORM_CARD, registered_codes())                           # never the store's card_to_card adapter
+        self.assertTrue(any(f["name"] == "destination_card" for f in facts.manual_fields))
 
-    def test_not_eligible_rows_are_offline(self):
-        for code, facts in matrix.MATRIX.items():
-            if facts.platform == matrix.NOT_ELIGIBLE:
-                self.assertFalse(get_adapter(code).is_online, code)
-
-    def test_the_allow_list_is_derived_from_the_matrix_and_is_exactly_three_psps(self):
-        self.assertEqual(set(pgs.ELIGIBLE_CODES), {"zibal", "zarinpal", "pasargad"})
-        self.assertEqual(pgs.ELIGIBLE_CODES, matrix.APPROVED_CODES)
+    def test_the_allow_list_is_derived_from_the_matrix(self):
+        self.assertEqual(pgs.ELIGIBLE_CODES, matrix.IMPLEMENTED_CODES)
+        self.assertEqual(set(pgs.ELIGIBLE_CODES), {"zibal", "zarinpal", "pasargad", "snappay", "torobpay", "saman", "mellat", "platform_card"})
 
 
 @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
@@ -92,9 +111,9 @@ class StatusTaxonomyTests(TestCase):
     def test_every_provider_gets_the_status_that_is_actually_true(self):
         expected = {
             "zibal": pgs.MISSING_CREDENTIALS, "zarinpal": pgs.MISSING_CREDENTIALS, "pasargad": pgs.MISSING_CREDENTIALS,
-            "snappay": pgs.PENDING_CONTRACT, "torobpay": pgs.PENDING_CONTRACT,
-            "saman": pgs.NOT_IMPLEMENTED, "parsian": pgs.NOT_IMPLEMENTED, "mellat": pgs.NOT_IMPLEMENTED,
-            "sadad": pgs.NOT_IMPLEMENTED, "tejarat": pgs.NOT_IMPLEMENTED,
+            "snappay": pgs.MISSING_CREDENTIALS, "torobpay": pgs.MISSING_CREDENTIALS, "saman": pgs.MISSING_CREDENTIALS,
+            "mellat": pgs.MISSING_CREDENTIALS, "platform_card": pgs.MISSING_CREDENTIALS,
+            "parsian": pgs.NOT_IMPLEMENTED, "sadad": pgs.NOT_IMPLEMENTED, "tejarat": pgs.NOT_IMPLEMENTED,
             "cod": pgs.NOT_ELIGIBLE, "card_to_card": pgs.NOT_ELIGIBLE,
         }
         for code, status in expected.items():
@@ -102,16 +121,15 @@ class StatusTaxonomyTests(TestCase):
             self.assertFalse(self.state(code).ready, code)
 
     def test_blocked_providers_do_not_share_one_generic_message(self):
-        details = {code: self.state(code).status_detail for code in ("saman", "parsian", "mellat", "sadad", "tejarat", "snappay", "torobpay")}
+        details = {code: self.state(code).status_detail for code in ("parsian", "sadad", "tejarat")}
         self.assertEqual(len(set(details.values())), len(details), "each blocker must be provider-specific")
         self.assertTrue(all(len(text) > 25 for text in details.values()))
-        self.assertIn("PSP", " ".join(matrix.MATRIX["tejarat"].blocker.split()) + "PSP")        # Tejarat: underlying PSP unknown
-        self.assertIn("SaaS", self.state("snappay").status_detail + matrix.MATRIX["snappay"].summary)
+        self.assertIn("PSP", self.state("tejarat").status_detail)                            # Tejarat: underlying PSP unknown
 
-    def test_status_labels_are_distinct_and_cover_the_seven_cases(self):
-        self.assertEqual(len(set(pgs.STATUS_LABELS.values())), 7)
+    def test_status_labels_are_distinct_and_cover_every_case(self):
+        self.assertEqual(len(set(pgs.STATUS_LABELS.values())), 8)
         self.assertEqual(set(pgs.STATUS_LABELS), {pgs.READY, pgs.DISABLED, pgs.MISSING_CREDENTIALS, pgs.MISSING_CONFIG,
-                                                  pgs.PENDING_CONTRACT, pgs.NOT_IMPLEMENTED, pgs.NOT_ELIGIBLE})
+                                                  pgs.PENDING_CONTRACT, pgs.PENDING_VERIFICATION, pgs.NOT_IMPLEMENTED, pgs.NOT_ELIGIBLE})
 
     def test_ready_disabled_and_missing_credentials_transitions(self):
         pgs.save_gateway("pasargad", credentials=dict(PASARGAD_CREDS), sandbox=False, enabled=False)
@@ -149,7 +167,7 @@ class StatusTaxonomyTests(TestCase):
         pgs.set_default("manual")
 
     def test_blocked_providers_cannot_be_configured_even_by_direct_service_calls(self):
-        for code in ("snappay", "torobpay", "saman", "parsian", "mellat", "sadad", "tejarat", "cod", "card_to_card"):
+        for code in ("parsian", "sadad", "tejarat", "cod", "card_to_card"):
             with self.assertRaises(pgs.PlatformGatewayError, msg=code):
                 pgs.save_gateway(code, credentials={"client_id": "x", "merchant_id": "y" * 36}, sandbox=True, enabled=True)
             with self.assertRaises(pgs.PlatformGatewayError, msg=code):
@@ -579,7 +597,7 @@ class OwnerDashboardPlatformBillingTests(TestCase):
         invoice = self._invoice()
         one_ready = self.client.get(f"/admin-portal/billing/invoices/{invoice.pk}/").content.decode()
         self.assertIn(f"/admin-portal/billing/invoices/{invoice.pk}/pay/", one_ready)
-        self.assertNotIn('name="gateway"', one_ready)                                                # single gateway ⇒ no chooser
+        self.assertNotIn("<select", one_ready.split('billing/invoices/%d/pay/' % invoice.pk, 1)[1].split("</form>", 1)[0])   # single gateway ⇒ no chooser
         ready_platform_zibal(self)
         two_ready = self.client.get(f"/admin-portal/billing/invoices/{invoice.pk}/").content.decode()
         self.assertIn('name="gateway"', two_ready)
@@ -632,10 +650,12 @@ class PlatformAdminGatewayUiTests(TestCase):
 
     def test_page_shows_every_status_class_with_its_own_label_and_no_generic_unavailable_text(self):
         html = self.get()
-        for status in ("missing_credentials", "pending_contract", "not_implemented", "not_eligible"):
+        for status in ("missing_credentials", "not_implemented"):
             self.assertIn(f'data-status="{status}"', html, status)
-        for code in ("pasargad", "zibal", "zarinpal", "snappay", "torobpay", "saman", "parsian", "mellat", "sadad", "tejarat"):
+        for code in ("pasargad", "zibal", "zarinpal", "snappay", "torobpay", "saman", "parsian", "mellat", "sadad", "tejarat", "platform_card"):
             self.assertIn(f'id="gw-{code}"', html, code)
+        self.assertNotIn('id="gw-cod"', html)
+        self.assertNotIn('id="gw-card_to_card"', html)
         self.assertNotIn("غیرقابل‌استفاده برای پلتفرم", html)                    # the old one-size-fits-all label is gone
         self.assertIn("SaaS", html)                                              # BNPL blocker is specific
         self.assertIn("IP", html)                                                # Pasargad prerequisites are shown
@@ -663,7 +683,10 @@ class PlatformAdminGatewayUiTests(TestCase):
         for code in ("zibal", "zarinpal", "pasargad"):
             segment = html.split(f'<option value="{code}"', 1)[1].split(">", 1)[0]
             self.assertIn("disabled", segment, code)
-        self.assertNotIn('<option value="snappay"', html)
+        segment = html.split('<option value="snappay"', 1)[1].split(">", 1)[0]
+        self.assertIn("disabled", segment)                                       # configured-or-not, a gated BNPL is never selectable
+        self.assertNotIn('<option value="platform_card"', html)                  # manual methods are never the online default
+        self.assertNotIn('<option value="parsian"', html)
         self.post({"action": "set_default", "gateway_code": "snappay"})
         self.post({"action": "set_default", "gateway_code": "pasargad"})
         self.assertEqual(pgs.default_code(), "manual")

@@ -570,6 +570,10 @@ urlpatterns = [
     path("billing/invoices/<int:pk>/", views.billing_invoice_detail, name="billing-invoice-detail"),
     path("billing/invoices/<int:pk>/print/", views.billing_invoice_print, name="billing-invoice-print"),
     path("billing/invoices/<int:pk>/pay/", views.billing_pay, name="billing-pay"),
+    path("billing/invoices/<int:pk>/card-to-card/", views.billing_card_claim, name="billing-card-claim"),
+    path("billing/card-claims/<int:claim_id>/cancel/", views.billing_card_claim_cancel, name="billing-card-claim-cancel"),
+    path("billing/card-claims/<int:claim_id>/receipt/", views.billing_card_claim_receipt, name="billing-card-claim-receipt"),
+    path("settings/sms/package/purchase/<int:pk>/card-to-card/", views.sms_purchase_card_claim, name="sms-purchase-card-claim"),
     path("billing/payment-result/", views.billing_payment_result, name="billing-payment-result"),
     path("billing/cancel/", views.billing_cancel, name="billing-cancel"),
 ]

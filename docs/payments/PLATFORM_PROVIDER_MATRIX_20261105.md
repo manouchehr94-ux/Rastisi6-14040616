@@ -6,7 +6,7 @@ payment RastiSi can sell any product through, (c) can the adapter run with **ind
 request / redirect / callback / verification / reconciliation all supported, (e) what external authorisation is missing.
 
 The matrix lives in code — `apps/portal/services/platform_gateway_matrix.py` — and is the **only** source for the allow-list
-(`ELIGIBLE_CODES`). `apps/billing/tests/test_platform_provider_coverage.py` pins it to the adapters' own declarations, so it
+(`ELIGIBLE_CODES` / `GATED`). `apps/billing/tests/test_platform_provider_coverage.py` pins it to the adapters' own declarations, so it
 cannot silently drift.
 
 > Documentation access on 2026-11-05: `raw.githubusercontent.com` (Pasargad's published docs) was reachable. The hosts
@@ -15,22 +15,37 @@ cannot silently drift.
 > (`gateway.zibal.ir`, `payment.zarinpal.com`, `pep.shaparak.ir`) return HTTP 403 from the session proxy. Rows therefore rely on
 > the 2026-11-03 research for those providers and are marked accordingly; no support is claimed that could not be evidenced.
 
-| Provider | Real adapter | Platform status | Reusable with independent platform credentials | Request → redirect → callback → verify → reconcile | Sandbox (official) | Blocker / external prerequisite |
-|---|---|---|---|---|---|---|
-| **Zibal** | yes (`zibal.py`, CREATE+VERIFY) + bespoke platform provider | **approved** | yes (`PlatformGatewayConfig` / legacy fields; never `PaymentGatewayConfig`) | `/v1/request` → `/start/{trackId}` → `success,status,trackId` (hint) → `/v1/verify` (+ orderId cross-check) → `reconcile_platform_payments` | **yes** — fixed `zibal` merchant (docs) | callback domain registered in Zibal panel; refund = manual |
-| **Zarinpal** | yes (`zarinpal.py`, CREATE+VERIFY) via `AdapterBackedBillingProvider` | **approved** | yes | `request.json` → `StartPay/{Authority}` → `Authority,Status` (hint) → `verify.json` (amount-bound) → reconcile | none documented (not invented) | 36-char merchant id; callback domain; refund = manual |
-| **Pasargad (Dorsa)** | yes (`pasargad.py`, CREATE+VERIFY+INQUIRE+CANCEL) via `AdapterBackedBillingProvider` | **approved** (new) | yes — platform terminal, numeric invoice namespace (`1`/`2`/`9`+pk) separate from store orders | `getToken` → `purchase` → browser with **Referer** (interstitial) → `invoiceId,status,referenceNumber,trackId` (hint) → `payment-inquiry` + `verify-transactions` (urlId from **server-stored** session data) → reconcile every 5 min (25-min verify deadline) | **none documented** | platform terminal credentials from Bank Pasargad, server-IP whitelist, callback domain = contract domain (code 13028). Refund: documented `reverse-transactions` (full amount, within the deadline) else manual |
-| **SnappPay (BNPL)** | yes (`snappay.py`: CREATE, VERIFY, SETTLE, CANCEL, INQUIRE) | **pending contract** | adapter could run with platform credentials, but not approved | cart-based BNPL flow exists for stores | not verified | published contract describes itemised carts + consumer installment contracts; **no evidence it covers selling SaaS subscriptions / SMS credit**. Needs SnappPay's written confirmation for the RastiSi platform merchant account + credentials + IP whitelist |
-| **TorobPay (BNPL)** | yes (`torobpay.py`) | **pending contract** | as above | as above | not verified | same: SaaS coverage unverified → written confirmation required |
-| **Saman (SEP)** | skeleton only | **not implemented** | n/a | none | n/a | official technical contract not obtained (sep.ir marketing-only; docs host unreachable) |
-| **Parsian (PEC)** | skeleton only | **not implemented** | n/a | none | n/a | official contract/WSDL not obtained |
-| **Mellat (Behpardakht)** | skeleton only | **not implemented** | n/a | none | n/a | official contract not obtained; settle must be a separate step |
-| **Sadad** | skeleton only | **not implemented** | n/a | none | n/a | official contract not obtained |
-| **Tejarat** | label skeleton | **not implemented** | n/a | none | n/a | underlying PSP unknown (IranKish **not** assumed) |
-| Card-to-card, COD | offline adapters | **not eligible** | n/a | no server-verifiable payment | n/a | a platform manual-transfer workflow would be a new product/finance decision |
+Platform classes (code: `platform_gateway_matrix.MATRIX`):
 
-Only Zibal, Zarinpal and Pasargad are approved. **No documentation-blocked or unverified provider was enabled** to remove an
-"unavailable" label; each shows its own specific status and blocker in Platform Admin.
+* **approved** — real adapter + verified contract covering a plain online payment → ready once configured and enabled.
+* **gated** — a real adapter / workflow exists and is fully tested with mocks, but **live use is blocked** until the platform owner (superuser) records evidence in the readiness gates: `provider_approval` (written provider authorisation, **per purchase type**), `contract_verification` (adapter checked against the provider's *current official* document), `live_verification` (one authorised real transaction with verify/settle success). Every attestation needs a ≥ 6-character document reference and is audited. **Mocked tests never open a gate**, and changing credentials/environment clears `live_verification`.
+* **not_implemented** — no functional adapter.
+* Store-only methods (cash on delivery, the stores' own card-to-card) are **not platform billing methods at all** (`STORE_ONLY`); see "COD removal" below.
+
+Readiness is six separate dimensions, shown in Platform Admin: *implemented · configured · eligible/contract-verified · provider-approved · operationally ready · enabled*. `ready` = enabled ∧ configured ∧ no configuration problems ∧ all gates attested ∧ purchase type allowed (admin choice ∩ provider-approved types). A superuser-owned store may *pilot* a gated method (only the `live_verification` gate is lifted for it — never contract/approval gates) to produce the live evidence.
+
+| Provider | Class | Implemented components | Gates before live use | Request → redirect → callback → verify (→ settle) → reconcile | Refund | Mocked tests | Remaining external prerequisite |
+|---|---|---|---|---|---|---|---|
+| **Zibal** | approved | `zibal.py` + bespoke platform provider | — | `/v1/request` → `/start/{trackId}` → `success,status,trackId` (hint) → `/v1/verify` + orderId → reconcile | manual | yes | callback domain registered; live merchant |
+| **Zarinpal** | approved | `zarinpal.py` via bridge | — | `request.json` → `StartPay/{Authority}` → `Authority,Status` (hint) → `verify.json` (amount-bound) → reconcile | manual | yes | 36-char merchant id; callback domain |
+| **Pasargad (Dorsa)** | approved | `pasargad.py` via bridge | — | `getToken` → `purchase` → **Referer interstitial** → callback (hint) → `payment-inquiry` + `verify-transactions` → reconcile ≤ 25 min | `reverse-transactions` (full, in window) else manual | yes | platform terminal credentials, IP whitelist, callback domain = contract domain |
+| **SnappPay (BNPL)** | **gated** (new platform path) | cart from **real invoice lines only** (refuses discount/credit lines, partial payment, mismatching totals), eligibility check (blocks only an explicit `eligible: false`), `verify` → **`settle`** → fulfilment; ambiguity ⇒ pending; reconcile = inquire → settle; terminal-negative ⇒ failed | `provider_approval` (+purchase types) · `live_verification` | `payment/token` → provider page → POST `transactionId,state,amount` (hint) → verify → settle | manual (never automatic for BNPL) | yes (adapter-level scripted fake + adapter contract tests) | **written SnappPay authorisation for selling SaaS subscriptions / SMS credit to the RastiSi merchant account**; client_id/secret; IP whitelist; provider-supplied `api_base`. Host not resolvable from this session ⇒ contract is from the 2026-11-03 research |
+| **TorobPay (BNPL)** | **gated** (new platform path) | same bridge as SnappPay | `provider_approval` · `live_verification` | token → page → callback (hint) → verify → settle | manual | yes | written TorobPay authorisation; four credentials; IP whitelist |
+| **Saman (SEP)** | **gated** (new adapter + bridge) | token request, **POST-form redirect** (`Token`), callback `State/RefNum/ResNum`, `VerifyTransaction` (RefNum + exact original amount, + optional ResNum cross-check), unique sale reference (`RefNum` can fulfil only one attempt), `ReverseTransaction` | **`contract_verification`** · `live_verification` | alnum order code (`B`/`S`+9 digits) = `ResNum` | reverse (full amount) else manual | yes | **No official SEP document was reachable** — encoded from secondary sources (see Evidence disclosure). Needs the official current document, TerminalId, IP whitelist |
+| **Mellat (Behpardakht)** | **gated** (new adapter + bridge) | SOAP `bpPayRequest` → **POST-form** (`RefId`) → callback `ResCode,SaleOrderId,SaleReferenceId` (hint) → `bpVerifyRequest` → **`bpSettleRequest`** (distinct step; 43/45 idempotent; 48 reversed is never settled) → `bpInquiryRequest` on ambiguity; reversal | **`contract_verification`** · `live_verification` | numeric order id (`1`/`2`/`9` + pk) | `bpReversalRequest` else manual | yes | **No official Behpardakht document was reachable**; encoded from secondary sources. Needs the official document, terminal credentials, IP whitelist |
+| **Platform card-to-card** | **approved (manual)** | first-class manual method `platform_card`: owner submits a *claim*; an authorised finance admin approves/rejects; approval goes through `confirm_payment` / the SMS credit ledger exactly once | — (finance approval is per claim) | claim → review queue → independent bank-statement reference + exact amount → approve/reject/expire/cancel | manual (refund ledger, then manual transfer) | yes (service, HTTP, PostgreSQL races) | a dedicated platform destination card (separate from store cards) and an authorised finance admin |
+| **Parsian / Sadad / Tejarat** | not_implemented | skeletons only | n/a | none | n/a | n/a | official contract/WSDL not obtained (Tejarat's PSP unknown; IranKish not assumed) |
+| **COD / store card-to-card** | **not a platform method** | removed from platform billing | n/a | n/a | n/a | absence + migration tests | none — store checkout keeps both |
+
+## Evidence disclosure (Saman and Mellat)
+
+On 2026-11-05 `sep.ir` is marketing-only, and `sep.shaparak.ir`, `api.mellatbank.ir` and `behpardakht.com` do not resolve from this session. **No official technical document for either provider was read.** The encoded contracts come from secondary sources only: `pkg.go.dev/github.com/aliworkshop/samanpayment`, the `shetabit/multipay` Saman and Behpardakht drivers (read via `raw.githubusercontent.com`), a third-party copy of a 2013 "Mellat PGW User Manual Rev 1.1", and the WSDL location `bpm.shaparak.ir/pgwchannel/services/pgw?wsdl`. Whether those match the providers' *current* APIs is **unverified**; for that reason both adapters keep `documentation_blocked = True` (never selectable for store checkout) and platform billing holds them behind the `contract_verification` gate. Adapter tests prove fail-closed behaviour and internal consistency, **not** conformance.
+
+The production-safety verdict is therefore: Zibal, Zarinpal, Pasargad and platform card-to-card are production-eligible once their external prerequisites are met; SnappPay/TorobPay are production-safe **only** after written provider authorisation for each purchase type; Saman and Mellat are **not production-ready** until the official documents are checked, the gate recorded and one real live transaction verified.
+
+## COD removal
+
+`cod` and the store-only `card_to_card` were never eligible, and now cannot appear anywhere in platform billing: not in the matrix (`STORE_ONLY`), the gateway catalog, the default selector, readiness counts, checkout options or the admin UI. `portal.0018_platform_cod_removal` is a data-safe, idempotent migration: legacy `enabled_payment_providers` lists are filtered, a default of `cod` falls back to `manual`, stray `PlatformGatewayConfig` rows are disabled (kept), and each change is written to the platform audit log; store COD (`apps.orders`) is untouched.
 
 ## Status taxonomy (Platform Admin → Payment Gateways)
 `ready` · `disabled_by_admin` (complete but switched off) · `missing_credentials` · `missing_configuration` (e.g. callback domain is

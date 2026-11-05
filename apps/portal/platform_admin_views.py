@@ -1320,12 +1320,26 @@ def payment_gateways(request):
         try:
             if action == "save":
                 adapter_fields = [f["name"] for f in pgs.gateway_state(code).fields]
+                types = None
+                if "ptypes_submitted" in request.POST:
+                    types = [t for t in pgs.PURCHASE_TYPES if f"ptype_{t}" in request.POST]
                 pgs.save_gateway(
                     code, credentials={n: request.POST.get(f"cred_{n}", "") for n in adapter_fields},
                     sandbox="sandbox_mode" in request.POST, enabled="is_enabled" in request.POST,
-                    actor=request.user, display_order=request.POST.get("display_order") or None,
+                    actor=request.user, display_order=request.POST.get("display_order") or None, purchase_types=types,
                 )
-                messages.success(request, "تنظیماتِ درگاه ذخیره شد.")
+                state = pgs.gateway_state(code)
+                if state.enabled and not state.ready:
+                    messages.warning(request, f"ذخیره شد؛ امّا «آماده» نیست: {state.status_label} — {state.status_detail}")
+                else:
+                    messages.success(request, "تنظیماتِ روش ذخیره شد.")
+            elif action in ("attest", "revoke_gate"):
+                gate = (request.POST.get("gate") or "").strip()
+                pgs.record_attestation(
+                    code, gate, reference=request.POST.get("reference", ""), actor=request.user,
+                    purchase_types=[t for t in pgs.PURCHASE_TYPES if f"atype_{t}" in request.POST], revoke=(action == "revoke_gate"),
+                )
+                messages.success(request, "گواهیِ گیت ثبت شد." if action == "attest" else "گواهیِ گیت باطل شد.")
             elif action == "set_default":
                 pgs.set_default(code, actor=request.user)
                 messages.success(request, "درگاهِ پیش‌فرض تغییر کرد.")
@@ -1346,10 +1360,18 @@ def payment_gateways(request):
         "states": states, "default_code": config.default_payment_provider,
         "effective_default": pgs.default_code(),
         "default_choices": [{"code": s.code, "label": s.label, "ready": s.ready, "status_label": s.status_label}
-                            for s in states if s.eligible],
+                            for s in states if s.eligible and s.kind == "online"],
+        "purchase_labels": pgs.matrix.PURCHASE_LABELS,
+        "pending_claims": _pending_claims_count(),
         "summary": {"ready": sum(1 for s in states if s.ready), "total": len(states)},
         "audit": pgs.audit_trail(15), "active_nav": "payment-gateways",
     })
+
+
+def _pending_claims_count() -> int:
+    from apps.billing.models import PlatformManualPaymentClaim
+
+    return PlatformManualPaymentClaim.objects.filter(status=PlatformManualPaymentClaim.Status.PENDING_REVIEW).count()
 
 
 def _attempt_rows(*, kind="", status="", provider="", query="", limit=300):
@@ -1410,10 +1432,15 @@ def reconciliation_snapshot():
 
     from django.utils import timezone
 
-    from apps.billing.models import BillingWebhookEvent, SubscriptionInvoice, SubscriptionPaymentAttempt, SubscriptionRefund
+    from apps.billing.models import (
+        BillingWebhookEvent, PlatformManualPaymentClaim, SubscriptionInvoice, SubscriptionPaymentAttempt, SubscriptionRefund,
+    )
+    from apps.billing.providers.registry import MANUAL_PROVIDER_CODES
     from apps.sms.models import SmsCreditLedger, SmsPackagePaymentAttempt, SmsPackagePurchase
 
-    cutoff = timezone.now() - timedelta(minutes=STALE_PENDING_MINUTES)
+    now = timezone.now()
+    cutoff = now - timedelta(minutes=STALE_PENDING_MINUTES)
+    manual = list(MANUAL_PROVIDER_CODES)
     sub_s, sms_s = SubscriptionPaymentAttempt.Status, SmsPackagePaymentAttempt.Status
     return {
         "requires_action": (
@@ -1422,10 +1449,24 @@ def reconciliation_snapshot():
         ),
         "stale_pending": (
             list(SubscriptionPaymentAttempt.objects.filter(status__in=(sub_s.CREATED, sub_s.PENDING), created_at__lt=cutoff)
-                 .exclude(provider_session_id="").select_related("store", "invoice")[:100]),
+                 .exclude(provider_session_id="").exclude(provider__in=manual).select_related("store", "invoice")[:100]),
             list(SmsPackagePaymentAttempt.objects.filter(status__in=(sms_s.CREATED, sms_s.PENDING), created_at__lt=cutoff)
-                 .exclude(provider_session_id="").select_related("store", "purchase")[:100]),
+                 .exclude(provider_session_id="").exclude(provider__in=manual).select_related("store", "purchase")[:100]),
         ),
+        # پرداخت‌هایی که verify شده‌اند امّا settle هنوز تأیید نشده (BNPL/ملت): پول نزدِ درگاه است، اثر هنوز اعمال نشده
+        "verified_unsettled": (
+            list(SubscriptionPaymentAttempt.objects.filter(status__in=(sub_s.CREATED, sub_s.PENDING), provider_extra__verified=True)
+                 .select_related("store", "invoice")[:100]),
+            list(SmsPackagePaymentAttempt.objects.filter(status__in=(sms_s.CREATED, sms_s.PENDING), provider_extra__verified=True)
+                 .select_related("store", "purchase")[:100]),
+        ),
+        "manual_claims": {
+            "pending": PlatformManualPaymentClaim.objects.filter(status=PlatformManualPaymentClaim.Status.PENDING_REVIEW).count(),
+            "overdue": PlatformManualPaymentClaim.objects.filter(
+                status=PlatformManualPaymentClaim.Status.PENDING_REVIEW, created_at__lt=now - timedelta(hours=24)).count(),
+            "needs_action": list(PlatformManualPaymentClaim.objects.filter(status=PlatformManualPaymentClaim.Status.NEEDS_ACTION)
+                                 .select_related("store", "invoice", "sms_purchase")[:50]),
+        },
         "paid_without_effect": (
             list(SubscriptionPaymentAttempt.objects.filter(status=sub_s.SUCCEEDED)
                  .exclude(invoice__status__in=(SubscriptionInvoice.Status.PAID, SubscriptionInvoice.Status.REFUNDED,
@@ -1450,6 +1491,8 @@ def payment_reconciliation(request):
         "requires_action": sum(len(x) for x in snapshot["requires_action"]),
         "stale_pending": sum(len(x) for x in snapshot["stale_pending"]),
         "paid_without_effect": sum(len(x) for x in snapshot["paid_without_effect"]),
+        "verified_unsettled": sum(len(x) for x in snapshot["verified_unsettled"]),
+        "claims_needs_action": len(snapshot["manual_claims"]["needs_action"]),
     }
     return render(request, "portal/platform_admin/payment_reconciliation.html", {
         "snapshot": snapshot, "totals": totals, "stale_minutes": STALE_PENDING_MINUTES,
@@ -1528,6 +1571,125 @@ def sms_purchase_action(request, purchase_id, action):
             object_id=purchase.pk, object_label=str(purchase.pk),
         )
     return redirect("portal_platform_admin:sms-purchases")
+
+
+# ------------------------------------------------- کارت‌به‌کارتِ پلتفرم: بررسیِ مالیِ ادعاها
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def manual_claims(request):
+    """صفِ ادعاهایِ پرداختِ کارت‌به‌کارت. رسید مدرکِ پرداخت نیست؛ تأیید فقط با صورتحسابِ بانکیِ مستقل."""
+    from apps.billing.models import PlatformManualPaymentClaim
+    from apps.billing.services import manual_card_service as mcs
+
+    status = (request.GET.get("status") or "pending_review").strip()
+    qs = PlatformManualPaymentClaim.objects.select_related("store", "invoice", "sms_purchase__package", "submitted_by", "reviewed_by")
+    if status in PlatformManualPaymentClaim.Status.values:
+        qs = qs.filter(status=status)
+    page = Paginator(qs.order_by("created_at" if status == "pending_review" else "-created_at"), 25).get_page(request.GET.get("page"))
+    return render(request, "portal/platform_admin/manual_claims.html", {
+        "page": page, "status": status, "status_choices": PlatformManualPaymentClaim.Status.choices,
+        "can_review": mcs.can_review(request.user), "active_nav": "manual-claims",
+    })
+
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def manual_claim_detail(request, claim_id):
+    from apps.billing.models import PlatformManualPaymentClaim
+    from apps.billing.services import manual_card_service as mcs
+
+    claim = get_object_or_404(
+        PlatformManualPaymentClaim.objects.select_related("store", "invoice", "sms_purchase__package", "submitted_by", "reviewed_by"),
+        pk=claim_id,
+    )
+    same_ref = PlatformManualPaymentClaim.objects.filter(reference_key=claim.reference_key).exclude(pk=claim.pk).count()
+    store_claims = PlatformManualPaymentClaim.objects.filter(store=claim.store).exclude(pk=claim.pk)
+    return render(request, "portal/platform_admin/manual_claim_detail.html", {
+        "claim": claim, "events": mcs.history(claim), "can_review": mcs.can_review(request.user),
+        "is_self": claim.submitted_by_id == request.user.pk, "same_reference_elsewhere": same_ref,
+        "store_rejected": store_claims.filter(status="rejected").count(), "store_total": store_claims.count(),
+        "active_nav": "manual-claims",
+    })
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def manual_claim_action(request, claim_id, action):
+    from apps.billing.models import PlatformManualPaymentClaim
+    from apps.billing.services import manual_card_service as mcs
+
+    claim = get_object_or_404(PlatformManualPaymentClaim, pk=claim_id)
+    try:
+        if action == "approve":
+            mcs.approve_claim(
+                claim, reviewer=request.user, bank_confirmation_reference=request.POST.get("bank_reference", ""),
+                confirmed_amount=request.POST.get("confirmed_amount", ""), note=(request.POST.get("note") or "").strip(),
+            )
+            messages.success(request, "پرداخت تأیید و (دقیقاً یک‌بار) اعمال شد.")
+        elif action == "reject":
+            mcs.reject_claim(claim, reviewer=request.user, reason=request.POST.get("reason", ""))
+            messages.success(request, "ادعا رد شد؛ مالک می‌تواند ادعای اصلاح‌شده ثبت کند.")
+        else:
+            messages.error(request, "عملیاتِ نامعتبر.")
+    except mcs.ClaimError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:manual-claim-detail", claim_id=claim.pk)
+
+
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def manual_claim_receipt(request, claim_id):
+    """رسیدِ ادعا از ذخیره‌سازیِ خصوصی؛ فقط مدیرِ پلتفرمِ احرازشده؛ هرگز لینکِ عمومی/قابلِ‌حدس."""
+    from django.http import FileResponse, Http404
+
+    from apps.billing.models import PlatformManualPaymentClaim
+
+    claim = get_object_or_404(PlatformManualPaymentClaim, pk=claim_id)
+    if not claim.receipt:
+        raise Http404
+    response = FileResponse(claim.receipt.open("rb"), content_type=claim.receipt_content_type or "application/octet-stream")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    response["Content-Disposition"] = "inline; filename=receipt"
+    return response
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_invoice_refund(request, invoice_id):
+    """بازپرداختِ فاکتور از مسیرِ کانونیکِ ``refund_service`` (مبلغِ قابلِ‌بازپرداخت، idempotent، حسابرسی‌شده). Providerهایِ
+    بدونِ API بازپرداخت «در انتظارِ پردازشِ دستی» می‌مانند تا مدیر پس از انتقالِ واقعیِ پول آن را تکمیل کند."""
+    from decimal import Decimal, InvalidOperation
+
+    from apps.billing.models import SubscriptionInvoice
+    from apps.billing.services import refund_service
+
+    invoice = get_object_or_404(SubscriptionInvoice, pk=invoice_id)
+    try:
+        amount = Decimal((request.POST.get("amount") or "").strip())
+        refund = refund_service.request_refund(
+            invoice, amount=amount, reason=(request.POST.get("reason") or "").strip(), requested_by=request.user,
+            idempotency_key=(request.POST.get("idempotency_key") or "").strip(),
+        )
+        messages.success(request, f"بازپرداخت ثبت شد ({refund.get_status_display()}).")
+    except (InvalidOperation, ValueError):
+        messages.error(request, "مبلغِ بازپرداخت معتبر نیست.")
+    except refund_service.RefundError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=invoice.pk)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_refund_complete(request, refund_id):
+    from apps.billing.models import SubscriptionRefund
+    from apps.billing.services import refund_service
+
+    refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
+    try:
+        refund_service.complete_refund_manually(refund, actor=request.user)
+        messages.success(request, "بازپرداخت پس از پردازشِ دستی تکمیل ثبت شد.")
+    except refund_service.RefundError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)
 
 
 # ---------------------------------------------------------------- بسته‌های پیامک

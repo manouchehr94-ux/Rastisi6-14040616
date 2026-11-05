@@ -1,34 +1,58 @@
 """Evidence-based provider matrix for PLATFORM billing (RastiSi collecting from store owners).
 
-This is the single source of truth for *whether a provider may be offered for platform payments* and *why not*.
+This is the single source of truth for *whether a provider may be offered for platform payments* and *under which gates*.
 A gateway that works for store orders is NOT automatically approved for SaaS platform billing: each row records the
 contract evidence, and ``platform`` is one of
 
-* ``approved``         — real adapter + verified official contract covering a plain online payment that RastiSi can
-                         sell any product through (no category restriction found) → may be enabled.
-* ``pending_contract`` — real adapter exists, but the contract/merchant authorisation for SaaS purchases is unverified.
-* ``not_implemented``  — no functional adapter (documentation-blocked skeleton): no request/verify contract exists in code.
-* ``not_eligible``     — structurally unsuitable for platform billing (offline method, no server-verifiable payment).
+* ``approved``        — real adapter + verified official contract covering a plain online payment (no category restriction
+                        found) → ready once configured and enabled. (``platform_card`` is the manual-payment equivalent.)
+* ``gated``           — a real adapter / workflow exists, but live use is blocked until the platform owner records the
+                        evidence named in ``gates`` (provider approval for the purchase type, contract verification against
+                        the official document, an authorised live test). Mocked tests never open a gate.
+* ``not_implemented`` — no functional adapter (documentation-blocked skeleton): no request/verify contract exists in code.
 
-Rows are evidence, not opinion: ``evidence`` names the source and the date it was last read. Changing a row to
-``approved`` requires new evidence; ``tests`` pins the matrix to the adapters' own declarations so it cannot drift."""
+Store-only methods (cash on delivery, store card-to-card) are **not platform billing methods at all** — see ``STORE_ONLY``.
+
+Rows are evidence, not opinion: ``evidence`` names the source and the date it was last read. Changing a row requires new
+evidence; the tests pin the matrix to the adapters' own declarations so it cannot drift."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 APPROVED = "approved"
-PENDING_CONTRACT = "pending_contract"
+GATED = "gated"
 NOT_IMPLEMENTED = "not_implemented"
-NOT_ELIGIBLE = "not_eligible"
+
+KIND_ONLINE = "online"
+KIND_MANUAL = "manual"
+
+#: گیت‌هایِ آمادگی (هر کدام یک گواهیِ صریحِ مدیر با ارجاع، ثبت‌شده در حسابرسی):
+GATE_PROVIDER_APPROVAL = "provider_approval"          # تأییدِ کتبیِ ارائه‌دهنده برای نوعِ خریدِ مشخص (مثلاً SaaS در BNPL)
+GATE_CONTRACT_VERIFICATION = "contract_verification"  # تطبیقِ آداپتر با مستندِ فنیِ رسمیِ جاری
+GATE_LIVE_VERIFICATION = "live_verification"          # یک تراکنشِ واقعیِ مجاز با موفقیتِ verify/settle
+
+PURCHASE_SUBSCRIPTION = "subscription"
+PURCHASE_SMS = "sms_package"
+PURCHASE_TYPES = (PURCHASE_SUBSCRIPTION, PURCHASE_SMS)
+PURCHASE_LABELS = {PURCHASE_SUBSCRIPTION: "اشتراک (خرید و تمدید)", PURCHASE_SMS: "بسته‌ی اعتبار پیامک"}
+
+#: روش‌هایی که فقط برای سفارشِ فروشگاه‌اند و **هرگز** روشِ پرداختِ پلتفرم نیستند (پرداخت در محل، کارت‌به‌کارتِ فروشگاه).
+STORE_ONLY = frozenset({"cod", "card_to_card"})
+
+#: کدِ روشِ دستیِ کارت‌به‌کارتِ **پلتفرم** — کاملاً جدا از ``card_to_card`` (آداپترِ فروشگاه).
+PLATFORM_CARD = "platform_card"
 
 
 @dataclass(frozen=True)
 class ProviderFacts:
     code: str
-    platform: str                                   # approved | pending_contract | not_implemented | not_eligible
+    platform: str                                   # approved | gated | not_implemented
     summary: str                                    # one line, Persian, shown in Platform Admin
     evidence: str                                   # source + date (English, for the matrix doc / reviewers)
+    kind: str = KIND_ONLINE                         # online | manual
+    gates: tuple = ()                               # GATE_* that must be attested before live use
+    default_purchase_types: tuple = PURCHASE_TYPES  # used when the admin has not chosen types explicitly
     blocker: str = ""                               # exact reason it is not approved (Persian)
     sandbox: str = "none"                           # "official" | "none"  (honest: only what the docs state)
     sandbox_note: str = ""
@@ -36,9 +60,10 @@ class ProviderFacts:
     verify: str = ""                                # authoritative verification mechanism
     reconciliation: str = ""                        # how a missed return is recovered
     refund: str = "manual"                          # "api" | "manual" | "none"
-    order_code_style: str = "token"                 # "token" (attempt token) | "numeric" (digits only — provider invoice id)
+    order_code_style: str = "token"                 # "token" (attempt token) | "numeric" | "alnum" (provider order id)
     prerequisites: tuple = ()                       # external steps (Persian) — shown as setup instructions
     setup_steps: tuple = field(default_factory=tuple)
+    manual_fields: tuple = ()                       # for KIND_MANUAL: ({name,label,public,required})
 
 
 MATRIX: dict[str, ProviderFacts] = {
@@ -101,36 +126,105 @@ MATRIX: dict[str, ProviderFacts] = {
         ),
     ),
     "snappay": ProviderFacts(
-        code="snappay", platform=PENDING_CONTRACT,
-        summary="اسنپ‌پی (BNPL) — آداپتر برای سبدِ کالای فروشگاه‌ها هست؛ استفاده برای خریدِ SaaS در انتظارِ تأییدِ قرارداد.",
-        evidence="academy.snapppay.ir/self-cms REST v2.1 (read 2026-11-03; host not reachable from this session on 2026-11-05); adapter snappay.py.",
-        blocker=(
-            "قراردادِ منتشرشده سبدِ کالا (cartList) و قراردادِ اقساطِ مصرف‌کننده را توصیف می‌کند؛ هیچ مدرکی نیست که "
-            "فروشِ اشتراکِ نرم‌افزار/اعتبارِ پیامک را پوشش دهد. فعال‌سازی نیازمندِ تأییدِ کتبیِ اسنپ‌پی برای حسابِ پذیرنده‌ی راستیسی است."
+        code="snappay", platform=GATED, gates=(GATE_PROVIDER_APPROVAL, GATE_LIVE_VERIFICATION), default_purchase_types=(),
+        summary="اسنپ‌پی (BNPL) — مسیرِ پرداختِ پلتفرم پیاده شده؛ استفاده فقط با تأییدِ کتبیِ ارائه‌دهنده برای نوعِ خرید و تستِ واقعیِ مجاز.",
+        evidence=(
+            "adapter apps/orders/gateways/snappay.py (REST v2.1 from academy.snapppay.ir/self-cms, read 2026-11-03; host not "
+            "resolvable from this session on 2026-11-05): OAuth, eligibility, payment/token (itemised cartList), verify, SETTLE, "
+            "cancel, status. Contract describes retail carts + consumer installment contracts; no statement covering SaaS "
+            "subscriptions / SMS credit."
         ),
-        callback="paymentToken/state (فقط راهنما)", verify="verify + settle (دو مرحله)", reconciliation="inquire (status)",
-        prerequisites=("تأییدِ کتبیِ اسنپ‌پی برای فروشِ خدماتِ SaaS", "اعتبارنامه‌ی پذیرنده + IP whitelist + returnURL مجاز"),
-        setup_steps=("ابتدا تأییدِ قراردادی را از اسنپ‌پی بگیرید؛ تا آن زمان این درگاه برای پرداختِ پلتفرم فعال نمی‌شود.",),
+        blocker=(
+            "پیش از هر استفاده‌ی زنده باید اسنپ‌پی کتباً فروشِ همین خدمت (اشتراک/اعتبار پیامک) را برای حسابِ پذیرنده‌ی راستیسی تأیید کرده باشد؛ "
+            "مرجعِ آن تأیید و نوع‌های خریدِ مجاز در گیتِ «تأییدِ ارائه‌دهنده» ثبت می‌شود."
+        ),
+        callback="POST returnURL: transactionId, state (OK|FAILED), amount (فقط راهنما)",
+        verify="verify (بدونِ نهایی‌سازی) ← settle (نهایی‌سازیِ جدا)؛ اشتراک/پیامک فقط پس از موفقیتِ هر دو فعال می‌شود؛ ابهامِ settle ⇒ status/inquiry",
+        reconciliation="reconcile_platform_payments: verify→settle یا استعلام (status)", refund="manual",
+        order_code_style="alnum",
+        prerequisites=("تأییدِ کتبیِ اسنپ‌پی برای فروشِ خدماتِ SaaS", "client_id / client_secret پذیرنده‌ی راستیسی", "IP سرور در whitelist و returnURL مجاز",
+                       "نشانیِ محیطِ stage/production که اسنپ‌پی می‌دهد (api_base)"),
+        setup_steps=(
+            "تأییدِ کتبیِ اسنپ‌پی را بگیرید و مرجعِ آن را در گیتِ «تأییدِ ارائه‌دهنده» (با نوع‌های خریدِ مجاز) ثبت کنید.",
+            "اعتبارنامه‌ی پذیرنده و (در صورتِ ارائه) api_base محیط stage را وارد کنید؛ «تستِ پیکربندی» فقط OAuth را می‌سنجد.",
+            "با یک خریدِ آزمایشیِ واقعیِ حداقلی از فروشگاهِ خودتان (حالتِ آزمایشی مدیر) verify→settle را بررسی و گیتِ «تستِ واقعی» را ثبت کنید.",
+            "سپس روش را فعال کنید.",
+        ),
     ),
     "torobpay": ProviderFacts(
-        code="torobpay", platform=PENDING_CONTRACT,
-        summary="ترب‌پی (BNPL) — آداپتر برای سبدِ کالای فروشگاه‌ها هست؛ استفاده برای خریدِ SaaS در انتظارِ تأییدِ قرارداد.",
-        evidence="provider-published WooCommerce plugin source class-torobpay-api.php (read 2026-11-03; host not reachable on 2026-11-05); adapter torobpay.py.",
-        blocker=(
-            "قراردادِ در دسترس فقط سبدِ کالا و اقساط را توصیف می‌کند؛ پوششِ خریدِ SaaS تأیید نشده است. "
-            "نیازمندِ تأییدِ کتبیِ ترب‌پی برای حسابِ پذیرنده‌ی راستیسی."
+        code="torobpay", platform=GATED, gates=(GATE_PROVIDER_APPROVAL, GATE_LIVE_VERIFICATION), default_purchase_types=(),
+        summary="ترب‌پی (BNPL) — مسیرِ پرداختِ پلتفرم پیاده شده؛ استفاده فقط با تأییدِ کتبیِ ارائه‌دهنده برای نوعِ خرید و تستِ واقعیِ مجاز.",
+        evidence=(
+            "adapter apps/orders/gateways/torobpay.py (from the provider-published WooCommerce plugin source class-torobpay-api.php, "
+            "read 2026-11-03; host not resolvable on 2026-11-05): token, eligibility, verify, SETTLE, cancel, status. "
+            "No statement covering SaaS subscriptions / SMS credit."
         ),
-        callback="(فقط راهنما)", verify="verify + settle (دو مرحله)", reconciliation="inquire (status)",
-        prerequisites=("تأییدِ کتبیِ ترب‌پی برای فروشِ خدماتِ SaaS", "اعتبارنامه‌ی پذیرنده + IP whitelist"),
-        setup_steps=("ابتدا تأییدِ قراردادی را از ترب‌پی بگیرید؛ تا آن زمان این درگاه برای پرداختِ پلتفرم فعال نمی‌شود.",),
+        blocker=(
+            "پیش از هر استفاده‌ی زنده باید ترب‌پی کتباً فروشِ همین خدمت را برای حسابِ پذیرنده‌ی راستیسی تأیید کرده باشد؛ مرجعِ تأیید در گیتِ «تأییدِ ارائه‌دهنده» ثبت می‌شود."
+        ),
+        callback="(فقط راهنما)", verify="verify ← settle (دو مرحله)؛ فعال‌سازی فقط پس از هر دو؛ ابهام ⇒ inquiry",
+        reconciliation="reconcile_platform_payments: verify→settle یا استعلام", refund="manual", order_code_style="alnum",
+        prerequisites=("تأییدِ کتبیِ ترب‌پی برای فروشِ خدماتِ SaaS", "client_id / client_secret / username / password پذیرنده", "IP سرور در whitelist"),
+        setup_steps=(
+            "تأییدِ کتبیِ ترب‌پی را بگیرید و مرجعِ آن را در گیتِ «تأییدِ ارائه‌دهنده» ثبت کنید.",
+            "اعتبارنامه را وارد کنید و «تستِ پیکربندی» را بزنید.",
+            "با یک خریدِ آزمایشیِ واقعیِ حداقلی verify→settle را بررسی و گیتِ «تستِ واقعی» را ثبت کنید.",
+        ),
     ),
     "saman": ProviderFacts(
-        code="saman", platform=NOT_IMPLEMENTED,
-        summary="سامان (سپ) — پیاده‌سازی فنی وجود ندارد.",
-        evidence="adapter saman.py is a registered skeleton (no capabilities); official contract not obtained (sep.ir marketing-only 2026-11-03; sep.shaparak.ir not reachable from this session 2026-11-05).",
-        blocker="قراردادِ فنیِ رسمی (token/redirect/verify/reverse) در دسترس نیست و آداپترِ کارکردی وجود ندارد. با دریافتِ مستندِ رسمی از سپ پیاده‌سازی می‌شود.",
-        prerequisites=("مستندِ فنیِ رسمیِ سپ + قراردادِ پذیرنده",),
-        setup_steps=("مستندِ فنیِ رسمی و اعتبارنامه‌ی پذیرنده را از سپ بگیرید؛ سپس آداپتر پیاده‌سازی و تست می‌شود.",),
+        code="saman", platform=GATED, gates=(GATE_CONTRACT_VERIFICATION, GATE_LIVE_VERIFICATION),
+        summary="سامان (سپ) — آداپترِ توکنی پیاده شده؛ فعال‌سازی فقط پس از تطبیقِ با مستندِ رسمیِ جاری و تستِ واقعیِ مجاز.",
+        evidence=(
+            "No official SEP document was reachable on 2026-11-05 (sep.ir marketing-only; sep.shaparak.ir / docs not resolvable from this "
+            "session). Contract encoded from secondhand sources ONLY: pkg.go.dev/github.com/aliworkshop/samanpayment (JSON token request "
+            "{action,TerminalId,RedirectUrl,TxnRandomSessionKey,ResNum,Amount,CellNumber}, callback {MID,State,Status,RRN,RefNum,ResNum,"
+            "TerminalId,TraceNo,Amount,Wage,SecurePan}, VerifyTransaction/ReverseTransaction {RefNum,TerminalNumber,TxnRandomSessionKey} "
+            "→ {Success,ResultCode,TransactionDetail{OrginalAmount,AffectiveAmount,...}}), shetabit/multipay Saman driver (legacy SOAP "
+            "variant: RequestToken/VerifyTransaction/ReverseTransaction; POST form Token+RedirectUrl), WordPress/PyPI wrappers (server IP "
+            "whitelist on sep.shaparak.ir). Which variant is current is UNVERIFIED."
+        ),
+        blocker=(
+            "مستندِ فنیِ رسمیِ جاریِ سپ در دسترس نبود؛ آدرس‌ها و فیلدها از منابعِ ثانویه‌اند. تا زمانی که مدیر پیاده‌سازی را با مستندِ رسمیِ "
+            "جاری تطبیق ندهد (گیتِ «تأییدِ قرارداد فنی») و یک تراکنشِ واقعیِ مجاز موفق نشود، فعال‌سازیِ زنده مسدود است."
+        ),
+        callback="POST form: State/Status, RefNum, ResNum, RRN, TraceNo, Amount, SecurePan (فقط راهنما)",
+        verify="VerifyTransaction (RefNum + TerminalNumber) با تطبیقِ ResNum و مبلغِ اصلی؛ RefNum یکتا (جلوگیری از استفاده‌ی دوباره)",
+        reconciliation="reconcile_platform_payments (verify با RefNum؛ بدونِ RefNum امکانِ تطبیق نیست)", refund="manual",
+        order_code_style="alnum",
+        prerequisites=("TerminalId (و در صورتِ لزوم کلیدِ تراکنش) پذیرنده‌ی راستیسی از سپ", "IP سرور در whitelist سپ", "تطبیقِ آداپتر با مستندِ رسمیِ جاری"),
+        setup_steps=(
+            "مستندِ فنیِ رسمیِ جاریِ سپ را از بانک بگیرید و آداپتر (apps/orders/gateways/saman.py) را با آن تطبیق دهید؛ سپس گیتِ «تأییدِ قرارداد فنی» را با مرجعِ سند ثبت کنید.",
+            "TerminalId را وارد کنید و IP سرور را نزدِ سپ ثبت کنید.",
+            "«تستِ پیکربندی» یک توکنِ پرداختِ پرداخت‌نشده می‌سازد.",
+            "با یک خریدِ واقعیِ حداقلی از فروشگاهِ خودتان verify را بررسی و گیتِ «تستِ واقعی» را ثبت کنید.",
+        ),
+    ),
+    "mellat": ProviderFacts(
+        code="mellat", platform=GATED, gates=(GATE_CONTRACT_VERIFICATION, GATE_LIVE_VERIFICATION),
+        summary="ملت (به‌پرداخت) — آداپتر با چرخه‌ی pay/verify/settle پیاده شده؛ فعال‌سازی فقط پس از تطبیقِ با مستندِ رسمیِ جاری و تستِ واقعیِ مجاز.",
+        evidence=(
+            "No official Behpardakht document was reachable on 2026-11-05 (api.mellatbank.ir / behpardakht.com not resolvable). "
+            "Secondhand sources: shetabit/multipay Behpardakht driver (raw.githubusercontent.com, read 2026-11-05: SOAP bpPayRequest/"
+            "bpVerifyRequest/bpSettleRequest/bpReversalRequest; params terminalId,userName,userPassword,orderId,amount(rial),localDate "
+            "Ymd,localTime His,additionalData,callBackUrl,payerId; verify/settle/reversal take orderId,saleOrderId,saleReferenceId; "
+            "response 'code,RefId'; POST form field RefId; callback ResCode,RefId,SaleOrderId,SaleReferenceId,CardHolderPan; verify 43=already "
+            "verified, settle 45/48 accepted; reversal on failed verify/settle); a 2013 'Mellat PGW User Manual Rev 1.1' copy and WSDL "
+            "location bpm.shaparak.ir/pgwchannel/services/pgw?wsdl (third-party hosts). Whether this still matches the current contract is UNVERIFIED."
+        ),
+        blocker=(
+            "مستندِ رسمیِ جاریِ به‌پرداخت در دسترس نبود؛ ساختارِ SOAP از منابعِ ثانویه است. تا زمانی که مدیر پیاده‌سازی را با مستندِ رسمیِ جاری "
+            "تطبیق ندهد و یک تراکنشِ واقعیِ مجاز (verify + settle) موفق نشود، فعال‌سازیِ زنده مسدود است. ردِ callback بدونِ verify+settle هرگز خریدی را فعال نمی‌کند."
+        ),
+        callback="POST: ResCode, RefId, SaleOrderId, SaleReferenceId, CardHolderPan (فقط راهنما)",
+        verify="bpVerifyRequest ← bpSettleRequest (settle مرحله‌ی جدا)؛ فعال‌سازی فقط پس از هر دو؛ ابهام ⇒ bpInquiryRequest",
+        reconciliation="reconcile_platform_payments: verify+settle یا bpInquiryRequest", refund="manual", order_code_style="numeric",
+        prerequisites=("terminalId / userName / userPassword پذیرنده‌ی راستیسی از به‌پرداخت", "IP سرور در whitelist بانک", "تطبیقِ آداپتر با مستندِ رسمیِ جاری"),
+        setup_steps=(
+            "مستندِ فنیِ رسمیِ جاریِ به‌پرداخت را بگیرید و آداپتر (apps/orders/gateways/mellat.py) را با آن تطبیق دهید؛ سپس گیتِ «تأییدِ قرارداد فنی» را با مرجعِ سند ثبت کنید.",
+            "terminalId، نام‌کاربری و گذرواژه را وارد کنید و IP سرور را ثبت کنید.",
+            "«تستِ پیکربندی» یک bpPayRequest پرداخت‌نشده می‌سازد.",
+            "با یک خریدِ واقعیِ حداقلی از فروشگاهِ خودتان verify و settle را بررسی و گیتِ «تستِ واقعی» را ثبت کنید.",
+        ),
     ),
     "parsian": ProviderFacts(
         code="parsian", platform=NOT_IMPLEMENTED,
@@ -139,14 +233,6 @@ MATRIX: dict[str, ProviderFacts] = {
         blocker="مستندِ فنی/WSDLِ رسمی در دسترس نیست؛ آداپترِ کارکردی وجود ندارد.",
         prerequisites=("مستندِ فنی/WSDL رسمیِ پارسیان + قراردادِ پذیرنده",),
         setup_steps=("مستندِ رسمی را از بانک پارسیان بگیرید؛ سپس آداپتر پیاده‌سازی می‌شود.",),
-    ),
-    "mellat": ProviderFacts(
-        code="mellat", platform=NOT_IMPLEMENTED,
-        summary="ملت (به‌پرداخت) — پیاده‌سازی فنی وجود ندارد.",
-        evidence="adapter mellat.py skeleton; behpardakht.com unreachable 2026-11-03; api.mellatbank.ir not reachable from this session 2026-11-05.",
-        blocker="مستندِ رسمیِ به‌پرداخت در دسترس نیست؛ settle باید مرحله‌ی جدا باشد و بدونِ مستند قابل پیاده‌سازی نیست.",
-        prerequisites=("مستندِ فنی رسمیِ به‌پرداخت + قراردادِ پذیرنده",),
-        setup_steps=("مستندِ رسمی را از به‌پرداخت ملت بگیرید؛ سپس آداپتر (با settle جدا) پیاده‌سازی می‌شود.",),
     ),
     "sadad": ProviderFacts(
         code="sadad", platform=NOT_IMPLEMENTED,
@@ -164,22 +250,33 @@ MATRIX: dict[str, ProviderFacts] = {
         prerequisites=("مشخص‌شدنِ PSPِ زیرین + مستندِ فنیِ رسمیِ آن",),
         setup_steps=("از بانک تجارت PSP و مستندِ فنیِ مربوط را بگیرید؛ سپس آداپتر پیاده‌سازی می‌شود.",),
     ),
-    "card_to_card": ProviderFacts(
-        code="card_to_card", platform=NOT_ELIGIBLE,
-        summary="کارت‌به‌کارت — روشِ آفلاین؛ پرداختِ قابل‌تأییدِ سرور-به-سرور ندارد.",
-        evidence="adapter card_to_card.py is_online=False (manual approval by a merchant).",
-        blocker="برای پرداختِ پلتفرم یک گردشِ کارِ تازه (تأییدِ دستیِ مدیرِ پلتفرم) لازم است که تصمیمِ محصولی/مالی جداست؛ اینجا فعال نمی‌شود.",
-    ),
-    "cod": ProviderFacts(
-        code="cod", platform=NOT_ELIGIBLE,
-        summary="پرداخت در محل — برای خدماتِ دیجیتال/SaaS بی‌معنی است.",
-        evidence="adapter cod.py is_online=False.",
-        blocker="پرداخت در محل برای اشتراک/اعتبارِ پیامک کاربرد ندارد.",
+    PLATFORM_CARD: ProviderFacts(
+        code=PLATFORM_CARD, platform=APPROVED, kind=KIND_MANUAL, default_purchase_types=(),
+        summary="کارت‌به‌کارتِ پلتفرم — روشِ دستیِ درجه‌یک: ادعای پرداخت + تأییدِ مالیِ مستقل؛ هرگز فعال‌سازیِ خودکار.",
+        evidence="First-class manual workflow in apps/billing (PlatformManualPaymentClaim): receipts are evidence, never proof of funds; approval needs an authorised finance admin's independent bank-statement confirmation.",
+        callback="(ندارد — ثبتِ ادعا توسطِ مالک)", verify="تأییدِ دستیِ مدیرِ مالی با صورتحسابِ بانکی؛ سپس همان مسیرِ confirm_payment (یک‌بار، قفل‌دار، دفتر)",
+        reconciliation="صفِ بررسی + انقضای خودکارِ ادعاهای رسیدگی‌نشده", refund="manual",
+        prerequisites=("کارتِ مقصدِ اختصاصیِ پلتفرم (جدا از کارتِ فروشگاه‌ها)", "یک مدیرِ مالیِ مجاز برای تأیید"),
+        setup_steps=(
+            "شماره‌کارت مقصد، نامِ دارنده و (اختیاری) شبا و نامِ بانکِ **پلتفرم** را وارد کنید (جدا از تنظیماتِ کارت‌به‌کارتِ فروشگاه‌ها).",
+            "نوع‌های خریدی را که با این روش مجازند انتخاب کنید و فعال کنید.",
+            "ادعاها در «بررسیِ کارت‌به‌کارت» ظاهر می‌شوند؛ فقط پس از دیدنِ واردشدنِ پول در صورتحسابِ بانکی تأیید کنید.",
+        ),
+        manual_fields=(
+            {"name": "destination_card", "label": "شماره‌کارتِ مقصدِ پلتفرم", "public": True, "required": True},
+            {"name": "holder_name", "label": "نامِ دارنده‌ی کارت", "public": True, "required": True},
+            {"name": "bank_name", "label": "نامِ بانک", "public": True, "required": False},
+            {"name": "sheba", "label": "شماره‌ی شبا (اختیاری)", "public": True, "required": False},
+            {"name": "instructions", "label": "توضیحاتِ پرداخت برای مالک (اختیاری)", "public": True, "required": False},
+        ),
     ),
 }
 
-#: درگاه‌هایی که برای پرداختِ پلتفرم مجازند — مشتق از ماتریس (نه فهرستِ جداگانه).
-APPROVED_CODES = tuple(code for code, facts in MATRIX.items() if facts.platform == APPROVED)
+#: روش‌هایی که پیاده‌سازیِ کارکردی دارند (approved + gated) — مشتق از ماتریس، نه فهرستِ جداگانه.
+APPROVED_CODES = tuple(code for code, f in MATRIX.items() if f.platform == APPROVED)
+IMPLEMENTED_CODES = tuple(code for code, f in MATRIX.items() if f.platform in (APPROVED, GATED))
+ONLINE_CODES = tuple(code for code in IMPLEMENTED_CODES if MATRIX[code].kind == KIND_ONLINE)
+MANUAL_CODES = tuple(code for code in IMPLEMENTED_CODES if MATRIX[code].kind == KIND_MANUAL)
 
 
 def facts_for(code: str) -> ProviderFacts | None:

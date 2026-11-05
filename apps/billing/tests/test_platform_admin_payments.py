@@ -79,9 +79,9 @@ class GatewayPageTests(PlatformAdminPaymentsBase):
         html = self.get("/payments/gateways/").content.decode()
         self.assertIn("gw-zibal", html)
         self.assertIn("gw-zarinpal", html)
-        self.assertIn('data-status="pending_contract"', html)        # BNPL: implemented, contract pending
+        self.assertIn('data-status="missing_credentials"', html)     # implemented, not yet configured
         self.assertIn('data-status="not_implemented"', html)         # PSP skeletons: no functional adapter
-        self.assertIn("غیرفعال", html)
+        self.assertNotIn('id="gw-cod"', html)                        # COD is not a platform billing method
 
     def test_saving_a_gateway_enables_it_audits_it_and_never_echoes_the_secret(self):
         response = self.post("/payments/gateways/", {

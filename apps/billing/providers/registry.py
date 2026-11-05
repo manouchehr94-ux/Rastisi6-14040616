@@ -9,6 +9,7 @@ from django.conf import settings
 from apps.billing.providers.adapter_backed import AdapterBackedBillingProvider
 from apps.billing.providers.base import BillingProviderError
 from apps.billing.providers.manual import ManualProvider
+from apps.billing.providers.manual_card import ManualCardProvider
 from apps.billing.providers.zibal import ZibalBillingProvider
 
 _PROVIDERS = {
@@ -16,7 +17,17 @@ _PROVIDERS = {
     ZibalBillingProvider.code: ZibalBillingProvider(),
     "zarinpal": AdapterBackedBillingProvider("zarinpal"),
     "pasargad": AdapterBackedBillingProvider("pasargad"),
+    # BNPL / PSPهایِ دارایِ گیت: مسیرِ پلتفرم وجود دارد؛ استفاده را platform_gateway_service با گیت‌ها کنترل می‌کند.
+    "snappay": AdapterBackedBillingProvider("snappay"),
+    "torobpay": AdapterBackedBillingProvider("torobpay"),
+    "saman": AdapterBackedBillingProvider("saman"),
+    "mellat": AdapterBackedBillingProvider("mellat"),
+    # کارت‌به‌کارتِ پلتفرم: روشِ دستی (بدونِ جلسه‌ی آنلاین).
+    ManualCardProvider.code: ManualCardProvider(),
 }
+
+#: Providerهایی که پرداختِ آنلاینِ خودکار ندارند (تطبیقِ خودکار نباید آن‌ها را بررسی کند).
+MANUAL_PROVIDER_CODES = frozenset({"manual", ManualCardProvider.code})
 
 
 def get_provider(code: str | None = None):

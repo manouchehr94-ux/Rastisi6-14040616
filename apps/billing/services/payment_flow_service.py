@@ -31,7 +31,7 @@ def _storable_extra(extra) -> dict:
     return {str(k)[:40]: v for k, v in dict(extra or {}).items() if isinstance(v, (str, int, bool)) and len(str(v)) <= 200}
 
 
-def gateway_redirect(provider_code: str, url: str):
+def gateway_redirect(provider_code: str, url: str, post_fields=None):
     """پاسخِ هدایتِ مرورگر به صفحه‌ی پرداختِ درگاه. درگاه‌هایی که Referer=دامنه‌ی پذیرنده می‌خواهند (پاسارگاد) از
     صفحه‌ی میانیِ ``referrer=origin`` عبور می‌کنند؛ بقیه یک ۳۰۲ ساده."""
     from apps.orders.gateways.redirects import gateway_redirect_response
@@ -41,7 +41,7 @@ def gateway_redirect(provider_code: str, url: str):
         adapter = get_adapter(provider_code)
     except KeyError:
         adapter = None
-    return gateway_redirect_response(url, adapter=adapter)
+    return gateway_redirect_response(url, adapter=adapter, post_fields=post_fields)
 
 
 def callback_url_for(callback_base_url: str, attempt) -> str:
@@ -176,6 +176,11 @@ def verify_and_confirm(attempt, *, confirm, confirmation_error, actor=None, now=
     except BillingProviderError as exc:
         if exc.code in ("amount_mismatch", "order_mismatch"):
             flag_requires_action(attempt, code=exc.code, now=now)
+        elif exc.code == "provider_terminal_failure":
+            model.objects.filter(pk=attempt.pk).exclude(status=S.SUCCEEDED).update(
+                status=S.FAILED, failure_code="provider_terminal_failure",
+                failure_message="ارائه‌دهنده اعلام کرد این تراکنش تکمیل نمی‌شود.", completed_at=now, updated_at=now,
+            )
         raise
     if not status.succeeded:
         if provider.callback_claims_failure(callback_data) and attempt.status in (S.CREATED, S.PENDING):

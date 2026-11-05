@@ -422,6 +422,12 @@ class PlatformGatewayConfig(TimeStampedModel):
         "اعتبارنامه‌ی رمزنگاری‌شده", blank=True, default="",
         help_text="مقدارِ رمزنگاری‌شده — هرگز مستقیم خوانده نمی‌شود",
     )
+    #: نوع‌های خریدی که مدیر اجازه داده با این روش پرداخت شوند (``subscription`` / ``sms_package``). تهی = پیش‌فرضِ ماتریس
+    #: (PSPهای تأییدشده: هر دو؛ روش‌های دارایِ گیت: هیچ تا زمانِ ثبتِ مجوز).
+    purchase_types = models.JSONField("نوع‌های خریدِ مجاز", blank=True, default=list)
+    #: گواهی‌هایِ صریحِ مدیر که گیت‌هایِ آمادگی را باز می‌کنند: ``{gate: {at, by, reference, purchase_types?}}`` با
+    #: gate ∈ provider_approval · contract_verification · live_verification. رازی در آن نیست؛ هر ثبت در حسابرسی هم هست.
+    attestations = models.JSONField("گواهی‌هایِ آمادگی", blank=True, default=dict)
     # نتیجه‌ی آخرین «تستِ پیکربندی» (بدونِ حرکتِ پول). جدا از «آماده‌بودن»: تست‌نشده ≠ ناآماده.
     last_test_at = models.DateTimeField("زمانِ آخرین تست", null=True, blank=True)
     last_test_ok = models.BooleanField("آخرین تست موفق بود", null=True, blank=True)

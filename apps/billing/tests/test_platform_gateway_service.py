@@ -20,23 +20,27 @@ from apps.stores.models import Store
 
 @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class EligibilityTests(TestCase):
-    def test_only_verified_psp_adapters_are_eligible(self):
-        self.assertEqual({c for c in pgs.ELIGIBLE_CODES if pgs.is_eligible(c)}, {"zibal", "zarinpal", "pasargad"})
+    IMPLEMENTED = {"zibal", "zarinpal", "pasargad", "snappay", "torobpay", "saman", "mellat", "platform_card"}
 
-    def test_blocked_bnpl_offline_and_unverified_gateways_are_refused_with_a_reason(self):
-        for code in ("saman", "parsian", "mellat", "sadad", "tejarat", "snappay", "torobpay", "cod", "card_to_card", "nope"):
+    def test_exactly_the_implemented_methods_are_configurable_for_platform_billing(self):
+        self.assertEqual({c for c in pgs.ELIGIBLE_CODES if pgs.is_eligible(c)}, self.IMPLEMENTED)
+
+    def test_not_implemented_and_store_only_methods_are_refused_with_a_reason(self):
+        for code in ("parsian", "sadad", "tejarat", "cod", "card_to_card", "nope"):
             self.assertFalse(pgs.is_eligible(code), code)
             self.assertTrue(pgs.ineligibility_reason(code), code)
             with self.assertRaises(pgs.PlatformGatewayError, msg=code):
                 pgs.save_gateway(code, credentials={}, sandbox=False, enabled=True)
         self.assertFalse(PlatformGatewayConfig.objects.exists())
 
-    def test_catalog_shows_blocked_gateways_read_only(self):
+    def test_catalog_lists_platform_methods_only_and_never_cod_or_store_card_to_card(self):
         states = {s.code: s for s in pgs.catalog()}
-        self.assertTrue(all(states[c].eligible for c in ("zibal", "zarinpal", "pasargad")))
-        self.assertFalse(states["saman"].eligible)
-        self.assertFalse(states["saman"].ready)
-        self.assertEqual(states["cod"].status, pgs.NOT_ELIGIBLE)
+        self.assertTrue(all(states[c].eligible for c in self.IMPLEMENTED))
+        self.assertFalse(states["parsian"].eligible)
+        self.assertEqual(states["parsian"].status, pgs.NOT_IMPLEMENTED)
+        self.assertNotIn("cod", states)
+        self.assertNotIn("card_to_card", states)
+        self.assertEqual(states["platform_card"].kind, "manual")
 
 
 @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")

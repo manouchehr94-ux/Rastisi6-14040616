@@ -364,6 +364,12 @@ class PaymentGatewayAdapter(ABC):
         ``redirects.gateway_redirect_response`` (an origin-referrer interstitial) instead of a bare 302."""
         return False
 
+    @property
+    def supports_dry_run_session(self) -> bool:
+        """False for adapters whose payment session needs real cart data (BNPL): a configuration test must then limit itself to
+        ``check_connection`` and never invent a cart."""
+        return True
+
     def check_connection(self, *, credentials: dict[str, str], sandbox: bool = False) -> str:
         """OPTIONAL, side-effect-free credential check (no payment is created or moved). Returns a short human message
         on success; raises a ``GatewayError`` subclass on failure. Adapters whose contract has no harmless

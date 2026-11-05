@@ -12,7 +12,26 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.html import escape
 
 
-def gateway_redirect_response(url: str, *, adapter=None):
+def gateway_redirect_response(url: str, *, adapter=None, post_fields=None):
+    """``post_fields``: درگاه‌هایی که صفحه‌ی پرداخت را با **فرمِ POST** می‌خواهند (ملت: ``RefId``؛ سپ: ``Token``). فرمِ HTML
+    (مقادیر escape‌شده، بدونِ ذخیره) با ارسالِ خودکار؛ برای کاربرِ بدونِ JS دکمه‌ی دستی هست."""
+    if post_fields:
+        inputs = "".join(
+            f'<input type="hidden" name="{escape(str(k))}" value="{escape(str(v))}">' for k, v in dict(post_fields).items()
+        )
+        safe_action = escape(url)
+        html = (
+            '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow">'
+            '<meta name="referrer" content="origin"><title>انتقال به درگاه پرداخت</title></head>'
+            '<body style="font-family:Tahoma,sans-serif;text-align:center;padding:48px 16px" onload="document.forms[0].submit()">'
+            f'<p>در حال انتقال به درگاه پرداخت…</p><form method="post" action="{safe_action}">{inputs}'
+            '<noscript><button type="submit">ادامه به درگاه پرداخت</button></noscript></form></body></html>'
+        )
+        response = HttpResponse(html)
+        response["Referrer-Policy"] = "origin"
+        response["Cache-Control"] = "no-store"
+        return response
     if not (adapter is not None and getattr(adapter, "redirect_requires_referer", False)):
         return HttpResponseRedirect(url)
     safe = escape(url)

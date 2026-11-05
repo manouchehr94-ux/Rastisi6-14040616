@@ -4329,7 +4329,7 @@ def _settings_context(
         "sms_billing_policy": SmsBillingPolicy.load(),
         "sms_packages": balance_service.list_active_packages(),
         "sms_package_purchase_form": SmsPackagePurchaseForm(),
-        "platform_gateway_options": SimpleLazyObject(lambda: _platform_gateway_options()),
+        "platform_gateway_options": SimpleLazyObject(lambda: _platform_gateway_options("sms_package", store)),
         "sms_purchase_history": SimpleLazyObject(lambda: list(
             store.sms_package_purchases.select_related("package").prefetch_related("payment_attempts").order_by("-created_at")[:10]
         )),
@@ -4856,10 +4856,10 @@ def settings_sms_connection(request):
 _SMS_SETTINGS_PATH = "/admin-portal/settings/?section=sms"
 
 
-def _platform_gateway_options():
+def _platform_gateway_options(purchase_type=None, store=None):
     from apps.portal.services import platform_gateway_service
 
-    return platform_gateway_service.checkout_options()
+    return platform_gateway_service.checkout_options(purchase_type or platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store)
 
 
 def _start_sms_purchase_payment(request, purchase):
@@ -4869,11 +4869,19 @@ def _start_sms_purchase_payment(request, purchase):
     from apps.billing.services.payment_flow_service import PaymentFlowError
     from apps.portal.services import platform_gateway_service
 
-    if not platform_gateway_service.ready_codes():
-        return None
+    store = purchase.store
     requested = (request.POST.get("gateway") or "").strip()[:40]
+    if requested == platform_gateway_service.PLATFORM_CARD:
+        if not platform_gateway_service.manual_option(platform_gateway_service.PURCHASE_SMS):
+            messages.error(request, "کارت‌به‌کارت برای خریدِ پیامک فعال نیست.")
+            return redirect(_SMS_SETTINGS_PATH)
+        return redirect("dashboard:sms-purchase-card-claim", pk=purchase.pk)
+    if not platform_gateway_service.ready_codes(platform_gateway_service.PURCHASE_SMS, store=store, include_pilot=True):
+        return None
     try:
-        provider = platform_gateway_service.resolve_checkout_provider(requested)
+        provider = platform_gateway_service.resolve_checkout_provider(
+            requested, platform_gateway_service.PURCHASE_SMS, store=store,
+        )
     except platform_gateway_service.PlatformGatewayError as exc:
         messages.error(request, str(exc))
         return redirect(_SMS_SETTINGS_PATH)
@@ -4888,7 +4896,7 @@ def _start_sms_purchase_payment(request, purchase):
         return redirect(_SMS_SETTINGS_PATH)
     if session is None:                       # تکرارِ idempotent: جلسه‌ی قبلی؛ به صفحه برگرد
         return redirect(_SMS_SETTINGS_PATH)
-    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url)
+    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url, (session.extra or {}).get("post_fields"))
 
 
 @require_POST
@@ -8501,7 +8509,7 @@ def billing_overview(request):
         "can_manage_account": membership_has_permission(request.store_membership, BILLING_ACCOUNT_MANAGE),
         "can_pay": membership_has_permission(request.store_membership, BILLING_PAYMENT_MANAGE),
         "can_cancel": membership_has_permission(request.store_membership, SUBSCRIPTION_CANCEL),
-        "platform_gateway_options": _platform_gateway_options(),
+        "platform_gateway_options": _platform_gateway_options("subscription", store),
     })
 
 
@@ -8558,9 +8566,10 @@ def billing_invoice_detail(request, pk):
         "attempts": invoice.payment_attempts.all(),
         "refunds": invoice.refunds.all(),
         "credit_notes": invoice.credit_notes.all(),
+        "manual_claims": invoice.manual_claims.select_related("reviewed_by").all(),
         "active_page": "billing",
         "can_pay": membership_has_permission(request.store_membership, BILLING_PAYMENT_MANAGE),
-        "platform_gateway_options": _platform_gateway_options(),
+        "platform_gateway_options": _platform_gateway_options("subscription", store),
     })
 
 
@@ -8575,8 +8584,16 @@ def billing_pay(request, pk):
     store = _resolve_dashboard_store(request)
     invoice = _billing_invoice_or_404(store, pk)
     requested = (request.POST.get("gateway") or "").strip()[:40]
+    if requested == platform_gateway_service.PLATFORM_CARD:
+        if not platform_gateway_service.manual_option(platform_gateway_service.PURCHASE_SUBSCRIPTION):
+            messages.error(request, "کارت‌به‌کارت برای پرداختِ اشتراک فعال نیست.")
+            return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
+        return redirect("dashboard:billing-card-claim", pk=invoice.pk)
     try:
-        provider = platform_gateway_service.resolve_checkout_provider(requested) if requested else None
+        provider = (
+            platform_gateway_service.resolve_checkout_provider(requested, platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store)
+            if requested else None
+        )
     except platform_gateway_service.PlatformGatewayError as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
@@ -8590,7 +8607,7 @@ def billing_pay(request, pk):
         messages.error(request, str(exc))
         return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
     request.session["billing_last_attempt"] = attempt.public_token
-    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url)
+    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url, (session.extra or {}).get("post_fields"))
 
 
 @staff_required
@@ -8658,3 +8675,119 @@ def billing_invoice_print(request, pk):
         "invoice": invoice, "lines": invoice.lines.all(),
         "seller_name": getattr(settings, "SHOP_NAME", "پلتفرم"),
     })
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# کارت‌به‌کارتِ **پلتفرم** — ادعای پرداخت توسطِ مالک (بدونِ هیچ اثرِ مالی تا تأییدِ مدیرِ مالی)
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _card_claim_context(request, *, store, target_label, amount, purchase_type, back_url, post_url, claims):
+    from django.utils import timezone
+
+    from apps.portal.services import platform_gateway_service
+
+    return {
+        "target_label": target_label, "amount": amount, "instructions": platform_gateway_service.manual_card_instructions(),
+        "claims": claims, "back_url": back_url, "post_url": post_url, "purchase_type": purchase_type,
+        "now": timezone.localtime().strftime("%Y-%m-%dT%H:%M"), "active_page": "billing",
+    }
+
+
+def _handle_card_claim(request, *, store, invoice=None, sms_purchase=None, target_label, amount, purchase_type, back_url, post_url):
+    from apps.billing.services import manual_card_service as mcs
+    from apps.billing.services.manual_card_service import ClaimError
+    from apps.portal.services import platform_gateway_service
+
+    claims = (invoice.manual_claims if invoice is not None else sms_purchase.manual_claims).select_related("reviewed_by").all()
+    if request.method == "POST":
+        try:
+            try:
+                transferred_at = _parse_local_datetime((request.POST.get("transferred_at") or "").strip())
+            except ValueError:
+                transferred_at = None
+            if transferred_at is None:
+                raise ClaimError("زمانِ انتقال معتبر نیست.")
+            mcs.submit_claim(
+                user=request.user, store=store, reference=request.POST.get("reference", ""), transferred_at=transferred_at,
+                payer_card_last4=request.POST.get("payer_card_last4", ""), receipt=request.FILES.get("receipt"),
+                invoice=invoice, sms_purchase=sms_purchase,
+            )
+        except ClaimError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "ادعای پرداخت ثبت شد و در انتظارِ بررسیِ مالی است. تا تأییدِ مدیرِ مالی هیچ سرویسی فعال نمی‌شود.")
+            return redirect(post_url)
+    if not platform_gateway_service.manual_option(purchase_type):
+        messages.error(request, "کارت‌به‌کارت برای این خرید فعال نیست.")
+        return redirect(back_url)
+    return render(request, "dashboard/billing_card_claim.html", _card_claim_context(
+        request, store=store, target_label=target_label, amount=amount, purchase_type=purchase_type,
+        back_url=back_url, post_url=post_url, claims=claims,
+    ))
+
+
+@staff_required
+@permission_required(BILLING_PAYMENT_MANAGE)
+def billing_card_claim(request, pk):
+    store = _resolve_dashboard_store(request)
+    invoice = _billing_invoice_or_404(store, pk)
+    url = reverse("dashboard:billing-card-claim", args=[invoice.pk])
+    return _handle_card_claim(
+        request, store=store, invoice=invoice, target_label=f"فاکتور {invoice.number}", amount=invoice.amount_due,
+        purchase_type="subscription", back_url=reverse("dashboard:billing-invoice-detail", args=[invoice.pk]), post_url=url,
+    )
+
+
+@staff_required
+@permission_required(SMS_SETTINGS_MANAGE)
+def sms_purchase_card_claim(request, pk):
+    store = _resolve_dashboard_store(request)
+    purchase = get_object_or_404(SmsPackagePurchase, pk=pk, store=store)
+    return _handle_card_claim(
+        request, store=store, sms_purchase=purchase, target_label=f"بسته‌ی پیامک «{purchase.package.name}»", amount=purchase.price,
+        purchase_type="sms_package", back_url=_SMS_SETTINGS_PATH, post_url=reverse("dashboard:sms-purchase-card-claim", args=[purchase.pk]),
+    )
+
+
+def _owner_claim_or_404(request, claim_id):
+    from apps.billing.models import PlatformManualPaymentClaim
+
+    store = _resolve_dashboard_store(request)
+    claim = get_object_or_404(PlatformManualPaymentClaim, pk=claim_id, store=store)
+    needed = BILLING_PAYMENT_MANAGE if claim.invoice_id else SMS_SETTINGS_MANAGE
+    if not membership_has_permission(request.store_membership, needed):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+    return claim
+
+
+@require_POST
+@staff_required
+def billing_card_claim_cancel(request, claim_id):
+    from apps.billing.services import manual_card_service as mcs
+
+    claim = _owner_claim_or_404(request, claim_id)
+    try:
+        mcs.cancel_claim(claim, user=request.user)
+        messages.success(request, "ادعای پرداخت لغو شد.")
+    except mcs.ClaimError as exc:
+        messages.error(request, str(exc))
+    return redirect(
+        reverse("dashboard:billing-invoice-detail", args=[claim.invoice_id]) if claim.invoice_id else _SMS_SETTINGS_PATH
+    )
+
+
+@staff_required
+def billing_card_claim_receipt(request, claim_id):
+    """رسیدِ **خودِ مالک** از ذخیره‌سازیِ خصوصی (احرازِ هویت + محدود به همین فروشگاه)؛ هرگز لینکِ عمومی."""
+    from django.http import FileResponse
+
+    claim = _owner_claim_or_404(request, claim_id)
+    if not claim.receipt:
+        raise Http404
+    response = FileResponse(claim.receipt.open("rb"), content_type=claim.receipt_content_type or "application/octet-stream")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    response["Content-Disposition"] = "inline; filename=receipt"
+    return response

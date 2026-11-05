@@ -67,6 +67,12 @@ urlpatterns = [
     path("payments/transactions/", views.payment_transactions, name="payment-transactions"),
     path("payments/reconciliation/", views.payment_reconciliation, name="payment-reconciliation"),
     path("payments/verify/<str:kind>/<int:attempt_id>/", views.payment_verify_now, name="payment-verify-now"),
+    path("payments/card-claims/", views.manual_claims, name="manual-claims"),
+    path("payments/card-claims/<int:claim_id>/", views.manual_claim_detail, name="manual-claim-detail"),
+    path("payments/card-claims/<int:claim_id>/receipt/", views.manual_claim_receipt, name="manual-claim-receipt"),
+    path("payments/card-claims/<int:claim_id>/<str:action>/", views.manual_claim_action, name="manual-claim-action"),
+    path("payments/invoice/<int:invoice_id>/refund/", views.payment_invoice_refund, name="payment-invoice-refund"),
+    path("payments/refund/<int:refund_id>/complete/", views.payment_refund_complete, name="payment-refund-complete"),
     path("payments/sms-purchases/", views.sms_purchases, name="sms-purchases"),
     path("payments/sms-purchases/<int:purchase_id>/<str:action>/", views.sms_purchase_action, name="sms-purchase-action"),
 

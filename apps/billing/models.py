@@ -546,3 +546,178 @@ class BillingSequence(models.Model):
 
     def __str__(self):
         return f"{self.key}={self.last_value}"
+
+
+# ============================================================================================================
+# کارت‌به‌کارتِ پلتفرم — روشِ دستیِ درجه‌یک (جدا از ``orders.CardTransferSubmission`` که مالِ سفارشِ فروشگاه است)
+# ============================================================================================================
+
+def _receipt_upload_to(instance, filename):
+    import secrets
+
+    ext = ""
+    if "." in filename:
+        ext = "." + filename.rsplit(".", 1)[-1].lower()[:5]
+    return f"platform_receipts/{instance.store_id}/{secrets.token_hex(16)}{ext}"
+
+
+def _private_storage():
+    from apps.core.storage import PrivateFileSystemStorage
+
+    return PrivateFileSystemStorage()
+
+
+class PlatformManualPaymentClaim(TimeStampedModel):
+    """ادعای پرداختِ کارت‌به‌کارت به **حسابِ پلتفرم** برای یک فاکتورِ اشتراک یا خریدِ بسته‌ی پیامک.
+
+    رسید/شماره‌ی پیگیری **مدرکِ پرداخت نیست**: فقط ادعایی است که یک مدیرِ مالیِ مجاز باید با صورتحسابِ بانکیِ مستقل
+    تأیید کند. هیچ اشتراک/اعتباری با ثبتِ ادعا فعال نمی‌شود. تأیید از همان ``confirm_payment``/دفترِ اعتبار عبور می‌کند
+    (دقیقاً یک‌بار). قیدهایِ پایگاه‌داده: یک ادعای فعال برای هر فاکتور/خرید؛ شماره‌ی پیگیریِ فعال/تأییدشده یکتا؛
+    ارجاعِ صورتحسابِ بانکیِ تأییدشده یکتا."""
+
+    class Status(models.TextChoices):
+        PENDING_REVIEW = "pending_review", "در انتظارِ بررسیِ مالی"
+        APPROVED = "approved", "تأییدشده"
+        REJECTED = "rejected", "ردشده"
+        CANCELLED = "cancelled", "لغوشده توسطِ مالک"
+        EXPIRED = "expired", "منقضی‌شده"
+        NEEDS_ACTION = "needs_action", "نیازمندِ اقدام (پول تأیید شد امّا اثر اعمال نشد)"
+
+    ACTIVE_STATUSES = frozenset({Status.PENDING_REVIEW, Status.APPROVED})
+
+    store = models.ForeignKey("stores.Store", verbose_name="فروشگاه", on_delete=models.PROTECT, related_name="platform_manual_claims")
+    invoice = models.ForeignKey(
+        SubscriptionInvoice, verbose_name="فاکتور", on_delete=models.PROTECT, null=True, blank=True, related_name="manual_claims",
+    )
+    sms_purchase = models.ForeignKey(
+        "sms.SmsPackagePurchase", verbose_name="خریدِ بسته‌ی پیامک", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="manual_claims",
+    )
+    subscription_attempt = models.OneToOneField(
+        SubscriptionPaymentAttempt, verbose_name="تلاشِ پرداختِ اشتراک", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="manual_claim",
+    )
+    sms_attempt = models.OneToOneField(
+        "sms.SmsPackagePaymentAttempt", verbose_name="تلاشِ پرداختِ پیامک", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="manual_claim",
+    )
+    submitted_by = models.ForeignKey(
+        "auth.User", verbose_name="ثبت‌کننده", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    expected_amount = _money(verbose_name="مبلغِ مورد انتظار (سمتِ سرور)")
+    currency = models.CharField("ارز", max_length=8, default="IRT")
+    reference_raw = models.CharField("شماره‌ی پیگیری (همان‌طور که وارد شد)", max_length=80)
+    reference_key = models.CharField("شماره‌ی پیگیریِ نرمال‌شده", max_length=80, db_index=True)
+    transferred_at = models.DateTimeField("زمانِ ادعاییِ انتقال")
+    payer_card_last4 = models.CharField("چهار رقمِ آخرِ کارتِ پرداخت‌کننده", max_length=4, blank=True, default="")
+    receipt = models.FileField("رسید", upload_to=_receipt_upload_to, storage=_private_storage, blank=True, default="", max_length=200)
+    receipt_sha256 = models.CharField("هشِ رسید", max_length=64, blank=True, default="")
+    receipt_content_type = models.CharField("نوعِ رسید", max_length=40, blank=True, default="")
+    status = models.CharField("وضعیت", max_length=16, choices=Status.choices, default=Status.PENDING_REVIEW, db_index=True)
+    expires_at = models.DateTimeField("مهلتِ بررسی")
+    flags = models.JSONField("نشانه‌هایِ مشکوک", blank=True, default=list)
+    reviewed_by = models.ForeignKey(
+        "auth.User", verbose_name="بررسی‌کننده", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    reviewed_at = models.DateTimeField("زمانِ بررسی", null=True, blank=True)
+    review_note = models.CharField("یادداشت/دلیلِ بررسی", max_length=500, blank=True, default="")
+    bank_confirmation_reference = models.CharField("ارجاعِ صورتحسابِ بانکیِ مستقل", max_length=120, blank=True, default="")
+    confirmed_amount = models.DecimalField("مبلغِ تأییدشده در صورتحساب", max_digits=14, decimal_places=0, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "ادعای پرداختِ کارت‌به‌کارتِ پلتفرم"
+        verbose_name_plural = "ادعاهایِ پرداختِ کارت‌به‌کارتِ پلتفرم"
+        ordering = ["-created_at"]
+        permissions = [
+            ("approve_manual_platform_payment", "می‌تواند پرداختِ کارت‌به‌کارتِ پلتفرم را با صورتحسابِ بانکی تأیید/رد کند"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                name="manualclaim_exactly_one_target",
+                check=(models.Q(invoice__isnull=False, sms_purchase__isnull=True) | models.Q(invoice__isnull=True, sms_purchase__isnull=False)),
+            ),
+            models.CheckConstraint(name="manualclaim_amount_positive", check=models.Q(expected_amount__gt=0)),
+            # شماره‌ی پیگیریِ فعال (در انتظار/تأییدشده) یکتا است ⇒ بازپخش (replay) و ادعایِ تکراری غیرممکن.
+            models.UniqueConstraint(
+                fields=["reference_key"], condition=models.Q(status__in=["pending_review", "approved"]),
+                name="uniq_manualclaim_active_reference",
+            ),
+            # برای هر فاکتور/خرید حداکثر یک ادعای در انتظار و حداکثر یک ادعای تأییدشده.
+            models.UniqueConstraint(
+                fields=["invoice"], condition=models.Q(status="pending_review", invoice__isnull=False), name="uniq_manualclaim_pending_invoice",
+            ),
+            models.UniqueConstraint(
+                fields=["invoice"], condition=models.Q(status="approved", invoice__isnull=False), name="uniq_manualclaim_approved_invoice",
+            ),
+            models.UniqueConstraint(
+                fields=["sms_purchase"], condition=models.Q(status="pending_review", sms_purchase__isnull=False), name="uniq_manualclaim_pending_sms",
+            ),
+            models.UniqueConstraint(
+                fields=["sms_purchase"], condition=models.Q(status="approved", sms_purchase__isnull=False), name="uniq_manualclaim_approved_sms",
+            ),
+            # یک خطِ صورتحسابِ بانکی فقط یک‌بار می‌تواند پرداختی را تأیید کند.
+            models.UniqueConstraint(
+                fields=["bank_confirmation_reference"], condition=models.Q(status="approved") & ~models.Q(bank_confirmation_reference=""),
+                name="uniq_manualclaim_bank_confirmation",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["store", "status"], name="idx_manualclaim_store_status"),
+            models.Index(fields=["status", "expires_at"], name="idx_manualclaim_status_expiry"),
+        ]
+
+    def __str__(self):
+        return f"ManualClaim<{self.pk}> {self.get_status_display()}"
+
+    @property
+    def target_label(self) -> str:
+        if self.invoice_id:
+            return f"فاکتور {self.invoice.number}"
+        return f"بسته‌ی پیامک #{self.sms_purchase_id}"
+
+    @property
+    def purchase_type(self) -> str:
+        return "subscription" if self.invoice_id else "sms_package"
+
+
+class PlatformManualPaymentClaimEvent(models.Model):
+    """تاریخچه‌ی **فقط‌افزودنیِ** یک ادعا (ثبت، بررسی، تأیید، رد، لغو، انقضا، تلاشِ تکراری...). هرگز ویرایش/حذف نمی‌شود؛
+    برای شواهدِ مالی و حسابرسی."""
+
+    claim = models.ForeignKey(PlatformManualPaymentClaim, on_delete=models.PROTECT, related_name="events")
+    actor = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    action = models.CharField("رخداد", max_length=40, db_index=True)
+    detail = models.JSONField("جزئیات", blank=True, default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    ACTION_LABELS = {
+        "submitted": "ثبتِ ادعا", "approved": "تأییدِ مالی", "rejected": "ردِ ادعا", "cancelled": "لغوِ ادعا توسطِ مالک",
+        "expired": "انقضا", "needs_action": "نیازمندِ اقدام", "duplicate_reference": "تلاشِ ثبتِ شماره‌ی پیگیریِ تکراری",
+    }
+
+    @property
+    def action_label(self):
+        return self.ACTION_LABELS.get(self.action, self.action)
+
+    @property
+    def detail_text(self):
+        """خلاصه‌ی خوانا از جزئیات (بدونِ نمایشِ ساختارِ خام)."""
+        parts = []
+        for key, value in (self.detail or {}).items():
+            if value in ("", None, [], {}, False):
+                continue
+            parts.append(f"{key}: {', '.join(map(str, value)) if isinstance(value, (list, tuple)) else value}")
+        return " · ".join(parts)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "رخدادِ ادعایِ کارت‌به‌کارت"
+        verbose_name_plural = "رخدادهایِ ادعایِ کارت‌به‌کارت"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValueError("رخدادِ ادعا تغییرناپذیر است.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("رخدادِ ادعا حذف‌شدنی نیست.")

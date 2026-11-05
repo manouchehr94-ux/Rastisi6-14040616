@@ -1,0 +1,47 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}ادعای کارت‌به‌کارت #{{ claim.pk }} | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<p><a href="{% url 'portal_platform_admin:manual-claims' %}" class="pa-help">← صفِ ادعاها</a></p>
+{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
+<div class="pa-card"><div class="pa-cardhead"><h3>ادعا #{{ claim.pk }} — {{ claim.target_label }}</h3>
+  <span class="pa-badge {% if claim.status == 'approved' %}pa-ok{% elif claim.status == 'pending_review' %}pa-warn{% else %}pa-off{% endif %}">{{ claim.get_status_display }}</span></div>
+<div class="pa-cardbody" style="line-height:2.1">
+  <div><b>فروشگاه:</b> {{ claim.store.name }} · <b>ثبت‌کننده:</b> {{ claim.submitted_by.username|default:"—" }}</div>
+  <div><b>مبلغِ مورد انتظارِ سمتِ سرور:</b> <span style="font-size:18px;font-weight:800">{{ claim.expected_amount }}</span> {{ claim.currency }}</div>
+  <div><b>شماره‌ی پیگیری:</b> <span dir="ltr">{{ claim.reference_raw }}</span> (کلید: <span dir="ltr">{{ claim.reference_key }}</span>)</div>
+  <div><b>زمانِ ادعاییِ انتقال:</b> {{ claim.transferred_at|jalali }} · <b>۴ رقمِ آخرِ کارتِ پرداخت‌کننده:</b> {{ claim.payer_card_last4|default:"—" }}</div>
+  <div><b>رسید:</b> {% if claim.receipt %}<a href="{% url 'portal_platform_admin:manual-claim-receipt' claim.pk %}" target="_blank" rel="noopener">مشاهده ({{ claim.receipt_content_type }})</a> <span class="pa-help" dir="ltr">sha256 {{ claim.receipt_sha256|slice:":16" }}…</span>{% else %}ندارد{% endif %}</div>
+  <div><b>مهلتِ بررسی:</b> {{ claim.expires_at|jalali }}</div>
+  {% if claim.flags %}<div><b>نشانه‌هایِ مشکوک:</b> {% for flag in claim.flags %}<span class="pa-badge pa-warn">{{ flag }}</span> {% endfor %}</div>{% endif %}
+  {% if same_reference_elsewhere %}<div class="pa-alert">⚠️ همین شماره‌ی پیگیری در {{ same_reference_elsewhere }} ادعایِ دیگر (قبلی/ردشده) هم آمده است.</div>{% endif %}
+  {% if store_rejected %}<div class="pa-help">این فروشگاه {{ store_rejected }} ادعایِ ردشده از {{ store_total }} ادعایِ دیگر دارد.</div>{% endif %}
+  {% if claim.reviewed_by %}<div><b>بررسی‌کننده:</b> {{ claim.reviewed_by.username }} · {{ claim.reviewed_at|jalali }} · ارجاعِ صورتحسابِ بانکی: <span dir="ltr">{{ claim.bank_confirmation_reference|default:"—" }}</span> · مبلغِ تأییدشده: {{ claim.confirmed_amount|default:"—" }} · {{ claim.review_note }}</div>{% endif %}
+</div></div>
+
+{% if claim.status == "pending_review" %}
+<div class="pa-card"><div class="pa-cardhead"><h3>بررسیِ مالی</h3></div><div class="pa-cardbody">
+  {% if not can_review %}<div class="pa-alert">شما دسترسیِ «تأییدِ پرداختِ کارت‌به‌کارتِ پلتفرم» را ندارید.</div>
+  {% elif is_self %}<div class="pa-alert">این ادعا را خودتان ثبت کرده‌اید؛ تأیید/رد مجاز نیست (تضادِ منافع).</div>
+  {% else %}
+  <form method="post" action="{% url 'portal_platform_admin:manual-claim-action' claim.pk 'approve' %}" style="display:grid;gap:8px;max-width:560px">{% csrf_token %}
+    <p class="pa-help">پیش از تأیید، واردشدنِ دقیقاً <b>{{ claim.expected_amount }}</b> تومان را در صورتحسابِ بانکیِ مستقل ببینید و ارجاعِ آن را وارد کنید.</p>
+    <input class="pa-input" name="bank_reference" placeholder="ارجاعِ صورتحسابِ بانکی (الزامی، یکتا)" required minlength="6" dir="ltr">
+    <input class="pa-input" name="confirmed_amount" placeholder="مبلغِ دیده‌شده در صورتحساب" required inputmode="numeric">
+    <input class="pa-input" name="note" placeholder="یادداشت (اختیاری)">
+    <button class="pa-btn pa-primary" type="submit" onclick="return confirm('تأییدِ نهایی و فعال‌سازیِ خدمت؟ این کار بازگشت‌پذیر نیست.')">تأییدِ مالی و اعمال</button>
+  </form>
+  <hr>
+  <form method="post" action="{% url 'portal_platform_admin:manual-claim-action' claim.pk 'reject' %}" style="display:grid;gap:8px;max-width:560px">{% csrf_token %}
+    <input class="pa-input" name="reason" placeholder="دلیلِ رد/اصلاحِ لازم (الزامی)" required minlength="5">
+    <button class="pa-btn pa-soft" type="submit">رد (مالک می‌تواند ادعای اصلاح‌شده ثبت کند)</button>
+  </form>
+  {% endif %}
+</div></div>
+{% endif %}
+
+<div class="pa-card"><div class="pa-cardhead"><h3>تاریخچه‌ی کامل (فقط‌افزودنی)</h3></div><div class="pa-cardbody">
+  {% for event in events %}<div style="font-size:12.5px;margin-bottom:4px">{{ event.created_at|jalali }} — <b>{{ event.action_label }}</b> — {{ event.actor.username|default:"سامانه" }} <span class="pa-help" dir="ltr">{{ event.detail_text }}</span></div>
+  {% empty %}<p class="pa-help">رخدادی نیست.</p>{% endfor %}
+</div></div>
+{% endblock %}

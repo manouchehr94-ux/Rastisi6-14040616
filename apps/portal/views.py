@@ -1732,7 +1732,7 @@ def billing_plans(request, store_public_id):
 
     return render(request, "portal/app/billing_plans.html", {
         "store": store, "plan_versions": offerable_versions, "current_subscription": current_subscription,
-        "gateway_options": platform_gateway_service.checkout_options(),
+        "gateway_options": platform_gateway_service.checkout_options(platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store),
     })
 
 
@@ -1773,8 +1773,17 @@ def _start_purchase(request, *, store, plan_version, gateway=""):
     invoice = result
     from apps.portal.services import platform_gateway_service
 
+    if gateway == platform_gateway_service.PLATFORM_CARD:
+        # کارت‌به‌کارتِ پلتفرم: فاکتور صادر شده؛ مالک برای ثبتِ ادعا به صفحه‌ی صورتحسابِ پنلِ مدیریت می‌رود (هیچ پرداختِ آنلاینی نیست).
+        if not platform_gateway_service.manual_option(platform_gateway_service.PURCHASE_SUBSCRIPTION):
+            messages.error(request, "کارت‌به‌کارت برای خریدِ اشتراک فعال نیست.")
+            return redirect("portal:billing-plans", store_public_id=store.public_id)
+        return redirect("portal:billing-card-handoff", store_public_id=store.public_id, invoice_id=invoice.pk)
     try:
-        provider = platform_gateway_service.resolve_checkout_provider(gateway) if gateway else None
+        provider = (
+            platform_gateway_service.resolve_checkout_provider(gateway, platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store)
+            if gateway else None
+        )
     except platform_gateway_service.PlatformGatewayError as exc:
         messages.error(request, str(exc))
         return redirect("portal:billing-plans", store_public_id=store.public_id)
@@ -1794,7 +1803,7 @@ def _start_purchase(request, *, store, plan_version, gateway=""):
 
     if not billing_registry.get_provider(attempt.provider).supports_automatic_capture:
         return redirect("portal:billing-return", store_public_id=store.public_id, attempt_public_token=attempt.public_token)
-    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url)
+    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url, (session.extra or {}).get("post_fields"))
 
 
 @owner_required
@@ -1867,6 +1876,20 @@ def billing_step_up_verify(request, store_public_id):
         messages.error(request, "کدِ واردشده نادرست یا منقضی است.")
 
     return render(request, "portal/app/step_up_verify.html", {"store": store})
+
+
+@owner_required
+def billing_card_handoff(request, store_public_id, invoice_id):
+    """پس از صدورِ فاکتورِ اشتراک و انتخابِ کارت‌به‌کارت: راهنما + ورود به پنلِ مدیریت برای ثبتِ ادعای پرداخت."""
+    from apps.billing.models import SubscriptionInvoice
+
+    store = _get_owned_store_or_404(request, store_public_id)
+    if not portal_actions_allowed(request, store, SUBSCRIPTION_CHANGE, BILLING_PAYMENT_MANAGE):
+        return portal_permission_denied(request)
+    invoice = get_object_or_404(SubscriptionInvoice, pk=invoice_id, store=store)
+    return render(request, "portal/app/billing_card_handoff.html", {
+        "store": store, "invoice": invoice, "next_path": reverse("dashboard:billing-card-claim", args=[invoice.pk]),
+    })
 
 
 @owner_required

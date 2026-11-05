@@ -33,7 +33,7 @@
         <div style="margin-inline-start:auto;display:flex;gap:8px">
           <a class="btn" href="{% url 'dashboard:billing-invoice-detail' next_open_invoice.pk %}">جزئیات</a>
           {% if can_pay %}
-          <form method="post" action="{% url 'dashboard:billing-pay' next_open_invoice.pk %}">{% csrf_token %}{% if platform_gateway_options|length > 1 %}<select name="gateway" aria-label="درگاه پرداخت" style="margin-inline-end:6px">{% for option in platform_gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% endif %}<button class="btn btn-primary" type="submit">پرداخت</button></form>
+          <form method="post" action="{% url 'dashboard:billing-pay' next_open_invoice.pk %}">{% csrf_token %}{% if platform_gateway_options|length > 1 %}<select name="gateway" aria-label="درگاه پرداخت" style="margin-inline-end:6px">{% for option in platform_gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% elif platform_gateway_options|length == 1 %}<input type="hidden" name="gateway" value="{{ platform_gateway_options.0.code }}">{% endif %}<button class="btn btn-primary" type="submit">پرداخت</button></form>
           {% endif %}
         </div>
       </div>

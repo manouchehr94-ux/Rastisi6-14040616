@@ -63,6 +63,7 @@
     <p style="margin-top:0"><b>{{ state.status_label }}:</b> {{ state.status_detail }}</p>
     {% if state.last_test_message %}<p class="pa-help">آخرین تست ({{ state.last_test_at|jalali:"%Y/%m/%d %H:%M" }}): {{ state.last_test_message }}</p>{% endif %}
 
+    {% if state.kind == "manual" %}<p class="pa-help"><a href="{% url 'portal_platform_admin:manual-claims' %}">ادعاهایِ در انتظارِ بررسی: <b>{{ pending_claims }}</b></a> — کارتِ مقصدِ پلتفرم کاملاً جدا از کارت‌به‌کارتِ فروشگاه‌هاست.</p>{% endif %}
     {% if state.eligible %}
       {% if state.onboarding_help %}<p class="pa-help">{{ state.onboarding_help }}</p>{% endif %}
       <form method="post" autocomplete="off">
@@ -73,9 +74,14 @@
           {% for field in state.fields %}
           <div class="pa-field">
             <label for="cred-{{ state.code }}-{{ field.name }}">{{ field.label }}</label>
+            {% if field.public %}
+            <input class="pa-input" id="cred-{{ state.code }}-{{ field.name }}" type="text" dir="ltr" autocomplete="off"
+                   name="cred_{{ field.name }}" value="{{ field.value }}" {% if field.required %}required{% endif %}>
+            {% else %}
             <input class="pa-input" id="cred-{{ state.code }}-{{ field.name }}" type="password" dir="ltr" autocomplete="new-password"
                    name="cred_{{ field.name }}" value=""
                    placeholder="{% if field.configured %}•••••••• (ذخیره شده — برای تغییر، مقدارِ تازه وارد کنید){% else %}وارد نشده{% endif %}">
+            {% endif %}
           </div>
           {% endfor %}
           <div class="pa-field">
@@ -83,6 +89,15 @@
             <input class="pa-input" id="order-{{ state.code }}" type="number" min="0" name="display_order" value="0">
           </div>
         </div>
+        <fieldset style="margin-top:10px;border:1px dashed var(--pa-line,#ccd);border-radius:10px;padding:8px 12px">
+          <legend style="font-size:12.5px">نوع‌هایِ خریدی که با این روش مجازند</legend>
+          <input type="hidden" name="ptypes_submitted" value="1">
+          {% for ptype, plabel in purchase_labels.items %}
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin-inline-end:14px">
+            <input type="checkbox" name="ptype_{{ ptype }}" {% if ptype in state.allowed_types %}checked{% endif %}> {{ plabel }}
+          </label>{% endfor %}
+          {% if state.gates %}<div class="pa-help">مجازِ مؤثر (انتخابِ شما ∩ تأییدِ ارائه‌دهنده): {% for t in state.effective_types %}{{ t }} {% empty %}هیچ{% endfor %}</div>{% endif %}
+        </fieldset>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px">
           <input type="checkbox" name="is_enabled" {% if state.enabled %}checked{% endif %}> فعال برای پرداخت از صاحبانِ فروشگاه
         </label>
@@ -90,7 +105,7 @@
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px">
           <input type="checkbox" name="sandbox_mode" {% if state.sandbox %}checked{% endif %}> حالتِ آزمایشی (Sandbox) — بدونِ پرداختِ واقعی
         </label>
-        {% else %}
+        {% elif state.kind != "manual" %}
         <p class="pa-help" style="margin-top:6px">Sandbox: {{ state.sandbox_note|default:"برای این درگاه در مستنداتِ رسمی Sandbox مشخص نشده است." }}</p>
         {% endif %}
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
@@ -104,6 +119,28 @@
         <span class="pa-help">احرازِ هویت (در صورتِ وجود) و ساختِ یک درخواستِ پرداختِ آزمایشیِ پرداخت‌نشده؛ هیچ ردیفِ پرداخت و هیچ ریدایرکتی ساخته نمی‌شود.</span>
       </form>
       {% endif %}
+    {% endif %}
+
+    {% if state.eligible and state.gates %}
+    <div class="pa-card" style="margin-top:14px;border:1px solid var(--pa-line,#ccd)"><div class="pa-cardbody">
+      <b>گیت‌هایِ آمادگیِ زنده</b>
+      <p class="pa-help">تست‌هایِ mock و «تستِ پیکربندی» هیچ گیتی را باز نمی‌کنند. هر گیت با ارجاعِ مستند ثبت و حسابرسی می‌شود.</p>
+      {% for gate in state.gates %}
+      <div style="padding:8px 0;border-bottom:1px dashed var(--pa-line,#ccd)" data-gate="{{ gate.gate }}">
+        <span class="pa-badge {% if gate.ok %}pa-ok{% else %}pa-warn{% endif %}">{% if gate.ok %}ثبت شده{% else %}ثبت نشده{% endif %}</span> {{ gate.label }}
+        {% if gate.ok %}<span class="pa-help" dir="ltr"> — {{ gate.reference }}{% if gate.purchase_types %} [{% for t in gate.purchase_types %}{{ t }} {% endfor %}]{% endif %}</span>
+        <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="revoke_gate"><input type="hidden" name="gateway_code" value="{{ state.code }}"><input type="hidden" name="gate" value="{{ gate.gate }}"><button class="pa-btn pa-small pa-soft" type="submit">ابطال</button></form>
+        {% else %}
+        <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">{% csrf_token %}
+          <input type="hidden" name="action" value="attest"><input type="hidden" name="gateway_code" value="{{ state.code }}"><input type="hidden" name="gate" value="{{ gate.gate }}">
+          <input class="pa-input" name="reference" placeholder="ارجاعِ مستند (نامه/تیکت/سند، حداقل ۶ نویسه)" required minlength="6" style="max-width:300px">
+          {% if gate.gate == "provider_approval" %}{% for ptype, plabel in purchase_labels.items %}<label style="font-size:12.5px"><input type="checkbox" name="atype_{{ ptype }}"> {{ plabel }}</label>{% endfor %}{% endif %}
+          <button class="pa-btn pa-small pa-primary" type="submit">ثبتِ گیت</button>
+        </form>
+        {% endif %}
+      </div>{% endfor %}
+      {% if state.pilot_possible %}<p class="pa-help" style="margin-top:8px">گیت‌هایِ قراردادی باز است؛ فروشگاهِ متعلق به مدیرِ پلتفرم می‌تواند با یک خریدِ واقعیِ حداقلی آزمایش کند (فقط برای او نمایش داده می‌شود). سپس گیتِ «تستِ واقعی» را ثبت کنید.</p>{% endif %}
+    </div></div>
     {% endif %}
 
     {% if state.setup_steps %}

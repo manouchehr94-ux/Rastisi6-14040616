@@ -11,6 +11,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.billing.models import SubscriptionPaymentAttempt
+from apps.billing.providers import registry
 from apps.billing.providers.base import BillingProviderError
 from apps.billing.services import payment_flow_service, sms_purchase_payment_service
 from apps.billing.services.confirmation_service import ConfirmationError
@@ -39,7 +40,7 @@ class Command(BaseCommand):
             S = model.Status
             queryset = (
                 model.objects.filter(status__in=(S.CREATED, S.PENDING), created_at__lt=newest, created_at__gte=oldest)
-                .exclude(provider_session_id="").order_by("created_at")
+                .exclude(provider_session_id="").exclude(provider__in=registry.MANUAL_PROVIDER_CODES).order_by("created_at")
             )
             for attempt in queryset.iterator():
                 counts["checked"] += 1

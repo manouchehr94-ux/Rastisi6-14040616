@@ -38,12 +38,16 @@ class _PurchaseDescriptor:
 
     number: str
     payment_description: str
+    cart_lines: tuple = ()
 
 
 def _describe(purchase) -> _PurchaseDescriptor:
+    # سبدِ BNPL از محتوای واقعیِ همین خرید: یک بسته‌ی پیامک با قیمتِ اسنپ‌شاتِ سمتِ سرور — هیچ محتوایی ساخته نمی‌شود.
     return _PurchaseDescriptor(
         number=f"SMS-{purchase.pk}",
         payment_description=f"خرید بسته پیامک راستیسی — {purchase.credit_amount} اعتبار",
+        cart_lines=({"id": f"sms-package-{purchase.package_id}", "name": f"بسته پیامک {purchase.credit_amount} اعتبار"[:100],
+                     "count": 1, "unit_amount": int(purchase.price), "line_amount": int(purchase.price)},),
     )
 
 
