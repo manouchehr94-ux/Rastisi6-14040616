@@ -114,3 +114,14 @@ class BillingPaymentProvider(ABC):
     def refund_payment(self, *, provider_payment_id: str, amount: Decimal, currency: str,
                        idempotency_key: str) -> RefundResult:
         """بازپرداختِ (کاملِ/جزئیِ) یک پرداخت را از Provider درخواست می‌کند."""
+
+    def verify_attempt(self, *, attempt, callback_data: dict | None = None) -> PaymentStatusResult:
+        """تأییدِ سرور-به-سرورِ یک تلاشِ مشخص (نه پارامترهایِ مرورگر). پیش‌فرض: همان
+        ``fetch_payment_status`` با شناسه‌یِ جلسه‌ی خودِ تلاش. Providerهایی که برایِ تأیید به
+        مبلغِ مورد انتظار یا داده‌یِ بازگشت نیاز دارند آن را override می‌کنند."""
+        return self.fetch_payment_status(provider_payment_id=attempt.provider_session_id)
+
+    def callback_claims_failure(self, callback_data: dict | None) -> bool:
+        """آیا دادهٔ بازگشتِ مرورگر *ادعا* می‌کند پرداخت ناموفق/لغو شد؟ فقط یک راهنما: هرگز به‌تنهایی
+        وضعیتِ مالی را عوض نمی‌کند؛ فقط همراهِ «verify سرور هم تأیید نکرد» یک تلاش را ناموفق علامت می‌زند."""
+        return False

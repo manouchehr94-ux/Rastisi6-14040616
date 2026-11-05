@@ -16,6 +16,10 @@ urlpatterns = [
     # (the Platform Admin host is deliberately not public; tenant hosts resolve a Store first). Authenticity is
     # enforced by SNS signature + topic allowlist inside the view, not by the host.
     path("notifications/", include("apps.notifications.urls")),
+    # Platform billing gateway callback (``billing/return/<token>/``) + signed webhook: the platform's OWN gateway
+    # redirects the browser to the canonical platform host (the host registered with the gateway merchant account).
+    # Authenticity: unguessable attempt token + server-to-server verify (callback) / HMAC signature (webhook).
+    path("billing/", include("apps.billing.urls")),
     path("", include("apps.portal.urls")),
 ]
 

@@ -1,0 +1,61 @@
+{% extends "dashboard/base_admin.html" %}
+{% load persian %}
+{% block title %}پرداخت کارت‌به‌کارت | پنل مدیریت{% endblock %}
+{% block page_title %}پرداخت کارت‌به‌کارت به راستیسی{% endblock %}
+{% block page_sub %}{{ target_label }}{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:16px"><div class="card-body">
+  <div style="background:var(--bg);border-radius:12px;padding:14px 16px;line-height:2">
+    <div><b>مبلغِ دقیقِ قابلِ پرداخت:</b> <span style="font-size:18px;font-weight:800">{{ amount|toman }}</span></div>
+    {% if instructions.card_number %}
+    <div><b>شماره‌کارتِ مقصد (پلتفرم):</b> <span dir="ltr" style="font-weight:700;letter-spacing:1px">{{ instructions.card_display }}</span></div>
+    <div><b>به نامِ:</b> {{ instructions.holder_name }}{% if instructions.bank_name %} — {{ instructions.bank_name }}{% endif %}</div>
+    {% if instructions.sheba %}<div><b>شبا:</b> <span dir="ltr">{{ instructions.sheba }}</span></div>{% endif %}
+    {% if instructions.instructions %}<div style="color:var(--muted);font-size:12.5px">{{ instructions.instructions }}</div>{% endif %}
+    {% endif %}
+  </div>
+  <p style="font-size:12.5px;color:var(--muted);margin-top:10px">
+    ⚠️ ثبتِ رسید <b>پرداخت را تأیید نمی‌کند</b>. اشتراک/اعتبارِ پیامک فقط پس از آنکه مدیرِ مالیِ راستیسی واردشدنِ پول را در صورتحسابِ بانکی ببیند و تأیید کند فعال می‌شود.
+    همان مبلغِ دقیق را واریز کنید؛ پرداختِ کمتر یا بیشتر تأیید نمی‌شود.
+  </p>
+</div></div>
+
+{% if messages %}{% for message in messages %}<div class="alert {% if message.tags == 'error' %}alert-danger{% endif %}" role="status" style="margin-bottom:10px">{{ message }}</div>{% endfor %}{% endif %}
+
+<div class="card" style="margin-bottom:16px">
+  <div class="card-head"><h3>ثبتِ ادعای پرداخت</h3></div>
+  <div class="card-body">
+    <form method="post" action="{{ post_url }}" enctype="multipart/form-data" autocomplete="off">
+      {% csrf_token %}
+      <div class="form-group"><label for="ref">شماره‌ی پیگیری / مرجعِ تراکنش (الزامی)</label>
+        <input class="inp" id="ref" name="reference" required minlength="6" maxlength="80" dir="ltr"></div>
+      <div class="form-group"><label for="when">زمانِ انتقال (الزامی)</label>
+        <input class="inp" id="when" name="transferred_at" type="datetime-local" required max="{{ now }}"></div>
+      <div class="form-group"><label for="last4">چهار رقمِ آخرِ کارتِ پرداخت‌کننده (اختیاری)</label>
+        <input class="inp" id="last4" name="payer_card_last4" inputmode="numeric" pattern="[0-9۰-۹]{4}" maxlength="4" dir="ltr"></div>
+      <div class="form-group"><label for="rcpt">تصویر/PDF رسید (اختیاری، حداکثر ۵ مگابایت)</label>
+        <input class="inp" id="rcpt" name="receipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"></div>
+      <button class="btn btn-primary" type="submit">ثبتِ ادعا و ارسال برای بررسی</button>
+      <a class="btn" href="{{ back_url }}">بازگشت</a>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h3>ادعاهای قبلی</h3></div>
+  <div class="card-body">
+    {% for claim in claims %}
+    <div style="border-bottom:1px dashed var(--border);padding:8px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span class="badge {% if claim.status == 'approved' %}b-green{% elif claim.status == 'pending_review' %}b-amber{% elif claim.status == 'rejected' or claim.status == 'needs_action' %}b-red{% else %}b-gray{% endif %}">{{ claim.get_status_display }}</span>
+      <span dir="ltr">{{ claim.reference_raw }}</span>
+      <span style="color:var(--muted);font-size:12px">{{ claim.created_at|jalali:"%Y/%m/%d %H:%M" }}</span>
+      {% if claim.review_note and claim.status == 'rejected' %}<span style="font-size:12px">دلیل: {{ claim.review_note }}</span>{% endif %}
+      {% if claim.receipt %}<a href="{% url 'dashboard:billing-card-claim-receipt' claim.pk %}" target="_blank" rel="noopener">رسید</a>{% endif %}
+      {% if claim.status == 'pending_review' %}
+      <form method="post" action="{% url 'dashboard:billing-card-claim-cancel' claim.pk %}" style="margin-inline-start:auto">{% csrf_token %}<button class="btn btn-sm" type="submit">لغو</button></form>
+      {% endif %}
+    </div>
+    {% empty %}<p style="color:var(--muted);margin:0">هنوز ادعایی ثبت نشده است.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -37,8 +37,23 @@ def confirm_payment(*, attempt, amount, currency, provider_payment_id="", actor=
     if locked_attempt.status == SubscriptionPaymentAttempt.Status.SUCCEEDED:
         return locked_attempt
     if invoice.status == SubscriptionInvoice.Status.PAID:
-        # فاکتور از قبل پرداخت‌شده (مثلاً تلاشِ دیگری موفق بود) — این تلاش را
-        # هم موفق علامت می‌زنیم اگر لازم باشد، اما پرداختِ دوباره اعمال نمی‌شود.
+        # فاکتور از قبل پرداخت‌شده (تلاشِ دیگری موفق بود) و این تلاش هم پولی گرفته: پرداختِ
+        # دوباره **اعمال نمی‌شود**، و این تلاش «نیازمندِ اقدام» (پرداختِ تکراری — احتمالاً
+        # بازپرداخت) علامت می‌خورد تا در فهرستِ تطبیقِ مدیر دیده شود، نه اینکه گم شود.
+        locked_attempt.status = SubscriptionPaymentAttempt.Status.REQUIRES_ACTION
+        locked_attempt.failure_code = "duplicate_payment"
+        locked_attempt.failure_message = "فاکتور پیش‌تر پرداخت شده؛ این پرداختِ تکراری نیازمندِ بازپرداخت/بررسی است."
+        if provider_payment_id:
+            locked_attempt.provider_payment_id = provider_payment_id
+        locked_attempt.completed_at = now
+        locked_attempt.save(update_fields=[
+            "status", "failure_code", "failure_message", "provider_payment_id", "completed_at", "updated_at",
+        ])
+        record_audit_event(
+            store=invoice.store, actor=actor, action_code="billing.duplicate_payment_flagged",
+            object_type="SubscriptionPaymentAttempt", object_id=locked_attempt.pk, object_label=locked_attempt.public_token,
+            after={"invoice": invoice.number, "amount": str(locked_attempt.amount)},
+        )
         return locked_attempt
 
     amount = Decimal(amount)

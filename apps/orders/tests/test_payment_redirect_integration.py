@@ -103,10 +103,20 @@ class PersistedUrlRedirectTests(RedirectIntegrationBase):
         with patch(target, return_value=result):
             response = self._post_initiate(order)
 
-        self.assertEqual(response.status_code, 302, gateway_code)
-        # Redirects to the authoritative payment-page URL, NOT the track_id.
-        self.assertEqual(response["Location"], known_url, gateway_code)
-        self.assertNotEqual(response["Location"], track_id, gateway_code)
+        if gateway_code == "pasargad":
+            # Dorsa contract: the browser must arrive with Referer = merchant domain. A bare cross-origin 302 sends none
+            # under Django's default Referrer-Policy, so Pasargad goes through an origin-referrer interstitial that
+            # navigates to the SAME authoritative URL (never the track_id).
+            self.assertEqual(response.status_code, 200, gateway_code)
+            body = response.content.decode()
+            self.assertIn('<meta name="referrer" content="origin">', body)
+            self.assertIn(known_url.replace("&", "&amp;"), body)
+            self.assertEqual(response["Referrer-Policy"], "origin")
+        else:
+            self.assertEqual(response.status_code, 302, gateway_code)
+            # Redirects to the authoritative payment-page URL, NOT the track_id.
+            self.assertEqual(response["Location"], known_url, gateway_code)
+            self.assertNotEqual(response["Location"], track_id, gateway_code)
 
         attempt = self._single_attempt(order)
         self.assertEqual(attempt.gateway_track_id, track_id, gateway_code)

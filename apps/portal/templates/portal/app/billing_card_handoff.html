@@ -1,0 +1,18 @@
+{% extends "portal/base_platform.html" %}
+{% block title %}پرداخت کارت‌به‌کارت | راستیسی{% endblock %}
+{% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block content %}
+<div class="p-wrap"><div class="p-form-card" style="max-width:560px">
+  <h2 style="text-align:center">پرداخت کارت‌به‌کارت</h2>
+  <p style="text-align:center;font-size:14px">فاکتور <b>{{ invoice.number }}</b> صادر شد — مبلغِ دقیق: <b>{{ invoice.amount_due }}</b> تومان.</p>
+  <p style="font-size:13px;color:var(--p-muted);line-height:2">
+    برای دیدنِ شماره‌کارتِ مقصد و ثبتِ شماره‌ی پیگیری، به پنلِ مدیریتِ فروشگاه بروید. اشتراک شما <b>فقط پس از تأییدِ مالیِ راستیسی</b>
+    (دیدنِ واریز در صورتحسابِ بانکی) فعال می‌شود؛ ثبتِ رسید به‌تنهایی آن را فعال نمی‌کند.
+  </p>
+  <form method="post" action="{% url 'portal:enter-admin' store.public_id %}">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ next_path }}">
+    <button type="submit" class="p-btn p-btn-primary" style="width:100%">ادامه در پنلِ مدیریت</button>
+  </form>
+  <p style="text-align:center;margin-top:12px"><a href="{% url 'portal:billing-plans' store.public_id %}">بازگشت به پلن‌ها</a></p>
+</div></div>
+{% endblock %}

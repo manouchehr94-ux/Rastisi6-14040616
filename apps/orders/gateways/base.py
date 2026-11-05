@@ -356,6 +356,28 @@ class PaymentGatewayAdapter(ABC):
         """
         return False
 
+    @property
+    def redirect_requires_referer(self) -> bool:
+        """True when the provider's contract requires the customer's browser to arrive at the payment page with
+        ``Referer`` = the merchant domain (Pasargad/Dorsa). Django's default ``Referrer-Policy: same-origin`` strips the
+        Referer on a cross-origin redirect, so such providers must be reached through
+        ``redirects.gateway_redirect_response`` (an origin-referrer interstitial) instead of a bare 302."""
+        return False
+
+    @property
+    def supports_dry_run_session(self) -> bool:
+        """False for adapters whose payment session needs real cart data (BNPL): a configuration test must then limit itself to
+        ``check_connection`` and never invent a cart."""
+        return True
+
+    def check_connection(self, *, credentials: dict[str, str], sandbox: bool = False) -> str:
+        """OPTIONAL, side-effect-free credential check (no payment is created or moved). Returns a short human message
+        on success; raises a ``GatewayError`` subclass on failure. Adapters whose contract has no harmless
+        authentication call keep this default and callers fall back to their own safe dry-run."""
+        raise GatewayUnsupportedOperationError(
+            f"{self.code}: no side-effect-free connection check is documented", code="unsupported_check",
+        )
+
     def supports(self, operation: PaymentOperation) -> bool:
         """Convenience check: does this adapter declare ``operation``?"""
         return operation in self.capabilities

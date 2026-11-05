@@ -212,6 +212,15 @@ class SnappPayAdapter(PaymentGatewayAdapter):
 
     # -- credential validation ---------------------------------------------
 
+    @property
+    def supports_dry_run_session(self) -> bool:
+        return False          # a BNPL payment token needs a real cart; the configuration test only authenticates
+
+    def check_connection(self, *, credentials: dict[str, str], sandbox: bool = False) -> str:
+        """OAuth authentication only (no payment token, no cart, no money)."""
+        self._get_token(credentials)
+        return "احراز هویت OAuth موفق بود."
+
     def validate_credentials(self, credentials: dict[str, str]) -> list[str]:
         errors = []
         if not (credentials.get("client_id") or "").strip():
