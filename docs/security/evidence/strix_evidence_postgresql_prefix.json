@@ -1,0 +1,346 @@
+[
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "fixture",
+  "stores": {
+   "a": {
+    "pk": 1,
+    "slug": "akhlaghi",
+    "host": "tenant-a.example.com"
+   },
+   "b": {
+    "pk": 2,
+    "slug": "tenant-store-b",
+    "host": "tenant-b.example.com"
+   }
+  },
+  "orders": {
+   "a": {
+    "code": "TI-A-1",
+    "store_id": 1,
+    "customer_id": 1,
+    "grand_total": "7654321",
+    "payment_status": "paid"
+   },
+   "b": {
+    "code": "TI-B-1",
+    "store_id": 2,
+    "customer_id": 1,
+    "grand_total": "1000000",
+    "payment_status": "paid"
+   }
+  },
+  "users": {
+   "shared_customer_user": 1,
+   "stranger": 2,
+   "staff": 3
+  },
+  "note": "SAME global Customer owns an order in Store A and one in Store B; each store has its own host."
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "request",
+  "view": "orders:payment-result",
+  "requested_host": "tenant-b.example.com",
+  "acting_user": "shared_customer_user",
+  "status": 404,
+  "content_length": 10055,
+  "body_sha256": "6a819046821e0e2f",
+  "is_generic_not_found": true,
+  "leaks": {
+   "order_code": false,
+   "amount_plain": false,
+   "amount_fa": false,
+   "customer_name": false
+  },
+  "location": "",
+  "session_keys_changed": false
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "request",
+  "view": "orders:payment-start",
+  "requested_host": "tenant-b.example.com",
+  "acting_user": "shared_customer_user",
+  "status": 404,
+  "content_length": 10053,
+  "body_sha256": "b58362a000aa0c0c",
+  "is_generic_not_found": true,
+  "leaks": {
+   "order_code": false,
+   "amount_plain": false,
+   "amount_fa": false,
+   "customer_name": false
+  },
+  "location": "",
+  "session_keys_changed": false
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "request",
+  "view": "orders:payment-initiate",
+  "requested_host": "tenant-b.example.com",
+  "acting_user": "shared_customer_user",
+  "status": 404,
+  "content_length": 10059,
+  "body_sha256": "134647019885f958",
+  "is_generic_not_found": true,
+  "leaks": {
+   "order_code": false,
+   "amount_plain": false,
+   "amount_fa": false,
+   "customer_name": false
+  },
+  "location": "",
+  "session_keys_changed": false
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "control",
+  "case": "other_user_right_host",
+  "status": 404,
+  "content_length": 10067,
+  "body_sha256": "1f5cdb7487e736ce",
+  "is_generic_not_found": true,
+  "leaks": {
+   "order_code": false,
+   "amount_plain": false,
+   "amount_fa": false,
+   "customer_name": false
+  },
+  "location": ""
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "control",
+  "case": "anonymous_right_host",
+  "status": 404,
+  "content_length": 10067,
+  "body_sha256": "fe4334d86b5ce6b7",
+  "is_generic_not_found": true,
+  "leaks": {
+   "order_code": false,
+   "amount_plain": false,
+   "amount_fa": false,
+   "customer_name": false
+  },
+  "location": ""
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "control",
+  "case": "owner_own_host_POSITIVE_CONTROL",
+  "status": 200,
+  "content_length": 11128,
+  "body_sha256": "82062062e97635a3",
+  "is_generic_not_found": false,
+  "leaks": {
+   "order_code": true,
+   "amount_plain": false,
+   "amount_fa": true,
+   "customer_name": false
+  },
+  "location": ""
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "side_effects",
+  "orders_before": {
+   "TI-B-1": [
+    "paid",
+    "processing",
+    "1000000"
+   ],
+   "TI-A-1": [
+    "paid",
+    "processing",
+    "7654321"
+   ]
+  },
+  "orders_after": {
+   "TI-B-1": [
+    "paid",
+    "processing",
+    "1000000"
+   ],
+   "TI-A-1": [
+    "paid",
+    "processing",
+    "7654321"
+   ]
+  },
+  "unchanged": true
+ },
+ {
+  "scenario": "refund_idempotency_cross_store",
+  "step": "fixture",
+  "stores": {
+   "a": {
+    "pk": 1,
+    "slug": "akhlaghi",
+    "host": "tenant-a.example.com"
+   },
+   "b": {
+    "pk": 3,
+    "slug": "tenant-store-b",
+    "host": "tenant-b.example.com"
+   }
+  },
+  "orders": {
+   "a": {
+    "code": "TI-A-1",
+    "store_id": 1,
+    "customer_id": 3,
+    "grand_total": "7654321",
+    "payment_status": "paid"
+   },
+   "b": {
+    "code": "TI-B-1",
+    "store_id": 3,
+    "customer_id": 3,
+    "grand_total": "1000000",
+    "payment_status": "paid"
+   }
+  },
+  "users": {
+   "shared_customer_user": 4,
+   "stranger": 5,
+   "staff": 6
+  },
+  "note": "SAME global Customer owns an order in Store A and one in Store B; each store has its own host."
+ },
+ {
+  "scenario": "refund_idempotency_cross_store",
+  "step": "db_constraint",
+  "constraints": {
+   "uniq_refund_idempotency_key_when_set": {
+    "columns": [
+     "idempotency_key"
+    ],
+    "unique": true
+   }
+  }
+ },
+ {
+  "scenario": "refund_idempotency_cross_store",
+  "step": "store_a_refund_created",
+  "refund": {
+   "pk": "1",
+   "status": "succeeded",
+   "approved_amount": "3827161",
+   "store_id": "1",
+   "order_id": "3",
+   "idempotency_key": "strix-shared-key-0001"
+  }
+ },
+ {
+  "scenario": "refund_idempotency_cross_store",
+  "step": "store_b_reuses_key",
+  "outcome": {
+   "result": "RefundError (collision / existence oracle)",
+   "message": "کلید یکتای درخواست استرداد با این سفارش مطابقت ندارد."
+  }
+ },
+ {
+  "scenario": "refund_idempotency_cross_store",
+  "step": "side_effects",
+  "store_a_refund_unchanged": true,
+  "refund_rows": {
+   "store_a": 1,
+   "store_b": 0
+  },
+  "store_b_order_payment_status": "paid"
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "worker",
+  "tag": "a",
+  "pg_backend_pid": 5273,
+  "released_at_s": 0.0196,
+  "finished_at_s": 0.1353,
+  "result": [
+   "ok",
+   1,
+   2
+  ]
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "worker",
+  "tag": "a",
+  "pg_backend_pid": 5275,
+  "released_at_s": 0.0203,
+  "finished_at_s": 0.1401,
+  "result": [
+   "ok",
+   1,
+   2
+  ]
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "worker",
+  "tag": "a",
+  "pg_backend_pid": 5276,
+  "released_at_s": 0.0186,
+  "finished_at_s": 0.1449,
+  "result": [
+   "ok",
+   1,
+   2
+  ]
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "summary",
+  "tags": [
+   "a",
+   "a",
+   "a"
+  ],
+  "distinct_pg_backends": 3,
+  "db_rows": {
+   "store_a": 1,
+   "store_b": 0
+  }
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "worker",
+  "tag": "b",
+  "pg_backend_pid": 5281,
+  "released_at_s": 0.014,
+  "finished_at_s": 0.0626,
+  "result": [
+   "ok",
+   2,
+   5
+  ]
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "worker",
+  "tag": "a",
+  "pg_backend_pid": 5280,
+  "released_at_s": 0.0132,
+  "finished_at_s": 0.0654,
+  "result": [
+   "refund_error",
+   "کلید یکتای درخواست استرداد با این سفارش مطابقت ندارد.",
+   null
+  ]
+ },
+ {
+  "scenario": "refund_idempotency_concurrent_postgres",
+  "step": "summary",
+  "tags": [
+   "a",
+   "b"
+  ],
+  "distinct_pg_backends": 2,
+  "db_rows": {
+   "store_a": 0,
+   "store_b": 1
+  }
+ }
+]

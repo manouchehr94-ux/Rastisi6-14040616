@@ -1,0 +1,59 @@
+[
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "fixture",
+  "stores": {
+   "a": {
+    "pk": 1,
+    "slug": "akhlaghi",
+    "host": "tenant-a.example.com"
+   },
+   "b": {
+    "pk": 2,
+    "slug": "tenant-store-b",
+    "host": "tenant-b.example.com"
+   }
+  },
+  "orders": {
+   "a": {
+    "code": "TI-A-1",
+    "store_id": 1,
+    "customer_id": 1,
+    "grand_total": "7654321",
+    "payment_status": "paid"
+   },
+   "b": {
+    "code": "TI-B-1",
+    "store_id": 2,
+    "customer_id": 1,
+    "grand_total": "1000000",
+    "payment_status": "paid"
+   }
+  },
+  "users": {
+   "shared_customer_user": 1,
+   "stranger": 2,
+   "staff": 3
+  },
+  "note": "SAME global Customer owns an order in Store A and one in Store B; each store has its own host."
+ },
+ {
+  "scenario": "payment_result_same_user_other_store",
+  "step": "request",
+  "view": "orders:payment-result",
+  "requested_host": "tenant-b.example.com",
+  "acting_user": "shared_customer_user",
+  "status": 200,
+  "content_length": 11113,
+  "body_sha256": "1ae186922063ce29",
+  "is_generic_not_found": false,
+  "leaks": {
+   "order_code": true,
+   "amount_plain": false,
+   "amount_fa": true,
+   "customer_name": false
+  },
+  "location": "",
+  "session_keys_changed": false
+ }
+]
