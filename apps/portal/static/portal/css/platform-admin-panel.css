@@ -198,6 +198,8 @@
 .pa-num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;text-align:right}
 td.pa-num,th.pa-num{text-align:right}
 .pa-ltr{direction:ltr;unicode-bidi:isolate;display:inline-block;max-width:100%;overflow-wrap:anywhere;text-align:left}
+/* A table cell must stay a table cell: the inline-block above would pull it out of the row (shorter cell, broken row separator, text shifted off the row baseline). */
+td.pa-ltr,th.pa-ltr{display:table-cell;max-width:none}
 .pa-wrapcell{overflow-wrap:anywhere;word-break:break-word}
 
 /* ---------- ۹. نشان / هشدار / توست / مودال ---------- */
@@ -239,9 +241,12 @@ td.pa-num,th.pa-num{text-align:right}
 .pa-acc>div{padding:var(--pa-s3) var(--pa-s4) var(--pa-s4);border-top:1px solid var(--pa-line)}
 .pa-toolbar{display:flex;gap:var(--pa-s2);align-items:center;flex-wrap:wrap}
 .pa-toolbar .pa-spacer{flex:1}
-.pa-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--pa-s3);align-items:end}
+/* Filter bars: top-aligned so a field's help text can never push its control off the shared row (end-alignment made every control without help text
+   sit lower than the one with it). The actions take their own full-width row, so they never wrap inside a narrow grid track. */
+.pa-filters{--pa-label-h:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--pa-s3);align-items:start}
+.pa-filters .pa-field>label{line-height:var(--pa-label-h)}
 .pa-filters .pa-field.pa-grow{grid-column:span 2}
-.pa-filters .pa-filter-actions{display:flex;gap:var(--pa-s2);align-items:center}
+.pa-filters .pa-filter-actions{grid-column:1/-1;display:flex;gap:var(--pa-s2);align-items:center;flex-wrap:wrap}
 .pa-pagination{display:flex;gap:var(--pa-s2);justify-content:center;align-items:center;padding:var(--pa-s4);flex-wrap:wrap;border-top:1px solid var(--pa-line)}
 .pa-pagination .pa-help{margin:0 var(--pa-s2)}
 .pa-empty{text-align:center;padding:var(--pa-s8) var(--pa-s5);color:var(--pa-muted)}
@@ -256,6 +261,7 @@ td.pa-num,th.pa-num{text-align:right}
 /* ---------- ۱۱. ابزارک‌ها (به‌جایِ style="" پراکنده) ---------- */
 .pa-row{display:flex;align-items:center;gap:var(--pa-s2);flex-wrap:wrap}
 .pa-row.pa-nowrap{flex-wrap:nowrap}
+td.pa-actcol>.pa-row{justify-content:flex-end}
 .pa-stack{display:grid;gap:var(--pa-s3)}
 .pa-gap-1{gap:var(--pa-s1)}.pa-gap-2{gap:var(--pa-s2)}.pa-gap-3{gap:var(--pa-s3)}.pa-gap-4{gap:var(--pa-s4)}
 .pa-grow{flex:1 1 0;min-width:0}

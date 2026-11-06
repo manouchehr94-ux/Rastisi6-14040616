@@ -21,7 +21,7 @@
   {% if page.object_list %}
   <div class="pa-tablewrap">
     <table>
-      <thead><tr><th>فروشگاه</th><th>پلن</th><th>وضعیت</th><th>دوره‌ی جاری</th><th>پایانِ تریال</th><th></th></tr></thead>
+      <thead><tr><th>فروشگاه</th><th>پلن</th><th>وضعیت</th><th>دوره‌ی جاری</th><th>پایانِ تریال</th><th class="pa-actcol"></th></tr></thead>
       <tbody>
         {% for sub in page.object_list %}
         <tr>
@@ -35,14 +35,14 @@
           </td>
           <td>{{ sub.current_period_end|jalali|default:"—" }}</td>
           <td>{{ sub.trial_end_at|jalali|default:"—" }}</td>
-          <td class="pa-row">
+          <td class="pa-actcol"><div class="pa-row pa-nowrap">
             <a class="pa-btn pa-small pa-soft" href="{% url 'portal_platform_admin:store-detail' sub.store.public_id %}?tab=subscription">مدیریت</a>
             {% if sub.status == "active" %}
             <form method="post" action="{% url 'portal_platform_admin:subscription-suspend' sub.pk %}">{% csrf_token %}<button class="pa-btn pa-small pa-danger" type="submit">تعلیق</button></form>
             {% elif sub.status == "suspended" %}
             <form method="post" action="{% url 'portal_platform_admin:subscription-resume' sub.pk %}">{% csrf_token %}<button class="pa-btn pa-small" type="submit">ازسرگیری</button></form>
             {% endif %}
-          </td>
+          </div></td>
         </tr>
         {% endfor %}
       </tbody>
