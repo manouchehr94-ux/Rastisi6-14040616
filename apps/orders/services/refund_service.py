@@ -257,8 +257,10 @@ def _validate_existing_refund_request(
     shipping_amount: Decimal, reason: str, merchant_note: str,
     refund_method: str, restock: bool,
 ) -> Refund:
-    """An idempotency key can only be reused for the identical tenant/order/request."""
-    # Do not return or describe a refund belonging to another tenant.
+    """An idempotency key can only be reused for the identical tenant/order/request.
+
+    The key namespace is per store (lookup and DB constraint are both store-scoped), so ``existing`` always belongs to ``store``; the store check below is
+    defence in depth. A key reused for a different order *of the same store* is refused without describing that order."""
     if existing.store_id != store.pk or existing.order_id != order.pk:
         raise RefundError("کلید یکتای درخواست استرداد با این سفارش مطابقت ندارد.")
     if (
@@ -302,7 +304,7 @@ def execute_order_refund(
         raise RefundError("این سفارش متعلق به این فروشگاه نیست.")
 
     if idempotency_key:
-        existing = Refund.objects.filter(idempotency_key=idempotency_key).first()
+        existing = Refund.objects.filter(store=store, idempotency_key=idempotency_key).first()
         if existing is not None:
             return _validate_existing_refund_request(
                 existing, order=order, store=store, line_requests=line_requests,
@@ -331,7 +333,7 @@ def execute_order_refund(
     except IntegrityError:
         # Only treat an integrity failure as a retry if that exact key now exists.
         if idempotency_key:
-            existing = Refund.objects.filter(idempotency_key=idempotency_key).first()
+            existing = Refund.objects.filter(store=store, idempotency_key=idempotency_key).first()
             if existing is not None:
                 return _validate_existing_refund_request(
                     existing, order=order, store=store, line_requests=line_requests,

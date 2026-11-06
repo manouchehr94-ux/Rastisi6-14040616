@@ -1367,10 +1367,11 @@ class Refund(TimeStampedModel):
                 check=models.Q(approved_amount__isnull=True) | models.Q(approved_amount__gte=0),
                 name="refund_approved_amount_non_negative",
             ),
+            # The retry key is a per-tenant namespace: one store's key must never collide with, block, or reveal another store's refund.
             models.UniqueConstraint(
-                fields=["idempotency_key"],
+                fields=["store", "idempotency_key"],
                 condition=~models.Q(idempotency_key=""),
-                name="uniq_refund_idempotency_key_when_set",
+                name="uniq_refund_idempotency_key_per_store",
             ),
         ]
 
