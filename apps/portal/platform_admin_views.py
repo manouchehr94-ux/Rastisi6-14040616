@@ -994,6 +994,82 @@ def plans(request):
     return render(request, "portal/platform_admin/plans.html", {"plans": plan_list, "active_nav": "plans"})
 
 
+def _apply_echo(review, echo):
+    """مقدارهایِ واردشده‌یِ مالک (پس از خطا) را به ردیف‌هایِ بازبینی برمی‌گرداند؛ بدونِ echo، پیش‌فرض: قدیمی‌ها «حفظ» می‌شوند."""
+    for row in review["rows"]:
+        saved = (echo or {}).get("rows", {}).get(row["interval"])
+        if saved is not None:
+            row.update(offered=saved["offered"], discount=saved["discount"], keep_checked=saved["keep_legacy"], ack_checked=saved["ack"])
+        else:
+            row.setdefault("keep_checked", row["legacy"])
+            row.setdefault("ack_checked", False)
+    return review
+
+
+def _pricing_js_config():
+    """پیکربندیِ پیش‌نمایشِ زنده (فقط نمایش؛ سرور مرجع است): تعدادِ ماه‌ها و سیاستِ گرد‌کردن — همان ثابت‌هایِ ``period_pricing``."""
+    import json
+
+    from apps.subscriptions.services import period_pricing as pp
+
+    return json.dumps({"months": pp.PERIOD_MONTHS, "rounding": "half_up_whole_toman", "max_monthly": int(pp.MAX_MONTHLY)})
+
+
+def _with_enforced(entitlements, latest_version, capability_registry):
+    """مارکِ ``existing/enforced`` را برایِ بازنمایی پس از خطای اعتبارسنجی دوباره می‌گذارد."""
+    existing = {pe.entitlement_id: pe for pe in latest_version.plan_entitlements.all()} if latest_version else {}
+    for entitlement in entitlements:
+        entitlement.existing = existing.get(entitlement.pk)
+        entitlement.enforced = capability_registry.is_registered(entitlement.key)
+    return entitlements
+
+
+def _parse_formula_pricing(post, review):
+    """فرمِ قیمت‌گذاریِ ساده (یک قیمتِ ماهانه + درصدِ تخفیفِ ۳/۶/۱۲ ماهه) را **در سرور** اعتبارسنجی می‌کند. هیچ مبلغِ محاسبه‌شده‌ای
+    از مرورگر پذیرفته نمی‌شود (فقط قیمتِ ماهانه و درصدها). ``(cleaned, errors, echo)`` برمی‌گرداند؛ ``cleaned`` در خطا ``None`` است."""
+    from apps.subscriptions.services import period_pricing as pp
+
+    errors, echo = [], {"monthly": (post.get("monthly_price") or "").strip(), "rows": {}}
+    free = post.get("plan_kind") == "free"
+    echo["free"] = free
+    if free:
+        return {"free": True}, errors, echo
+    rows = {r["interval"]: r for r in review["rows"]}
+    discounts, offered, keep_legacy = {}, [], []
+    try:
+        monthly = pp.validate_monthly_price(post.get("monthly_price"))
+    except pp.PricingError as exc:
+        errors.append(str(exc))
+        monthly = None
+    for interval in pp.DISCOUNTED_PERIODS:
+        r = rows[interval]
+        raw = (post.get(f"discount_{interval}") or "").strip()
+        is_offered = post.get(f"offer_{interval}") == "on"
+        keep = post.get(f"keep_legacy_{interval}") == "on" and r["legacy"]
+        echo["rows"][interval] = {"discount": raw, "offered": is_offered, "keep_legacy": keep, "ack": post.get(f"ack_{interval}") == "on"}
+        if keep:
+            keep_legacy.append(interval)
+            continue
+        if not is_offered:
+            continue
+        try:
+            discounts[interval] = pp.validate_discount(raw)
+        except pp.PricingError as exc:
+            errors.append(f"{r['label']}: {exc}")
+            continue
+        if r["legacy"] and r["needs_review"] and not echo["rows"][interval]["ack"]:
+            errors.append(f"{r['label']}: تبدیلِ قیمتِ ثابتِ قدیمی به فرمول ارزشِ تجاری را عوض می‌کند؛ یا «حفظِ قیمتِ فعلی» را بزنید یا تغییر را صراحتاً تأیید کنید.")
+        offered.append(interval)
+    if monthly is not None and not errors:
+        try:
+            pp.compute_all(monthly, discounts)
+        except pp.PricingError as exc:
+            errors.append(str(exc))
+    if errors:
+        return None, errors, echo
+    return {"free": False, "monthly": monthly, "discounts": discounts, "offered": offered, "keep_legacy": keep_legacy}, errors, echo
+
+
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def plan_form(request, plan_id=None):
     """ساختِ پلن + نسخه‌ی پیش‌نویسِ آن، یا افزودنِ یک نسخه‌ی تازه به پلنِ
@@ -1002,9 +1078,10 @@ def plan_form(request, plan_id=None):
     from apps.subscriptions import capability_registry
     from apps.subscriptions.models import EntitlementDefinition, Plan, PlanVersion
     from apps.subscriptions.services.plan_service import (
-        PlanServiceError, clear_version_price, create_plan_version, get_or_create_draft, set_plan_entitlement,
-        set_version_price, update_draft_version,
+        PlanServiceError, clear_version_price, create_plan_version, get_or_create_draft, set_formula_pricing,
+        set_plan_entitlement, set_version_price, update_draft_version,
     )
+    from apps.subscriptions.services import period_pricing
 
     plan = get_object_or_404(Plan, pk=plan_id) if plan_id else None
     entitlements = EntitlementDefinition.objects.filter(is_active=True).order_by("key")
@@ -1033,6 +1110,20 @@ def plan_form(request, plan_id=None):
             if "public_selectable_submitted" in request.POST
             else (plan.is_publicly_selectable if plan else True)
         )
+
+        formula = None
+        if "pricing_formula_submitted" in request.POST:
+            review = period_pricing.owner_review(latest_version)
+            formula, price_errors, echo = _parse_formula_pricing(request.POST, review)
+            if price_errors:
+                _apply_echo(review, echo)
+                for message in price_errors:
+                    messages.error(request, message)
+                return render(request, "portal/platform_admin/plan_form.html", {
+                    "plan": plan, "entitlements": _with_enforced(entitlements, latest_version, capability_registry),
+                    "latest_version": latest_version, "active_nav": "plans", "pricing": review, "pricing_echo": echo,
+                    "pricing_json": _pricing_js_config(), "form_post": request.POST,
+                })
 
         if not name or not code:
             messages.error(request, "نام و کدِ پلن الزامی است.")
@@ -1072,6 +1163,9 @@ def plan_form(request, plan_id=None):
             action_code = "platform_admin.plan_updated"
 
         # قیمتِ گزینه‌ی اصلی: ``price_<دوره>`` اگر فرمِ تازه فرستاده باشد، وگرنه ``display_price`` (فرم/تستِ قدیمی).
+        if formula is not None:
+            billing_interval = "none" if formula["free"] else "monthly"
+            display_price = "0" if formula["free"] else str(formula["monthly"])
         primary_price = (request.POST.get(f"price_{billing_interval}") or "").strip() or display_price
         trial_once = request.POST.get("trial_once_per_store", "on" if "trial_once_submitted" not in request.POST else "") == "on"
         try:
@@ -1089,7 +1183,17 @@ def plan_form(request, plan_id=None):
             return redirect("portal_platform_admin:plan-edit", plan.pk) if not plan_is_new else redirect("portal_platform_admin:plans")
         prices_submitted = any(f"price_{i}" in request.POST for i in PlanVersion.PAID_INTERVALS)
         try:
-            for interval in PlanVersion.PAID_INTERVALS:
+            if formula is not None:
+                if formula["free"]:
+                    for interval in PlanVersion.PAID_INTERVALS:
+                        clear_version_price(version, interval)
+                else:
+                    set_formula_pricing(
+                        version, monthly_price=formula["monthly"], discounts=formula["discounts"], offered=formula["offered"],
+                        keep_legacy=formula["keep_legacy"], actor=request.user,
+                    )
+                prices_submitted = False
+            for interval in (PlanVersion.PAID_INTERVALS if formula is None else ()):
                 raw_price = (request.POST.get(f"price_{interval}") or "").strip()
                 if not raw_price:
                     if prices_submitted and interval != billing_interval:
@@ -1132,7 +1236,7 @@ def plan_form(request, plan_id=None):
     for entitlement in entitlements:
         entitlement.existing = existing_entitlements.get(entitlement.pk)
         entitlement.enforced = capability_registry.is_registered(entitlement.key)
-    price_rows = []
+    price_rows = []   # (قدیمی) فقط برایِ سازگاری با قالب‌هایِ قدیمی؛ فرمِ تازه از ``pricing`` استفاده می‌کند
     options = latest_version.price_options() if latest_version else {}
     primary = latest_version.billing_interval if latest_version else "monthly"
     for interval in PlanVersion.PAID_INTERVALS:
@@ -1145,6 +1249,7 @@ def plan_form(request, plan_id=None):
     return render(request, "portal/platform_admin/plan_form.html", {
         "plan": plan, "entitlements": entitlements, "latest_version": latest_version, "active_nav": "plans",
         "price_rows": price_rows, "primary_interval": primary,
+        "pricing": _apply_echo(period_pricing.owner_review(latest_version), None), "pricing_echo": None, "pricing_json": _pricing_js_config(),
     })
 
 

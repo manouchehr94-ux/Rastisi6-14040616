@@ -1,4 +1,5 @@
 {% extends "portal/base_platform.html" %}
+{% load persian %}
 {% block title %}خریدِ اشتراک | راستیسی{% endblock %}
 {% block robots_meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block content %}
@@ -23,7 +24,7 @@
       <form method="post" action="{% url 'portal:billing-checkout' store.public_id offer.version.pk %}" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         {% csrf_token %}
         <input type="hidden" name="billing_interval" value="{{ period.interval }}">
-        <div style="font-size:13px"><b>{{ period.price }}</b> تومان / {{ period.label }}{% if period.savings_percent %} <span style="font-size:11px;color:var(--p-muted)">({{ period.savings_percent }}٪ صرفه‌جویی)</span>{% endif %}</div>
+        <div style="font-size:13px"><b data-testid="period-price">{{ period.price|toman_raw }}</b> تومان / {{ period.label }}{% if period.compare_at %} <s style="font-size:11px;color:var(--p-muted)">{{ period.compare_at|toman_raw }}</s>{% endif %}{% if period.savings_percent %} <span style="font-size:11px;color:var(--p-muted)">({{ period.savings_percent|fa_number }}٪ تخفیف)</span>{% endif %}</div>
         {% if has_payment_methods %}<button type="submit" class="p-btn p-btn-primary">خرید</button>{% else %}<button type="button" class="p-btn" disabled aria-disabled="true" title="روشِ پرداختی فعال نیست">در دسترس نیست</button>{% endif %}
       </form>
       {% endfor %}

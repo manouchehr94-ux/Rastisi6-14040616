@@ -18,6 +18,7 @@ from apps.billing.models import SubscriptionInvoice, SubscriptionInvoiceLine
 from apps.billing.services import numbering_service
 from apps.billing.services.account_service import get_or_create_billing_account
 from apps.core.services.audit_service import record_audit_event
+from apps.subscriptions.services import period_pricing
 
 ZERO = Decimal("0")
 
@@ -70,7 +71,8 @@ def plan_line_spec(plan_version, *, period_start=None, period_end=None, descript
         "plan_version_snapshot": plan_version_snapshot(plan_version, interval),
         "service_period_start": period_start,
         "service_period_end": period_end,
-        "metadata": {},
+        # ممیزیِ نحوه‌ی مشتق‌شدنِ مبلغ (دوره/ماه‌ها/تخفیف/جمعِ بدونِ تخفیف) — فقط توضیحی؛ مبلغِ ردیف همان ``unit_amount`` است.
+        "metadata": period_pricing.invoice_metadata(plan_version, interval),
     }
 
 

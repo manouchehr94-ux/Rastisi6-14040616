@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}پلن‌ها | پنل مدیریت{% endblock %}
 {% block page_title %}انتخابِ پلن{% endblock %}
 {% block page_sub %}پیش از تغییر، پیش‌نمایشِ تفاوتِ قابلیت‌ها را ببینید{% endblock %}
@@ -30,7 +31,7 @@
           {% if item.periods|length > 1 %}
           <label style="display:block;font-size:12px;margin-bottom:6px">دوره‌ی پرداخت
             <select name="billing_interval" style="width:100%;margin-top:4px">
-              {% for period in item.periods %}<option value="{{ period.interval }}"{% if period.interval == item.version.billing_interval %} selected{% endif %}>{{ period.label }} — {{ period.price }} {{ item.version.currency }}{% if period.savings_percent %} ({{ period.savings_percent }}٪ صرفه‌جویی){% endif %}</option>{% endfor %}
+              {% for period in item.periods %}<option value="{{ period.interval }}"{% if period.interval == item.version.billing_interval %} selected{% endif %}>{{ period.label }} — {{ period.price|toman }}{% if period.savings_percent %} ({{ period.savings_percent|fa_number }}٪ تخفیف){% endif %}</option>{% endfor %}
             </select>
           </label>
           {% endif %}
