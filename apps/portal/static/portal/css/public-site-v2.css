@@ -1007,3 +1007,5 @@ input::placeholder,textarea::placeholder{color:var(--rs-muted);opacity:1}
 .r-hint-list,.r-error-list{margin:7px 0 0;padding:0 18px 0 0;list-style:disc}
 .r-hint-list li,.r-error-list li{margin-bottom:3px}
 @media(max-width:720px){.r-auth-tabs{grid-template-columns:1fr 1fr}.r-auth-tab{font-size:14px;padding:0 6px}}
+
+.needs-confirm{display:inline-block;padding:0 8px;border-radius:6px;background:color-mix(in srgb,#f4b740 28%,transparent);border:1px dashed #f4b740;font-weight:700;font-size:.92em;line-height:1.7}

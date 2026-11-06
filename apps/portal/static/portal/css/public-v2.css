@@ -588,6 +588,7 @@ input[type=range]{width:100%;accent-color:var(--leaf)}
 .legal-toc a:hover{color:var(--leaf)}
 .legal-doc{font-size:17px;line-height:2.05;color:var(--ink-2)}
 .legal-doc h2{font-family:var(--display);font-weight:400;font-size:30px;color:var(--ink);margin:36px 0 8px;scroll-margin-top:90px}
+.needs-confirm{display:inline-block;padding:0 8px;border-radius:6px;background:color-mix(in srgb,var(--saffron) 28%,transparent);border:1px dashed var(--saffron);font-weight:700;font-size:.92em;line-height:1.7}
 .legal-doc h3{font-size:18px;color:var(--ink);margin:18px 0 4px}
 .legal-doc p,.legal-doc ul,.legal-doc ol{margin:0 0 12px}
 .legal-doc ul,.legal-doc ol{padding-inline-start:24px}

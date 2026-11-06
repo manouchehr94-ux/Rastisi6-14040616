@@ -1,27 +1,20 @@
 {% extends "portal/public/base_public.html" %}
 {% block title %}حریم خصوصی | راستی‌سی{% endblock %}
-{% block meta_description %}<meta name="description" content="سیاست حریم خصوصی راستی‌سی و اطلاعاتی که برای ارائه خدمات پلتفرم نگهداری می‌شود.">{% endblock %}
-{% block robots_meta %}<meta name="robots" content="index, follow">{% endblock %}
+{% block meta_description %}<meta name="description" content="سیاست حریم خصوصی راستی‌سی: چه اطلاعاتی نگهداری می‌شود، برای چه کاری و چه سرویس‌هایی در آن نقش دارند.">{% endblock %}
+{% block robots_meta %}{% if privacy_approved %}<meta name="robots" content="index, follow">{% else %}<meta name="robots" content="noindex, nofollow">{% endif %}{% endblock %}
 
 {% block content %}
 <div class="r-legal">
   <header class="r-legal-head">
     <div class="rs-eyebrow">سند قانونی</div>
     <h1 class="r-h1">حریم خصوصی</h1>
-    <p class="r-lead">این صفحه ساختار توضیح نحوه نگهداری و استفاده از اطلاعات در راستی‌سی را نشان می‌دهد.</p>
+    <p class="r-lead">چه اطلاعاتی نگهداری می‌شود، برای چه کاری استفاده می‌شود و چه کسانی در آن نقش دارند.</p>
   </header>
 
   <section class="r-legal-body">
-    <div class="r-legal-note">این متن در وضعیت فعلی یک نمونهٔ ساختاری پروژه است و پیش از انتشار رسمی باید با رفتار واقعی سامانه و الزامات حقوقی تطبیق و تأیید شود.</div>
-    <article class="r-legal-doc">
-      <p>برای ارائه خدمات پلتفرم، دسته‌هایی از اطلاعات مرتبط با حساب، فروشگاه و عملیات آن نگهداری می‌شود، از جمله:</p>
-      <ol>
-        <li>اطلاعات حساب مالک فروشگاه برای احراز هویت و ارتباط عملیاتی.</li>
-        <li>اطلاعات فروشگاه، محصولات و سفارش‌ها که به همان فروشگاه تعلق دارند.</li>
-        <li>اطلاعات صورتحساب و اشتراک برای محاسبه و پیگیری پلن انتخابی.</li>
-        <li>جزئیات دقیق جمع‌آوری، نگهداری، سرویس‌های ثالث و حقوق کاربران باید در نسخه رسمی این سند بر اساس رفتار واقعی سامانه تکمیل شود.</li>
-      </ol>
-    </article>
+    {% if not privacy_approved %}<div class="r-legal-note" data-privacy-draft-notice>{% include "portal/public/_privacy_notice.html" %}</div>{% endif %}
+    <nav class="r-legal-toc" aria-label="فهرست مطالب">{% include "portal/public/_privacy_toc.html" %}</nav>
+    {% include "portal/public/_privacy_body.html" %}
   </section>
 </div>
 {% endblock %}
