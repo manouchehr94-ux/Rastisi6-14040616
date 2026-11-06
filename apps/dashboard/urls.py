@@ -574,6 +574,11 @@ urlpatterns = [
     path("billing/card-claims/<int:claim_id>/cancel/", views.billing_card_claim_cancel, name="billing-card-claim-cancel"),
     path("billing/card-claims/<int:claim_id>/receipt/", views.billing_card_claim_receipt, name="billing-card-claim-receipt"),
     path("settings/sms/package/purchase/<int:pk>/card-to-card/", views.sms_purchase_card_claim, name="sms-purchase-card-claim"),
+    # SMS دارایِ نامِ مسیرِ جدا (``sms-checkout*``) است تا نقشه‌ی ناوبری بخشِ درستِ تنظیمات («پیامک») را فعال کند؛ مسیرِ عمومیِ
+    # ``platform-checkout`` برایِ ``reverse(kind, pk)`` همان نشانیِ یکسان را می‌سازد.
+    path("billing/checkout/sms/<int:pk>/", platform_checkout_views.platform_checkout, {"kind": "sms"}, name="sms-checkout"),
+    path("billing/checkout/sms/<int:pk>/pay/", platform_checkout_views.platform_checkout_pay, {"kind": "sms"}, name="sms-checkout-pay"),
+    path("billing/checkout/sms/<int:pk>/status/", platform_checkout_views.platform_checkout_status, {"kind": "sms"}, name="sms-checkout-status"),
     path("billing/checkout/<str:kind>/<int:pk>/", platform_checkout_views.platform_checkout, name="platform-checkout"),
     path("billing/checkout/<str:kind>/<int:pk>/pay/", platform_checkout_views.platform_checkout_pay, name="platform-checkout-pay"),
     path("billing/checkout/<str:kind>/<int:pk>/status/", platform_checkout_views.platform_checkout_status, name="platform-checkout-status"),

@@ -44,9 +44,11 @@ SUB_PRICE, SMS_PRICE, SMS_CREDITS = 300_000, 150_000, 500
 
 
 UP_HOST = f"pcup.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
+PORTAL_HOST = "rastisi.localhost"
+FREE_HOST = f"pcfree.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
 
 
-@override_settings(ALLOWED_HOSTS=[OWNER_HOST, OTHER_HOST, UP_HOST, PLATFORM_HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
+@override_settings(ALLOWED_HOSTS=[OWNER_HOST, OTHER_HOST, UP_HOST, FREE_HOST, PLATFORM_HOST, PORTAL_HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class CheckoutBase(TestCase):
     def setUp(self):
         use_private_tmp(self)
@@ -685,6 +687,241 @@ class PlanChangeThroughCheckoutTests(CheckoutBase):
         response = self.client2.post("/admin-portal/subscription/plans/change/", {"version_id": self.v1.pk, "preview_token": token})
         self.assertRedirects(response, reverse("dashboard:subscription-overview"), fetch_redirect_response=False)
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2, kind="plan_change").count(), 0)
+
+
+class CheckoutNavigationTests(CheckoutBase):
+    """Checkout screens are focused: no settings tab bar, sub-tabs or «settings-only» search; the navigation map is still right."""
+
+    def test_checkout_pages_drop_the_settings_chrome_but_keep_the_shell_and_the_hidden_bell_error(self):
+        ready_platform_zibal(self)
+        for kind in KINDS:
+            with self.subTest(kind=kind):
+                html = self.page(kind).content.decode()
+                for needle in ("admin-section-tabs", "admin-subtabs", "settingsSearch", "فقط صفحه‌های تنظیمات"):
+                    self.assertNotIn(needle, html, needle)
+                self.assertIn("adminV2SearchTrigger", html)                           # the global search stays
+                self.assertRegex(html, r'data-nt-error role="alert" hidden')             # bell error is hidden until a real failure
+
+    def test_the_navigation_map_puts_each_checkout_in_the_right_section_and_tab(self):
+        from apps.dashboard import navigation
+
+        self.assertEqual(navigation.resolve_active("sms-checkout", None, "settings"), ("settings", "messaging"))
+        self.assertEqual(navigation.resolve_active("sms-checkout-pay", None, "settings"), ("settings", "messaging"))
+        self.assertEqual(navigation.resolve_active("platform-checkout", None, "billing"), ("settings", "account"))
+
+    def test_both_routes_resolve_to_the_same_view_and_the_generic_reverse_gives_the_same_path(self):
+        self.assertEqual(self.url(SMS), f"/admin-portal/billing/checkout/sms/{self.purchase.pk}/")
+        self.assertEqual(self.url(SUB), f"/admin-portal/billing/checkout/subscription/{self.invoice.pk}/")
+        from django.urls import resolve
+
+        self.assertEqual(resolve(self.url(SMS)).url_name, "sms-checkout")
+        self.assertEqual(resolve(self.url(SUB)).url_name, "platform-checkout")
+
+
+class ZibalLegacyAuthorityTests(TestCase):
+    """The canonical row is authoritative: legacy columns can never override it, and the retirement audit is honest."""
+
+    def setUp(self):
+        self.addCleanup(cache.clear)
+        cache.clear()
+
+    def _legacy(self, merchant="LEGACY-MERCHANT", sandbox=True, default="zibal"):
+        from apps.portal.services.platform_config_service import get_platform_configuration
+
+        config = get_platform_configuration()
+        config.default_payment_provider = default
+        config.zibal_sandbox_mode = sandbox
+        config.set_zibal_credentials(merchant=merchant)
+        config.save()
+        cache.clear()
+
+    @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
+    def test_an_existing_canonical_row_always_wins_over_legacy_credentials_mode_and_enabled(self):
+        from apps.portal.models import PlatformGatewayConfig
+
+        self._legacy()
+        pgs.save_gateway("zibal", credentials={"merchant": "CANON-MERCHANT"}, sandbox=False, enabled=False)
+        self._legacy(merchant="LEGACY-NEWER", sandbox=True, default="zibal")              # legacy changed AFTER the row existed
+        creds, sandbox, source = pgs.credentials_and_mode("zibal")
+        self.assertEqual((creds["merchant"], sandbox, source), ("CANON-MERCHANT", False, "row"))
+        state = pgs.gateway_state("zibal")
+        self.assertFalse(state.enabled)                       # the row says disabled; legacy default==zibal must not enable it
+        self.assertNotIn("zibal", pgs.ready_codes())
+        self.assertEqual(PlatformGatewayConfig.objects.filter(gateway_code="zibal").count(), 1)
+
+    @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
+    def test_the_provider_request_uses_the_canonical_merchant_never_the_legacy_one(self):
+        from apps.billing.tests.platform_payment_support import patch_zibal
+
+        self._legacy(merchant="LEGACY-MERCHANT", sandbox=False)
+        pgs.save_gateway("zibal", credentials={"merchant": "CANON-MERCHANT"}, sandbox=False, enabled=True)
+        fake = patch_zibal(self)
+        from apps.billing.providers import registry
+        from apps.billing.tests.platform_payment_support import open_invoice_for
+
+        store = Store.objects.create(name="کانون", slug="pccanon", admin_subdomain="pccanon")
+        _sub, invoice = open_invoice_for(store, code="pccanon")
+        payment_flow_service.start_payment(invoice, provider="zibal", callback_base_url="https://rastisi.ir/", return_to="")
+        self.assertEqual(fake.calls_to("request")[0]["merchant"], "CANON-MERCHANT")
+        self.assertNotIn("LEGACY-MERCHANT", str(fake.calls))
+        self.assertTrue(registry.get_provider("zibal"))
+
+    def test_the_legacy_route_never_writes_and_no_service_path_writes_the_legacy_columns(self):
+        from apps.portal.services.platform_config_service import get_platform_configuration
+
+        self._legacy(merchant="LEGACY-MERCHANT")
+        before = get_platform_configuration().encrypted_zibal_credentials
+        pgs.save_gateway("zibal", credentials={"merchant": "ROW-NEW"}, sandbox=False, enabled=True)
+        pgs.save_gateway("zibal", credentials={"merchant": ""}, sandbox=True, enabled=False)
+        self.assertEqual(get_platform_configuration().encrypted_zibal_credentials, before)         # frozen rollback copy
+
+    def test_the_retirement_audit_reports_legacy_as_blocking_until_the_row_is_the_effective_source(self):
+        from io import StringIO
+
+        from django.core.management import CommandError, call_command
+
+        out = StringIO()
+        call_command("audit_platform_zibal_legacy", stdout=out)
+        self.assertIn("effective_source: none", out.getvalue())
+        self._legacy()
+        with self.assertRaises(CommandError):
+            call_command("audit_platform_zibal_legacy", "--strict", stdout=StringIO(), stderr=StringIO())
+        pgs.save_gateway("zibal", credentials={"merchant": ""}, sandbox=False, enabled=True)    # first canonical save keeps the legacy merchant
+        out = StringIO()
+        call_command("audit_platform_zibal_legacy", "--strict", stdout=out)
+        self.assertIn("effective_source: row", out.getvalue())
+        self.assertNotIn("LEGACY-MERCHANT", out.getvalue())
+
+
+class FreeAndZeroDueTests(CheckoutBase):
+    """Free / zero-payable purchases never need a gateway, and a PAID plan can never be obtained this way."""
+
+    def setUp(self):
+        super().setUp()
+        self.free_store = Store.objects.create(name="رایگان", slug="pcfree", admin_subdomain="pcfree", status=Store.Status.ACTIVE)
+        self.free_owner = self._member(self.free_store, "pcfree-owner")
+        self.free_sub, self.free_invoice = open_invoice_for(self.free_store, code="pcfree", price="0")
+        self.free_client = Client(HTTP_HOST=f"pcfree.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}")
+        self.free_client.login(username="pcfree-owner", password="pass12345")
+
+    def free_url(self, action=""):
+        name = "platform-checkout-pay" if action == "pay" else "platform-checkout"
+        return reverse(f"dashboard:{name}", args=["subscription", self.free_invoice.pk])
+
+    def test_a_zero_invoice_shows_the_free_state_without_any_method_or_gateway(self):
+        html = self.free_client.get(self.free_url()).content.decode()
+        self.assertIn('data-testid="settle-free"', html)
+        self.assertNotIn('name="method"', html)
+        self.assertNotIn('data-testid="no-method"', html)
+
+    def test_settling_a_zero_invoice_activates_exactly_once_with_no_gateway_and_ignores_browser_fields(self):
+        self.assertFalse(pgs.checkout_options("subscription", store=self.free_store))          # no method is ready anywhere
+        for _ in range(3):
+            self.free_client.post(self.free_url("pay"), {"method": "platform_card", "amount": "999999", "price": "5"})
+        invoice = SubscriptionInvoice.objects.get(pk=self.free_invoice.pk)
+        self.assertEqual((invoice.status, int(invoice.amount_paid)), (SubscriptionInvoice.Status.PAID, 0))
+        self.assertEqual(StoreSubscription.objects.get(pk=self.free_sub.pk).status, StoreSubscription.Status.ACTIVE)
+        self.assertEqual(SubscriptionPaymentAttempt.objects.filter(invoice=invoice).count(), 1)
+        from apps.core.models import AuditLogEntry
+
+        self.assertEqual(AuditLogEntry.objects.filter(action_code="billing.zero_invoice_settled").count(), 1)
+        self.assertContains(self.free_client.get(self.free_url()), 'data-state="paid"')
+
+    def test_a_paid_invoice_can_never_be_settled_as_free(self):
+        from apps.billing.services import confirmation_service as cs
+
+        with self.assertRaises(cs.ConfirmationError):
+            cs.settle_zero_due_invoice(self.invoice)
+        for method in ("free", "zero", "", "manual"):
+            self.pay(SUB, method, amount="0")
+        invoice = SubscriptionInvoice.objects.get(pk=self.invoice.pk)
+        self.assertEqual((invoice.status, int(invoice.amount_paid), self.attempts(SUB).count()), (SubscriptionInvoice.Status.OPEN, 0, 0))
+        self.assertEqual(StoreSubscription.objects.get(pk=self.sub.pk).status, self.sub.status)       # not activated
+
+    def test_a_tampered_zero_total_with_paid_lines_is_refused_by_the_line_sum_guard(self):
+        from apps.billing.services import confirmation_service as cs
+
+        SubscriptionInvoice.objects.filter(pk=self.invoice.pk).update(grand_total=0, amount_due=0, subtotal=0)
+        with self.assertRaises(cs.ConfirmationError):
+            cs.settle_zero_due_invoice(SubscriptionInvoice.objects.get(pk=self.invoice.pk))
+        self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.OPEN)
+
+    def test_cross_tenant_cannot_settle_anothers_zero_invoice(self):
+        response = self.owner_client.post(reverse("dashboard:platform-checkout-pay", args=["subscription", self.free_invoice.pk]), {"method": "x"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(SubscriptionInvoice.objects.get(pk=self.free_invoice.pk).status, SubscriptionInvoice.Status.OPEN)
+
+    def test_a_zero_price_sms_package_is_granted_once_and_a_priced_one_never(self):
+        free_pkg = SmsPackage.objects.create(name="رایگان", credit_amount=50, price=0)
+        purchase = balance_service.request_purchase(store=self.store, package=free_pkg)
+        url = reverse("dashboard:platform-checkout", args=["sms", purchase.pk])
+        pay = reverse("dashboard:platform-checkout-pay", args=["sms", purchase.pk])
+        self.assertContains(self.owner_client.get(url), 'data-testid="settle-free"')
+        for _ in range(3):
+            self.owner_client.post(pay, {"method": "zibal", "amount": "0"})
+        self.assertEqual(self.credits(), 150)
+        self.assertEqual(SmsCreditLedger.objects.filter(purchase=purchase).count(), 1)
+        self.assertEqual(SmsPackagePurchase.objects.get(pk=purchase.pk).status, SmsPackagePurchase.Status.COMPLETED)
+        # a priced package: even with the snapshot tampered to look free in the browser, the server price decides
+        for _ in range(2):
+            self.pay(SMS, "free", amount="0")
+        self.assertEqual(self.credits(), 150)
+        from apps.billing.services.payment_flow_service import PaymentFlowError
+
+        with self.assertRaises(PaymentFlowError):
+            sms_purchase_payment_service.settle_free_purchase(self.purchase)
+
+    def test_buying_a_zero_price_package_works_with_no_ready_method_but_a_priced_one_is_still_refused(self):
+        free_pkg = SmsPackage.objects.create(name="رایگان۲", credit_amount=10, price=0)
+        response = self.owner_client.post(reverse("dashboard:settings-sms-package-purchase"), {"package_id": free_pkg.pk})
+        purchase = SmsPackagePurchase.objects.get(package=free_pkg)
+        self.assertRedirects(response, reverse("dashboard:platform-checkout", args=["sms", purchase.pk]), fetch_redirect_response=False)
+        self.owner_client.post(reverse("dashboard:settings-sms-package-purchase"), {"package_id": self.package.pk})
+        self.assertFalse(SmsPackagePurchase.objects.filter(store=self.store, package=self.package, pk__gt=self.purchase.pk).exists())
+
+
+class FreeTargetsAreNeverBlockedTests(CheckoutBase):
+    """A downgrade / free target is scheduled without any gateway, from both the portal and the dashboard."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.portal.services.platform_config_service import update_platform_configuration
+        from apps.subscriptions.services import subscription_service as ss
+        from apps.subscriptions.tests.test_pricing_dynamic import make_plan
+
+        update_platform_configuration(actor=None, step_up_actions={"subscription_purchase_confirm": False})
+        _p, self.paid = make_plan("pcfree-paid", base=300000, order=1)
+        _p, self.cheap = make_plan("pcfree-cheap", base=100000, order=2)
+        _p, self.zero = make_plan("pcfree-zero", base=0, order=3)
+        self.st = Store.objects.create(name="تنزل", slug="pcdown", admin_subdomain="pcdown", status=Store.Status.ACTIVE)
+        self.st_owner = self._member(self.st, "pcdown-owner")
+        self.sub3 = ss.activate_subscription(ss.create_subscription(self.st, self.paid), period_end=timezone.now() + timedelta(days=20))
+        self.pc = Client()
+        self.pc.force_login(self.st_owner)
+
+    def portal_buy(self, version):
+        return self.pc.post(f"/app/stores/{self.st.public_id}/billing/checkout/{version.pk}/", HTTP_HOST=PORTAL_HOST)
+
+    def test_portal_downgrade_and_free_target_with_no_method_ready_are_scheduled_not_blocked(self):
+        from apps.billing.models import ScheduledPlanChange
+
+        self.assertFalse(pgs.checkout_options("subscription", store=self.st))
+        response = self.portal_buy(self.cheap)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ScheduledPlanChange.objects.filter(subscription__store=self.st).exists())
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.st).exists())
+        self.portal_buy(self.zero)
+        self.assertEqual(ScheduledPlanChange.objects.get(subscription__store=self.st).target_plan_version_id, self.zero.pk)
+
+    def test_portal_paid_upgrade_with_no_method_is_still_refused_and_creates_no_invoice(self):
+        from apps.subscriptions.tests.test_pricing_dynamic import make_plan
+
+        _p, top = make_plan("pcfree-top", base=900000, order=4)
+        self.portal_buy(top)
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.st).exists())
+        from apps.subscriptions.services import entitlement_service as ent
+
+        self.assertEqual(ent.get_current_subscription(self.st).plan_version_id, self.paid.pk)      # paid plan never granted free
 
 
 @skipUnlessDBFeature("has_select_for_update")

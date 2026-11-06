@@ -4878,7 +4878,7 @@ def settings_sms_package_purchase(request):
         return redirect(_SMS_SETTINGS_PATH)
     store = _resolve_dashboard_store(request)
     package = get_object_or_404(SmsPackage, pk=form.cleaned_data["package_id"], is_active=True)
-    if not _platform_gateway_options("sms_package", store):
+    if package.price > 0 and not _platform_gateway_options("sms_package", store):      # بسته‌ی قیمت‌صفر به درگاه نیاز ندارد
         messages.error(request, "در حال حاضر هیچ روشِ پرداختی برای خریدِ بسته‌ی پیامک فعال نیست؛ بعداً دوباره تلاش کنید.")
         return redirect(_SMS_SETTINGS_PATH)
     # خریدِ pendingِ همان بسته دوباره استفاده می‌شود (انباشتِ ردیفِ تکراری ممنوع).
@@ -8409,7 +8409,7 @@ def subscription_plan_execute(request):
         # هیچ فاکتورِ بی‌راهی نسازیم: اگر ارتقا پرداخت می‌خواهد و هیچ روشِ آماده‌ای نیست، پیش از ساختنِ فاکتور رد می‌شود.
         if not _platform_gateway_options("subscription", store) and pcb.preview(
             current_subscription, target_version, billing_interval=billing_interval or None,
-        ).get("billing_effect") == "upgrade_requires_payment":
+        ).get("payable_amount", 0) > 0:
             messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
             return redirect("dashboard:subscription-plans")
         kind, result = pcb.start_plan_change(

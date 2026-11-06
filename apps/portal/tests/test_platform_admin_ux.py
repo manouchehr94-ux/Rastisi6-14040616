@@ -40,7 +40,7 @@ POST_ONLY = {
     "domain-check", "domain-set-primary", "notification-sender-toggle", "notification-platform-template-preview",
     "notification-platform-template-test",
     # PR #40 finance actions
-    "payment-verify-now", "manual-claim-action", "payment-invoice-refund", "payment-refund-complete", "sms-purchase-action",
+    "payment-verify-now", "payment-duplicate-action", "manual-claim-action", "payment-invoice-refund", "payment-refund-complete", "sms-purchase-action",
 }
 FILE_DOWNLOADS = {"manual-claim-receipt"}          # streams a private receipt file; not an HTML page
 NOT_IN_SIDEBAR = POST_ONLY | FILE_DOWNLOADS | {"login"}

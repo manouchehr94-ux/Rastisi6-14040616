@@ -74,6 +74,7 @@ urlpatterns = [
     path("payments/transactions/", views.payment_transactions, name="payment-transactions"),
     path("payments/reconciliation/", views.payment_reconciliation, name="payment-reconciliation"),
     path("payments/verify/<str:kind>/<int:attempt_id>/", views.payment_verify_now, name="payment-verify-now"),
+    path("payments/duplicates/<str:kind>/<int:attempt_id>/<str:action>/", views.payment_duplicate_action, name="payment-duplicate-action"),
     path("payments/card-claims/", views.manual_claims, name="manual-claims"),
     path("payments/card-claims/<int:claim_id>/", views.manual_claim_detail, name="manual-claim-detail"),
     path("payments/card-claims/<int:claim_id>/receipt/", views.manual_claim_receipt, name="manual-claim-receipt"),

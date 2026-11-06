@@ -54,6 +54,24 @@ def _method_codes(target):
     return {m["code"]: m for m in pcs.methods(target)}
 
 
+def _settle_free(request, target, page):
+    """مبلغِ صفرِ **سمتِ سرور**: بدونِ درگاه تسویه می‌شود؛ هر مقدارِ ``method``/``amount`` از مرورگر نادیده گرفته می‌شود.
+    سخت‌گیریِ نهایی (جمعِ ردیف‌ها، وضعیت، تازگیِ تصمیم) داخلِ سرویس‌هاست — پلنِ پولی هرگز رایگان نمی‌شود."""
+    from apps.billing.services import confirmation_service, sms_purchase_payment_service
+    from apps.billing.services.payment_flow_service import PaymentFlowError
+
+    try:
+        if target.kind == pcs.KIND_SUBSCRIPTION:
+            confirmation_service.settle_zero_due_invoice(target.obj, actor=request.user)
+        else:
+            sms_purchase_payment_service.settle_free_purchase(target.obj, actor=request.user)
+    except (confirmation_service.ConfirmationError, PaymentFlowError) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "خرید بدونِ پرداخت تأیید و اعمال شد.")
+    return redirect(page)
+
+
 def start_checkout(request, target, requested: str):
     """شروعِ پرداخت با روشِ انتخابی. ``requested`` باید دقیقاً یکی از روش‌هایِ **آمادهٔ همین خرید** باشد. بازگشتِ
     مقصد همیشه صفحه‌یِ تسویه است (وضعیت از رکوردِ سرور)."""
@@ -65,6 +83,8 @@ def start_checkout(request, target, requested: str):
     if not state.can_pay:
         messages.error(request, state.message)
         return redirect(page)
+    if state.free:
+        return _settle_free(request, target, page)
     if state.needs_ack and request.POST.get("ack") != "1":
         messages.error(request, "پرداختِ قبلی هنوز تأیید نشده است. اگر آن را کامل نکرده‌اید، تأییدِ «پرداختِ قبلی را کامل نکرده‌ام» را بزنید؛ وگرنه «بررسیِ وضعیت» را بزنید.")
         return redirect(page)
@@ -117,7 +137,7 @@ def start_checkout(request, target, requested: str):
 def platform_checkout(request, kind, pk):
     target = resolve_target(request, kind, pk)
     state = pcs.state(target)
-    options = pcs.methods(target) if state.can_pay else []
+    options = pcs.methods(target) if state.can_pay and not state.free else []
     default = next((m["code"] for m in options if m.get("is_default")), options[0]["code"] if options else "")
     return render(request, "dashboard/platform_checkout.html", {
         "target": target, "state": state, "methods": options, "default_method": default,
@@ -126,7 +146,8 @@ def platform_checkout(request, kind, pk):
         "back_url": reverse("dashboard:subscription-plans") if kind == pcs.KIND_SUBSCRIPTION else SMS_SETTINGS_PATH,
         "back_label": "بازگشت به پلن‌ها" if kind == pcs.KIND_SUBSCRIPTION else "بازگشت به تنظیماتِ پیامک",
         "invoice_url": reverse("dashboard:billing-invoice-detail", args=[pk]) if kind == pcs.KIND_SUBSCRIPTION else "",
-        "no_method": state.can_pay and not options,
+        "no_method": state.can_pay and not options and not state.free,
+        "hide_section_nav": True,
         "active_page": "billing" if kind == pcs.KIND_SUBSCRIPTION else "settings",
     })
 

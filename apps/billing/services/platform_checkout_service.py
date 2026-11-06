@@ -59,6 +59,7 @@ class CheckoutState:
     can_pay: bool
     attempt: object = None
     claim: object = None
+    free: bool = False             # مبلغِ صفر (قیمتِ صفر/تخفیفِ کامل): بدونِ درگاه و با تأییدِ سرور تسویه می‌شود
     needs_ack: bool = False        # یک تلاشِ آنلاینِ نامعلوم هست: پرداختِ دوباره فقط با تأییدِ صریحِ مرچنت (جلوگیری از پرداختِ دوباره)
 
 
@@ -127,12 +128,20 @@ def state(target: Target, *, now=None) -> CheckoutState:
     now = now or timezone.now()
     terminal = _terminal(target)
     if terminal == PAID:
-        return CheckoutState(PAID, "ok", "پرداخت تأیید شد", "پرداخت شما از سمتِ سرور تأیید و خرید اعمال شد.", False)
+        message = "پرداخت شما از سمتِ سرور تأیید و خرید اعمال شد."
+        if any(a.failure_code in ("duplicate_payment", "purchase_completed") for a in _attempts(target)):
+            message += " پرداختِ تکراریِ دیگری هم از شما دریافت شده بود؛ این مبلغ ثبت شد و مالی راستیسی آن را بازپرداخت یا تسویه می‌کند — خریدِ شما فقط یک‌بار اعمال شده است."
+        return CheckoutState(PAID, "ok", "پرداخت تأیید شد", message, False)
     if terminal == REFUNDED:
         return CheckoutState(REFUNDED, "info", "بازپرداخت شد", "مبلغِ این خرید بازپرداخت شده است.", False)
     if terminal == CLOSED:
         return CheckoutState(CLOSED, "bad", "این خرید بسته شده است", "امکانِ پرداخت برای این مورد وجود ندارد؛ از ابتدا خرید کنید.", False)
 
+    if target.amount == 0:
+        return CheckoutState(
+            PAYABLE, "info", "بدونِ مبلغِ پرداختی",
+            "مبلغِ این خرید صفر است؛ برای فعال‌سازی نیازی به درگاه یا کارت‌به‌کارت نیست.", True, free=True,
+        )
     attempts, claims = _attempts(target), _claims(target)
     latest_attempt = attempts[0] if attempts else None
     latest_claim = claims[0] if claims else None

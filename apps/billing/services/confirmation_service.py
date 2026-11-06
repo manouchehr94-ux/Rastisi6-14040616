@@ -36,6 +36,8 @@ def confirm_payment(*, attempt, amount, currency, provider_payment_id="", actor=
     # idempotency: تلاشِ از قبل موفق ⇒ بدونِ اعمالِ دوباره.
     if locked_attempt.status == SubscriptionPaymentAttempt.Status.SUCCEEDED:
         return locked_attempt
+    if locked_attempt.status == SubscriptionPaymentAttempt.Status.REQUIRES_ACTION and locked_attempt.failure_code == "duplicate_payment":
+        return locked_attempt                          # پرداختِ تکراریِ از قبل ثبت‌شده: تکرارِ callback حسابرسیِ دوباره نمی‌سازد
     if invoice.status == SubscriptionInvoice.Status.PAID:
         # فاکتور از قبل پرداخت‌شده (تلاشِ دیگری موفق بود) و این تلاش هم پولی گرفته: پرداختِ
         # دوباره **اعمال نمی‌شود**، و این تلاش «نیازمندِ اقدام» (پرداختِ تکراری — احتمالاً
@@ -112,6 +114,43 @@ def mark_invoice_paid_manually(invoice, *, actor=None, now=None, note=""):
         attempt=attempt, amount=locked.amount_due, currency=locked.currency,
         provider_payment_id=f"manual-admin-{attempt.public_token}", actor=actor, now=now,
     )
+
+
+@transaction.atomic
+def settle_zero_due_invoice(invoice, *, actor=None, now=None):
+    """فاکتورِ **واقعاً صفر** (مثلاً قیمتِ صفر یا تخفیفِ کامل) را بدونِ درگاه تسویه و اعمال می‌کند — دقیقاً یک‌بار.
+
+    سخت‌گیریِ سمتِ سرور (هیچ دسترسیِ رایگان به پلنِ پولی): فاکتور باید قابلِ پرداخت باشد، ``grand_total``/``amount_due``/
+    ``amount_paid`` همگی صفر باشند و **جمعِ ردیف‌هایِ فاکتور** (که سرور از نسخه‌ی پلن ساخته) هم صفر باشد؛ برایِ ``PLAN_CHANGE``
+    تازگیِ تصمیم مثلِ ``start_payment`` بررسی می‌شود. از همان ``confirm_payment`` (ثبتِ تلاش، حسابرسی، فعال‌سازی/تمدید) می‌گذرد."""
+    from apps.billing.services import attempt_service
+
+    now = now or timezone.now()
+    locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
+    if locked.status == SubscriptionInvoice.Status.PAID:
+        return locked                                                  # idempotent
+    if not locked.is_payable:
+        raise ConfirmationError("این فاکتور در وضعیتِ قابلِ‌پرداخت نیست.")
+    lines_total = sum((line.total for line in locked.lines.all()), ZERO)
+    if locked.grand_total != ZERO or locked.amount_due != ZERO or locked.amount_paid != ZERO or lines_total != ZERO:
+        raise ConfirmationError("این فاکتور مبلغِ صفر ندارد و باید پرداخت شود.")
+    if locked.kind == SubscriptionInvoice.Kind.PLAN_CHANGE:
+        from apps.subscriptions.services import plan_change_service as pcs
+
+        current = StoreSubscription.objects.get(pk=locked.subscription_id)
+        if not locked.idempotency_key or locked.idempotency_key != pcs._preview_token(current, locked.plan_version):
+            raise ConfirmationError("این فاکتورِ تغییرِ پلن دیگر تصمیمِ معتبرِ فعلی نیست.")
+    attempt = attempt_service.create_attempt(locked, provider="manual", actor=actor, now=now)
+    record_audit_event(
+        store=locked.store, actor=actor, action_code="billing.zero_invoice_settled",
+        object_type="SubscriptionInvoice", object_id=locked.pk, object_label=locked.number,
+        after={"grand_total": "0", "kind": locked.kind},
+    )
+    confirm_payment(
+        attempt=attempt, amount=ZERO, currency=locked.currency,
+        provider_payment_id=f"zero-due-{attempt.public_token}", actor=actor, now=now,
+    )
+    return SubscriptionInvoice.objects.get(pk=locked.pk)
 
 
 def _remember_interval(subscription, interval):

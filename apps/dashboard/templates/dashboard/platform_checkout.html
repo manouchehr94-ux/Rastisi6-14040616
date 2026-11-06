@@ -58,7 +58,12 @@
     <section class="card" aria-labelledby="pco-pay-h">
       <div class="card-head"><h3 id="pco-pay-h">{% if methods %}روشِ پرداخت{% else %}وضعیت{% endif %}</h3></div>
       <div class="card-body">
-        {% if state.code == 'verifying' %}
+        {% if state.free %}
+        <form method="post" action="{{ post_url }}" data-pco-form>{% csrf_token %}
+          <p class="pco-meta" style="margin-top:0">مبلغِ این خرید صفر است؛ پرداختی لازم نیست.</p>
+          <button class="btn btn-primary pco-pay" type="submit" data-pco-submit data-testid="settle-free">تأیید و فعال‌سازی (بدونِ پرداخت)</button>
+        </form>
+        {% elif state.code == 'verifying' %}
         <form method="post" action="{{ status_url }}" style="margin-bottom:14px">{% csrf_token %}
           <p class="pco-meta" style="margin-top:0">اگر پرداخت را کامل کرده‌اید، وضعیت را از درگاه بررسی کنید؛ تا تأییدِ سرور هیچ تغییری اعمال نمی‌شود.</p>
           <button class="btn btn-primary pco-pay" type="submit" data-testid="check-status">بررسیِ وضعیتِ پرداخت</button>

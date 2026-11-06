@@ -82,7 +82,7 @@ def _locked_balance(store):
 
 
 @transaction.atomic
-def complete_purchase(*, purchase: SmsPackagePurchase, attempt=None, actor=None) -> SmsPackagePurchase:
+def complete_purchase(*, purchase: SmsPackagePurchase, attempt=None, actor=None, note: str = "") -> SmsPackagePurchase:
     """تنها مسیرِ افزودنِ اعتبارِ خرید — از Platform Admin (دستی) یا پس از پرداختِ آنلاینِ **تأییدشده**
     (``attempt``). با قفلِ ردیفِ خرید و موجودی، idempotent و بدونِ از دست رفتنِ به‌روزرسانی:
     وضعیتِ غیرِ pending خطا می‌دهد، و قیدِ یکتایِ دفتر ``(purchase, kind)`` حتی در صورتِ باگ از
@@ -101,7 +101,7 @@ def complete_purchase(*, purchase: SmsPackagePurchase, attempt=None, actor=None)
         store=locked.store, purchase=locked, payment_attempt=attempt, actor=actor,
         kind=SmsCreditLedger.Kind.PURCHASE, delta=locked.credit_amount,
         balance_before=before, balance_after=after,
-        note="پرداخت آنلاینِ تأییدشده" if attempt is not None else "تکمیلِ دستی توسطِ مدیرِ پلتفرم",
+        note=note or ("پرداخت آنلاینِ تأییدشده" if attempt is not None else "تکمیلِ دستی توسطِ مدیرِ پلتفرم"),
     )
     locked.status = SmsPackagePurchase.Status.COMPLETED
     locked.completed_at = timezone.now()

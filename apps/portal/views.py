@@ -1816,7 +1816,16 @@ def _start_purchase(request, *, store, plan_version, billing_interval=""):
     from apps.billing.services import platform_checkout_service
     from apps.portal.services import platform_gateway_service
 
-    if not platform_gateway_service.checkout_options(platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store):
+    # فقط وقتی که این تغییر **واقعاً پرداخت می‌خواهد** و هیچ روشِ آماده‌ای نیست رد می‌شود؛ تنزل/هم‌قیمت/رایگان بدونِ درگاه
+    # زمان‌بندی می‌شود و مسدود نمی‌گردد. تصمیمِ «نیازمندِ پرداخت» از پیش‌نمایشِ سمتِ سرور می‌آید، نه ورودیِ مرورگر.
+    try:
+        requires_payment = plan_change_billing_service.preview(
+            current, plan_version, billing_interval=billing_interval or None,
+        ).get("payable_amount", 0) > 0
+    except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
+        messages.error(request, str(exc))
+        return redirect("portal:billing-plans", store_public_id=store.public_id)
+    if requires_payment and not platform_gateway_service.checkout_options(platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store):
         messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
         return redirect("portal:billing-plans", store_public_id=store.public_id)
 
