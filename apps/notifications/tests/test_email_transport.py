@@ -3,9 +3,8 @@
 This proves our code speaks SMTP correctly (headers, multipart, recipients, failure → retry/backoff → single re-send); it does NOT
 prove a real provider/account/domain (SPF/DKIM/DMARC, reputation, inbox placement) — that needs operator verification."""
 
-import asyncore
-import smtpd
 import socket
+import socketserver
 import threading
 import warnings
 from datetime import timedelta
@@ -25,38 +24,77 @@ User = get_user_model()
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-class Sink(smtpd.SMTPServer):
-    received: list
-
-    def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        self.received.append((mailfrom, rcpttos, data))
-
-
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
+class _SmtpHandler(socketserver.StreamRequestHandler):
+    """Just enough SMTP for Django's backend: EHLO/HELO, MAIL, RCPT, DATA, RSET, NOOP, QUIT. (``smtpd``/``asyncore`` were removed in Python 3.12, which is why this
+    sink is a plain ``socketserver`` one — same interface as before: ``received`` holds ``(mailfrom, [recipients], raw message bytes)``.)"""
+
+    def reply(self, text):
+        self.wfile.write(text.encode() + b"\r\n")
+        self.wfile.flush()
+
+    def handle(self):
+        mailfrom, rcpts = "", []
+        self.reply("220 localhost test SMTP sink")
+        while True:
+            line = self.rfile.readline()
+            if not line:
+                return
+            cmd = line.decode("utf-8", "replace").strip()
+            upper = cmd.upper()
+            if upper.startswith(("EHLO", "HELO")):
+                self.reply("250 localhost")
+            elif upper.startswith("MAIL FROM:"):
+                mailfrom, rcpts = cmd[10:].strip().split(" ")[0].strip("<>"), []
+                self.reply("250 OK")
+            elif upper.startswith("RCPT TO:"):
+                rcpts.append(cmd[8:].strip().split(" ")[0].strip("<>"))
+                self.reply("250 OK")
+            elif upper == "DATA":
+                self.reply("354 End data with <CR><LF>.<CR><LF>")
+                chunks = []
+                while True:
+                    row = self.rfile.readline()
+                    if not row or row in (b".\r\n", b".\n"):
+                        break
+                    chunks.append(row[1:] if row.startswith(b"..") else row)       # dot-unstuffing
+                data = b"".join(chunks).replace(b"\r\n", b"\n")
+                self.server.received.append((mailfrom, list(rcpts), data))
+                self.reply("250 OK queued")
+            elif upper == "RSET":
+                mailfrom, rcpts = "", []
+                self.reply("250 OK")
+            elif upper == "NOOP":
+                self.reply("250 OK")
+            elif upper == "QUIT":
+                self.reply("221 Bye")
+                return
+            else:
+                self.reply("502 Command not implemented")
+
+
+class _Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 class SmtpSink:
     def __init__(self, port):
         self.received = []
-        Sink.received = self.received
-        self.server = Sink(("127.0.0.1", port), None, decode_data=False)
-        self.map = {}
-        self.running = True
-        self.thread = threading.Thread(target=self.loop, daemon=True)
+        self.server = _Server(("127.0.0.1", port), _SmtpHandler)
+        self.server.received = self.received
+        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         self.thread.start()
 
-    def loop(self):
-        while self.running:
-            asyncore.loop(timeout=0.1, count=1)
-
     def stop(self):
-        self.running = False
+        self.server.shutdown()
+        self.server.server_close()
         self.thread.join(2)
-        self.server.close()
-        asyncore.close_all()
 
 
 class EmailTransportTests(TestCase):
