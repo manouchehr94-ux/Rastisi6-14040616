@@ -1610,6 +1610,15 @@ def _pending_claims_count() -> int:
     return PlatformManualPaymentClaim.objects.filter(status=PlatformManualPaymentClaim.Status.PENDING_REVIEW).count()
 
 
+def _attempt_row_order(row):
+    """The ONE total order of the transactions list, newest first: ``created_at`` desc, then subscription before SMS, then ``pk`` desc.
+
+    Explicit (not an accident of list concatenation) so rows that share a timestamp — common for rows written in one transaction/bulk — keep a
+    stable position across page requests. It is consistent with each part's own queryset order (``-created_at, -pk``), which is what makes the
+    "read at most ``stop`` rows per part" over-fetch in ``_MergedAttemptRows`` exact: the merged order restricted to one part IS that part's order."""
+    return (row["created_at"], row["kind"] == "subscription", row["attempt"].pk)
+
+
 class _MergedAttemptRows:
     """Newest-first merge of several attempt querysets, usable by ``Paginator`` (``len`` + slicing) without loading the whole history.
 
@@ -1629,7 +1638,7 @@ class _MergedAttemptRows:
         rows = []
         for qs, build in self._parts:
             rows.extend(build(a) for a in (qs[:stop] if stop is not None else qs))
-        rows.sort(key=lambda r: r["created_at"], reverse=True)
+        rows.sort(key=_attempt_row_order, reverse=True)
         return rows[start:stop]
 
 
