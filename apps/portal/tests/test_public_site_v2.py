@@ -175,6 +175,12 @@ class DemoStoreAndTemplateCatalogTests(TestCase):
 
         return layout_preset_registry.list_ready_templates()
 
+    def _offered(self):
+        """What a seller can actually choose — and therefore exactly what the public pages advertise."""
+        from apps.storefront_builder import layout_preset_registry
+
+        return layout_preset_registry.list_selectable_templates()
+
     def test_demo_store_names_products_prices_colours_and_photos_are_editable(self):
         for key, val in {
             "demo.1.name": "فروشگاه من", "demo.1.tag": "ساده‌ی من", "demo.1.url": "my-shop.ir",
@@ -214,9 +220,10 @@ class DemoStoreAndTemplateCatalogTests(TestCase):
         PublicSiteSetting.objects.filter(key="home.hero.more_tag").update(value="همه قالب‌ها ←")
         self.assertContains(self._get("/"), "همه قالب‌ها ←")
 
-    def test_templates_page_lists_every_real_ready_template(self):
-        presets = self._catalog()
-        self.assertGreater(len(presets), 20)
+    def test_templates_page_lists_exactly_the_templates_a_seller_can_choose(self):
+        presets = self._offered()
+        self.assertGreater(len(presets), 10)
+        self.assertLess(len(presets), len(self._catalog()))              # the registry still holds more than are offered; the page must not show them
         html = self._get("/design/").content.decode()
         self.assertEqual(html.count('class="tpl"'), len(presets))
         for preset in presets[:5]:
@@ -224,7 +231,7 @@ class DemoStoreAndTemplateCatalogTests(TestCase):
         self.assertIn('id="tplQ"', html)
 
     def test_owner_can_rename_hide_categorise_and_feature_a_template(self):
-        a, b, c = self._catalog()[:3]
+        a, b, c = self._offered()[:3]
         PublicSiteSetting.objects.create(key=f"rt.{a.key}.name", value="نام تازه من")
         PublicSiteSetting.objects.create(key=f"rt.{a.key}.desc", value="توضیح من")
         PublicSiteSetting.objects.create(key=f"rt.{b.key}.hide", value="1")
@@ -245,19 +252,27 @@ class DemoStoreAndTemplateCatalogTests(TestCase):
         home = self._get("/").content.decode()
         self.assertEqual(home.count('class="tpl"'), 4)
 
-    def test_a_new_ready_template_appears_without_any_code_change(self):
+    def test_a_new_ready_template_appears_publicly_only_once_it_is_selectable(self):
+        """Public rows == what a seller can choose. A brand-new registered Ready Template is not advertised until the owner approves it for the gallery
+        (``template_gallery_policy``); once approved it appears with no other code change."""
         from unittest import mock
 
-        from apps.portal.public_site import services
+        from apps.portal.public_site import registry as public_registry, services
+        from apps.storefront_builder import template_gallery_policy
 
         real = self._catalog()
         extra = real[0].__class__(**{**real[0].__dict__, "key": "brand_new_template", "label_fa": "قالب کاملاً تازه"})
-        with mock.patch(
-            "apps.storefront_builder.layout_preset_registry.list_ready_templates", return_value=real + [extra],
-        ):
-            rows = services.ready_template_rows()
-        self.assertEqual(rows[-1]["name"], "قالب کاملاً تازه")
-        self.assertEqual(len(rows), len(real) + 1)
+        baseline = len(services.ready_template_rows())
+        # ``registry._DYNAMIC`` caches the per-template public-site fields for the whole process: isolate it so this test does not depend on test order.
+        with mock.patch("apps.storefront_builder.layout_preset_registry.list_ready_templates", return_value=real + [extra]), \
+                mock.patch.object(public_registry, "_DYNAMIC", None):
+            self.assertEqual(len(services.ready_template_rows()), baseline)                       # registered but not approved: not advertised
+            approved = template_gallery_policy.SELECTABLE_TEMPLATE_KEYS + ("brand_new_template",)
+            with mock.patch.object(template_gallery_policy, "SELECTABLE_TEMPLATE_KEYS", approved), \
+                    mock.patch.object(template_gallery_policy, "_SELECTABLE_SET", frozenset(approved)):
+                rows = services.ready_template_rows()
+        self.assertEqual(len(rows), baseline + 1)
+        self.assertIn("قالب کاملاً تازه", [r["name"] for r in rows])
 
 
 class RegistryContractTests(SimpleTestCase):

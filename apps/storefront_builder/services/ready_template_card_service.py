@@ -3,8 +3,8 @@
 Shared by every surface that shows Ready Templates (Merchant Admin Template Gallery, the R4
 Design Studio gallery and the owner-onboarding Template step). It owns no catalog and no
 thumbnail logic of its own: presets come from ``layout_preset_registry.list_selectable_templates()``
-(seller-facing galleries, ``SCOPE_GALLERY``) or ``list_ready_templates()`` (the public landing site's
-display catalog, ``SCOPE_PUBLIC``) and screenshots/thumbnails from ``template_preview_service``
+(seller-facing galleries, ``SCOPE_GALLERY``) or ``list_ready_templates()`` (the full registry,
+``SCOPE_PUBLIC`` — NOT used by the public landing site any more: it shows the same selectable set as the galleries so it never advertises a template a seller cannot choose) and screenshots/thumbnails from ``template_preview_service``
 (``resolve_real_screenshot`` with the canonical SVG fallback). Pure reads — never writes.
 """
 
