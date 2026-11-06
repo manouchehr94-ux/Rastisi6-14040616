@@ -39,3 +39,12 @@ SMS ⇒ نامِ مسیرِ `sms-checkout*` ⇒ تنظیمات › پیامک؛ 
 * **چه زمانی ستون‌ها امن حذف می‌شوند** — فقط‌خواندنی: `python manage.py audit_platform_zibal_legacy --strict` باید در **همه‌ی محیط‌ها** (QA و تولید) نشان دهد:
   ۱) `legacy_has_data=False` یا `canonical_row_exists=True` (migration `portal/0019` اجرا شده)؛ ۲) `effective_source` برابرِ `row` (یا `none`) باشد، نه `legacy`؛ ۳) یک چرخه‌ی انتشارِ کامل
   بدونِ نیاز به بازگشت (rollback) گذشته باشد. سپس **با مجوزِ جداگانه‌ی مالک** یک migration ستون‌ها را حذف و یک تغییرِ کد فال‌بک را برمی‌دارد. تا آن زمان ستون‌ها فقط نسخه‌ی خواندنیِ rollback‌اند.
+
+## ۶. نتایجِ آزمون (PostgreSQL ۱۶ + Chromium)
+* آزمون‌هایِ هدفمندِ جدید: `test_platform_checkout` (تسویه، ماتریسِ پذیرش، رایگان/صفر، ناوبری، مرجعیتِ زیبال)، `test_platform_duplicate_settlement` (۱۱ تست، شاملِ هم‌زمانیِ ۲ نخی)،
+  `test_platform_checkout_audit`، `test_platform_admin_billing_zibal` — همه OK.
+* **رگرسیونِ کامل** (`apps.billing apps.portal apps.sms apps.subscriptions apps.dashboard apps.notifications`): ۴۷۳۴ تست، ۱۶ خطا:
+  یک رگرسیونِ واقعی (تستِ مجوز که `apps.portal.views.payment_flow_service` را patch می‌کرد؛ اصلاح و OK)؛
+  ۵ `LegacyRetainedExportTests` + ۲ تستِ `product_options…/attribute_value…` + ۱ `email_transport` (خطایِ import) + ۳ شکستِ `InFlightDeliveryConcurrencyTests` که روی commit مبنا (`d08dbe91`) **عیناً** رخ می‌دهند؛
+  ۱ `public_site_v2` (وابسته به ترتیب؛ تکی OK، قبلاً مستند)؛ ۶ خطایِ `setUpClass` از نوعِ `django_content_type` پس از آزمون‌هایِ TransactionTestCase (تکی همگی گذر می‌کنند).
+* مرورگر (دیتابیسِ یک‌بارمصرف، درگاهِ شبیه‌ساز): ۱۸۸/۱۸۸ بررسی، ۰ خطایِ کنسول — A..E + F (دو تلاش هر دو تسویه، بازپرداخت/تسویه در تطبیق) + G (بسته‌ی رایگان بدونِ روشِ آماده).

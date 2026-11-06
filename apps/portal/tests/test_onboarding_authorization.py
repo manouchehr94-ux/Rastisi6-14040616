@@ -492,7 +492,7 @@ class SubscriptionPurchaseAuthorizationTests(TestCase):
         with patch(
             "apps.portal.views.plan_change_billing_service.start_plan_change"
         ) as mocked_start_plan_change, patch(
-            "apps.portal.views.payment_flow_service.start_payment"
+            "apps.billing.services.payment_flow_service.start_payment"
         ) as mocked_start_payment:
             response = self.client.post(self._checkout_url(), HTTP_HOST=_HOST)
 
