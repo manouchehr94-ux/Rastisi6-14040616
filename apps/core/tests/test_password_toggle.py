@@ -3,8 +3,8 @@
 * ``PasswordToggleWiringTests`` - no browser: every admin / platform-admin / portal page that renders a password input loads the ONE shared
   stylesheet + script, and the retired portal-only control is gone (a second implementation is how the eye ended up on top of the text).
 * ``PasswordToggleBrowserTests`` - opt-in Chromium (``SFB_BROWSER_TESTS=1``): real files, RTL + LTR, desktop + phone width. The eye sits in the
-  reserved gutter at the inline end of the INPUT's own direction, is a >=44px target, never overlaps the typed text, flips password<->text,
-  keeps the value, and the field is hidden by default and again after submit."""
+  reserved gutter on the physical RIGHT of an always-LTR input (direction:ltr; text-align:left, whatever the page direction), is a >=44px target,
+  never overlaps the typed text, flips password<->text, keeps the value, and the field is hidden by default and again after submit."""
 
 import os
 import re
@@ -23,7 +23,8 @@ HOSTS = {
     "dashboard/templates/dashboard/base_admin.html": "admin shell (payment gateway secrets, every admin page)",
     "dashboard/templates/dashboard/login.html": "admin login (standalone)",
     "portal/templates/portal/platform_admin/base.html": "platform admin (login, SMS credentials)",
-    "portal/templates/portal/public/base_public.html": "portal login / signup / password reset",
+    "portal/templates/portal/public/base_public.html": "legacy portal base",
+    "portal/templates/portal/public_v2/base.html": "public site v2: login / signup completion / password reset (auth_base extends it)",
 }
 
 
@@ -46,23 +47,40 @@ class PasswordToggleWiringTests(SimpleTestCase):
         self.assertIn("var HIDE = 'پنهان\u200cکردن رمز';", js)
 
     def test_every_template_with_a_password_input_extends_a_host(self):
-        """A template that renders ``type="password"`` (or a Django password widget field) must be a host or extend one."""
-        hosts = {Path(rel).name for rel in HOSTS}
-        bases = hosts | {"base_admin.html", "base_public.html", "base.html"}
+        """A template that renders ``type="password"`` (or a Django password widget field) must be a host or *resolve* (through its whole ``extends``
+        chain, by exact file) to one. A suffix match such as ``auth_base.html`` ~ ``base.html`` is NOT enough — that is how public v2 lost its eye."""
+        template_roots = [p for p in APPS.rglob("templates") if p.is_dir()] + [APPS.parent / "templates"]
+
+        def resolve(name):
+            for root in template_roots:
+                candidate = root / name
+                if candidate.is_file():
+                    return candidate
+            return None
+
+        def loads_component(path, seen=()):
+            rel = path.relative_to(APPS).as_posix() if path.is_relative_to(APPS) else None
+            if rel in HOSTS or (path.name == "base.html" and path.parent == APPS.parent / "templates"):
+                return True
+            if path in seen:
+                return False
+            match = re.search(r'{%\s*extends\s+"([^"]+)"', path.read_text(encoding="utf-8"))
+            parent = resolve(match.group(1)) if match else None
+            return bool(parent) and loads_component(parent, seen + (path,))
+
         offenders = []
         for path in APPS.rglob("templates/**/*.html"):
             rel = path.relative_to(APPS).as_posix()
             if rel.startswith(("customers/", "storefront_builder/")) or "/tests/" in rel:
-                continue  # customer-facing storefront auth is out of scope for the admin component
+                continue  # storefront auth is covered by the storefront-base test above
             if "/partials/" in rel:
                 continue  # included by pages that extend a host (settings.html -> base_admin.html); covered by the host check
             text = path.read_text(encoding="utf-8")
             if not re.search(r'type="password"|form\.password|password_form\.password', text):
                 continue
-            if rel in HOSTS or re.search(r'{%\s*extends\s+"[^"]*(' + "|".join(re.escape(b) for b in bases) + r')"', text):
-                continue
-            offenders.append(rel)
-        self.assertEqual(offenders, [], "password inputs on pages that do not load the shared toggle")
+            if not loads_component(path):
+                offenders.append(rel)
+        self.assertEqual(offenders, [], "password inputs on pages whose template chain never loads the shared toggle")
 
     def test_the_old_portal_only_control_is_retired(self):
         portal_css = (APPS / "portal/static/portal/css/public-site-v2.css").read_text(encoding="utf-8")
@@ -70,13 +88,19 @@ class PasswordToggleWiringTests(SimpleTestCase):
         self.assertNotIn("r-password-toggle", portal_css + auth_js)
         self.assertNotIn("padding-right:68px", portal_css)
 
-    def test_css_reserves_the_gutter_on_the_inline_end_and_is_a_large_target(self):
+    def test_css_is_physical_right_ltr_and_a_large_target(self):
         css = CSS.read_text(encoding="utf-8")
         self.assertIn("padding-inline-end: var(--pw-gutter) !important", css)
-        self.assertIn("inset-inline-end", css)
+        self.assertRegex(css, r"\.pw-field > input\.pw-input\s*\{[^}]*direction:\s*ltr\s*!important")
+        self.assertRegex(css, r"\.pw-field > input\.pw-input\s*\{[^}]*text-align:\s*left\s*!important")
+        self.assertRegex(css, r"\.pw-field > input\.pw-input\s*\{[^}]*padding-right:\s*var\(--pw-gutter\)\s*!important")
+        self.assertRegex(css, r"\.pw-toggle\s*\{[^}]*right:\s*4px")
         self.assertRegex(css, r"--pw-size:\s*44px")
-        self.assertNotRegex(css, r"\bright\s*:\s*\d")      # physical offsets would put the eye over the text in one of the two directions
-        self.assertNotRegex(css, r"\bleft\s*:\s*\d")
+
+    def test_script_forces_ltr_and_marks_the_input(self):
+        js = JS.read_text(encoding="utf-8")
+        self.assertIn("input.setAttribute('dir', 'ltr')", js)
+        self.assertIn("input.classList.add('pw-input')", js)
 
     def test_script_never_touches_name_value_or_autocomplete(self):
         js = re.sub(r"/\*.*?\*/|//[^\n]*", "", JS.read_text(encoding="utf-8"), flags=re.S)   # code only, not the explanatory comments
@@ -105,8 +129,9 @@ class PasswordToggleBrowserTests(unittest.TestCase):
 
         cls._pw = sync_playwright().start()
         launch = {"args": ["--no-sandbox"]}
-        for candidate in ("/opt/pw-browsers/chromium-1194/chrome-linux/chrome", "/opt/pw-browsers/chromium/chrome"):
-            if os.path.exists(candidate):
+        for candidate in (os.environ.get("SFB_CHROMIUM_PATH", ""), "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", "/opt/pw-browsers/chromium/chrome",
+                          "/opt/pw-browsers/chromium"):
+            if candidate and os.path.isfile(candidate):
                 launch["executable_path"] = candidate
                 break
         cls.browser = cls._pw.chromium.launch(**launch)
@@ -131,7 +156,7 @@ class PasswordToggleBrowserTests(unittest.TestCase):
             for width in (1440, 390):
                 ctx, page = self._page(page_dir, width)
                 try:
-                    for field_id, expected_end in (("rtl", "left"), ("ltr", "right")):
+                    for field_id, expected_end in (("rtl", "right"), ("ltr", "right")):          # always the physical right, even for an input authored dir=rtl
                         g = page.evaluate(
                             """(id) => {
                               const input = document.getElementById(id);
@@ -153,7 +178,8 @@ class PasswordToggleBrowserTests(unittest.TestCase):
                         self.assertGreaterEqual(g["bh"], 44, where)
                         self.assertTrue(g["inside"], where)
                         self.assertEqual(g["overlap"], 0, f"the eye overlaps the text area: {where}")
-                        self.assertEqual(g["side"], expected_end, f"eye must sit at the input's own inline end: {where}")
+                        self.assertEqual(g["side"], expected_end, f"eye must sit on the physical right: {where}")
+                        self.assertEqual(page.eval_on_selector("#" + field_id, "e => [getComputedStyle(e).direction, getComputedStyle(e).textAlign]"), ["ltr", "left"], where)
                     self.assertEqual(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), True, "no horizontal page scroll")
                 finally:
                     ctx.close()
