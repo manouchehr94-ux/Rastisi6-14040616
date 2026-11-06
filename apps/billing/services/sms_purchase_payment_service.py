@@ -185,6 +185,9 @@ def settle_free_purchase(purchase, *, actor=None):
         raise PaymentFlowError("این خرید در وضعیتِ قابلِ‌پرداخت نیست.")
     if locked.price != 0:
         raise PaymentFlowError("این خرید مبلغِ صفر ندارد و باید پرداخت شود.")
+    balance_service._locked_balance(locked.store)                      # همان قفلِ request_purchase/complete_purchase: دو تسویه‌ی هم‌زمان پشتِ سرِ هم می‌شوند
+    if balance_service.free_package_already_redeemed(store=locked.store, package=locked.package, exclude_pk=locked.pk):
+        raise PaymentFlowError(balance_service.FREE_PACKAGE_ALREADY_REDEEMED_MESSAGE)   # یک بسته‌ی رایگان = یک‌بار برای هر فروشگاه
     completed = balance_service.complete_purchase(purchase=locked, actor=actor, note="بسته‌ی رایگان (مبلغِ صفر)")
     record_audit_event(
         store=locked.store, actor=actor, action_code="billing.sms_free_purchase_settled",

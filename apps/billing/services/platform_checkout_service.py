@@ -137,6 +137,11 @@ def state(target: Target, *, now=None) -> CheckoutState:
     if terminal == CLOSED:
         return CheckoutState(CLOSED, "bad", "این خرید بسته شده است", "امکانِ پرداخت برای این مورد وجود ندارد؛ از ابتدا خرید کنید.", False)
 
+    if target.amount == 0 and target.kind != KIND_SUBSCRIPTION:
+        from apps.sms.services import balance_service
+
+        if balance_service.free_package_already_redeemed(store=target.obj.store, package=target.obj.package, exclude_pk=target.obj.pk):
+            return CheckoutState(CLOSED, "bad", "این بسته‌ی رایگان قبلاً فعال شده است", balance_service.FREE_PACKAGE_ALREADY_REDEEMED_MESSAGE, False)
     if target.amount == 0:
         return CheckoutState(
             PAYABLE, "info", "بدونِ مبلغِ پرداختی",

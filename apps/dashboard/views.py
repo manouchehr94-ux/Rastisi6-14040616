@@ -4881,11 +4881,20 @@ def settings_sms_package_purchase(request):
     if package.price > 0 and not _platform_gateway_options("sms_package", store):      # بسته‌ی قیمت‌صفر به درگاه نیاز ندارد
         messages.error(request, "در حال حاضر هیچ روشِ پرداختی برای خریدِ بسته‌ی پیامک فعال نیست؛ بعداً دوباره تلاش کنید.")
         return redirect(_SMS_SETTINGS_PATH)
-    # خریدِ pendingِ همان بسته دوباره استفاده می‌شود (انباشتِ ردیفِ تکراری ممنوع).
-    purchase = (
-        store.sms_package_purchases.filter(package=package, status=SmsPackagePurchase.Status.PENDING)
-        .order_by("-created_at").first()
-    ) or balance_service.request_purchase(store=store, package=package)
+    # خریدِ pendingِ همان بسته دوباره استفاده می‌شود (انباشتِ ردیفِ تکراری ممنوع). بسته‌ی قیمت‌صفر همیشه از ``request_purchase`` (زیرِ قفل) عبور می‌کند:
+    # هر فروشگاه آن را فقط یک‌بار می‌گیرد و درخواستِ هم‌زمان هرگز دو خرید نمی‌سازد.
+    try:
+        purchase = (
+            None if package.price == 0 else
+            store.sms_package_purchases.filter(package=package, status=SmsPackagePurchase.Status.PENDING).order_by("-created_at").first()
+        ) or balance_service.request_purchase(store=store, package=package)
+    except balance_service.FreePackageAlreadyRedeemed as exc:
+        from apps.core.services.audit_service import record_audit_event
+
+        record_audit_event(store=store, actor=request.user, action_code="billing.sms_free_purchase_blocked", object_type="SmsPackage",
+                           object_id=package.pk, object_label=package.name, after={"reason": "free_package_already_redeemed"})
+        messages.error(request, str(exc))
+        return redirect(_SMS_SETTINGS_PATH)
     return redirect(checkout_url(pcs.KIND_SMS, purchase.pk))
 
 

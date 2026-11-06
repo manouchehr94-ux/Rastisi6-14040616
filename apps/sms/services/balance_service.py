@@ -59,9 +59,42 @@ def list_active_packages():
     return SmsPackage.objects.filter(is_active=True).order_by("display_order", "credit_amount")
 
 
+class FreePackageAlreadyRedeemed(Exception):
+    """بسته‌ی **قیمت‌صفر** برای این فروشگاه قبلاً فعال شده است (هر فروشگاه هر بسته‌ی رایگان را فقط یک‌بار می‌گیرد)."""
+
+
+FREE_PACKAGE_ALREADY_REDEEMED_MESSAGE = "این بسته‌ی رایگان قبلاً برای این فروشگاه فعال شده است و دوباره قابل دریافت نیست."
+
+
+def free_package_already_redeemed(*, store, package, exclude_pk=None) -> bool:
+    """آیا همین فروشگاه همین بسته را با **قیمتِ صفر** پیشتر گرفته است؟ (تکمیل‌شده یا بازپرداخت‌شده؛ بازپرداخت، حقِ دوباره‌گرفتن نمی‌دهد.)
+
+    سیاستِ ایمن و صریح: بسته‌ی قیمت‌صفر یک «هدیه‌ی یک‌باره» برای هر فروشگاه است؛ تکرارِ نامحدود = اعتبارِ نامحدود. تکرارِ دوره‌ای (مثلاً ماهانه) نیازمندِ
+    تصمیمِ مالک است و تا آن زمان غیرفعال می‌ماند. خریدهایِ پیشینِ تکمیل‌شده هرگز تغییر نمی‌کنند؛ فقط خریدِ **جدید** مسدود می‌شود."""
+    qs = SmsPackagePurchase.objects.filter(
+        store=store, package=package, price=0,
+        status__in=(SmsPackagePurchase.Status.COMPLETED, SmsPackagePurchase.Status.REFUNDED),
+    )
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    return qs.exists()
+
+
+@transaction.atomic
 def request_purchase(*, store, package: SmsPackage) -> SmsPackagePurchase:
     """درخواستِ خریدِ یک بسته را با وضعیتِ ``pending`` ثبت می‌کند — اعتباری
-    فوراً افزوده نمی‌شود (نگاه کنید به ``SmsPackagePurchase`` docstring)."""
+    فوراً افزوده نمی‌شود (نگاه کنید به ``SmsPackagePurchase`` docstring).
+
+    بسته‌ی **قیمت‌صفر**: زیرِ قفلِ ردیفِ موجودیِ همان فروشگاه (درخواست‌هایِ هم‌زمان پشتِ سرِ هم می‌شوند) یا
+    ``FreePackageAlreadyRedeemed`` می‌دهد، یا همان خریدِ pendingِ موجود را برمی‌گرداند (هرگز دو pending)."""
+    if package.price == 0:
+        _locked_balance(store)
+        if free_package_already_redeemed(store=store, package=package):
+            raise FreePackageAlreadyRedeemed(FREE_PACKAGE_ALREADY_REDEEMED_MESSAGE)
+        existing = (SmsPackagePurchase.objects.filter(store=store, package=package, price=0, status=SmsPackagePurchase.Status.PENDING)
+                    .order_by("-created_at").first())
+        if existing is not None:
+            return existing
     return SmsPackagePurchase.objects.create(
         store=store, package=package,
         credit_amount=package.credit_amount, price=package.price,
