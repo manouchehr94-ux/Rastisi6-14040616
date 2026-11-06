@@ -84,7 +84,7 @@ Screenshot folders (in the session scratchpad): `ui_admin_tables_20261106` (indu
 
 ## S7. Outstanding risks and owner decisions
 1. **Privacy policy** is a draft with 17 "needs owner confirmation" markers; **legal approval is required before public release** (`privacy.approved` stays off until then).
-2. **Custom industry name** ("سایر" is a catalog entry only) — decide whether to add a free-text field.
+2. ~~Custom industry name~~ — implemented in the final-validation round (see `FINAL_VALIDATION_20261106.md`, FV2); wording/limits (2–80 characters) are a product choice you may adjust.
 3. Public `/design/` now shows only the 19 approved templates (a documented product reversal); Platform Admin's per-template public-site editor still lists all registered templates.
 4. Legacy plan prices stay absolute until the owner converts them (owner-review path).
 5. Baseline failures that remain (not caused by this work): `InFlightDeliveryConcurrencyTests` (3), `test_coupon_concurrency` (1) — OTP-resend and campaign-email concerns; worth a separate ticket.
@@ -95,3 +95,5 @@ Screenshot folders (in the session scratchpad): `ui_admin_tables_20261106` (indu
 ## S8. Final readiness
 **Ready for the Platform Owner's isolated QA, with owner decisions pending (S7 items 1–3).** It is **not** production-ready: the privacy policy awaits legal approval, no Windows QA exists, and nothing was pushed.
 - Integrated QA branch final SHA: `845fb33c16d9c0e12fed932f83d010eb979bc163`
+
+> **Superseded for hand-off by `docs/qa/FINAL_VALIDATION_20261106.md`** (branch `qa/final-validation-20261106`), which adds the zero-price SMS policy, custom industry name, security evidence, 640-row pagination test and the current Windows QA bundle. The full 13,787-test regression is still **NOT COMPLETE**.
