@@ -50,7 +50,7 @@
           <div class="pco-line"><span>{{ label }}</span><span>{{ amount|toman }}</span></div>
           {% endfor %}
         </div>
-        <div class="pco-total"><span>مبلغِ قابلِ پرداخت</span><b data-testid="payable-amount">{{ target.amount|toman }}</b></div>
+        <div class="pco-total"><span>{% if state.code == 'paid' %}مبلغِ پرداخت‌شده{% elif state.code == 'refunded' or state.code == 'closed' %}مبلغِ خرید{% else %}مبلغِ قابلِ پرداخت{% endif %}</span><b data-testid="payable-amount">{{ target.amount|toman }}</b></div>
         <p class="pco-meta" style="margin:10px 0 0">مبلغ را سرور از فاکتور/بسته می‌خواند؛ هیچ مبلغی از مرورگر پذیرفته نمی‌شود.</p>
       </div>
     </section>

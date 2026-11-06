@@ -13,6 +13,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from apps.billing.models import PlatformManualPaymentClaim as Claim, SubscriptionInvoice
+from apps.core.utils import format_toman
 from apps.portal.services import platform_gateway_service as pgs
 
 KIND_SUBSCRIPTION = "subscription"
@@ -71,7 +72,8 @@ def invoice_target(invoice) -> Target:
         kind=KIND_SUBSCRIPTION, obj=invoice, store=invoice.store, purchase_type=pgs.PURCHASE_SUBSCRIPTION,
         title=f"اشتراک — {plan_version.plan.public_title or plan_version.plan.name}" if plan_version is not None else f"فاکتور {invoice.number}",
         subtitle=" · ".join(x for x in (f"فاکتور {invoice.number}", invoice.get_kind_display(), interval) if x),
-        amount=Decimal(invoice.amount_due), currency=invoice.currency, lines=lines,
+        # قابلِ پرداخت = باقی‌مانده؛ پس از پرداخت/بازپرداخت باقی‌مانده صفر است و جمعِ فاکتور نمایش داده می‌شود (نه «۰ تومان»)
+        amount=Decimal(invoice.amount_due if invoice.is_payable else invoice.grand_total), currency=invoice.currency, lines=lines,
     )
 
 
@@ -79,9 +81,9 @@ def sms_target(purchase) -> Target:
     return Target(
         kind=KIND_SMS, obj=purchase, store=purchase.store, purchase_type=pgs.PURCHASE_SMS,
         title=f"بسته‌ی پیامک «{purchase.package.name}»",
-        subtitle=f"{purchase.credit_amount} اعتبار پیامک",
+        subtitle=f"{format_toman(purchase.credit_amount, with_unit=False)} اعتبار پیامک",
         amount=Decimal(purchase.price), currency="IRT",
-        lines=((f"بسته‌ی «{purchase.package.name}» — {purchase.credit_amount} اعتبار", Decimal(purchase.price)),),
+        lines=((f"بسته‌ی «{purchase.package.name}» — {format_toman(purchase.credit_amount, with_unit=False)} اعتبار", Decimal(purchase.price)),),
     )
 
 

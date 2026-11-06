@@ -20,7 +20,7 @@ from apps.billing.models import (
     PlatformManualPaymentClaim as Claim, SubscriptionInvoice, SubscriptionPaymentAttempt,
 )
 from apps.billing.services import manual_card_service as mcs
-from apps.billing.services import payment_flow_service, sms_purchase_payment_service
+from apps.billing.services import payment_flow_service, platform_checkout_service as pcs, sms_purchase_payment_service
 from apps.billing.tests.platform_payment_support import (
     STORE_MERCHANT, open_invoice_for, patch_zibal, ready_platform_zarinpal, ready_platform_zibal,
 )
@@ -108,8 +108,7 @@ class CheckoutBase(TestCase):
         """How many times the purchase effect was applied (0 or 1 by design)."""
         if kind == SUB:
             return int(SubscriptionInvoice.objects.get(pk=self.invoice.pk).amount_paid > 0)
-        return SmsCreditLedger.objects.filter(purchase=self.purchase).count() if hasattr(SmsCreditLedger, "purchase") else (
-            SmsBalance.objects.get(store=self.store).credits - 100) // SMS_CREDITS
+        return SmsCreditLedger.objects.filter(purchase=self.purchase).count()
 
     def paid_now(self, kind):
         if kind == SUB:
@@ -239,6 +238,10 @@ class MethodVisibilityTests(CheckoutBase):
 
 
 class PageContentTests(CheckoutBase):
+    def test_the_portal_handoff_path_equals_the_dashboard_route(self):
+        for kind in (SUB, SMS):
+            self.assertEqual(pcs.checkout_path(kind, 17), reverse("dashboard:platform-checkout", args=[kind, 17]))
+
     def test_summary_shows_the_server_amount_the_product_and_never_the_platform_admin_shell(self):
         ready_platform_zibal(self)
         for kind in KINDS:
@@ -270,11 +273,6 @@ class PageContentTests(CheckoutBase):
                 sent = self.fake.calls_to("request")[-1]
                 self.assertEqual(sent["amount"], self.price(kind) * 10)           # toman → rial happens server-side only
                 self.fake.calls.clear()
-                attempt.delete() if False else None
-                break                                                            # one attempt per product is enough; cleanup below
-        for kind in (SMS,):
-            self.owner_client.post(self.url(kind, "pay"), {"method": "zibal", "amount": "1"})
-            self.assertEqual(int(self.attempts(kind).latest("pk").amount), SMS_PRICE)
 
 
 class CrossTenantTests(CheckoutBase):
@@ -313,8 +311,6 @@ class OnlineFlowTests(CheckoutBase):
     def test_pay_redirects_to_the_gateway_and_returns_to_the_checkout_page_and_applies_nothing_yet(self):
         for kind in KINDS:
             with self.subTest(kind=kind):
-                if kind == SMS:
-                    self.attempts(SUB).delete() if False else None
                 ready_platform_zibal(self)
                 self.fake.calls.clear()
                 response = self.pay(kind, "zibal")
@@ -340,7 +336,10 @@ class OnlineFlowTests(CheckoutBase):
                     self.callback(attempt)
                 self.assertTrue(self.paid_now(kind))
                 self.assertEqual(self.effect_count(kind), 1)
-                self.assertContains(self.page(kind), 'data-state="paid"')
+                final = self.page(kind).content.decode()
+                self.assertIn('data-state="paid"', final)
+                self.assertIn("مبلغِ پرداخت‌شده", final)                      # shows what was paid, never «۰ تومان»
+                self.assertIn("۳۰۰٬۰۰۰" if kind == SUB else "۱۵۰٬۰۰۰", final)
         self.assertEqual(self.credits(), 100 + SMS_CREDITS)
 
     def _sms_attempt(self):
@@ -521,7 +520,7 @@ class ManualCardToCardTests(CheckoutBase):
         return self.admin_client.post(f"/payments/card-claims/{claim.pk}/{action}/", data)
 
     def test_the_claim_page_shows_only_the_platform_account_the_exact_amount_and_the_way_back(self):
-        cfg = PaymentGatewayConfig.objects.create(store=self.store, gateway_code="card_to_card", is_active=True)
+        PaymentGatewayConfig.objects.create(store=self.store, gateway_code="card_to_card", is_active=True)
         for kind in KINDS:
             with self.subTest(kind=kind):
                 html = self.owner_client.get(self.claim_url(kind)).content.decode()
@@ -558,7 +557,10 @@ class ManualCardToCardTests(CheckoutBase):
                 self.review(claim, "approve", bank_reference=f"BANK-{kind}-0001", confirmed_amount=amount)
                 self.assertTrue(self.paid_now(kind))
                 self.assertEqual(self.effect_count(kind), 1)
-                self.assertContains(self.page(kind), 'data-state="paid"')
+                final = self.page(kind).content.decode()
+                self.assertIn('data-state="paid"', final)
+                self.assertIn("مبلغِ پرداخت‌شده", final)                      # shows what was paid, never «۰ تومان»
+                self.assertIn("۳۰۰٬۰۰۰" if kind == SUB else "۱۵۰٬۰۰۰", final)
         self.assertEqual(self.credits(), 100 + SMS_CREDITS)
         self.assertEqual(SmsCreditLedger.objects.filter(purchase=self.purchase).count(), 1)
         self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).amount_paid, SUB_PRICE)
@@ -677,7 +679,7 @@ class PlanChangeThroughCheckoutTests(CheckoutBase):
     def test_a_downgrade_needs_no_payment_even_with_no_method_ready(self):
         from apps.subscriptions.services import subscription_service as ss
 
-        ss.change_plan_version(self.sub2, self.v2) if hasattr(ss, "change_plan_version") else None
+        ss.change_plan_version(self.sub2, self.v2)                                    # start on the higher plan
         response = self.client2.post("/admin-portal/subscription/plans/preview/", {"version_id": self.v1.pk})
         token = response.context["preview"]["token"]
         response = self.client2.post("/admin-portal/subscription/plans/change/", {"version_id": self.v1.pk, "preview_token": token})

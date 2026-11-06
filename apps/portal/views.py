@@ -23,7 +23,6 @@ from apps.catalog.models import IndustryTemplate, StoreIndustryInstallation
 from apps.catalog.services import industry_catalog_service, template_summary_service
 from apps.storefront_builder.services import ready_template_card_service, store_template_service
 from apps.billing.models import SubscriptionPaymentAttempt
-from apps.billing.services import payment_flow_service
 from apps.billing.services import plan_change_billing_service
 from apps.stores.hostnames import build_cross_host_url
 from apps.stores.models import Store, StoreDomain, StoreMembership, StoreOwnershipTransfer
