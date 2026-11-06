@@ -19,7 +19,7 @@ Evidence labels: `FIXED_AND_VERIFIED`, `ALREADY_FIXED` (verified), `REPRODUCED`,
 | `security/tenant-isolation-20261106` | `c435803724003d7c7ae97311f28696167bbd987e` | tenant-isolation verification + refund-key fix |
 | `dev/pricing-simplify-20261106` | `4c6066bd75a5a75aa82bcbbf65b276087fc9e81a` | monthly price + 3/6/12-month discounts |
 | `ux/platform-merchant-remediation-20261106` | `a5496e44fa3556be026a65decf4649c543758fc8` | Platform/Merchant/public UX, privacy draft, test fixes |
-| `qa/integrated-remediation-20261106` | see the last line of this report | the three branches merged onto Checkout, for QA |
+| `qa/integrated-remediation-20261106` | `845fb33c16d9c0e12fed932f83d010eb979bc163` (the commit after this report is only this line) | the three branches merged onto Checkout, for QA |
 
 Commits: security 1; pricing 1; UX 8 (tables/filters/transactions · passwords · date pickers · public templates + heroes · privacy draft · onboarding verification doc · header hint · SMTP test port).
 Migrations (both safe): `orders.0022_refund_idempotency_key_per_store` (replaces a global unique constraint by `(store, key)` — strictly weaker, no data change) and
@@ -94,3 +94,4 @@ Screenshot folders (in the session scratchpad): `ui_admin_tables_20261106` (indu
 
 ## S8. Final readiness
 **Ready for the Platform Owner's isolated QA, with owner decisions pending (S7 items 1–3).** It is **not** production-ready: the privacy policy awaits legal approval, no Windows QA exists, and nothing was pushed.
+- Integrated QA branch final SHA: `845fb33c16d9c0e12fed932f83d010eb979bc163`
