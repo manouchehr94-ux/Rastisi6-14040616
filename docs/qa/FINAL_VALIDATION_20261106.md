@@ -23,7 +23,7 @@ later attempts are refused (audit `billing.sms_free_purchase_blocked`). Existing
 * Storage: `StoreIndustryInstallation.custom_industry_name` (`CharField(80, blank, default="")`), additive migration `catalog.0043`. Existing installs keep a blank name and keep showing the template name; ordinary templates ignore a forged name (stored blank).
 * Entry points: onboarding step and merchant-admin settings install; both pass the name only for the `other` template. Installed summaries show the name (and the base template on the onboarding summary).
 * Tenant isolation: the name lives on the store's own installation row; another owner gets 404 on this store's onboarding URL.
-* Tests: `apps/portal/tests/test_custom_industry_name.py` (28) + dashboard settings tests (+4) + opt-in Chromium `test_custom_industry_browser.py` (4: field follows the selected card, button disabled until a valid name, ordinary industry needs no name, server rejects a bad name when the client check is bypassed and keeps the typed value without injecting markup).
+* Tests: `apps/portal/tests/test_custom_industry_name.py` (19 test methods, several with sub-cases) + 4 new tests in the dashboard settings module (15 in total) + opt-in Chromium `test_custom_industry_browser.py` (4: field follows the selected card, button disabled until a valid name, ordinary industry needs no name, server rejects a bad name when the client check is bypassed and keeps the typed value without injecting markup).
 
 ## FV3 — cross-tenant evidence
 Full tables, fixtures and limits: `docs/security/TENANT_ISOLATION_EVIDENCE_20261106.md`; raw JSON in `docs/security/evidence/`.
@@ -45,7 +45,7 @@ The previous implementation passed the same test, so this was **not a defect**; 
 | FV1 `apps.billing.tests.test_sms_free_package_policy` (policy 13 + PG concurrency 2) | 15 |
 | FV2 `apps.portal.tests.test_custom_industry_name`, `apps.dashboard.tests.test_industry_settings_views` | 34 |
 | FV2 Chromium `apps.portal.tests.test_custom_industry_browser` (`SFB_BROWSER_TESTS=1`) | 4 |
-| FV3 `test_tenant_isolation_regression` (non-PG 10) + `test_strix_scenario_evidence` (HTTP + refund 2) | 14 |
+| FV3 `test_tenant_isolation_regression` (non-PG classes, 12) + `test_strix_scenario_evidence` (HTTP + refund, 2) | 14 |
 | FV3 PostgreSQL concurrency: regression class 2 + evidence class 2 (each run alone) | 4 |
 | FV4 `test_transactions_pagination_large` (9) + `test_platform_admin_tables` (13) | 22 |
 | FV5/regression `test_payment_migration_compat`, `test_onboarding_journey`, `test_mandatory_industry`, `test_onboarding_industry_ux`, catalog industry service + registry readiness | 91 |
