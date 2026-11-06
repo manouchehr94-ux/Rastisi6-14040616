@@ -123,6 +123,11 @@ a.ob-step-link:hover .ob-step-text{color:var(--rs-brand)}
 .ob-ic-meta{margin-top:auto;padding-top:8px;color:var(--rs-muted);font-size:12px}
 .ob-ic-check{position:absolute;top:10px;inset-inline-end:10px;display:none;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--rs-brand);color:var(--rs-surface);font-size:13px}
 .ob-industry-card.is-selected .ob-ic-check{display:grid}
+.ob-custom-industry{margin:14px 0;padding:14px 16px;border:1px solid var(--rs-line);border-radius:var(--rs-radius-md);background:var(--rs-surface)}
+.ob-custom-industry[hidden]{display:none}
+.ob-custom-industry label{display:block;margin-bottom:6px}
+.ob-custom-industry input{width:100%;max-width:420px;min-height:44px;padding:8px 12px;border:1px solid var(--rs-line);border-radius:var(--rs-radius-sm,8px);font:inherit}
+.ob-custom-industry.has-error input{border-color:var(--rs-danger)}
 .ob-industry-empty{padding:28px;border:1px dashed var(--rs-line);border-radius:var(--rs-radius-md);color:var(--rs-muted);text-align:center;font-size:14px}
 
 .ob-note{margin:0;padding:10px 14px;border-inline-start:3px solid var(--rs-brand);background:var(--rs-soft);color:var(--rs-muted);font-size:12.5px;line-height:1.9}

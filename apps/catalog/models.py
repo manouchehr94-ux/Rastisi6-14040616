@@ -1867,6 +1867,9 @@ class StoreIndustryInstallation(TimeStampedModel):
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.COMPLETED)
     categories_created = models.PositiveIntegerField("تعداد دسته‌بندی ساخته‌شده", default=0)
     attributes_created = models.PositiveIntegerField("تعداد ویژگی ساخته‌شده", default=0)
+    #: نامِ واقعیِ صنفی که فروشنده برای «سایر (صنف آزاد)» وارد کرده. فقط برای قالبِ «other» پر می‌شود؛
+    #: خالی = نصب‌های قدیمی/قالب‌های معمولی (سازگار با داده‌های موجود؛ هیچ داده‌ای بازنویسی نمی‌شود).
+    custom_industry_name = models.CharField("نامِ صنفِ آزاد", max_length=80, blank=True, default="")
 
     class Meta:
         verbose_name = "نصب قالب صنف"

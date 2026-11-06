@@ -4,7 +4,7 @@
   <div class="card-body">
     {% if industry_installation %}
     <div class="info-box">
-      <b>صنف:</b> {{ industry_installation.installation.industry_template.name }}<br>
+      <b>صنف:</b> {% if industry_installation.installation.custom_industry_name %}{{ industry_installation.installation.custom_industry_name }}{% else %}{{ industry_installation.installation.industry_template.name }}{% endif %}<br>
       <b>قالب نصب‌شده:</b> {{ industry_installation.installation.industry_template.name }}
       (نسخه {{ industry_installation.installation.installed_version|fa_number }})<br>
       <b>وضعیت نصب:</b>
@@ -48,6 +48,8 @@
           <form method="post" action="{% url 'dashboard:settings-industry-install' template.pk %}"
                 onsubmit="return confirm('نصب الگوی «{{ template.name }}» ساختار کاتالوگ فروشگاه شما را می‌سازد. ادامه می‌دهید؟');">
             {% csrf_token %}
+            {% if template.slug == "other" %}<input type="text" name="custom_industry_name" maxlength="80" minlength="2" required autocomplete="off" class="input"
+                   placeholder="نامِ صنفِ شما" aria-label="نامِ صنفِ شما" data-testid="custom-industry-name">{% endif %}
             <button type="submit" class="btn btn-primary btn-sm">نصب</button>
           </form>
         </div>

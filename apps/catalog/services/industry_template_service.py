@@ -41,10 +41,60 @@ def can_install_industry_template(store) -> None:
         )
 
 
+OTHER_INDUSTRY_SLUG = "other"
+CUSTOM_INDUSTRY_NAME_MAX_LENGTH = 80
+CUSTOM_INDUSTRY_NAME_MIN_LENGTH = 2
+CUSTOM_INDUSTRY_NAME_REQUIRED_MESSAGE = "برای «سایر (صنف آزاد)» نامِ صنفِ خودتان را بنویسید؛ مثلاً «لوازم‌التحریرِ هنری»."
+CUSTOM_INDUSTRY_NAME_TOO_SHORT_MESSAGE = "نامِ صنف باید دست‌کم ۲ نویسه باشد."
+CUSTOM_INDUSTRY_NAME_TOO_LONG_MESSAGE = f"نامِ صنف حداکثر {CUSTOM_INDUSTRY_NAME_MAX_LENGTH} نویسه می‌تواند باشد."
+CUSTOM_INDUSTRY_NAME_INVALID_MESSAGE = "نامِ صنف فقط می‌تواند شاملِ حروف، عدد و نشانه‌هایِ معمولیِ نگارشی باشد."
+
+
+def is_other_industry(industry_template) -> bool:
+    return getattr(industry_template, "slug", "") == OTHER_INDUSTRY_SLUG
+
+
+def validate_custom_industry_name(raw) -> str:
+    """نامِ آزادِ صنف را پاکسازی و اعتبارسنجی می‌کند و مقدارِ نرمال‌شده را برمی‌گرداند (وگرنه ``IndustryInstallationError``).
+
+    * فاصله‌هایِ اضافه (از جمله نیم‌فاصله‌یِ تکراری/کنترل‌ها) فشرده می‌شود؛ ي/ك عربی به ی/ک فارسی تبدیل می‌شود؛
+    * طول ۲..۸۰؛ نویسه‌هایِ کنترلی/نشانه‌گذاری (``<``، ``>`` و …) رد می‌شود (نام در قالب‌ها escape می‌شود، این دفاعِ دوم است)؛
+    * فقط حرف/عدد (هر زبان) و فاصله و «‌ - _ . , ، & ( ) /» پذیرفته می‌شود.
+    """
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKC", str(raw or "")).replace("ي", "ی").replace("ك", "ک")
+    if any(unicodedata.category(ch) in {"Cc", "Cs", "Co"} for ch in text.replace("\u200c", "").replace("\t", " ")):
+        raise IndustryInstallationError(CUSTOM_INDUSTRY_NAME_INVALID_MESSAGE)
+    text = re.sub(r"\u200c+", "\u200c", re.sub(r"\s+", " ", text)).strip(" \u200c")
+    if not text:
+        raise IndustryInstallationError(CUSTOM_INDUSTRY_NAME_REQUIRED_MESSAGE)
+    if len(text) < CUSTOM_INDUSTRY_NAME_MIN_LENGTH:
+        raise IndustryInstallationError(CUSTOM_INDUSTRY_NAME_TOO_SHORT_MESSAGE)
+    if len(text) > CUSTOM_INDUSTRY_NAME_MAX_LENGTH:
+        raise IndustryInstallationError(CUSTOM_INDUSTRY_NAME_TOO_LONG_MESSAGE)
+    allowed_punctuation = " \u200c()-.,،&/"
+    # حروف/ارقامِ هر زبان + اعراب (Mn/Mc، مثل کسره‌ی «ِ» که در «لوازم‌التحریرِ» می‌آید)؛ `\w` اعراب را نمی‌پذیرد، پس دستی بررسی می‌شود
+    if not all(ch.isalnum() or ch in allowed_punctuation or unicodedata.category(ch) in {"Mn", "Mc"} for ch in text):
+        raise IndustryInstallationError(CUSTOM_INDUSTRY_NAME_INVALID_MESSAGE)
+    if not any(ch.isalpha() for ch in text):
+        raise IndustryInstallationError(CUSTOM_INDUSTRY_NAME_INVALID_MESSAGE)
+    return text
+
+
 @transaction.atomic
-def install_industry_template(store, industry_template: IndustryTemplate) -> InstallationResult:
-    """قالب صنف را روی Store نصب می‌کند — کاملاً اتمیک؛ در خطا هیچ تغییری ثبت نمی‌شود."""
+def install_industry_template(store, industry_template: IndustryTemplate, *, custom_name=None) -> InstallationResult:
+    """قالب صنف را روی Store نصب می‌کند — کاملاً اتمیک؛ در خطا هیچ تغییری ثبت نمی‌شود.
+
+    برایِ قالبِ «سایر (صنف آزاد)» نامِ واقعیِ صنف (``custom_name``) الزامی و اعتبارسنجی‌شده است؛ برایِ هر قالبِ دیگری
+    نادیده/خالی ذخیره می‌شود (فروشنده‌ی صنفِ مشخص نمی‌تواند نامِ آزاد را جعل کند). ``custom_name=None`` برایِ فراخوانی‌هایِ
+    قدیمی (seed/مهاجرت/تست) فقط در «other» خطا نمی‌دهد: آن‌جا خالی ذخیره می‌شود تا نصب‌هایِ برنامه‌ریزی‌شده نشکنند —
+    ولی دو نقطه‌ی ورودیِ فروشنده (آنبوردینگ و تنظیماتِ داشبورد) همیشه ``custom_name`` را (حتی خالی) می‌فرستند."""
     can_install_industry_template(store)
+    stored_custom_name = ""
+    if is_other_industry(industry_template) and custom_name is not None:
+        stored_custom_name = validate_custom_industry_name(custom_name)
     if not industry_template.is_offerable_for_new_installation:
         raise IndustryInstallationError(
             f"قالب صنف «{industry_template.name}» در وضعیت «{industry_template.readiness}» است و برای نصب در "
@@ -153,7 +203,7 @@ def install_industry_template(store, industry_template: IndustryTemplate) -> Ins
 
     installation = StoreIndustryInstallation.objects.create(
         store=store, industry_template=industry_template, installed_version=industry_template.version,
-        status=StoreIndustryInstallation.Status.COMPLETED,
+        status=StoreIndustryInstallation.Status.COMPLETED, custom_industry_name=stored_custom_name,
         categories_created=len(categories_created), attributes_created=len(attributes_created),
     )
 

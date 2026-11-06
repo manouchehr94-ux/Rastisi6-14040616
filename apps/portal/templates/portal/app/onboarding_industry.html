@@ -14,7 +14,8 @@
   <div class="ob-installed">
     <span class="ob-ic-icon" aria-hidden="true">{{ installed_summary.icon|default:"🏷️" }}</span>
     <div>
-      <h3>{{ installation.industry_template.name }}</h3>
+      <h3>{% if installation.custom_industry_name %}{{ installation.custom_industry_name }}{% else %}{{ installation.industry_template.name }}{% endif %}</h3>
+      {% if installation.custom_industry_name %}<p>قالبِ پایه: {{ installation.industry_template.name }}</p>{% endif %}
       <p>{{ installed_summary.sector_label }} · نسخه‌ی {{ installation.installed_version }}</p>
       <p>{{ installation.categories_created }} دسته‌بندی و {{ installation.attributes_created }} ویژگی ساخته شد. می‌توانید آن‌ها را از پنلِ مدیریت ویرایش کنید؛ نصبِ قالبِ دیگری ممکن نیست.</p>
     </div>
@@ -45,7 +46,7 @@
 
     <div class="ob-industry-list" role="radiogroup" aria-label="فهرستِ صنف‌ها">
       {% for card in template_cards %}
-      <label class="ob-industry-card" data-ob-card data-id="{{ card.id }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
+      <label class="ob-industry-card" data-ob-card data-id="{{ card.id }}" data-slug="{{ card.slug }}" data-name="{{ card.name }}" data-sector="{{ card.sector }}" data-sector-label="{{ card.sector_label }}">
         <input type="radio" name="industry_template_id" value="{{ card.id }}"{% if selected_template_id == card.id|stringformat:'s' %} checked{% endif %}>
         <span class="ob-ic-check" aria-hidden="true">✓</span>
         <span class="ob-ic-icon" aria-hidden="true">{{ card.icon|default:"🏷️" }}</span>
@@ -55,6 +56,15 @@
         <span class="ob-ic-meta">{{ card.category_count }} دسته‌بندی</span>
       </label>
       {% endfor %}
+    </div>
+    {# «سایر (صنف آزاد)»: نامِ واقعیِ صنف؛ فقط با انتخابِ همین کارت نشان داده می‌شود (مرجعِ اعتبارسنجی سرور است) #}
+    <div class="ob-custom-industry{% if custom_name_error %} has-error{% endif %}" data-ob-custom-industry{% if not custom_name_error %} hidden{% endif %}>
+      <label for="ob-custom-industry-name"><b>نامِ صنفِ شما</b> <span class="ob-required" aria-hidden="true">*</span></label>
+      <input type="text" id="ob-custom-industry-name" name="custom_industry_name" maxlength="80" minlength="2" autocomplete="off" data-ob-custom-input
+             value="{{ custom_industry_name }}" placeholder="مثلاً: لوازم‌التحریرِ هنری"
+             aria-describedby="ob-custom-industry-help{% if custom_name_error %} ob-custom-industry-error{% endif %}"{% if custom_name_error %} aria-invalid="true"{% endif %}>
+      <p class="ob-help" id="ob-custom-industry-help">اگر صنفِ شما در فهرست نیست، نامِ دقیقِ کسب‌وکارتان را بنویسید (۲ تا ۸۰ نویسه). این نام در تنظیماتِ فروشگاه ثبت می‌شود.</p>
+      {% if custom_name_error %}<p class="ob-error" id="ob-custom-industry-error" role="alert">{{ custom_name_error }}</p>{% endif %}
     </div>
     <div class="ob-industry-empty" data-ob-no-results hidden>صنفی با این جست‌وجو پیدا نشد. عبارتِ دیگری را امتحان کنید یا از فهرست، صنفِ «سایر» را انتخاب کنید.</div>
     <p class="ob-sr-only" role="status" data-ob-selection-status></p>

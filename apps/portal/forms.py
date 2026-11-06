@@ -487,6 +487,9 @@ class OnboardingIndustryForm(forms.Form):
     #: (رد کردن/ادامه‌ی حالتِ «نصب‌شده» آن را لازم ندارد)؛ مرجعِ اجرایی همین سمتِ سرور است.
     #: عمداً «فقط مقدارِ دقیقِ ۱» پذیرفته می‌شود (نه هر رشته‌ی غیرخالی؛ مثلاً "0"/"false" تأیید نیست).
     confirm_industry_install = forms.CharField(required=False)
+    #: نامِ واقعیِ صنف — فقط برایِ «سایر (صنف آزاد)» معنا دارد؛ اعتبارسنجیِ مرجع در
+    #: ``industry_template_service.validate_custom_industry_name`` است (سرور، نه JS). حدِّ بالا برایِ جلوگیریِ از بدنه‌یِ عظیم.
+    custom_industry_name = forms.CharField(required=False, max_length=400)
 
     def clean_confirm_industry_install(self):
         return (self.cleaned_data.get("confirm_industry_install") or "").strip() == "1"

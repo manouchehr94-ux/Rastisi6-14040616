@@ -32,7 +32,8 @@ def install_other_industry(store, *, drop_categories: bool = False) -> StoreIndu
     return installation
 
 
-def choose_other_industry(client, industry_url: str, host: str = "rastisi.localhost"):
-    """Pick «سایر (صنف آزاد)» through the real «صنف» step (what a seller whose business is not listed does)."""
+def choose_other_industry(client, industry_url: str, host: str = "rastisi.localhost", custom_name: str = "لوازم‌التحریرِ هنری"):
+    """Pick «سایر (صنف آزاد)» through the real «صنف» step (what a seller whose business is not listed does). The seller must also type the real
+    industry name (``custom_name``) — the server rejects «other» without it."""
     template = ensure_other_template()
-    return client.post(industry_url, {"industry_template_id": template.pk, "confirm_industry_install": "1"}, HTTP_HOST=host)
+    return client.post(industry_url, {"industry_template_id": template.pk, "confirm_industry_install": "1", "custom_industry_name": custom_name}, HTTP_HOST=host)

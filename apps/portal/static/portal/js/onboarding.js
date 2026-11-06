@@ -23,6 +23,14 @@
     var submit = document.querySelector('[data-ob-install-submit]');
     var status = root.querySelector('[data-ob-selection-status]');
     var sector = 'all';
+    var customBox = root.querySelector('[data-ob-custom-industry]');
+    var customInput = root.querySelector('[data-ob-custom-input]');
+
+    function isOtherSelected() {
+      var radio = root.querySelector('input[name="industry_template_id"]:checked');
+      var card = radio && radio.closest('[data-ob-card]');
+      return !!card && card.getAttribute('data-slug') === 'other';
+    }
 
     function selectedRadio() {
       return root.querySelector('input[name="industry_template_id"]:checked') || null;
@@ -31,6 +39,8 @@
     function refreshSubmit() {
       if (!submit) return;
       var ready = !!selectedRadio() && (!confirmBox || confirmBox.checked);
+      // «سایر»: بدونِ نامِ صنف (۲ نویسه‌ی غیرخالی) ادامه ممکن نیست — فقط تجربه‌ی کاربری؛ سرور دوباره اعتبارسنجی می‌کند
+      if (ready && isOtherSelected()) ready = !!customInput && customInput.value.trim().length >= 2;
       submit.disabled = !ready;
       submit.setAttribute('aria-disabled', ready ? 'false' : 'true');
     }
@@ -46,6 +56,11 @@
       if (confirmName) confirmName.textContent = name || 'هنوز انتخاب نشده';
       if (submit) submit.textContent = name ? ('نصبِ صنفِ «' + name + '»') : 'نصبِ صنفِ انتخاب‌شده';
       if (status) status.textContent = name ? ('صنف «' + name + '» انتخاب شد.') : '';
+      if (customBox) {
+        var other = isOtherSelected();
+        customBox.hidden = !other;
+        if (customInput) customInput.disabled = !other;   // a disabled field is not submitted: a non-«other» pick never carries a stale name
+      }
       refreshSubmit();
     }
 
@@ -75,6 +90,7 @@
       });
     });
     if (confirmBox) confirmBox.addEventListener('change', refreshSubmit);
+    if (customInput) customInput.addEventListener('input', refreshSubmit);
 
     showSelection();
     applyFilter();

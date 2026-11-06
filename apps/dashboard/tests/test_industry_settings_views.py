@@ -151,3 +151,36 @@ class IndustrySettingsPermissionTests(IndustrySettingsTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertNotIn("/admin-portal/login/", response.url)
         self.assertIn("admin_return=", response.url)
+
+class IndustrySettingsCustomNameTests(IndustrySettingsTestCase):
+    """«سایر (صنف آزاد)» in the merchant-admin settings path: the real industry name is required and validated server-side (FV2)."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.portal.tests._industry import ensure_other_template
+
+        self.other = ensure_other_template()
+        self.url = reverse("dashboard:settings-industry-install", args=[self.other.pk])
+
+    def test_the_other_card_renders_a_required_name_input_and_ordinary_cards_do_not(self):
+        html = self.client.get(reverse("dashboard:settings") + "?section=industry").content.decode()
+        self.assertEqual(html.count('name="custom_industry_name"'), 1)
+        self.assertIn("data-testid=\"custom-industry-name\"", html)
+
+    def test_other_without_a_valid_name_is_refused_and_installs_nothing(self):
+        for bad in ("", "  ", "ا", "<b>x</b>", "ا" * 81):
+            with self.subTest(name=bad):
+                response = self.client.post(self.url, {"custom_industry_name": bad})
+                self.assertEqual(response.status_code, 302)
+                self.assertFalse(StoreIndustryInstallation.objects.filter(store=self.store).exists())
+
+    def test_other_with_a_name_installs_and_the_settings_page_shows_it(self):
+        self.client.post(self.url, {"custom_industry_name": "  گالری   سفال "})
+        installation = StoreIndustryInstallation.objects.get(store=self.store)
+        self.assertEqual(installation.custom_industry_name, "گالری سفال")
+        html = self.client.get(reverse("dashboard:settings") + "?section=industry").content.decode()
+        self.assertIn("گالری سفال", html)
+
+    def test_an_ordinary_template_ignores_the_name(self):
+        self.client.post(reverse("dashboard:settings-industry-install", args=[self.template.pk]), {"custom_industry_name": "جعلی"})
+        self.assertEqual(StoreIndustryInstallation.objects.get(store=self.store).custom_industry_name, "")

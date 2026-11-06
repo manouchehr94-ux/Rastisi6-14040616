@@ -1480,6 +1480,7 @@ def onboarding_industry(request, store_public_id):
     می‌دهد؛ هرگز دوباره نصب صدا زده نمی‌شود (idempotent-safe در برابرِ
     GET/POST مکرر یا دکمه‌ی back مرورگر)."""
     from apps.catalog.models import StoreIndustryInstallation
+    from apps.catalog.services import industry_template_service
     from apps.catalog.services.industry_template_service import IndustryInstallationError, install_industry_template
 
     store = _get_owned_store_or_404(request, store_public_id)
@@ -1487,6 +1488,8 @@ def onboarding_industry(request, store_public_id):
     templates = provisioning_service.latest_offerable_industry_templates()
     selected_template_id = ""
     confirm_error = False
+    custom_industry_name = ""
+    custom_name_error = ""
 
     if request.method == "POST":
         # AUTH-001: EVERY mutating POST path through this step (installing a
@@ -1524,6 +1527,7 @@ def onboarding_industry(request, store_public_id):
             messages.error(request, "ابتدا یک صنف را انتخاب کنید؛ اگر صنفِ شما در فهرست نیست، «سایر (صنف آزاد)» را انتخاب کنید.")
         else:
             selected_template_id = str(template_id)
+            custom_industry_name = form.cleaned_data.get("custom_industry_name") or ""
             if not form.cleaned_data["confirm_industry_install"]:
                 # سمتِ سرور مرجعِ تأیید است: بدونِ تأییدِ صریحِ «نصبِ یک‌بارمصرف» هیچ نصبی انجام نمی‌شود
                 # (دکمه‌ی غیرفعال در JS فقط تجربه‌ی کاربری است).
@@ -1538,12 +1542,19 @@ def onboarding_industry(request, store_public_id):
                     messages.error(request, "این صنف در حال حاضر برای نصب در دسترس نیست؛ صنفِ دیگری انتخاب کنید یا این مرحله را رد کنید.")
                 else:
                     try:
-                        install_industry_template(store, template)
+                        # «سایر (صنف آزاد)»: نامِ واقعیِ صنف الزامی و سمتِ سرور اعتبارسنجی می‌شود (نصب اتمیک است؛ نامِ نامعتبر = هیچ نصبی)؛
+                        # برایِ هر قالبِ دیگری نامِ آزاد نادیده گرفته می‌شود.
+                        install_industry_template(
+                            store, template,
+                            **({"custom_name": custom_industry_name} if industry_template_service.is_other_industry(template) else {}),
+                        )
                     except IndustryInstallationError as exc:
                         if StoreIndustryInstallation.objects.filter(store=store).exists():
                             # دابل‌کلیک/درخواستِ هم‌زمان: نصبِ اول موفق بوده؛ خطا نشان نده، فقط جلو ببر.
                             _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
                             return redirect("portal:onboarding-template", store_public_id=store.public_id)
+                        if industry_template_service.is_other_industry(template):
+                            custom_name_error = str(exc)
                         messages.error(request, str(exc))
                     else:
                         _advance_onboarding_stage(store, completed=Store.OnboardingStage.INDUSTRY)
@@ -1561,6 +1572,7 @@ def onboarding_industry(request, store_public_id):
         **_onboarding_shell_context(store, Store.OnboardingStage.INDUSTRY),
         "template_cards": template_cards, "installation": installation, "installed_summary": installed_summary,
         "selected_template_id": selected_template_id, "confirm_error": confirm_error,
+        "custom_industry_name": custom_industry_name, "custom_name_error": custom_name_error,
         "industry_sector_tabs": _sector_tabs_for(template_cards), "registry_ready": registry_ready,
     })
 

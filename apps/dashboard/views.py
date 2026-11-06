@@ -4516,7 +4516,11 @@ def settings_industry_install(request, template_id):
     store = _resolve_dashboard_store(request)
     template = get_object_or_404(IndustryTemplate, pk=template_id)
     try:
-        install_industry_template(store, template)
+        # «سایر (صنف آزاد)»: نامِ واقعیِ صنف الزامی و سمتِ سرور اعتبارسنجی می‌شود؛ برایِ قالب‌هایِ دیگر نادیده گرفته می‌شود.
+        install_industry_template(
+            store, template,
+            **({"custom_name": request.POST.get("custom_industry_name", "")[:400]} if template.slug == "other" else {}),
+        )
     except IndustryInstallationError as exc:
         messages.error(request, str(exc))
     else:
