@@ -124,6 +124,80 @@ def clear_version_price(plan_version, billing_interval) -> None:
     PlanVersionPrice.objects.filter(plan_version_id=plan_version.pk, billing_interval=billing_interval).delete()
 
 
+def _pricing_summary(version) -> dict:
+    """Audit summary of a version's prices: ``{interval: "price[/discount%]"}`` (no secrets)."""
+    from apps.subscriptions.services import period_pricing
+
+    out = {}
+    for q in period_pricing.quotes(PlanVersion.objects.get(pk=version.pk)):
+        out[q.interval] = f"{q.final_price}" + (f"/{q.discount_percent}%" if q.discount_percent is not None else "")
+    return out
+
+
+@transaction.atomic
+def set_formula_pricing(plan_version, *, monthly_price, discounts=None, offered=None, keep_legacy=(), actor=None) -> PlanVersion:
+    """قیمت‌گذاریِ **فرمولی** رویِ نسخه‌ی *پیش‌نویس*: یک قیمتِ ماهانه + درصدِ تخفیفِ دوره‌هایِ ۳/۶/۱۲ ماهه (``period_pricing``).
+
+    * مبلغِ هر دوره همین‌جا (سرور) محاسبه و به‌عنوانِ اسنپ‌شات ذخیره می‌شود؛ هیچ مبلغی از مرورگر پذیرفته نمی‌شود.
+    * ``offered``: دوره‌هایی که عرضه می‌شوند (پیش‌فرض: هر سه). دوره‌یِ عرضه‌نشده ردیفی ندارد.
+    * ``keep_legacy``: دوره‌هایی که قیمتِ ثابتِ **قدیمی**شان بدونِ تغییر نگه داشته می‌شود (مسیرِ بازبینیِ مالک؛ ارزشِ تجاری بی‌صدا عوض نمی‌شود).
+    * دوره‌یِ اصلیِ نسخه «ماهانه» و ``display_price`` = قیمتِ ماهانه می‌شود. نسخه‌یِ منتشرشده هرگز تغییر نمی‌کند (``_require_draft``)."""
+    from apps.subscriptions.services import period_pricing as pp
+
+    _require_draft(plan_version)
+    version = PlanVersion.objects.select_for_update().get(pk=plan_version.pk)
+    before = _pricing_summary(version)
+    try:
+        monthly = pp.validate_monthly_price(monthly_price)
+        discounts = {k: pp.validate_discount(v) for k, v in (discounts or {}).items()}
+        amounts = pp.compute_all(monthly, discounts)
+    except pp.PricingError as exc:
+        raise PlanServiceError(str(exc)) from exc
+    offered = set(pp.DISCOUNTED_PERIODS if offered is None else offered)
+    keep_legacy = set(keep_legacy)
+    if (offered | keep_legacy) - set(pp.DISCOUNTED_PERIODS):
+        raise PlanServiceError("دوره‌ی نامعتبر.")
+    # قیمتِ ثابتِ قدیمیِ دوره‌هایی که حفظ می‌شوند، پیش از تغییرِ ساختار برداشته می‌شود (هیچ مبلغی گم نمی‌شود).
+    legacy_rows = {}
+    old_options = version.price_options()
+    for interval in keep_legacy:
+        option = old_options.get(interval)
+        if option is None or option.get("discount_percent") is not None:
+            raise PlanServiceError("برایِ این دوره قیمتِ ثابتِ قدیمی وجود ندارد که حفظ شود.")
+        legacy_rows[interval] = option
+    PlanVersionPrice.objects.filter(plan_version=version).delete()
+    version.billing_interval = PlanVersion.BillingInterval.MONTHLY
+    version.display_price = monthly
+    version.save(update_fields=["billing_interval", "display_price", "updated_at"])
+    for interval, option in legacy_rows.items():
+        PlanVersionPrice.objects.create(
+            plan_version=version, billing_interval=interval, price=option["price"],
+            compare_at_price=option.get("compare_at"), label=option.get("label", ""), discount_percent=None,
+        )
+    for interval in pp.DISCOUNTED_PERIODS:
+        if interval not in offered or interval in keep_legacy:
+            continue
+        a = amounts[interval]
+        PlanVersionPrice.objects.create(
+            plan_version=version, billing_interval=interval, price=a.final_price, discount_percent=a.discount_percent,
+            compare_at_price=a.base_total if a.discount_amount > 0 else None, label="",
+        )
+    _audit(actor, "plan_pricing_saved", version, before=before, after=_pricing_summary(version))
+    return version
+
+
+def _recompute_formula_rows(version) -> None:
+    """هر ردیفِ فرمولی (دارایِ ``discount_percent``) را با قیمتِ ماهانه‌یِ فعلیِ پیش‌نویس هم‌خوان می‌کند؛ ردیف‌هایِ قدیمی دست نمی‌خورد."""
+    from apps.subscriptions.services import period_pricing as pp
+
+    if version.billing_interval != PlanVersion.BillingInterval.MONTHLY:
+        return
+    for row in PlanVersionPrice.objects.filter(plan_version=version, discount_percent__isnull=False):
+        a = pp.compute_period(version.display_price, row.billing_interval, row.discount_percent)
+        row.price, row.compare_at_price = a.final_price, (a.base_total if a.discount_amount > 0 else None)
+        row.save(update_fields=["price", "compare_at_price", "updated_at"])
+
+
 def validate_for_publication(plan_version) -> list:
     """خطاهایِ مانعِ انتشار (فهرستِ پیام). انتشار فقط وقتی مجاز است که همه‌ی قیمت‌ها منسجم باشند."""
     errors = []
@@ -133,6 +207,11 @@ def validate_for_publication(plan_version) -> list:
         compare = option.get("compare_at")
         if compare is not None and compare < option["price"]:
             errors.append(f"قیمتِ قبل از تخفیفِ دوره‌ی «{interval}» کمتر از قیمتِ فعلی است.")
+    from apps.subscriptions.services import period_pricing as pp
+
+    for q in pp.quotes(version):
+        if not q.consistent:
+            errors.append(f"قیمتِ دوره‌ی «{q.interval}» با فرمولِ قیمت‌گذاری (قیمتِ ماهانه و تخفیف) هم‌خوان نیست؛ فرمِ پلن را دوباره ذخیره کنید.")
     return errors
 
 
@@ -198,7 +277,8 @@ def get_or_create_draft(plan, *, actor=None) -> PlanVersion:
     if source is not None:
         for row in PlanVersionPrice.objects.filter(plan_version=source):
             PlanVersionPrice.objects.create(plan_version=draft, billing_interval=row.billing_interval, price=row.price,
-                                            compare_at_price=row.compare_at_price, label=row.label)
+                                            compare_at_price=row.compare_at_price, label=row.label,
+                                            discount_percent=row.discount_percent)
         for pe in PlanEntitlement.objects.filter(plan_version=source):
             PlanEntitlement.objects.create(
                 plan_version=draft, entitlement=pe.entitlement, is_enabled=pe.is_enabled, is_unlimited=pe.is_unlimited,
@@ -231,6 +311,8 @@ def update_draft_version(plan_version, *, actor=None, **fields) -> PlanVersion:
             raise PlanServiceError("دوره‌ی نامعتبر.")
         setattr(version, name, value)
     version.save()
+    if "display_price" in fields:
+        _recompute_formula_rows(version)             # قیمتِ ماهانه عوض شد ⇒ ردیف‌هایِ فرمولی با همان قیمت هم‌خوان می‌مانند
     _audit(actor, "plan_draft_updated", version, before=before, after={name: str(getattr(version, name)) for name in before})
     return version
 

@@ -66,20 +66,30 @@ def _savings_percent(version, interval, price):
 
 
 def _period_options(version):
+    """گزینه‌هایِ دوره‌یِ یک نسخه برایِ نمایش (صفحه‌یِ عمومی/انتخابِ مرچنت/سوییچرِ دوره). **همه‌ی اعداد از ``period_pricing.quotes``**
+    می‌آید (همان منبعِ صورتحساب و تسویه)؛ برایِ ردیفِ فرمولی درصدِ تخفیفِ ذخیره‌شده و جمعِ بدونِ تخفیفِ دقیق نمایش داده می‌شود،
+    برایِ ردیفِ قدیمی (قیمتِ ثابت) رفتارِ پیشین حفظ می‌شود."""
+    from apps.subscriptions.services import period_pricing
+
     out = []
-    options = version.price_options()
-    for interval in PlanVersion.PAID_INTERVALS:
-        opt = options.get(interval)
-        if opt is None:
-            continue
-        price = opt["price"]
-        compare = opt["compare_at"]
-        discount = int(((compare - price) / compare * 100).to_integral_value()) if compare and compare > price else 0
+    for q in period_pricing.quotes(version):
+        price = q.final_price
+        if q.mode == "formula":
+            percent = q.discount_percent
+            percent = (int(percent) if percent == percent.to_integral_value() else percent.normalize()) if percent else 0
+            compare = q.base_total if q.discount_amount > 0 else None
+            savings = percent
+        else:
+            compare = q.compare_at
+            discount = int(((compare - price) / compare * 100).to_integral_value()) if compare and compare > price else 0
+            percent = discount
+            compare = compare if discount else None
+            savings = _savings_percent(version, q.interval, price)
         out.append({
-            "interval": interval, "label": INTERVAL_LABELS[interval], "short": INTERVAL_SHORT[interval],
-            "price": price, "compare_at": compare if discount else None, "discount_percent": discount,
-            "savings_percent": _savings_percent(version, interval, price), "custom_label": opt["label"],
-            "monthly_equivalent": version.monthly_equivalent(interval),
+            "interval": q.interval, "label": INTERVAL_LABELS[q.interval], "short": INTERVAL_SHORT[q.interval],
+            "price": price, "compare_at": compare, "discount_percent": percent, "savings_percent": savings,
+            "custom_label": q.label, "monthly_equivalent": q.effective_monthly if q.mode != "base" else price,
+            "base_total": q.base_total, "discount_amount": q.discount_amount, "mode": q.mode, "months": q.months,
         })
     return out
 

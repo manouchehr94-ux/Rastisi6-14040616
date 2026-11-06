@@ -71,7 +71,7 @@ class PriceOptionsTests(TestCase):
     def test_legacy_single_price_versions_are_untouched(self):
         plan = Plan.objects.create(code="legacyish", name="L")
         v = PlanVersion.objects.create(plan=plan, version_number=1, status="published", display_price=490000, billing_interval="monthly")
-        self.assertEqual(v.price_options(), {"monthly": {"price": Decimal(490000), "compare_at": None, "label": ""}})
+        self.assertEqual(v.price_options(), {"monthly": {"price": Decimal(490000), "compare_at": None, "label": "", "discount_percent": None}})
         free = PlanVersion.objects.create(plan=plan, version_number=2, status="published", display_price=0, billing_interval="none")
         self.assertEqual(free.price_options(), {})
         self.assertEqual(free.monthly_equivalent(), Decimal(0))

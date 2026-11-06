@@ -368,3 +368,21 @@ dialog.pa-dialog .pa-modalbox{width:min(560px,calc(100vw - 32px))}
 .pa-details>summary{list-style:none;cursor:pointer;width:max-content}
 .pa-details>summary::-webkit-details-marker{display:none}
 .pa-details[open]{min-width:260px;padding:var(--pa-s3) 0;display:grid;gap:var(--pa-s3)}
+
+/* simple plan pricing: monthly base + discount per longer period (plan form) */
+.pa-periods{display:grid;gap:var(--pa-s3);margin-top:var(--pa-s4)}
+.pa-period{border:1px solid var(--pa-line);border-radius:var(--pa-r2);padding:var(--pa-s4);background:var(--pa-card)}
+.pa-period.is-off{opacity:.62}
+.pa-period-base{background:var(--pa-brand-soft)}
+.pa-period-head{display:flex;align-items:center;gap:var(--pa-s3);flex-wrap:wrap;margin-bottom:var(--pa-s3)}
+.pa-period-offer{margin-inline-start:auto}
+.pa-period-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--pa-s3);margin:0;align-items:start}
+.pa-period-grid dt{font-size:12px;color:var(--pa-muted);font-weight:600;margin-bottom:2px}
+.pa-period-grid dd{margin:0;font-variant-numeric:tabular-nums;font-weight:700;overflow-wrap:anywhere}
+.pa-period-grid .pa-final{font-size:15px;color:var(--pa-brand)}
+.pa-inputunit{display:flex;align-items:center;gap:var(--pa-s2)}
+.pa-inputunit input{flex:1;min-width:0}
+.pa-err{color:var(--pa-danger,#b42318)}
+.pa-legacy{margin-top:var(--pa-s3);padding-top:var(--pa-s3);border-top:1px dashed var(--pa-line);display:grid;gap:var(--pa-s2)}
+@media (max-width:900px){.pa-period-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.pa-period-grid{grid-template-columns:1fr}}

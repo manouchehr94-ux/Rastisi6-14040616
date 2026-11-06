@@ -341,10 +341,13 @@ class OwnerPagesTests(TestCase):
         self.client.force_login(self.owner)
         html = self.client.get(f"/plans/{self.plan.pk}/edit/", HTTP_HOST=ADMIN).content.decode()
         numeric = re.findall(r'<input[^>]*type="number"[^>]*>', html)
-        self.assertGreater(len(numeric), 8)
+        self.assertGreater(len(numeric), 4)     # display order + entitlement limits keep native number semantics
         for tag in numeric:
             self.assertIn("min=", tag)          # min/step semantics preserved (spinner hiding is CSS-only)
         self.assertNotIn("type=\"text\" name=\"price_", html)
+        # the pricing section (monthly price + discount %) is deliberately a text input with a numeric keypad, never a number spinner
+        self.assertRegex(html, r'<input[^>]*name="monthly_price"[^>]*inputmode="numeric"|<input[^>]*inputmode="numeric"[^>]*name="monthly_price"')
+        self.assertNotRegex(html, r'<input[^>]*type="number"[^>]*name="(monthly_price|discount_\w+)"')
 
     def test_destructive_actions_ask_for_confirmation(self):
         self.client.force_login(self.owner)

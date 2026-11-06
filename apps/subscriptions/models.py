@@ -170,7 +170,7 @@ class PlanVersion(TimeStampedModel):
         """``{interval: {"price": Decimal, "compare_at": Decimal|None, "label": str}}`` — اصلی + اضافی."""
         options = {}
         if self.billing_interval != self.BillingInterval.NONE:
-            options[self.billing_interval] = {"price": Decimal(self.display_price), "compare_at": None, "label": ""}
+            options[self.billing_interval] = {"price": Decimal(self.display_price), "compare_at": None, "label": "", "discount_percent": None}
         for row in self.prices.all():
             if row.billing_interval == self.billing_interval:
                 # ردیفِ گزینه‌ی اصلی فقط متادیتا (قیمتِ قبل از تخفیف/برچسب) می‌دهد؛ قیمت همیشه از خودِ نسخه است.
@@ -180,16 +180,16 @@ class PlanVersion(TimeStampedModel):
                 continue
             options[row.billing_interval] = {
                 "price": Decimal(row.price), "compare_at": Decimal(row.compare_at_price) if row.compare_at_price else None,
-                "label": row.label,
+                "label": row.label, "discount_percent": Decimal(row.discount_percent) if row.discount_percent is not None else None,
             }
         return options
 
     def price_for(self, interval=None) -> Decimal:
-        """قیمتِ دوره‌ی ``interval`` (پیش‌فرض: گزینه‌ی اصلی). دوره‌ی تعریف‌نشده ⇒ ``KeyError`` (هرگز حدس نمی‌زند)."""
-        interval = interval or self.billing_interval
-        if interval == self.billing_interval:
-            return Decimal(self.display_price)
-        return self.price_options()[interval]["price"]
+        """قیمتِ دوره‌ی ``interval`` (پیش‌فرض: گزینه‌ی اصلی) — تنها مسیرِ خواندنِ مبلغِ قابلِ‌پرداخت (صورتحساب/تمدید/تغییرِ پلن/تسویه)
+        از طریقِ ``period_pricing.final_amount``. دوره‌ی تعریف‌نشده ⇒ ``KeyError`` (هرگز حدس نمی‌زند)."""
+        from apps.subscriptions.services import period_pricing
+
+        return period_pricing.final_amount(self, interval or self.billing_interval)
 
     def offers_interval(self, interval) -> bool:
         return interval == self.billing_interval or interval in self.price_options()
@@ -212,6 +212,10 @@ class PlanVersionPrice(TimeStampedModel):
     price = models.DecimalField("قیمت", max_digits=14, decimal_places=0)
     compare_at_price = models.DecimalField("قیمتِ قبل از تخفیف (نمایشی)", max_digits=14, decimal_places=0, null=True, blank=True)
     label = models.CharField("برچسبِ دوره (مثلاً «۲ ماه رایگان»)", max_length=60, blank=True, default="")
+    #: درصدِ تخفیفِ این دوره نسبت به «قیمتِ ماهانه × تعدادِ ماه» (فرمولِ ``period_pricing``). ``None`` = قیمتِ ثابتِ **قدیمی**
+    #: (دستی)، که هرگز بی‌صدا بازمحاسبه نمی‌شود. وقتی مقدار دارد، ``price`` اسنپ‌شاتِ محاسبه‌شده‌یِ همان لحظه است و با انتشار
+    #: تغییرناپذیر می‌شود؛ قراردادِ مشترکانِ فعلی با همان اسنپ‌شات می‌ماند.
+    discount_percent = models.DecimalField("درصدِ تخفیفِ دوره", max_digits=5, decimal_places=2, null=True, blank=True)
 
     class Meta:
         verbose_name = "قیمتِ دوره‌ایِ نسخه‌ی پلن"
@@ -220,6 +224,10 @@ class PlanVersionPrice(TimeStampedModel):
         constraints = [
             models.UniqueConstraint(fields=["plan_version", "billing_interval"], name="uniq_planversionprice_interval"),
             models.CheckConstraint(check=models.Q(price__gte=0), name="planversionprice_non_negative"),
+            models.CheckConstraint(
+                check=models.Q(discount_percent__isnull=True) | (models.Q(discount_percent__gte=0) & models.Q(discount_percent__lt=100)),
+                name="planversionprice_discount_range",
+            ),
         ]
 
     def __str__(self):

@@ -1,4 +1,5 @@
 {% extends "portal/platform_admin/base.html" %}
+{% load static %}
 {% block title %}{% if plan %}ویرایشِ {{ plan.name }}{% else %}پلنِ تازه{% endif %} | پنل مدیریت پلتفرم{% endblock %}
 {% block page_class %}pa-narrow{% endblock %}
 {% block content %}
@@ -40,28 +41,69 @@
     </div>
   </fieldset>
 
-  <fieldset class="pa-fieldset">
-    <legend>قیمت و دوره‌ها {% if latest_version %}<span class="pa-badge {% if latest_version.status == 'draft' %}pa-warn{% else %}pa-info{% endif %}">v{{ latest_version.version_number }} · {{ latest_version.get_status_display }}</span>{% endif %}</legend>
-    <p class="pa-help">برایِ هر دوره‌ای که می‌فروشید قیمت وارد کنید و یکی را «اصلی» بگذارید؛ دوره‌یِ خالی عرضه نمی‌شود. برایِ پلنِ رایگان «بدونِ دوره» را انتخاب کنید. «قبل از تخفیف» فقط برایِ نمایشِ خط‌خورده است. پس از انتشار، قیمت‌هایِ نسخه تغییرناپذیرند.</p>
+  <fieldset class="pa-fieldset" data-pricing data-config='{{ pricing_json }}'>
+    <input type="hidden" name="pricing_formula_submitted" value="1">
+    <legend>قیمت‌گذاری {% if latest_version %}<span class="pa-badge {% if latest_version.status == 'draft' %}pa-warn{% else %}pa-info{% endif %}">v{{ latest_version.version_number }} · {{ latest_version.get_status_display }}</span>{% endif %}</legend>
+    <p class="pa-help">فقط <b>قیمتِ ماهانه</b> را وارد کنید و برایِ دوره‌هایِ ۳، ۶ و ۱۲ ماهه <b>درصدِ تخفیف</b> بدهید؛ مبلغِ هر دوره خودکار محاسبه می‌شود (قیمتِ ماهانه × تعدادِ ماه × (۱ − تخفیف)). مبلغ را سرور محاسبه و ثبت می‌کند و با انتشار تغییرناپذیر می‌شود؛ تخفیفِ پیش‌فرض ۰٪ است. گردکردن: نیم‌به‌بالا به تومانِ کامل.</p>
+    {% if pricing.has_legacy or pricing.structure == "legacy" and pricing.monthly is None and latest_version and latest_version.billing_interval != "none" %}
+    <div class="pa-alert" role="status" data-testid="legacy-pricing-review"><b>بازبینیِ قیمتِ قدیمی:</b> این پلن قیمت‌هایِ ثابتِ دوره‌ایِ قدیمی دارد. هیچ قیمتی بی‌صدا بازمحاسبه نمی‌شود: برایِ هر دوره یا «حفظِ قیمتِ فعلی» را بگذارید، یا تبدیل به تخفیفِ درصدی را (در صورتِ ناهم‌خوانی با تأییدِ صریح) بپذیرید. نسخه‌هایِ منتشرشده و صورتحساب‌هایِ قبلی هرگز تغییر نمی‌کنند.</div>
+    {% endif %}
     <div class="pa-fieldbody">
-      <div class="pa-tablewrap"><table>
-        <thead><tr><th>اصلی</th><th>دوره</th><th>قیمت (تومان)</th><th>قبل از تخفیف</th><th>برچسب (اختیاری)</th></tr></thead>
-        <tbody>
-        {% for row in price_rows %}
-          <tr>
-            <td><input type="radio" name="billing_interval" value="{{ row.interval }}" {% if row.is_primary %}checked{% endif %} aria-label="گزینه‌ی اصلی: {{ row.label }}"></td>
-            <td>{{ row.label }}</td>
-            <td><input class="pa-input" type="number" min="0" step="1" name="price_{{ row.interval }}" value="{{ row.price|default:'' }}" aria-label="قیمتِ {{ row.label }}"></td>
-            <td><input class="pa-input" type="number" min="0" step="1" name="compare_{{ row.interval }}" value="{{ row.compare_at|default:'' }}" aria-label="قبل از تخفیفِ {{ row.label }}"></td>
-            <td><input class="pa-input" type="text" maxlength="60" name="label_{{ row.interval }}" value="{{ row.custom_label|default:'' }}" aria-label="برچسبِ {{ row.label }}"></td>
-          </tr>
-        {% endfor %}
-          <tr><td><input type="radio" name="billing_interval" value="none" {% if primary_interval == "none" %}checked{% endif %} aria-label="بدونِ دوره"></td><td colspan="4">بدونِ دوره (رایگان/آزمایشی)</td></tr>
-        </tbody>
-      </table></div>
+      <div class="pa-row pa-mb-3" role="radiogroup" aria-label="نوعِ پلن">
+        <label class="pa-check"><input type="radio" name="plan_kind" value="paid" data-pr-kind {% if not pricing_echo.free and not pricing.free %}checked{% endif %}> پلنِ پولی (قیمتِ ماهانه + تخفیفِ دوره‌ها)</label>
+        <label class="pa-check"><input type="radio" name="plan_kind" value="free" data-pr-kind {% if pricing_echo.free or pricing.free %}checked{% endif %}> پلنِ رایگان/آزمایشی (بدونِ دوره)</label>
+      </div>
+      <div data-pr-paid>
+        <div class="pa-fields">
+          <div class="pa-field">
+            <label for="f-monthly">قیمتِ ماهانه (تومان)</label>
+            <input id="f-monthly" class="pa-ltr" type="text" inputmode="numeric" autocomplete="off" name="monthly_price" data-pr-monthly aria-describedby="f-monthly-help" value="{% if pricing_echo %}{{ pricing_echo.monthly }}{% elif pricing.monthly %}{{ pricing.monthly|stringformat:'d' }}{% endif %}">
+            <span class="pa-help" id="f-monthly-help">قیمتِ مبنا برایِ همه‌یِ دوره‌ها؛ عددِ صحیح، بزرگ‌تر از صفر.</span>
+          </div>
+        </div>
+        <div class="pa-periods" data-pr-periods>
+          <div class="pa-period pa-period-base" data-period="monthly" data-months="1">
+            <div class="pa-period-head"><b>ماهانه</b><span class="pa-help">۱ ماه · دوره‌یِ مبنا</span></div>
+            <dl class="pa-period-grid">
+              <div><dt>جمعِ بدونِ تخفیف</dt><dd data-out="base">—</dd></div>
+              <div><dt>درصدِ تخفیف</dt><dd>۰٪</dd></div>
+              <div><dt>مبلغِ تخفیف</dt><dd data-out="discount">—</dd></div>
+              <div><dt>قیمتِ نهایی</dt><dd class="pa-final" data-out="final">—</dd></div>
+              <div><dt>معادلِ ماهانه</dt><dd data-out="effective">—</dd></div>
+            </dl>
+          </div>
+          {% for row in pricing.rows %}
+          <div class="pa-period" data-period="{{ row.interval }}" data-months="{{ row.months }}" data-legacy="{% if row.legacy %}1{% else %}0{% endif %}">
+            <div class="pa-period-head">
+              <b>{{ row.label }}</b><span class="pa-help">{{ row.months }} ماه</span>
+              <label class="pa-check pa-period-offer"><input class="pa-switch" type="checkbox" name="offer_{{ row.interval }}" data-pr-offer {% if row.offered %}checked{% endif %}> عرضه شود</label>
+            </div>
+            <dl class="pa-period-grid">
+              <div><dt>جمعِ بدونِ تخفیف</dt><dd data-out="base">—</dd></div>
+              <div class="pa-field"><label for="d-{{ row.interval }}">درصدِ تخفیف</label>
+                <div class="pa-inputunit"><input id="d-{{ row.interval }}" class="pa-ltr" type="text" inputmode="decimal" autocomplete="off" name="discount_{{ row.interval }}" data-pr-discount aria-describedby="e-{{ row.interval }}" value="{{ row.discount }}"><span aria-hidden="true">٪</span></div>
+                <span class="pa-help pa-err" id="e-{{ row.interval }}" data-out="error" role="alert" hidden></span>
+              </div>
+              <div><dt>مبلغِ تخفیف</dt><dd data-out="discount">—</dd></div>
+              <div><dt>قیمتِ نهایی</dt><dd class="pa-final" data-out="final">—</dd></div>
+              <div><dt>معادلِ ماهانه</dt><dd data-out="effective">—</dd></div>
+            </dl>
+            {% if row.legacy %}
+            <div class="pa-legacy" data-testid="legacy-{{ row.interval }}">
+              <p class="pa-help">قیمتِ ثابتِ قدیمی: <b class="pa-num" data-stored="{{ row.stored_price|stringformat:'d' }}">{{ row.stored_price|stringformat:'d' }}</b> تومان.
+                {% if row.exact %}معادلِ <b>دقیقِ</b> {{ row.implied }}٪ تخفیف از قیمتِ ماهانه است.
+                {% elif row.exact is not None %}با فرمول <b>دقیقاً</b> قابلِ نمایش نیست (نزدیک‌ترین: {{ row.implied }}٪).{% else %}قیمتِ ماهانه‌یِ مبنا وجود ندارد.{% endif %}</p>
+              <label class="pa-check"><input type="checkbox" name="keep_legacy_{{ row.interval }}" data-pr-keep {% if row.keep_checked %}checked{% endif %}> حفظِ قیمتِ فعلی (بدونِ تبدیل به فرمول)</label>
+              {% if row.needs_review %}<label class="pa-check"><input type="checkbox" name="ack_{{ row.interval }}" data-pr-ack {% if row.ack_checked %}checked{% endif %}> تغییرِ ارزشِ تجاریِ این دوره را تأیید می‌کنم</label>{% endif %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <p class="pa-help" data-pr-free hidden>پلنِ رایگان/آزمایشی دوره و قیمتِ دوره‌ای ندارد؛ برایِ پلنِ رایگان هیچ پرداخت یا درگاهی لازم نیست.</p>
       <div class="pa-fields pa-mt-4">
-        <div class="pa-field"><label for="f-trial">روزهایِ تریال</label><input id="f-trial" type="number" min="0" step="1" name="trial_days" value="{{ latest_version.trial_days|default:0 }}"></div>
-        <div class="pa-field"><label for="f-dprice">قیمتِ «بدونِ دوره» (تومان)</label><input id="f-dprice" type="number" min="0" step="1" name="display_price" value="{{ latest_version.display_price|default:0 }}"><span class="pa-help">معمولاً ۰.</span></div>
+        <div class="pa-field"><label for="f-trial">روزهایِ تریال</label><input id="f-trial" class="pa-ltr" type="text" inputmode="numeric" name="trial_days" value="{{ latest_version.trial_days|default:0 }}"></div>
         <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="trial_once_per_store" {% if not latest_version or latest_version.trial_once_per_store %}checked{% endif %}> تریال فقط یک‌بار برایِ هر فروشگاه</label>
       </div>
     </div>
@@ -101,4 +143,5 @@
     <a class="pa-btn" href="{% url 'portal_platform_admin:plans' %}">انصراف</a>
   </div>
 </form>
+<script src="{% static 'portal/js/platform-admin-pricing.js' %}?v=20261106-1"></script>
 {% endblock %}
