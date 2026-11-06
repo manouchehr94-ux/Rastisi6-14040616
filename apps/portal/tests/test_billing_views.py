@@ -41,7 +41,7 @@ def _signed_webhook_headers(*, secret, body: bytes):
 
 
 @override_settings(
-    ALLOWED_HOSTS=[_HOST, "testserver"],
+    ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir",
     RASTISI_BILLING_WEBHOOK_SECRET=WEBHOOK_SECRET, RASTISI_BILLING_PROVIDER="manual",
 )
 class BillingViewsTestCase(TestCase):
@@ -79,6 +79,9 @@ class BillingViewsTestCase(TestCase):
             plan=self.plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
             billing_interval=PlanVersion.BillingInterval.MONTHLY, display_price=490_000,
         )
+        from apps.billing.tests.platform_payment_support import ready_platform_zibal
+
+        ready_platform_zibal(self)                      # the portal refuses to issue an invoice when NO platform method is ready
         self.client.force_login(self.owner)
 
     def _checkout(self):
@@ -87,9 +90,14 @@ class BillingViewsTestCase(TestCase):
         )
 
     def _attempt(self):
-        response = self._checkout()
-        token = response["Location"].rstrip("/").rsplit("/", 1)[-1]
-        return SubscriptionPaymentAttempt.objects.get(public_token=token)
+        """Portal «buy» issues the invoice; the signed-webhook ``manual`` provider is test infrastructure for the webhook path
+        (merchants can never pick it at the checkout), so its attempt is started through the service."""
+        from apps.billing.services import payment_flow_service
+
+        self._checkout()
+        invoice = SubscriptionInvoice.objects.filter(store=self.store).order_by("-pk").first()
+        attempt, _session = payment_flow_service.start_payment(invoice, actor=self.owner, provider="manual")
+        return attempt
 
     def _confirm_via_webhook(self, attempt, *, event_id, event_type="payment.succeeded"):
         body = json.dumps({
@@ -135,11 +143,12 @@ class BillingPlansViewTests(BillingViewsTestCase):
 
 
 class BillingCheckoutViewTests(BillingViewsTestCase):
-    def test_creates_invoice_and_redirects_to_return(self):
+    def test_creates_invoice_and_hands_off_to_the_unified_checkout_without_any_payment_attempt(self):
         response = self._checkout()
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/billing/return/", response["Location"])
+        self.assertIn("/admin-portal/handoff/", response["Location"])
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store).count(), 1)
+        self.assertEqual(SubscriptionPaymentAttempt.objects.filter(store=self.store).count(), 0)
 
     def test_get_is_not_allowed(self):
         response = self.client.get(

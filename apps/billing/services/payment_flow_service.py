@@ -166,6 +166,8 @@ def verify_and_confirm(attempt, *, confirm, confirmation_error, actor=None, now=
     S = model.Status
     if attempt.status == S.SUCCEEDED:
         return attempt
+    if attempt.status == S.REQUIRES_ACTION and attempt.failure_code in ("duplicate_payment", "purchase_completed"):
+        return attempt                                 # پرداختِ تکراریِ شناسایی‌شده؛ دوباره verify/حسابرسی نمی‌شود (تسویه با اقدامِ مدیرِ مالی)
 
     provider = registry.get_provider(attempt.provider)
     if not provider.supports_automatic_capture or not attempt.provider_session_id:

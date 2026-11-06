@@ -49,7 +49,16 @@ class SmsPaymentBase(TestCase):
         return SmsBalance.objects.get(store=self.store).credits
 
     def buy(self, **extra):
-        return self.client.post(reverse("dashboard:settings-sms-package-purchase"), {"package_id": self.package.pk, **extra})
+        """Walk the real path: package «buy» → pending purchase → unified checkout → POST pay with the chosen method."""
+        from apps.portal.services import platform_gateway_service as pgs
+
+        method = extra.pop("gateway", None) or extra.pop("method", None)
+        response = self.client.post(reverse("dashboard:settings-sms-package-purchase"), {"package_id": self.package.pk, **extra})
+        if response.status_code != 302 or "/billing/checkout/sms/" not in response["Location"]:
+            return response
+        purchase = SmsPackagePurchase.objects.filter(package=self.package).order_by("-pk").first()
+        return self.client.post(reverse("dashboard:platform-checkout-pay", args=["sms", purchase.pk]),
+                                {"method": method or pgs.default_code("sms_package"), "ack": "1"})
 
     def purchase_and_attempt(self):
         ready_platform_zibal(self)
@@ -81,11 +90,10 @@ class SmsCheckoutTests(SmsPaymentBase):
         self.assertEqual(self.credits(), 100)
         self.assertFalse(SmsCreditLedger.objects.exists())
 
-    def test_without_a_ready_platform_gateway_the_old_manual_flow_is_unchanged(self):
+    def test_without_any_ready_payment_method_no_dead_purchase_is_created(self):
         response = self.buy()
         self.assertRedirects(response, PAY_URL, fetch_redirect_response=False)
-        purchase = SmsPackagePurchase.objects.get(package=self.package)
-        self.assertEqual(purchase.status, P.PENDING)
+        self.assertFalse(SmsPackagePurchase.objects.filter(package=self.package).exists())
         self.assertFalse(SmsPackagePaymentAttempt.objects.exists())
         self.assertEqual(self.credits(), 100)
 
@@ -118,7 +126,8 @@ class SmsCheckoutTests(SmsPaymentBase):
 
         with patch("apps.billing.providers.zibal.requests.post", side_effect=requests.Timeout()):
             response = self.buy()
-        self.assertRedirects(response, PAY_URL, fetch_redirect_response=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/billing/checkout/sms/", response["Location"])
         attempt = SmsPackagePaymentAttempt.objects.get()
         self.assertEqual((attempt.status, attempt.failure_code), (S.FAILED, "timeout"))
         self.assertEqual(self.credits(), 100)
@@ -140,7 +149,7 @@ class SmsFulfilmentTests(SmsPaymentBase):
         self.paid(attempt)
         response = self.callback(attempt)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], f"http://testserver{PAY_URL}&payment=ok")
+        self.assertEqual(response["Location"], f"http://testserver/admin-portal/billing/checkout/sms/{purchase.pk}/?payment=ok")
         purchase.refresh_from_db()
         attempt.refresh_from_db()
         self.assertEqual((purchase.status, attempt.status), (P.COMPLETED, S.SUCCEEDED))

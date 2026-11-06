@@ -43,6 +43,9 @@ def admin_sidebar_nav(context):
 
 @register.inclusion_tag("dashboard/partials/_admin_section_tabs.html", takes_context=True)
 def admin_section_tabs(context):
+    if context.get("hide_section_nav"):
+        # صفحه‌های تسویه تمرکزی‌اند: نوارِ بخش‌ها/زیرتب‌ها و جست‌وجوی «فقط تنظیمات» نامرتبط‌اند (نقشه‌ی ناوبری همچنان درست است).
+        return {"nav": None, "settings_index": []}
     nav = _navigation(context)
     index = []
     if nav.active_section and nav.active_section.key == "settings":

@@ -117,11 +117,15 @@ class SmsPackagePurchaseViewTests(SmsAdminViewsTestCase):
         store = Store.objects.get(slug="akhlaghi")
         credits_before = SmsBalance.objects.get(store=store).credits
 
+        from apps.billing.tests.platform_payment_support import cache
+        from apps.billing.tests.test_platform_card_to_card import enable_platform_card
+
+        enable_platform_card(self)                      # a purchase needs at least one ready platform payment method
         response = self.client.post(
             reverse("dashboard:settings-sms-package-purchase"), {"package_id": self.package.pk},
         )
-        self.assertRedirects(response, "/admin-portal/settings/?section=sms")
         purchase = SmsPackagePurchase.objects.get(package=self.package)
+        self.assertRedirects(response, f"/admin-portal/billing/checkout/sms/{purchase.pk}/", fetch_redirect_response=False)
         self.assertEqual(purchase.status, SmsPackagePurchase.Status.PENDING)
         self.assertEqual(purchase.credit_amount, 500)
         self.assertEqual(
@@ -129,6 +133,15 @@ class SmsPackagePurchaseViewTests(SmsAdminViewsTestCase):
             credits_before,
             "درخواست خریدِ pending نباید موجودی فعلی Store را تغییر دهد",
         )
+
+    def test_with_no_ready_payment_method_no_dead_purchase_is_created(self):
+        from apps.sms.models import SmsPackagePurchase
+
+        response = self.client.post(
+            reverse("dashboard:settings-sms-package-purchase"), {"package_id": self.package.pk},
+        )
+        self.assertRedirects(response, "/admin-portal/settings/?section=sms")
+        self.assertFalse(SmsPackagePurchase.objects.filter(package=self.package).exists())
 
     def test_inactive_package_cannot_be_purchased(self):
         self.package.is_active = False

@@ -159,7 +159,10 @@ class PlanChangeExecuteBillingConvergenceTests(TestCase):
     pre-fix-vs-post-fix boundary."""
 
     def setUp(self):
+        from apps.billing.tests.test_platform_card_to_card import enable_platform_card
+
         ent.clear_entitlement_cache()
+        enable_platform_card(self)           # an upgrade needs at least one ready platform payment method (no dead invoices otherwise)
         self.client = Client(HTTP_HOST=HOST)
         self.store = Store.objects.get(slug="akhlaghi")  # legacy sub → display_price=0
         self.store.admin_subdomain = "sub-test"
@@ -240,7 +243,7 @@ class PlanChangeExecuteBillingConvergenceTests(TestCase):
         invoice = SubscriptionInvoice.objects.get(
             store=self.store, kind=SubscriptionInvoice.Kind.PLAN_CHANGE, plan_version=self.pricey_version,
         )
-        self.assertRedirects(resp, reverse("dashboard:billing-invoice-detail", args=[invoice.pk]))
+        self.assertRedirects(resp, reverse("dashboard:platform-checkout", args=["subscription", invoice.pk]), fetch_redirect_response=False)
         self.assertTrue(invoice.is_payable)
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store, kind=SubscriptionInvoice.Kind.PLAN_CHANGE).count(), 1)
 

@@ -133,6 +133,8 @@ def confirm_payment(*, attempt, amount, currency, provider_payment_id="", actor=
     locked = SmsPackagePaymentAttempt.objects.select_for_update().get(pk=attempt.pk)
     if locked.status == S.SUCCEEDED:
         return locked
+    if locked.status == S.REQUIRES_ACTION and locked.failure_code == "purchase_completed":
+        return locked                                  # پرداختِ تکراریِ از قبل ثبت‌شده: تکرارِ callback حسابرسیِ دوباره نمی‌سازد
     purchase = SmsPackagePurchase.objects.select_for_update().get(pk=locked.purchase_id)
 
     amount = Decimal(amount)
@@ -170,6 +172,26 @@ def confirm_payment(*, attempt, amount, currency, provider_payment_id="", actor=
         after={"purchase": purchase.pk, "credits": purchase.credit_amount, "amount": str(amount)},
     )
     return locked
+
+
+@transaction.atomic
+def settle_free_purchase(purchase, *, actor=None):
+    """خریدِ بسته‌ی **قیمت‌صفر** (اسنپ‌شاتِ سمتِ سرور) را بدونِ درگاه تکمیل می‌کند — دقیقاً یک‌بار، با ردیفِ دفتر و حسابرسی.
+    هر خریدِ دارای قیمتِ بیشتر از صفر رد می‌شود (هیچ اعتبارِ رایگان برایِ بسته‌یِ پولی)."""
+    locked = SmsPackagePurchase.objects.select_for_update().get(pk=purchase.pk)
+    if locked.status == SmsPackagePurchase.Status.COMPLETED:
+        return locked                                                  # idempotent
+    if locked.status != SmsPackagePurchase.Status.PENDING:
+        raise PaymentFlowError("این خرید در وضعیتِ قابلِ‌پرداخت نیست.")
+    if locked.price != 0:
+        raise PaymentFlowError("این خرید مبلغِ صفر ندارد و باید پرداخت شود.")
+    completed = balance_service.complete_purchase(purchase=locked, actor=actor, note="بسته‌ی رایگان (مبلغِ صفر)")
+    record_audit_event(
+        store=locked.store, actor=actor, action_code="billing.sms_free_purchase_settled",
+        object_type="SmsPackagePurchase", object_id=locked.pk, object_label=f"SMS-{locked.pk}",
+        after={"credits": locked.credit_amount, "price": "0"},
+    )
+    return completed
 
 
 def verify_and_fulfill(attempt, *, actor=None, now=None, callback_data=None):

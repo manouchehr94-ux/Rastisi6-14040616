@@ -1427,39 +1427,12 @@ def payment_manual_add(request):
 
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def billing_zibal_settings(request):
-    """صفحهٔ قدیمیِ زیبال (سازگاری) — اکنون روی همان ``platform_gateway_service`` می‌نویسد تا منبعِ
-    حقیقتِ درگاه‌ها یکی باشد. جایگزین: «درگاه‌های پرداختِ پلتفرم»."""
-    from apps.billing.providers import registry as billing_registry
-    from apps.portal.services import platform_gateway_service as pgs
-
-    config = get_platform_configuration()
+    """مسیرِ قدیمیِ زیبال (فقط برایِ لینک/نشانک‌هایِ قدیمی). **هیچ چیزی نمی‌نویسد**: منبعِ یگانه‌یِ پیکربندیِ
+    همه‌یِ درگاه‌هایِ پلتفرم «درگاه‌هایِ پرداختِ پلتفرم» است. دسترسیِ کارمندِ پلتفرم پیش از ریدایرکت بررسی می‌شود
+    (کاربرِ غیرمجاز به لاگین می‌رود، نه به صفحه‌یِ درگاه‌ها)؛ POST هم بدونِ اثر ریدایرکت می‌شود."""
     if request.method == "POST":
-        active_provider = (request.POST.get("default_payment_provider") or "manual").strip()
-        if active_provider not in {"manual", "zibal"}:
-            messages.error(request, "درگاهِ انتخاب‌شده معتبر نیست.")
-        else:
-            merchant = (request.POST.get("zibal_merchant") or "").strip()
-            try:
-                pgs.save_gateway(
-                    "zibal", credentials={"merchant": merchant},
-                    sandbox="zibal_sandbox_mode" in request.POST, enabled=(active_provider == "zibal"),
-                    actor=request.user,
-                )
-                pgs.set_default(active_provider, actor=request.user)
-            except pgs.PlatformGatewayError as exc:
-                messages.error(request, str(exc))
-            else:
-                messages.success(request, "تنظیماتِ زیبالِ پلتفرم ذخیره شد.")
-                return redirect("portal_platform_admin:billing-zibal-settings")
-
-    config = get_platform_configuration()
-    state = pgs.gateway_state("zibal")
-    return render(request, "portal/platform_admin/billing_zibal_settings.html", {
-        "config": config,
-        "merchant_is_configured": bool(state.fields and state.fields[0]["configured"]),
-        "active_provider_code": billing_registry.active_provider_code(),
-        "active_nav": "payments",
-    })
+        messages.info(request, "تنظیمِ زیبال به «درگاه‌هایِ پرداختِ پلتفرم» منتقل شده است؛ تغییرِ شما اعمال نشد.")
+    return redirect(reverse("portal_platform_admin:payment-gateways") + "#gw-zibal")
 
 
 # ------------------------------------------------- درگاه‌های پرداختِ پلتفرم (مدیریت یکپارچه)
@@ -1600,11 +1573,20 @@ def reconciliation_snapshot():
     cutoff = now - timedelta(minutes=STALE_PENDING_MINUTES)
     manual = list(MANUAL_PROVIDER_CODES)
     sub_s, sms_s = SubscriptionPaymentAttempt.Status, SmsPackagePaymentAttempt.Status
+    from apps.billing.services import duplicate_payment_service as dups
+
+    def _open_requires_action(model, related):
+        rows = list(model.objects.filter(status=model.Status.REQUIRES_ACTION).select_related("store", related)[:200])
+        for row in rows:                                     # فقط برایِ نمایش: «پرداختِ تکراری» و نتیجه‌ی ثبت‌شده
+            row.is_duplicate = dups.is_duplicate(row)
+            row.resolution = dups.resolution_of(row)
+            row.resolved = dups.is_resolved(row)
+        return rows
+
+    sub_ra, sms_ra = _open_requires_action(SubscriptionPaymentAttempt, "invoice"), _open_requires_action(SmsPackagePaymentAttempt, "purchase")
     return {
-        "requires_action": (
-            list(SubscriptionPaymentAttempt.objects.filter(status=sub_s.REQUIRES_ACTION).select_related("store", "invoice")[:100]),
-            list(SmsPackagePaymentAttempt.objects.filter(status=sms_s.REQUIRES_ACTION).select_related("store", "purchase")[:100]),
-        ),
+        "requires_action": ([r for r in sub_ra if not r.resolved][:100], [r for r in sms_ra if not r.resolved][:100]),
+        "duplicates_resolved": ([r for r in sub_ra if r.resolved][:50], [r for r in sms_ra if r.resolved][:50]),
         "stale_pending": (
             list(SubscriptionPaymentAttempt.objects.filter(status__in=(sub_s.CREATED, sub_s.PENDING), created_at__lt=cutoff)
                  .exclude(provider_session_id="").exclude(provider__in=manual).select_related("store", "invoice")[:100]),
@@ -1683,6 +1665,39 @@ def payment_verify_now(request, kind, attempt_id):
         actor=request.user, action_code="platform_payment.verify_now", object_type=f"{kind}_attempt", object_id=attempt_id,
     )
     return redirect(request.POST.get("next") if (request.POST.get("next") or "").startswith("/") and not (request.POST.get("next") or "").startswith("//") else reverse("portal_platform_admin:payment-reconciliation"))
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_duplicate_action(request, kind, attempt_id, action):
+    """پرداختِ تکراری (دو تلاش هر دو تسویه شدند): بازپرداخت از همان درگاه یا ثبتِ تسویه‌ی بیرونی. فقط مدیرِ مالیِ مجاز
+    (همان گیتِ تأییدِ کارت‌به‌کارت)؛ هیچ اثری رویِ فاکتور/خریدِ اعمال‌شده ندارد و idempotent است."""
+    from django.http import Http404, HttpResponseForbidden
+
+    from apps.billing.services import duplicate_payment_service as dups
+    from apps.billing.services import manual_card_service as mcs
+
+    if kind not in ("subscription", "sms") or action not in ("refund", "resolve"):
+        raise Http404
+    if not mcs.can_review(request.user):
+        return HttpResponseForbidden("دسترسیِ مدیرِ مالی لازم است.")
+    try:
+        if action == "refund":
+            _attempt, outcome = dups.refund_duplicate(kind, attempt_id, actor=request.user, reason=request.POST.get("reason", ""))
+            messages.success(request, "بازپرداخت از درگاه انجام شد." if outcome == "refunded" else
+                             "درخواستِ بازپرداخت ثبت شد؛ درگاه بازپرداختِ خودکار ندارد — پس از انجامِ دستی «ثبتِ تسویه‌ی بیرونی» را بزنید.")
+        else:
+            dups.mark_resolved(kind, attempt_id, actor=request.user, outcome=request.POST.get("outcome", ""),
+                               reference=request.POST.get("reference", ""), note=request.POST.get("note", ""))
+            messages.success(request, "تسویه‌ی پرداختِ تکراری ثبت شد.")
+    except dups.DuplicatePaymentError as exc:
+        messages.error(request, str(exc))
+    except dups.attempt_model(kind).DoesNotExist:
+        raise Http404
+    record_platform_audit_event(
+        actor=request.user, action_code=f"platform_payment.duplicate_{action}", object_type=f"{kind}_attempt", object_id=attempt_id,
+    )
+    return redirect("portal_platform_admin:payment-reconciliation")
 
 
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")

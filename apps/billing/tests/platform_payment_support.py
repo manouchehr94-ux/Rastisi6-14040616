@@ -171,3 +171,49 @@ def ready_platform_pasargad(case, *, creds=None, default=False):
     if default:
         pgs.set_default("pasargad")
     cache.clear()
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Unified-checkout helpers: the merchant journey is now  portal/dashboard "buy" → invoice/pending purchase → unified checkout
+# page → POST pay (method) → provider redirect.  Older tests that only cared about what happens AFTER the redirect use these
+# to walk the real path instead of the removed direct-to-gateway shortcut.
+# ---------------------------------------------------------------------------------------------------------------------
+
+def admin_client_for(store, user):
+    """A logged-in test client on the store's real admin host (the unified checkout lives there)."""
+    from django.conf import settings
+    from django.test import Client
+
+    host = f"{store.admin_subdomain}.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
+    client = Client(HTTP_HOST=host)
+    client.force_login(user)
+    return client, host
+
+
+def pay_on_checkout(case, store, user, kind, pk, *, method="", extra=None):
+    """POST the unified checkout pay endpoint as the store owner; returns the response (a provider redirect on success)."""
+    from django.conf import settings
+    from django.test import override_settings
+    from django.urls import reverse
+
+    from apps.stores.models import Store
+
+    Store.objects.filter(pk=store.pk).update(status=Store.Status.ACTIVE)          # real stores are provisioned ACTIVE; admin hosts resolve only those
+    client, host = admin_client_for(store, user)
+    with override_settings(ALLOWED_HOSTS=list(settings.ALLOWED_HOSTS) + [host]):
+        data = {"method": method} if method else {}
+        data.update(extra or {})
+        return client.post(reverse("dashboard:platform-checkout-pay", args=[kind, pk]), data)
+
+
+def portal_buy_and_pay(case, client, store, user, version, *, method=None, host="rastisi.localhost", **extra):
+    """Portal 'buy' (creates the invoice + hands off to the checkout) then pay on the unified checkout with ``method``."""
+    from apps.billing.models import SubscriptionInvoice as Invoice
+
+    method = extra.pop("gateway", None) or method
+    response = client.post(f"/app/stores/{store.public_id}/billing/checkout/{version.pk}/", dict(extra), HTTP_HOST=host)
+    invoice = Invoice.objects.filter(store=store).order_by("-pk").first()
+    if invoice is None or response.status_code != 302 or "/handoff/" not in response["Location"]:
+        return response
+    method = method or pgs.default_code("subscription")
+    return pay_on_checkout(case, store, user, "subscription", invoice.pk, method=method)

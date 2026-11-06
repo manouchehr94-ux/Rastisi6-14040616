@@ -146,6 +146,9 @@ class JourneyATestCase(TestCase):
         # billing system — confirmation only ever comes from a signed
         # webhook, never the browser's own return) ---
         version = PlanVersion.objects.get(plan__code="basic", status=PlanVersion.Status.PUBLISHED)
+        from apps.billing.tests.test_platform_card_to_card import enable_platform_card
+
+        enable_platform_card(self)                      # a purchase is refused unless a platform payment method is ready
         checkout_response = self.client.post(
             f"/app/stores/{store.public_id}/billing/checkout/{version.pk}/", HTTP_HOST=_HOST,
         )
@@ -154,8 +157,12 @@ class JourneyATestCase(TestCase):
             f"/app/stores/{store.public_id}/billing/step-up/", {"code": "222222"}, HTTP_HOST=_HOST,
         )
         self.assertEqual(step_up_response.status_code, 302)
-        attempt_token = step_up_response["Location"].rstrip("/").rsplit("/", 1)[-1]
-        attempt = SubscriptionPaymentAttempt.objects.get(public_token=attempt_token)
+        self.assertIn("/admin-portal/handoff/", step_up_response["Location"])         # → the unified checkout on the store's admin host
+        from apps.billing.models import SubscriptionInvoice
+        from apps.billing.services import payment_flow_service
+
+        invoice = SubscriptionInvoice.objects.filter(store=store).order_by("-pk").first()
+        attempt, _session = payment_flow_service.start_payment(invoice, provider="manual")   # signed-webhook test provider
         webhook_response = _confirm_billing_attempt_via_signed_webhook(attempt, event_id="e2e-basic-purchase")
         self.assertEqual(webhook_response.status_code, 200)
 

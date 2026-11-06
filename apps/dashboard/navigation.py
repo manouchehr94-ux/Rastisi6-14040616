@@ -402,7 +402,7 @@ SECTIONS: tuple = (
                 )),
             Tab("account", "تیم و اشتراک", "staff-list",
                 perms=("can_manage_staff", "can_view_subscription", "can_view_billing", "can_view_usage"),
-                matches=(_m(prefix=("staff-", "subscription-", "billing-", "usage-")),),
+                matches=(_m(prefix=("staff-", "subscription-", "billing-", "usage-", "platform-checkout")),),
                 pages=("staff", "subscription", "billing", "usage"),
                 keywords="اعضا تیم کارمند نقش اشتراک پلن صورتحساب مصرف سقف staff subscription billing usage",
                 children=(
@@ -411,7 +411,7 @@ SECTIONS: tuple = (
                     SubTab("subscription", "اشتراک", "subscription-overview", perms=("can_view_subscription",),
                            matches=(_m(prefix="subscription-"),), keywords="اشتراک پلن ارتقا subscription plan"),
                     SubTab("billing", "صورتحساب اشتراک", "billing-overview", perms=("can_view_billing",),
-                           matches=(_m(prefix="billing-"),), keywords="صورتحساب فاکتور اشتراک پرداخت اشتراک billing"),
+                           matches=(_m(prefix=("billing-", "platform-checkout")),), keywords="صورتحساب فاکتور اشتراک پرداخت اشتراک billing"),
                     SubTab("usage", "مصرف و سقف‌ها", "usage-overview", perms=("can_view_usage",),
                            matches=(_m(prefix="usage-"),), keywords="مصرف سقف محدودیت usage limits"),
                 )),
