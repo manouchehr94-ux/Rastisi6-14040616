@@ -396,14 +396,15 @@ input[type=range]{width:100%;accent-color:var(--leaf)}
 @media (max-width:860px){.closing-in{grid-template-columns:1fr;padding:72px 20px;gap:30px}}
 
 /* ================= INNER PAGES ================= */
-.pg-sign{background:var(--sign);color:var(--sign-ink);padding:64px 0 60px;position:relative}
+/* Internal-page introduction: compact on purpose (it used to be 64px+60px padding and a 76px h1 = ~45-65% of a 1366x768 laptop viewport). The HOME hero is a different component and is not touched. */
+.pg-sign{background:var(--sign);color:var(--sign-ink);padding:34px 0 30px;position:relative}
 .pg-sign::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0 119px,rgba(255,255,255,.035) 119px 120px)}
 .pg-sign .wrap{position:relative;z-index:1}
 .crumbs{font-size:14px;opacity:.7}
 .crumbs a:hover{color:var(--saffron)}
-.pg-sign h1{font-size:clamp(40px,6vw,76px);margin:10px 0 0;line-height:1.15;max-width:15em}
-.pg-sign p{opacity:.85;font-size:18.5px;max-width:36em;margin-top:14px}
-.pg-sign .btn{margin-top:26px}
+.pg-sign h1{font-size:clamp(28px,3.3vw,44px);margin:8px 0 0;line-height:1.25;max-width:26em}
+.pg-sign p{opacity:.85;font-size:16.5px;line-height:1.7;max-width:46em;margin-top:10px}
+.pg-sign .btn{margin-top:16px}
 
 .fsec{display:grid;grid-template-columns:.75fr 1.25fr;gap:56px;padding:56px 0;border-top:1px solid var(--rule)}
 .fsec:first-child{border-top:0;padding-top:0}
@@ -587,6 +588,7 @@ input[type=range]{width:100%;accent-color:var(--leaf)}
 .legal-toc a:hover{color:var(--leaf)}
 .legal-doc{font-size:17px;line-height:2.05;color:var(--ink-2)}
 .legal-doc h2{font-family:var(--display);font-weight:400;font-size:30px;color:var(--ink);margin:36px 0 8px;scroll-margin-top:90px}
+.needs-confirm{display:inline-block;padding:0 8px;border-radius:6px;background:color-mix(in srgb,var(--saffron) 28%,transparent);border:1px dashed var(--saffron);font-weight:700;font-size:.92em;line-height:1.7}
 .legal-doc h3{font-size:18px;color:var(--ink);margin:18px 0 4px}
 .legal-doc p,.legal-doc ul,.legal-doc ol{margin:0 0 12px}
 .legal-doc ul,.legal-doc ol{padding-inline-start:24px}
@@ -627,7 +629,7 @@ input[type=range]{width:100%;accent-color:var(--leaf)}
 .sub-sm{font-size:16.5px}
 .pg-404{padding:120px 0}
 .wrap.narrow{max-width:860px}
-.pg-sign p+.btn,.pg-sign .btn{margin-top:26px}
+.pg-sign p+.btn,.pg-sign .btn{margin-top:16px}
 .sec .wrap > .intro:only-child{margin-bottom:0}
 #id_code{direction:ltr;text-align:center;font-size:26px;font-weight:800;letter-spacing:.4em}
 .legal-doc .r-legal-section{margin:0 0 8px}

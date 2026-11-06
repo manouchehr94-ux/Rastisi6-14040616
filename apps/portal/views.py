@@ -181,8 +181,15 @@ def terms(request):
     return render(request, "portal/public/terms.html", {"terms_version": CURRENT_TERMS_VERSION})
 
 
+def _privacy_approved(request) -> bool:
+    """The privacy text is a DRAFT until the platform owner explicitly marks it approved (Platform Admin → public site). Default: not approved."""
+    from apps.portal.public_site import services as public_site_services
+
+    return public_site_services.truthy("privacy.approved", request)
+
+
 def privacy(request):
-    return render(request, "portal/public/privacy.html")
+    return render(request, "portal/public/privacy.html", {"privacy_approved": _privacy_approved(request)})
 
 
 def platform_robots_txt(request):
@@ -215,8 +222,9 @@ def platform_sitemap_xml(request):
         {"loc": request.build_absolute_uri(reverse("portal:contact")), "priority": "0.5", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:register")), "priority": "0.9", "lastmod": None},
         {"loc": request.build_absolute_uri(reverse("portal:terms")), "priority": "0.3", "lastmod": None},
-        {"loc": request.build_absolute_uri(reverse("portal:privacy")), "priority": "0.3", "lastmod": None},
     ]
+    if _privacy_approved(request):                      # a draft page is noindex, so it must not be advertised in the sitemap either
+        entries.append({"loc": request.build_absolute_uri(reverse("portal:privacy")), "priority": "0.3", "lastmod": None})
     return render(request, "seo/sitemap.xml", {"entries": entries}, content_type="application/xml")
 
 

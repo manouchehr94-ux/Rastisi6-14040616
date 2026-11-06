@@ -36,7 +36,7 @@
 <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
 <link rel="stylesheet" href="{% static 'css/base.css' %}">
 <link rel="stylesheet" href="{% static 'css/layout.css' %}">
-<link rel="stylesheet" href="{% static 'core/password_toggle.css' %}?v=20261029-2">
+<link rel="stylesheet" href="{% static 'core/password_toggle.css' %}?v=20261106-1">
 {% block extra_css %}{% endblock %}
 {% comment %}Loaded AFTER page CSS so a selected full-site palette can consistently
 theme every storefront page without per-page forks.{% endcomment %}
@@ -53,7 +53,7 @@ the product quick view (MODAL).{% endcomment %}
 <script src="{% static 'js/storefront_overlay.js' %}" defer></script>
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
 {% comment %}Shared password visibility toggle (eye button in its own gutter) — also covers the htmx-loaded customer login/signup modal.{% endcomment %}
-<script src="{% static 'core/password_toggle.js' %}?v=20261029-2" defer></script>
+<script src="{% static 'core/password_toggle.js' %}?v=20261106-1" defer></script>
 {% block structured_data %}{% endblock %}
 {% include "partials/tracking_head.html" %}
 </head>

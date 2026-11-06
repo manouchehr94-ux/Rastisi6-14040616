@@ -3,6 +3,7 @@
 .jdp-text{min-width:0;flex:1 1 auto;text-align:right;direction:ltr;font-variant-numeric:tabular-nums}
 .jdp-btn{flex:0 0 auto;min-width:38px;min-height:38px;border:1px solid var(--border,#d9d9e3);background:var(--surface,#fff);border-radius:10px;cursor:pointer;font-size:16px;line-height:1}
 .jdp-btn:focus-visible,.jdp-day:focus-visible,.jdp-nav:focus-visible,.jdp-link:focus-visible,.jdp-ok:focus-visible{outline:2px solid var(--brand,#6d28d9);outline-offset:2px}
+/* `absolute` is only the no-JS fallback: jalali_picker.js places the open popup with viewport (fixed) coordinates so ancestor overflow can't clip it. */
 .jdp-pop{position:absolute;z-index:1200;top:calc(100% + 6px);inset-inline-start:0;width:296px;max-width:calc(100vw - 24px);padding:12px;background:var(--surface,#fff);color:var(--text,#1f2937);border:1px solid var(--border,#d9d9e3);border-radius:14px;box-shadow:0 14px 40px rgba(15,23,42,.18);direction:rtl;font-size:14px}
 .jdp-pop[hidden]{display:none}
 .jdp-head{display:flex;align-items:center;gap:6px;margin-bottom:8px}

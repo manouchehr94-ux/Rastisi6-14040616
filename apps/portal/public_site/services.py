@@ -348,12 +348,16 @@ def demo_payload(request=None) -> dict:
 
 
 def ready_template_rows(request=None) -> list:
-    """The platform's real Ready Templates (one card each, latest version) as public-page rows.
-    Read-only; new templates appear automatically. Owner overrides: name/desc/cat/hide/home."""
+    """The Ready Templates a seller can ACTUALLY choose (one card each, latest version) as public-page rows.
+
+    The public pages (``/design/``, the home shelf) read the very same set as the Studio / merchant gallery / onboarding (``SCOPE_GALLERY`` =
+    ``list_selectable_templates()``): a template is advertised publicly only if a seller can select it, with the same key, version and name. A registered
+    Ready Template the owner has not approved for the gallery is NOT shown (it used to be: 63 public vs 19 selectable). Read-only; owner overrides:
+    name/desc/cat/hide/home."""
     from apps.storefront_builder.services import ready_template_card_service
 
     cards = ready_template_card_service.build_ready_template_cards(
-        None, current_template_key=None, current_template_version=None,
+        None, current_template_key=None, current_template_version=None, scope=ready_template_card_service.SCOPE_GALLERY,
     )
     rows = []
     for card in cards:

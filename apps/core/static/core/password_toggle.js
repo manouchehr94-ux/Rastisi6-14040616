@@ -4,6 +4,7 @@
  *  - default hidden (type=password); the button flips password <-> text and nothing else: name, id, value,
  *    autocomplete and validation are untouched, so browser autofill and form posts behave exactly as before;
  *  - the field returns to hidden on submit, reset and bfcache restore;
+ *  - the field is always dir=ltr / text-align:left with the eye on the physical right (see password_toggle.css);
  *  - opt out with data-pw-toggle="off"; fields added later (htmx/Alpine) are picked up by a MutationObserver.
  */
 (function () {
@@ -23,12 +24,11 @@
 
     var wrap = document.createElement('span');
     wrap.className = 'pw-field';
-    // The gutter follows the INPUT's own text direction, never the page's.
-    var dir = (input.getAttribute('dir') || '').toLowerCase();
-    if (dir !== 'ltr' && dir !== 'rtl') {
-      try { dir = window.getComputedStyle(input).direction === 'ltr' ? 'ltr' : 'rtl'; } catch (e) { dir = 'rtl'; }
-    }
-    wrap.setAttribute('dir', dir);
+    // Product rule: a password is always typed left-to-right (direction:ltr; text-align:left) with the eye on the physical RIGHT, whatever the page
+    // direction is. Labels and the rest of the form stay RTL: only this field is forced.
+    input.setAttribute('dir', 'ltr');
+    input.classList.add('pw-input');
+    wrap.setAttribute('dir', 'ltr');
     parent.insertBefore(wrap, input);
     wrap.appendChild(input);
 

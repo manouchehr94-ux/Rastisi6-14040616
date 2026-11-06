@@ -21,7 +21,7 @@
   {% if page.object_list %}
   <div class="pa-tablewrap">
     <table>
-      <thead><tr><th>میزبان</th><th>فروشگاه</th><th>نوع</th><th>اصلی</th><th>وضعیتِ تأیید</th><th>ایجاد</th><th></th></tr></thead>
+      <thead><tr><th>میزبان</th><th>فروشگاه</th><th>نوع</th><th>اصلی</th><th>وضعیتِ تأیید</th><th>ایجاد</th><th class="pa-actcol"></th></tr></thead>
       <tbody>
         {% for domain in page.object_list %}
         <tr>
@@ -35,12 +35,12 @@
             {% else %}<span class="pa-badge pa-warn">{{ domain.get_verification_status_display }}</span>{% endif %}
           </td>
           <td>{{ domain.created_at|jalali }}</td>
-          <td class="pa-row">
+          <td class="pa-actcol"><div class="pa-row pa-nowrap">
             <form method="post" action="{% url 'portal_platform_admin:domain-check' domain.pk %}"><input type="hidden" name="next" value="{{ request.get_full_path }}">{% csrf_token %}<button class="pa-btn pa-small" type="submit">بررسیِ DNS/SSL</button></form>
             {% if domain.verification_status == "verified" and not domain.is_primary %}
             <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:domain-set-primary' domain.pk %}" data-confirm="این دامنه به‌عنوانِ دامنه‌یِ اصلیِ فروشگاه تنظیم شود؟">{% csrf_token %}<button class="pa-btn pa-small pa-soft" type="submit">اصلی‌کردن</button></form>
             {% endif %}
-          </td>
+          </div></td>
         </tr>
         {% endfor %}
       </tbody>

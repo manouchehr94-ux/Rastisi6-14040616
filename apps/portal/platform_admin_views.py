@@ -1610,35 +1610,55 @@ def _pending_claims_count() -> int:
     return PlatformManualPaymentClaim.objects.filter(status=PlatformManualPaymentClaim.Status.PENDING_REVIEW).count()
 
 
-def _attempt_rows(*, kind="", status="", provider="", query="", limit=300):
+class _MergedAttemptRows:
+    """Newest-first merge of several attempt querysets, usable by ``Paginator`` (``len`` + slicing) without loading the whole history.
+
+    Each part is ``(queryset ordered by -created_at, row_builder)``. ``len`` is the sum of COUNTs; a slice ``[a:b]`` reads at most ``b`` rows from every part
+    and merges them, so page N costs O(N x page_size) rows — never an arbitrary cut-off that would hide older financial records."""
+
+    def __init__(self, parts):
+        self._parts = parts
+
+    def __len__(self):
+        return sum(qs.count() for qs, _build in self._parts)
+
+    def __getitem__(self, item):
+        if not isinstance(item, slice):
+            raise TypeError("only slicing is supported")
+        start, stop = item.start or 0, item.stop
+        rows = []
+        for qs, build in self._parts:
+            rows.extend(build(a) for a in (qs[:stop] if stop is not None else qs))
+        rows.sort(key=lambda r: r["created_at"], reverse=True)
+        return rows[start:stop]
+
+
+def _attempt_rows(*, kind="", status="", provider="", query=""):
     from apps.billing.models import SubscriptionPaymentAttempt
     from apps.sms.models import SmsPackagePaymentAttempt
 
-    rows = []
+    parts = []
     if kind in ("", "subscription"):
-        qs = SubscriptionPaymentAttempt.objects.select_related("store", "invoice").order_by("-created_at")
+        qs = SubscriptionPaymentAttempt.objects.select_related("store", "invoice").order_by("-created_at", "-pk")
         if status:
             qs = qs.filter(status=status)
         if provider:
             qs = qs.filter(provider=provider)
         if query:
             qs = qs.filter(Q(store__name__icontains=query) | Q(invoice__number__icontains=query) | Q(public_token__icontains=query))
-        for a in qs[:limit]:
-            rows.append({"kind": "subscription", "kind_label": "اشتراک", "attempt": a, "ref": a.invoice.number,
-                         "store": a.store, "created_at": a.created_at})
+        parts.append((qs, lambda a: {"kind": "subscription", "kind_label": "اشتراک", "attempt": a, "ref": a.invoice.number,
+                                     "store": a.store, "created_at": a.created_at}))
     if kind in ("", "sms"):
-        qs = SmsPackagePaymentAttempt.objects.select_related("store", "purchase__package").order_by("-created_at")
+        qs = SmsPackagePaymentAttempt.objects.select_related("store", "purchase__package").order_by("-created_at", "-pk")
         if status:
             qs = qs.filter(status=status)
         if provider:
             qs = qs.filter(provider=provider)
         if query:
             qs = qs.filter(Q(store__name__icontains=query) | Q(public_token__icontains=query))
-        for a in qs[:limit]:
-            rows.append({"kind": "sms", "kind_label": "بسته پیامک", "attempt": a, "ref": f"SMS-{a.purchase_id}",
-                         "store": a.store, "created_at": a.created_at})
-    rows.sort(key=lambda r: r["created_at"], reverse=True)
-    return rows
+        parts.append((qs, lambda a: {"kind": "sms", "kind_label": "بسته پیامک", "attempt": a, "ref": f"SMS-{a.purchase_id}",
+                                     "store": a.store, "created_at": a.created_at}))
+    return _MergedAttemptRows(parts)
 
 
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
