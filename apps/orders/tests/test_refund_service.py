@@ -179,13 +179,32 @@ class ExecuteOrderRefundTests(RefundServiceTestCase):
             order=other_order, product_name="کالا", quantity=1,
             unit_price=Decimal("100000"), line_total=Decimal("100000"),
         )
+        original = Refund.objects.get(store=self.store, idempotency_key="p0-shared")
+        # The key namespace is per store: another tenant using the same key is NOT a replay of ours — it gets its own refund and never ours.
+        other_refund = execute_order_refund(
+            other_order, store=other_store, actor=self.staff,
+            line_requests=[{"order_item_id": other_item.pk, "quantity": 1}],
+            idempotency_key="p0-shared",
+        )
+        self.assertEqual((other_refund.store_id, other_refund.order_id), (other_store.pk, other_order.pk))
+        self.assertNotEqual(other_refund.pk, original.pk)
+        original.refresh_from_db()
+        self.assertEqual((original.store_id, original.order_id), (self.store.pk, self.order.pk))
+        self.assertEqual(Refund.objects.filter(store=self.store).count(), 1)
+        # Within ONE store a key can never be replayed for a different order.
+        second_order = Order.objects.create(
+            code="P0-SECOND", store=self.store, customer=self.customer, vendor=self.vendor, address={},
+            shipping_method=self.shipping, payment_gateway=self.gateway, items_total=Decimal("100000"),
+            grand_total=Decimal("100000"), payment_status=Order.PaymentStatus.PAID,
+        )
+        second_item = OrderItem.objects.create(order=second_order, product_name="کالا", quantity=1,
+                                               unit_price=Decimal("100000"), line_total=Decimal("100000"))
         with self.assertRaises(RefundError):
             execute_order_refund(
-                other_order, store=other_store, actor=self.staff,
-                line_requests=[{"order_item_id": other_item.pk, "quantity": 1}],
-                idempotency_key="p0-shared",
+                second_order, store=self.store, actor=self.staff,
+                line_requests=[{"order_item_id": second_item.pk, "quantity": 1}], idempotency_key="p0-shared",
             )
-        self.assertFalse(Refund.objects.filter(store=other_store).exists())
+        self.assertEqual(Refund.objects.filter(store=self.store).count(), 1)
 
     def test_retry_key_rejects_changed_request_fields(self):
         original = {"order": self.order, "store": self.store, "actor": self.staff,

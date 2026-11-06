@@ -82,7 +82,10 @@ class MigrationAdditivityTests(TestCase):
     def test_single_leaf_and_canonical_card_transfer_migration_is_preserved_as_parent(self):
         loader = MigrationLoader(None, ignore_no_migrations=True)
         leaves = [k for k in loader.graph.leaf_nodes() if k[0] == "orders"]
-        self.assertEqual(leaves, [("orders", "0021_payment_engine_unified")])
+        # Exactly one leaf, and it descends from 0021 (the chain may grow; 0020/0021 are never renumbered or replaced).
+        self.assertEqual(leaves, [("orders", "0022_refund_idempotency_key_per_store")])
+        self.assertIn(("orders", "0021_payment_engine_unified"),
+                      loader.get_migration("orders", "0022_refund_idempotency_key_per_store").dependencies)
         migration = loader.get_migration("orders", "0021_payment_engine_unified")
         self.assertIn(("orders", "0020_card_transfer"), migration.dependencies)
         self.assertTrue(loader.get_migration("orders", "0020_card_transfer"))   # never renumbered / replaced
