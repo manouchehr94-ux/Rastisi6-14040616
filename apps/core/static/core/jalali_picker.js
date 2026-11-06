@@ -203,10 +203,60 @@
     text.addEventListener('change', commitText);
     text.addEventListener('blur', function () { if (!pop.hidden) return; commitText(); });
 
+    /* ---------- جای‌گذاریِ پنجره ----------
+     * The popup used to be `position:absolute` inside the field, so any ancestor with overflow hidden/auto (cards, fieldsets, drawers, modals) clipped it
+     * and nothing kept it inside the viewport. While open it is now placed with viewport (`fixed`) coordinates computed from the field's rectangle:
+     * flips above when there is no room below, is clamped horizontally, gets an internal scroll as a last resort, follows scroll/resize, and calibrates
+     * itself against a transformed ancestor (which would otherwise become the containing block of a fixed element).
+     * On phones (<=560px) the CSS bottom sheet is kept. */
+    var GAP = 6, EDGE = 8;
+    function phoneLayout() { return !!(root.matchMedia && root.matchMedia('(max-width: 560px)').matches); }
+    function place() {
+      if (pop.hidden) return;
+      if (phoneLayout()) { unplace(); return; }
+      var vw = root.innerWidth || document.documentElement.clientWidth, vh = root.innerHeight || document.documentElement.clientHeight;
+      var a = wrap.getBoundingClientRect();
+      pop.style.position = 'fixed';
+      pop.style.insetInlineStart = 'auto'; pop.style.insetBlockStart = 'auto'; pop.style.insetBlockEnd = 'auto';
+      pop.style.maxHeight = ''; pop.style.overflowY = '';
+      pop.style.left = '0px'; pop.style.top = '0px';
+      var pw = pop.offsetWidth, ph = pop.offsetHeight;
+      var below = vh - a.bottom - GAP - EDGE, above = a.top - GAP - EDGE;
+      var openBelow = ph <= below || below >= above;
+      var room = openBelow ? below : above;
+      if (ph > room) { ph = Math.max(room, 160); pop.style.maxHeight = ph + 'px'; pop.style.overflowY = 'auto'; }
+      var top = openBelow ? a.bottom + GAP : a.top - GAP - ph;
+      top = Math.min(Math.max(top, EDGE), Math.max(EDGE, vh - ph - EDGE));
+      var rtl = (root.getComputedStyle(wrap).direction === 'rtl');
+      var left = rtl ? a.right - pw : a.left;
+      left = Math.min(Math.max(left, EDGE), Math.max(EDGE, vw - pw - EDGE));
+      pop.style.left = left + 'px'; pop.style.top = top + 'px';
+      var r = pop.getBoundingClientRect(), dx = r.left - left, dy = r.top - top;        /* a transformed ancestor shifts `fixed`: calibrate */
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) { pop.style.left = (left - dx) + 'px'; pop.style.top = (top - dy) + 'px'; }
+    }
+    function unplace() {
+      ['position', 'left', 'top', 'maxHeight', 'overflowY', 'insetInlineStart', 'insetBlockStart', 'insetBlockEnd'].forEach(function (k) { pop.style[k] = ''; });
+    }
+    var placeOn = false;
+    function startPlacing() {
+      if (placeOn) return;
+      placeOn = true;
+      root.addEventListener('scroll', place, true);
+      root.addEventListener('resize', place);
+    }
+    function stopPlacing() {
+      if (!placeOn) return;
+      placeOn = false;
+      root.removeEventListener('scroll', place, true);
+      root.removeEventListener('resize', place);
+    }
+
     /* ---------- پنجرهٔ تقویم ---------- */
     function close(returnFocus) {
       if (pop.hidden) return;
       pop.hidden = true;
+      stopPlacing();
+      unplace();
       text.setAttribute('aria-expanded', 'false');
       if (openPicker === api2) openPicker = null;
       if (returnFocus) text.focus();
@@ -329,6 +379,7 @@
         if (focusDay && grid.querySelector('[data-day="' + focusDay + '"]')) target = grid.querySelector('[data-day="' + focusDay + '"]');
         if (target && pop.contains(document.activeElement) || focusDay === true) { if (target) target.focus(); }
       }
+      place();
     }
     function open() {
       if (text.disabled || !pop.hidden) return;
@@ -341,11 +392,14 @@
       text.setAttribute('aria-expanded', 'true');
       render(true);
       openPicker = api2;
+      startPlacing();
+      place();
     }
     var api2 = { close: close, root: wrap };
     button.addEventListener('click', function () { if (pop.hidden) open(); else close(true); });
     text.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) { e.preventDefault(); open(); }
+      else if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); e.stopPropagation(); close(true); }
       else if (e.key === 'Enter' && !pop.hidden) { e.preventDefault(); }
       else if (e.key === 'Enter') { commitText(); }
     });
