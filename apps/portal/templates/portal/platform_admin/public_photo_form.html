@@ -1,29 +1,32 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}ویرایش تصویر سایت عمومی | پنل مالک پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:public-photos' %}" class="pa-help">← بازگشت به تصاویر سایت عمومی</a></p>
-<div class="pa-pagehead"><div><h1>{{ label }}</h1><p>تصویر این جایگاه در تمام محل‌های استفاده در سایت عمومی جایگزین می‌شود.</p></div></div>
+<a class="pa-back" href="{% url 'portal_platform_admin:public-photos' %}">← تصاویرِ سایتِ عمومی</a>
+<div class="pa-pagehead"><div><h1>{{ label }}</h1><p>تصویرِ این جایگاه در تمامِ محل‌هایِ استفاده در سایتِ عمومی جایگزین می‌شود.</p></div></div>
 
-<div class="pa-card">
-  <div class="pa-cardbody">
-    <img src="{{ preview_url }}" alt="{{ label }}" width="440" height="260" style="display:block;max-width:100%;height:240px;object-fit:cover;border-radius:6px;margin-bottom:22px">
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %}
-      {% if form.non_field_errors %}<div class="pa-alert pa-alert-error">{{ form.non_field_errors }}</div>{% endif %}
-      <div class="pa-field">
-        <label for="{{ form.image.id_for_label }}">تصویر تازه</label>
+<form method="post" enctype="multipart/form-data" class="pa-form" data-pa-dirty>
+  {% csrf_token %}
+  <fieldset class="pa-fieldset"><legend>تصویرِ فعلی</legend>
+    <div class="pa-fieldbody"><img class="pa-photo" data-pa-fallback src="{{ preview_url }}" alt="{{ label }}" width="440" height="260"></div>
+  </fieldset>
+  <fieldset class="pa-fieldset"><legend>جایگزینی</legend>
+    {% if form.non_field_errors %}<div class="pa-fieldbody"><div class="pa-alert pa-alert-error" role="alert">{{ form.non_field_errors }}</div></div>{% endif %}
+    <div class="pa-fields">
+      <div class="pa-field pa-full{% if form.image.errors %} has-error{% endif %}">
+        <label for="{{ form.image.id_for_label }}">تصویرِ تازه</label>
         {{ form.image }}
-        {% if form.image.errors %}<div class="pa-alert pa-alert-error">{{ form.image.errors }}</div>{% endif %}
-        <p class="pa-help">فقط JPEG، PNG یا WebP. حداکثر ۴ مگابایت و حداکثر ۵۰۰۰ پیکسل در هر ضلع.</p>
+        {% if form.image.errors %}<div class="pa-error">{{ form.image.errors }}</div>{% endif %}
+        <span class="pa-help">فقط JPEG، PNG یا WebP. حداکثر ۴ مگابایت و حداکثر ۵۰۰۰ پیکسل در هر ضلع.</span>
       </div>
-      <div class="pa-field">
-        <label for="{{ form.alt_text.id_for_label }}">متن جایگزین تصویر</label>
+      <div class="pa-field pa-full{% if form.alt_text.errors %} has-error{% endif %}">
+        <label for="{{ form.alt_text.id_for_label }}">متنِ جایگزینِ تصویر</label>
         {{ form.alt_text }}
-        {% if form.alt_text.errors %}<div class="pa-alert pa-alert-error">{{ form.alt_text.errors }}</div>{% endif %}
-        <p class="pa-help">برای عکس جدید، توضیح دقیق و کوتاه فارسی بنویسید.</p>
+        {% if form.alt_text.errors %}<div class="pa-error">{{ form.alt_text.errors }}</div>{% endif %}
+        <span class="pa-help">برایِ عکسِ جدید، توضیحِ دقیق و کوتاهِ فارسی بنویسید.</span>
       </div>
-      <button class="pa-btn pa-primary" type="submit">ذخیرهٔ تصویر</button>
-    </form>
-  </div>
-</div>
+    </div>
+  </fieldset>
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ذخیره‌یِ تصویر</button><a class="pa-btn" href="{% url 'portal_platform_admin:public-photos' %}">انصراف</a></div>
+</form>
 {% endblock %}

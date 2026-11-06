@@ -4,19 +4,17 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>دامنه‌ها</h1><p>وضعیتِ DNS/SSL همیشه به‌صورتِ زنده بررسی می‌شود — هیچ نتیجه‌ای شبیه‌سازی نمی‌شود.</p></div></div>
 
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="نامِ میزبان یا فروشگاه..." value="{{ query }}"></div>
-    <select class="pa-input" name="domain_type" style="max-width:180px">
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-field"><label for="flt-domain_type">نوعِ دامنه</label><select id="flt-domain_type" name="domain_type">
       <option value="">همه‌ی انواع</option>
       {% for value, label in domain_type_choices %}<option value="{{ value }}" {% if domain_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    <select class="pa-input" name="verification_status" style="max-width:180px">
+    </select></div>
+  <div class="pa-field"><label for="flt-verification_status">وضعیتِ تأیید</label><select id="flt-verification_status" name="verification_status">
       <option value="">همه‌ی وضعیت‌ها</option>
       {% for value, label in verification_status_choices %}<option value="{{ value }}" {% if verification_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    <button class="pa-btn pa-primary" type="submit">فیلتر</button>
-  </div>
+    </select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:domains' %}">پاک‌کردن</a></div>
 </div></form>
 
 <div class="pa-card">
@@ -27,7 +25,7 @@
       <tbody>
         {% for domain in page.object_list %}
         <tr>
-          <td style="direction:ltr;text-align:left">{{ domain.hostname }}</td>
+          <td class="pa-ltr">{{ domain.hostname }}</td>
           <td><a href="{% url 'portal_platform_admin:store-detail' domain.store.public_id %}">{{ domain.store.name }}</a></td>
           <td>{{ domain.get_domain_type_display }}</td>
           <td>{% if domain.is_primary %}<span class="pa-badge pa-info">اصلی</span>{% else %}—{% endif %}</td>
@@ -37,10 +35,10 @@
             {% else %}<span class="pa-badge pa-warn">{{ domain.get_verification_status_display }}</span>{% endif %}
           </td>
           <td>{{ domain.created_at|jalali }}</td>
-          <td style="display:flex;gap:6px">
+          <td class="pa-row">
             <form method="post" action="{% url 'portal_platform_admin:domain-check' domain.pk %}"><input type="hidden" name="next" value="{{ request.get_full_path }}">{% csrf_token %}<button class="pa-btn pa-small" type="submit">بررسیِ DNS/SSL</button></form>
             {% if domain.verification_status == "verified" and not domain.is_primary %}
-            <form method="post" action="{% url 'portal_platform_admin:domain-set-primary' domain.pk %}">{% csrf_token %}<button class="pa-btn pa-small pa-soft" type="submit">اصلی‌کردن</button></form>
+            <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:domain-set-primary' domain.pk %}" data-confirm="این دامنه به‌عنوانِ دامنه‌یِ اصلیِ فروشگاه تنظیم شود؟">{% csrf_token %}<button class="pa-btn pa-small pa-soft" type="submit">اصلی‌کردن</button></form>
             {% endif %}
           </td>
         </tr>
@@ -50,7 +48,7 @@
   </div>
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">🌐</div><p>دامنه‌ای یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-globe"/></svg></div><p>دامنه‌ای یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

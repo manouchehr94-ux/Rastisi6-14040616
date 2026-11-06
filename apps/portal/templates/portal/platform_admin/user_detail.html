@@ -2,18 +2,17 @@
 {% load persian %}
 {% block title %}{{ profile_user.owner_profile.full_name|default:profile_user.email }} | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:users' %}" class="pa-help">← بازگشت به فهرستِ کاربران</a></p>
-<div x-data="{modal:null}">
+<a class="pa-back" href="{% url 'portal_platform_admin:users' %}">← فهرستِ کاربران</a>
 <div class="pa-card"><div class="pa-cardbody pa-detail-header">
-  <div class="pa-store-logo">👤</div>
+  <div class="pa-store-logo" aria-hidden="true"><svg class="pa-i"><use href="#i-users"/></svg></div>
   <div>
-    <h2 style="margin:0">{{ profile_user.owner_profile.full_name|default:profile_user.email }}</h2>
-    <p class="pa-help" style="direction:ltr;text-align:right">{{ profile_user.email }} · {{ profile_user.owner_profile.phone|default:"—" }}</p>
+    <h1 class="pa-detail-title">{{ profile_user.owner_profile.full_name|default:profile_user.email }}</h1>
+    <p class="pa-help pa-ltr">{{ profile_user.email }} · {{ profile_user.owner_profile.phone|default:"—" }}</p>
     {% if profile_user.is_active %}<span class="pa-badge pa-ok">فعال</span>{% else %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}
   </div>
-  <div class="pa-actions" style="display:flex;gap:8px">
+  <div class="pa-actions pa-row">
     {% if profile_user.is_active %}
-    <button class="pa-btn pa-danger" type="button" @click="modal='suspend'">تعلیقِ حساب</button>
+    <button class="pa-btn pa-danger" type="button" data-pa-open="dlg-suspend">تعلیقِ حساب</button>
     {% else %}
     <form method="post" action="{% url 'portal_platform_admin:user-activate' profile_user.pk %}">
       {% csrf_token %}<button class="pa-btn pa-soft" type="submit">فعال‌سازیِ حساب</button>
@@ -22,17 +21,16 @@
   </div>
 </div></div>
 
-<div class="pa-modal" x-show="modal==='suspend'" x-cloak @click.self="modal=null">
+<dialog class="pa-dialog" id="dlg-suspend" aria-labelledby="dlg-suspend-t">
   <div class="pa-modalbox">
-    <div class="pa-modalhead"><h3>تعلیقِ حسابِ کاربر</h3><button class="pa-x" type="button" @click="modal=null">✕</button></div>
+    <div class="pa-modalhead"><h3>تعلیقِ حسابِ کاربر</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
     <form method="post" action="{% url 'portal_platform_admin:user-suspend' profile_user.pk %}">
       {% csrf_token %}
       <div class="pa-modalbody"><div class="pa-field"><label>دلیلِ تعلیق</label><textarea class="pa-input" name="reason" required rows="3"></textarea></div></div>
-      <div class="pa-modalfoot"><button class="pa-btn" type="button" @click="modal=null">انصراف</button><button class="pa-btn pa-danger" type="submit">تعلیق</button></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-danger" type="submit">تعلیق</button></div>
     </form>
   </div>
-</div>
-</div>
+</dialog>
 
 <div class="pa-card">
   <div class="pa-cardhead"><h3>فروشگاه‌ها</h3></div>
@@ -57,7 +55,7 @@
     <form method="post" action="{% url 'portal_platform_admin:user-add-note' profile_user.pk %}">
       {% csrf_token %}
       <div class="pa-field"><textarea class="pa-input" name="body" rows="2" placeholder="یادداشتِ داخلی..."></textarea></div>
-      <button class="pa-btn pa-primary" style="margin-top:8px" type="submit">ثبتِ یادداشت</button>
+      <button class="pa-btn pa-primary pa-mt-2" type="submit">ثبتِ یادداشت</button>
     </form>
   </div>
 </div>

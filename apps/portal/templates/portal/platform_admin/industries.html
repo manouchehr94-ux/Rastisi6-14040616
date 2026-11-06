@@ -3,34 +3,29 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>صنف‌ها و قالب‌ها</h1><p>هر نسخه‌ی یک قالبِ صنف پس از ساخته‌شدن تغییرناپذیر است؛ نسخه‌ی تازه یک ردیفِ کاملاً جدید می‌سازد.</p></div></div>
 
-<form method="get" class="pa-card">
-  <div class="pa-cardbody">
-    <div class="pa-toolbar">
-      <div style="flex:2;min-width:220px"><input class="pa-input" type="search" name="q" placeholder="نام یا اسلاگ..." value="{{ q }}"></div>
-      <select class="pa-input" name="sector" style="max-width:180px">
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ q }}"></div>
+  <div class="pa-field"><label for="flt-sector">رسته</label><select id="flt-sector" name="sector">
         <option value="">همه‌ی رسته‌ها</option>
         {% for code, label in sector_tabs %}
         {% if code != "all" %}
         <option value="{{ code }}" {% if selected_sector == code %}selected{% endif %}>{{ label }}</option>
         {% endif %}
         {% endfor %}
-      </select>
-      <select class="pa-input" name="active" style="max-width:140px">
+      </select></div>
+  <div class="pa-field"><label for="flt-active">وضعیت</label><select id="flt-active" name="active">
         <option value="">همه‌ی وضعیت‌ها</option>
         <option value="active" {% if selected_active == "active" %}selected{% endif %}>فعال</option>
         <option value="inactive" {% if selected_active == "inactive" %}selected{% endif %}>غیرفعال</option>
-      </select>
-      <select class="pa-input" name="readiness" style="max-width:170px">
+      </select></div>
+  <div class="pa-field"><label for="flt-readiness">readiness</label><select id="flt-readiness" name="readiness">
         <option value="">همه‌ی آمادگی‌ها</option>
         {% for value, label in readiness_choices %}
         <option value="{{ value }}" {% if selected_readiness == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
-      </select>
-      <button class="pa-btn pa-primary" type="submit">فیلتر</button>
-      <a class="pa-btn" href="{% url 'portal_platform_admin:industries' %}">پاک‌کردن</a>
-    </div>
-  </div>
-</form>
+      </select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:industries' %}">پاک‌کردن</a></div>
+</div></form>
 
 <div class="pa-card">
   {% if templates %}
@@ -42,7 +37,7 @@
         <tr>
           <td>{{ template.icon }} {{ template.name }}</td>
           <td>{{ template.get_sector_display }}</td>
-          <td style="direction:ltr;text-align:left">{{ template.slug }}</td>
+          <td class="pa-ltr">{{ template.slug }}</td>
           <td>v{{ template.version }}</td>
           <td>{{ template.locale }}</td>
           <td>
@@ -60,7 +55,7 @@
     </table>
   </div>
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">🧱</div><p>هیچ قالبِ صنفی با این فیلترها یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-layers"/></svg></div><p>هیچ قالبِ صنفی با این فیلترها یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

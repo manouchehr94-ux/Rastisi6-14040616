@@ -4,19 +4,17 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>گزارش رخدادهایِ پلتفرم</h1><p>رخدادهایِ سراسری (تنظیمات/پلن/دسترسیِ خودِ این پنل). رخدادهایِ مختصِ یک فروشگاه در برگه‌ی «حسابرسی»ِ همان فروشگاه است.</p></div></div>
 
-<div class="pa-alert" style="background:var(--pa-bluebg);color:var(--pa-blue-ink)">
+<div class="pa-alert">
   به‌دلیلِ سیاستِ حریمِ خصوصیِ مصوبِ این کدبیس (بدونِ تصمیمِ ثبتِ IP/User-Agent)، این رخدادها ستونِ آدرسِ IP ندارند — نگاه کنید به یادداشت‌هایِ گزارشِ نهایی.
 </div>
 
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="text" name="action_code" placeholder="جست‌وجو در کدِ عملیات..." value="{{ action_code }}"></div>
-    <select class="pa-input" name="result" style="max-width:160px">
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-action_code">کدِ عملیات</label><input id="flt-action_code" type="text" name="action_code" value="{{ action_code }}"></div>
+  <div class="pa-field"><label for="flt-result">نتیجه</label><select id="flt-result" name="result">
       <option value="">همه‌ی نتایج</option>
       {% for value, label in result_choices %}<option value="{{ value }}" {% if result == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    <button class="pa-btn pa-primary" type="submit">فیلتر</button>
-  </div>
+    </select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:audit-log' %}">پاک‌کردن</a></div>
 </div></form>
 
 <div class="pa-card">
@@ -27,7 +25,7 @@
       <tbody>
         {% for entry in page.object_list %}
         <tr>
-          <td style="direction:ltr;text-align:left">{{ entry.action_code }}</td>
+          <td class="pa-ltr">{{ entry.action_code }}</td>
           <td>{{ entry.object_type }}</td>
           <td>{{ entry.object_label }}</td>
           <td>{{ entry.actor.get_username|default:"—" }}</td>
@@ -40,7 +38,7 @@
   </div>
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">🛡️</div><p>رخدادی یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-shield"/></svg></div><p>رخدادی یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

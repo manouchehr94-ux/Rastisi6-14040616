@@ -4,19 +4,17 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>اشتراک فروشگاه‌ها</h1><p>اشتراکِ جاریِ هر فروشگاه — تمدید/تغییرِ پلن از صفحه‌ی فروشگاه انجام می‌شود.</p></div></div>
 
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="نامِ فروشگاه..." value="{{ query }}"></div>
-    <select class="pa-input" name="status" style="max-width:180px">
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-field"><label for="flt-status">وضعیت</label><select id="flt-status" name="status">
       <option value="">همه‌ی وضعیت‌ها</option>
       {% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    <select class="pa-input" name="plan" style="max-width:160px">
+    </select></div>
+  <div class="pa-field"><label for="flt-plan">پلن</label><select id="flt-plan" name="plan">
       <option value="">همه‌ی پلن‌ها</option>
       {% for plan in plans %}<option value="{{ plan.pk }}" {% if plan_id == plan.pk|stringformat:"s" %}selected{% endif %}>{{ plan.name }}</option>{% endfor %}
-    </select>
-    <button class="pa-btn pa-primary" type="submit">فیلتر</button>
-  </div>
+    </select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:subscriptions' %}">پاک‌کردن</a></div>
 </div></form>
 
 <div class="pa-card">
@@ -37,7 +35,7 @@
           </td>
           <td>{{ sub.current_period_end|jalali|default:"—" }}</td>
           <td>{{ sub.trial_end_at|jalali|default:"—" }}</td>
-          <td style="display:flex;gap:6px">
+          <td class="pa-row">
             <a class="pa-btn pa-small pa-soft" href="{% url 'portal_platform_admin:store-detail' sub.store.public_id %}?tab=subscription">مدیریت</a>
             {% if sub.status == "active" %}
             <form method="post" action="{% url 'portal_platform_admin:subscription-suspend' sub.pk %}">{% csrf_token %}<button class="pa-btn pa-small pa-danger" type="submit">تعلیق</button></form>
@@ -52,7 +50,7 @@
   </div>
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">📄</div><p>اشتراکی یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-file"/></svg></div><p>اشتراکی یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

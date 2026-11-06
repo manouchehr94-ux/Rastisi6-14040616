@@ -1,26 +1,54 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}شرکت‌های پیامکی | پنل مالک پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<div class="pa-pagehead"><div><h1>شرکت‌های خدمات پیامکی</h1><p>اتصال Providerها و سیاست هزینه/اعتبار کل پلتفرم. رمزها هیچ‌وقت دوباره نمایش داده نمی‌شوند.</p></div></div>
+<div class="pa-pagehead"><div><h1>شرکت‌هایِ خدماتِ پیامکی</h1><p>اتصالِ Providerها و سیاستِ هزینه/اعتبارِ کلِ پلتفرم. رمزها هیچ‌وقت دوباره نمایش داده نمی‌شوند.</p></div></div>
 
-{% if test_result %}<div class="pa-alert {% if test_result.success %}pa-alert-success{% else %}pa-alert-error{% endif %}">{% if test_result.success %}تست {{ test_result.provider }} موفق بود. شناسه: {{ test_result.ref|default:"—" }}{% else %}تست ناموفق: {{ test_result.error }}{% endif %}</div>{% endif %}
+{% if test_result %}<div class="pa-alert {% if test_result.success %}pa-alert-success{% else %}pa-alert-error{% endif %}" role="status">{% if test_result.success %}تستِ {{ test_result.provider }} موفق بود. شناسه: {{ test_result.ref|default:"—" }}{% else %}تستِ ناموفق: {{ test_result.error }}{% endif %}</div>{% endif %}
 
-<form method="post" class="pa-card"><div class="pa-cardhead"><h3>قانون محاسبه و اعتبار</h3></div><div class="pa-cardbody">{% csrf_token %}<input type="hidden" name="action" value="save_policy">
-<div class="pa-grid2">
-<div class="pa-field"><label>تعداد کاراکتر در هر اعتبار</label><input class="pa-input" type="number" min="1" name="chars_per_credit" value="{{ policy.chars_per_credit }}"><p class="pa-help">مثلاً 70: متن 71 کاراکتری = 2 اعتبار.</p></div>
-<div class="pa-field"><label>قیمت هر اعتبار (تومان)</label><input class="pa-input" type="number" min="0" name="price_per_credit_toman" value="{{ policy.price_per_credit_toman }}"><p class="pa-help">پیش‌فرض فعلی: 205 تومان.</p></div>
-</div><div class="pa-field" style="margin-top:10px"><label>حداکثر بدهی مجاز برای OTP</label><input class="pa-input" style="max-width:220px" type="number" min="0" name="otp_overdraft_limit" value="{{ policy.otp_overdraft_limit }}"><p class="pa-help">پیام عادی زیر صفر هرگز ارسال نمی‌شود؛ OTP می‌تواند تا این تعداد اعتبار منفی شود.</p></div>
-<button class="pa-btn pa-primary" type="submit">ذخیره قانون هزینه</button></div></form>
+<form method="post" class="pa-form" data-pa-dirty>{% csrf_token %}<input type="hidden" name="action" value="save_policy">
+  <fieldset class="pa-fieldset"><legend>قانونِ محاسبه و اعتبار</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="sp-chars">تعدادِ کاراکتر در هر اعتبار</label><input id="sp-chars" type="number" min="1" step="1" name="chars_per_credit" value="{{ policy.chars_per_credit }}"><span class="pa-help">مثلاً 70: متنِ ۷۱ کاراکتری = ۲ اعتبار.</span></div>
+      <div class="pa-field"><label for="sp-price">قیمتِ هر اعتبار (تومان)</label><input id="sp-price" type="number" min="0" step="1" name="price_per_credit_toman" value="{{ policy.price_per_credit_toman }}"><span class="pa-help">مقدارِ فعلی در این فرم نمایش داده می‌شود؛ تغییرِ آن روی محاسبه‌یِ هزینه‌یِ پیامک‌هایِ بعدی اثر می‌گذارد.</span></div>
+      <div class="pa-field"><label for="sp-od">حداکثرِ بدهیِ مجاز برایِ OTP</label><input id="sp-od" type="number" min="0" step="1" name="otp_overdraft_limit" value="{{ policy.otp_overdraft_limit }}"><span class="pa-help">پیامِ عادی زیرِ صفر هرگز ارسال نمی‌شود؛ OTP می‌تواند تا این تعداد اعتبار منفی شود.</span></div>
+    </div>
+  </fieldset>
+  <div class="pa-formbar pa-static"><button class="pa-btn pa-primary" type="submit">ذخیره‌یِ قانونِ هزینه</button></div>
+</form>
 
-<form method="post" class="pa-card"><div class="pa-cardhead"><h3>Providerها</h3></div><div class="pa-cardbody">{% csrf_token %}<input type="hidden" name="action" value="save_providers">
-<div class="pa-field"><label>Provider اصلی</label><select class="pa-input" name="primary_provider"><option value="melipayamak" {% if config.sms_backend == "melipayamak" %}selected{% endif %}>ملی‌پیامک</option><option value="kavenegar" {% if config.sms_backend == "kavenegar" %}selected{% endif %}>کاوه‌نگار</option></select></div>
-<div class="pa-section" style="margin-top:16px"><h3>ملی‌پیامک</h3><label><input type="checkbox" name="melipayamak_enabled" {% if melipayamak_enabled %}checked{% endif %}> فعال</label>
-<div class="pa-grid2" style="margin-top:10px"><div class="pa-field"><label>نام کاربری</label><input class="pa-input" name="melipayamak_username" value="{{ credentials.melipayamak_username|default:'' }}"></div><div class="pa-field"><label>رمز عبور</label><input class="pa-input" type="password" name="melipayamak_password" placeholder="{% if melipayamak_password_is_configured %}ذخیره شده — فقط برای تغییر وارد کنید{% endif %}"></div></div>
-<div class="pa-field"><label>شماره فرستنده پیامک متنی</label><input class="pa-input" dir="ltr" name="melipayamak_sender" value="{{ credentials.melipayamak_sender|default:config.sms_sender_number }}"></div></div>
-<div class="pa-section"><h3>کاوه‌نگار</h3><label><input type="checkbox" name="kavenegar_enabled" {% if kavenegar_enabled %}checked{% endif %}> فعال</label>
-<div class="pa-grid2" style="margin-top:10px"><div class="pa-field"><label>API Key</label><input class="pa-input" type="password" name="kavenegar_api_key" placeholder="{% if kavenegar_api_key_is_configured %}ذخیره شده — فقط برای تغییر وارد کنید{% endif %}"></div><div class="pa-field"><label>شماره فرستنده پیامک متنی</label><input class="pa-input" dir="ltr" name="kavenegar_sender" value="{{ credentials.kavenegar_sender|default:'' }}"></div></div>
-<label><input type="checkbox" name="otp_fallback_enabled" {% if otp_fallback_enabled %}checked{% endif %}> اگر OTP Provider اصلی شکست خورد، از Provider رزرو استفاده شود</label></div>
-<button class="pa-btn pa-primary" type="submit">ذخیره شرکت‌های پیامکی</button></div></form>
+<form method="post" class="pa-form pa-mt-4" data-pa-dirty>{% csrf_token %}<input type="hidden" name="action" value="save_providers">
+  <fieldset class="pa-fieldset"><legend>Providerها</legend>
+    <div class="pa-fields">
+      <div class="pa-field pa-full"><label for="sp-primary">Provider اصلی</label><select id="sp-primary" name="primary_provider"><option value="melipayamak" {% if config.sms_backend == "melipayamak" %}selected{% endif %}>ملی‌پیامک</option><option value="kavenegar" {% if config.sms_backend == "kavenegar" %}selected{% endif %}>کاوه‌نگار</option></select></div>
+    </div>
+  </fieldset>
+  <fieldset class="pa-fieldset"><legend>ملی‌پیامک</legend>
+    <div class="pa-fields">
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="melipayamak_enabled" {% if melipayamak_enabled %}checked{% endif %}> فعال</label>
+      <div class="pa-field"><label for="mp-user">نامِ کاربری</label><input id="mp-user" class="pa-ltr" name="melipayamak_username" autocomplete="off" value="{{ credentials.melipayamak_username|default:'' }}"></div>
+      <div class="pa-field"><label for="mp-pass">رمزِ عبور</label><input id="mp-pass" type="password" name="melipayamak_password" autocomplete="new-password" placeholder="{% if melipayamak_password_is_configured %}ذخیره شده — فقط برایِ تغییر وارد کنید{% endif %}"></div>
+      <div class="pa-field pa-full"><label for="mp-sender">شماره‌یِ فرستنده‌یِ پیامکِ متنی</label><input id="mp-sender" class="pa-ltr" name="melipayamak_sender" value="{{ credentials.melipayamak_sender|default:config.sms_sender_number }}"></div>
+    </div>
+  </fieldset>
+  <fieldset class="pa-fieldset"><legend>کاوه‌نگار</legend>
+    <div class="pa-fields">
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="kavenegar_enabled" {% if kavenegar_enabled %}checked{% endif %}> فعال</label>
+      <div class="pa-field"><label for="kv-key">API Key</label><input id="kv-key" type="password" name="kavenegar_api_key" autocomplete="new-password" placeholder="{% if kavenegar_api_key_is_configured %}ذخیره شده — فقط برایِ تغییر وارد کنید{% endif %}"></div>
+      <div class="pa-field"><label for="kv-sender">شماره‌یِ فرستنده‌یِ پیامکِ متنی</label><input id="kv-sender" class="pa-ltr" name="kavenegar_sender" value="{{ credentials.kavenegar_sender|default:'' }}"></div>
+      <label class="pa-check pa-full"><input type="checkbox" name="otp_fallback_enabled" {% if otp_fallback_enabled %}checked{% endif %}> اگر OTP Provider اصلی شکست خورد، از Provider رزرو استفاده شود</label>
+    </div>
+  </fieldset>
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ذخیره‌یِ شرکت‌هایِ پیامکی</button></div>
+</form>
 
-<form method="post" class="pa-card"><div class="pa-cardhead"><h3>تست اتصال مستقیم</h3></div><div class="pa-cardbody">{% csrf_token %}<input type="hidden" name="action" value="test_provider"><div class="pa-grid2"><div class="pa-field"><label>شماره موبایل</label><input class="pa-input" dir="ltr" name="test_phone" placeholder="09xxxxxxxxx"></div><div class="pa-field"><label>Provider</label><select class="pa-input" name="provider"><option value="melipayamak">ملی‌پیامک</option><option value="kavenegar">کاوه‌نگار</option></select></div></div><button class="pa-btn pa-soft" type="submit">ارسال پیامک تست</button></div></form>
+<form method="post" class="pa-form pa-mt-4" data-no-loading>{% csrf_token %}<input type="hidden" name="action" value="test_provider">
+  <fieldset class="pa-fieldset"><legend>تستِ اتصالِ مستقیم</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="tp-phone">شماره‌یِ موبایل</label><input id="tp-phone" class="pa-ltr" type="tel" inputmode="tel" name="test_phone" placeholder="09xxxxxxxxx"></div>
+      <div class="pa-field"><label for="tp-prov">Provider</label><select id="tp-prov" name="provider"><option value="melipayamak">ملی‌پیامک</option><option value="kavenegar">کاوه‌نگار</option></select></div>
+    </div>
+  </fieldset>
+  <div class="pa-formbar pa-static"><button class="pa-btn" type="submit">ارسالِ پیامکِ تست</button></div>
+</form>
 {% endblock %}

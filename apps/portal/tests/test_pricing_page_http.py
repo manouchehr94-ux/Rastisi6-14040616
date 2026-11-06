@@ -322,9 +322,10 @@ class PlatformAdminPricingManagementTests(TestCase):
 
         sync_entitlement_definitions()
         html = self.client.get("/plans/add/", HTTP_HOST=ADMIN).content.decode()
-        self.assertIn("هنوز اعمال نمی‌شود", html)
+        self.assertIn("هنوز اعمال‌نشده در کد", html)          # unenforced keys are listed (collapsed), not offered as controls
         self.assertIn('name="entitlement_catalog.products"', html)
         self.assertNotIn('name="entitlement_integrations.api"', html)
+        self.assertIn("integrations.api", html)
 
 
 @override_settings(ALLOWED_HOSTS=[PUBLIC, ADMIN, STORE_HOST, "testserver"])

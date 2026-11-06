@@ -1,43 +1,49 @@
 {% extends "portal/platform_admin/base.html" %}
-{% block title %}پلن‌های اشتراک | پنل مدیریت پلتفرم{% endblock %}
+{% block title %}پلن‌ها و نسخه‌ها | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
 <div class="pa-pagehead">
-  <div><h1>پلن‌های اشتراک</h1><p>ویرایشِ پلن روی نسخه‌ی «پیش‌نویس» انجام می‌شود (اگر نبود از آخرین نسخه کپی می‌شود) — نسخه‌های منتشرشده هرگز تغییر نمی‌کنند. بایگانیِ پلن مشترکانِ فعلی را تغییر نمی‌دهد.</p></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pa-btn" href="{% url 'portal_platform_admin:features' %}">کاتالوگِ قابلیت‌ها</a><a class="pa-btn" href="{% url 'portal_platform_admin:assignment-matrix' %}">تخصیصِ قابلیت به پلن</a><a class="pa-btn" href="{% url 'portal_platform_admin:pricing-content' %}">محتوای صفحه‌ی تعرفه</a><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}">+ پلنِ تازه</a></div>
+  <div><h1>پلن‌ها و نسخه‌ها</h1><p>ویرایشِ پلن روی نسخه‌ی «پیش‌نویس» انجام می‌شود (اگر نبود، از آخرین نسخه کپی می‌شود). نسخه‌هایِ منتشرشده تغییرناپذیرند و بایگانیِ پلن مشترکانِ فعلی را تغییر نمی‌دهد.</p></div>
+  <div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}"><svg class="pa-i"><use href="#i-plus"/></svg>پلنِ تازه</a></div>
 </div>
 
-{% if plans %}
 {% for plan in plans %}
-<div class="pa-card">
+<section class="pa-card" data-plan="{{ plan.code }}">
   <div class="pa-cardhead">
-    <h3>{{ plan.name }} {% if not plan.is_active %}<span class="pa-badge pa-off">بایگانی‌شده</span>{% endif %}{% if plan.promo_label %}<span class="pa-badge pa-info">{{ plan.promo_label }}</span>{% endif %}{% if plan.is_recommended %}<span class="pa-badge pa-info">پیشنهادی</span>{% endif %}{% if not plan.is_publicly_selectable %}<span class="pa-badge pa-off">پنهان از صفحه عمومی</span>{% endif %}</h3>
-    <div style="display:flex;gap:8px">
-      <a class="pa-btn pa-small" href="{% url 'portal_platform_admin:plan-edit' plan.pk %}">ویرایشِ پیش‌نویس / نسخه‌ی تازه</a>
-      <a class="pa-btn pa-small" href="{% url 'portal_platform_admin:plan-migration' plan.pk %}">مهاجرتِ مشترکان</a>
-      <form method="post" action="{% url 'portal_platform_admin:plan-archive' plan.pk %}">
-        {% csrf_token %}<button class="pa-btn pa-small pa-danger" type="submit">{% if plan.is_active %}بایگانی{% else %}بازگردانی{% endif %}</button>
+    <h3>{{ plan.name }}
+      {% if not plan.is_active %}<span class="pa-badge pa-off">بایگانی‌شده</span>{% endif %}
+      {% if plan.is_recommended %}<span class="pa-badge pa-info">پیشنهادی</span>{% endif %}
+      {% if plan.promo_label %}<span class="pa-badge pa-warn">{{ plan.promo_label }}</span>{% endif %}
+      {% if not plan.is_publicly_selectable %}<span class="pa-badge">پنهان از صفحه‌ی عمومی</span>{% endif %}
+    </h3>
+    <div class="pa-actions">
+      <a class="pa-btn" href="{% url 'portal_platform_admin:plan-edit' plan.pk %}">ویرایشِ پیش‌نویس / نسخه‌ی تازه</a>
+      <a class="pa-btn" href="{% url 'portal_platform_admin:plan-migration' plan.pk %}">مهاجرتِ مشترکان</a>
+      <form method="post" action="{% url 'portal_platform_admin:plan-archive' plan.pk %}" class="pa-form-inline"
+            {% if plan.is_active %}data-confirm="پلنِ «{{ plan.name }}» بایگانی شود؟ فروشِ تازه و نمایشِ عمومی بسته می‌شود؛ مشترکانِ فعلی بدونِ تغییر ادامه می‌دهند."{% endif %}>
+        {% csrf_token %}<button class="pa-btn {% if plan.is_active %}pa-danger{% endif %}" type="submit">{% if plan.is_active %}بایگانی{% else %}بازگردانی{% endif %}</button>
       </form>
     </div>
   </div>
   <div class="pa-tablewrap">
     <table>
-      <thead><tr><th>نسخه</th><th>وضعیت</th><th>قیمتِ نمایشی</th><th>روزهایِ تریال</th><th>دوره</th><th></th></tr></thead>
+      <thead><tr><th>نسخه</th><th>وضعیت</th><th class="pa-num">قیمتِ نمایشی (تومان)</th><th class="pa-num">روزهایِ تریال</th><th>دوره‌یِ اصلی</th><th class="pa-actcol"></th></tr></thead>
       <tbody>
         {% for version in plan.versions.all %}
         <tr>
-          <td>v{{ version.version_number }}</td>
+          <td class="pa-num">v{{ version.version_number }}</td>
           <td>
             {% if version.status == "published" %}<span class="pa-badge pa-ok">منتشرشده</span>
             {% elif version.status == "draft" %}<span class="pa-badge pa-warn">پیش‌نویس</span>
-            {% else %}<span class="pa-badge pa-off">{{ version.get_status_display }}</span>{% endif %}
+            {% else %}<span class="pa-badge">{{ version.get_status_display }}</span>{% endif %}
           </td>
-          <td>{{ version.display_price }}</td>
-          <td>{{ version.trial_days }}</td>
+          <td class="pa-num">{{ version.display_price }}</td>
+          <td class="pa-num">{{ version.trial_days }}</td>
           <td>{{ version.get_billing_interval_display }}</td>
-          <td>
+          <td class="pa-actcol">
             {% if version.status == "draft" %}
-            <form method="post" action="{% url 'portal_platform_admin:plan-version-publish' plan.pk version.pk %}">
-              {% csrf_token %}<button class="pa-btn pa-small pa-primary" type="submit">انتشار</button>
+            <form method="post" action="{% url 'portal_platform_admin:plan-version-publish' plan.pk version.pk %}" class="pa-form-inline"
+                  data-confirm="نسخه‌ی v{{ version.version_number }} منتشر شود؟ پس از انتشار، قیمت و حق‌دسترسی‌هایِ این نسخه تغییرناپذیر می‌شوند.">
+              {% csrf_token %}<button class="pa-btn pa-primary" type="submit">انتشار</button>
             </form>
             {% endif %}
           </td>
@@ -46,9 +52,8 @@
       </tbody>
     </table>
   </div>
-</div>
+</section>
+{% empty %}
+<div class="pa-card pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-tag"/></svg></div><h3>هنوز پلنی تعریف نشده</h3><p>نخستین پلن را بسازید؛ قیمت، دوره‌ها و سقف‌ها را خودتان تعیین می‌کنید.</p><div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:plan-add' %}">پلنِ تازه</a></div></div>
 {% endfor %}
-{% else %}
-<div class="pa-card pa-empty"><div class="pa-empty-icon">🧩</div><p>هیچ پلنی تعریف نشده.</p></div>
-{% endif %}
 {% endblock %}

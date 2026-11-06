@@ -2,17 +2,17 @@
 {% load persian %}
 {% block title %}فاکتورِ {{ invoice.number }} | پنل مدیریت پلتفرم{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:payments' %}" class="pa-help">← بازگشت به فهرستِ پرداخت‌ها</a></p>
-<div class="pa-card"><div class="pa-cardbody">
-  <h2 style="margin:0 0 6px">فاکتورِ {{ invoice.number }}</h2>
-  <p class="pa-help">فروشگاه: {{ invoice.store.name }} · پلن: {{ invoice.plan_version.plan.name }}</p>
-</div></div>
+<a class="pa-back" href="{% url 'portal_platform_admin:payments' %}">← پرداخت‌ها و فاکتورها</a>
+<div class="pa-pagehead">
+  <div><h1>فاکتورِ <span class="pa-ltr">{{ invoice.number }}</span></h1><p>فروشگاه: {{ invoice.store.name }} · پلن: {{ invoice.plan_version.plan.name }}</p></div>
+  {% if invoice.status == "open" or invoice.status == "payment_pending" or invoice.status == "past_due" %}<div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:payment-manual-add' %}">ثبتِ پرداختِ دستی</a></div>{% endif %}
+</div>
 
 <div class="pa-grid4">
   <div class="pa-kpi pa-blue"><span>مبلغِ کل</span><b>{{ invoice.grand_total }}</b></div>
   <div class="pa-kpi pa-green"><span>پرداخت‌شده</span><b>{{ invoice.amount_paid }}</b></div>
   <div class="pa-kpi pa-orange"><span>باقی‌مانده</span><b>{{ invoice.amount_due }}</b></div>
-  <div class="pa-kpi pa-purple"><span>وضعیت</span><b style="font-size:15px">{{ invoice.get_status_display }}</b></div>
+  <div class="pa-kpi pa-purple"><span>وضعیت</span><b class="pa-kpi-text">{{ invoice.get_status_display }}</b></div>
 </div>
 
 <div class="pa-card">
@@ -43,7 +43,4 @@
   </div>
 </div>
 
-{% if invoice.status == "open" or invoice.status == "payment_pending" or invoice.status == "past_due" %}
-<a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:payment-manual-add' %}">ثبتِ پرداختِ دستی برایِ این فاکتور</a>
-{% endif %}
 {% endblock %}

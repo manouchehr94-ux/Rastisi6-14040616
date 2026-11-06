@@ -1,24 +1,34 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}مهاجرتِ مشترکان | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:plans' %}" class="pa-help">← پلن‌ها</a></p>
+<a class="pa-back" href="{% url 'portal_platform_admin:plans' %}">← پلن‌ها و نسخه‌ها</a>
 <div class="pa-pagehead"><div><h1>مهاجرتِ مشترکانِ «{{ plan.name }}»</h1>
-  <p>پیش‌فرضِ محصول <b>grandfathering</b> است: مشترکانِ فعلی روی نسخه‌ی خودشان می‌مانند و دسترسیِ قراردادی‌شان بی‌صدا تغییر نمی‌کند. مهاجرتِ صریح فقط با ثبتِ دلیل انجام می‌شود و در ممیزی ثبت می‌گردد.</p></div></div>
-{% if messages %}{% for message in messages %}<div class="pa-alert">{{ message }}</div>{% endfor %}{% endif %}
-<form method="get" class="pa-card"><div class="pa-cardbody" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-  <label>از نسخه</label><select class="pa-input" style="width:auto" name="from">{% for v in versions %}<option value="{{ v.pk }}" {% if src.pk == v.pk %}selected{% endif %}>v{{ v.version_number }} ({{ v.get_status_display }})</option>{% endfor %}</select>
-  <label>به نسخه</label><select class="pa-input" style="width:auto" name="to">{% for v in versions %}<option value="{{ v.pk }}" {% if dst.pk == v.pk %}selected{% endif %}>v{{ v.version_number }} ({{ v.get_status_display }})</option>{% endfor %}</select>
-  <button class="pa-btn" type="submit">پیش‌نمایش</button></div></form>
+  <p>پیش‌فرضِ محصول <b>grandfathering</b> است: مشترکانِ فعلی روی نسخه‌یِ خودشان می‌مانند و دسترسیِ قراردادی‌شان بی‌صدا تغییر نمی‌کند. مهاجرتِ صریح فقط با ثبتِ دلیل انجام می‌شود و در ممیزی ثبت می‌گردد.</p></div></div>
+
+<form method="get" class="pa-card"><div class="pa-cardbody pa-filters">
+  <div class="pa-field"><label for="mg-from">از نسخه</label><select id="mg-from" name="from">{% for v in versions %}<option value="{{ v.pk }}" {% if src.pk == v.pk %}selected{% endif %}>v{{ v.version_number }} ({{ v.get_status_display }})</option>{% endfor %}</select></div>
+  <div class="pa-field"><label for="mg-to">به نسخه</label><select id="mg-to" name="to">{% for v in versions %}<option value="{{ v.pk }}" {% if dst.pk == v.pk %}selected{% endif %}>v{{ v.version_number }} ({{ v.get_status_display }})</option>{% endfor %}</select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">پیش‌نمایش</button></div>
+</div></form>
+
 {% if preview %}
-<div class="pa-card"><div class="pa-cardhead"><h3>پیش‌نمایش (هیچ تغییری هنوز اعمال نشده)</h3></div><div class="pa-cardbody">
-  <p>مشترکانِ جاریِ v{{ src.version_number }}: <b>{{ preview.subscribers }}</b></p>
-  <p>دسترسی‌هایِ از دست‌رفتنی: {% if preview.lost %}<b>{{ preview.lost|join:"، " }}</b>{% else %}ندارد{% endif %}</p>
-  <p>دسترسی‌هایِ اضافه‌شونده: {% if preview.gained %}{{ preview.gained|join:"، " }}{% else %}ندارد{% endif %}</p>
-  <p>سقف‌هایِ تغییرکرده: {% if preview.changed %}{{ preview.changed|join:"، " }}{% else %}ندارد{% endif %}</p>
-  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="execute"><input type="hidden" name="from" value="{{ src.pk }}"><input type="hidden" name="to" value="{{ dst.pk }}">
-    <input class="pa-input" type="text" name="reason" placeholder="دلیلِ مهاجرت (الزامی)" required>
-    {% if preview.lost %}<label style="font-size:13px;display:block;margin-top:6px"><input type="checkbox" name="accept_losses"> می‌پذیرم که این مهاجرت دسترسیِ فهرست‌شده را از مشترکان می‌گیرد</label>{% endif %}
-    <button class="pa-btn pa-danger" style="margin-top:8px" type="submit">اجرایِ مهاجرت</button></form>
-</div></div>
+<section class="pa-card">
+  <div class="pa-cardhead"><h3>پیش‌نمایش — هیچ تغییری هنوز اعمال نشده</h3></div>
+  <div class="pa-cardbody">
+    <dl class="pa-dl">
+      <dt>مشترکانِ جاریِ v{{ src.version_number }}</dt><dd class="pa-num">{{ preview.subscribers }}</dd>
+      <dt>دسترسی‌هایِ از دست‌رفتنی</dt><dd>{% if preview.lost %}<b>{{ preview.lost|join:"، " }}</b>{% else %}ندارد{% endif %}</dd>
+      <dt>دسترسی‌هایِ اضافه‌شونده</dt><dd>{% if preview.gained %}{{ preview.gained|join:"، " }}{% else %}ندارد{% endif %}</dd>
+      <dt>سقف‌هایِ تغییرکرده</dt><dd>{% if preview.changed %}{{ preview.changed|join:"، " }}{% else %}ندارد{% endif %}</dd>
+    </dl>
+  </div>
+  <form method="post" class="pa-cardfoot pa-stack" data-confirm="مشترکانِ جاریِ این نسخه به v{{ dst.version_number }} منتقل می‌شوند. این کار در ممیزی ثبت می‌شود. ادامه می‌دهید؟">{% csrf_token %}
+    <input type="hidden" name="action" value="execute"><input type="hidden" name="from" value="{{ src.pk }}"><input type="hidden" name="to" value="{{ dst.pk }}">
+    <div class="pa-field"><label for="mg-reason">دلیلِ مهاجرت</label><input id="mg-reason" type="text" name="reason" required><span class="pa-help">الزامی؛ در ممیزی ثبت می‌شود.</span></div>
+    {% if preview.lost %}<label class="pa-check"><input type="checkbox" name="accept_losses"> می‌پذیرم که این مهاجرت دسترسیِ فهرست‌شده را از مشترکان می‌گیرد</label>{% endif %}
+    <div class="pa-row"><button class="pa-btn pa-danger" type="submit">اجرایِ مهاجرت</button><a class="pa-btn" href="{% url 'portal_platform_admin:plans' %}">انصراف</a></div>
+  </form>
+</section>
 {% endif %}
 {% endblock %}

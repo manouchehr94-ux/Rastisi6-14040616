@@ -1,79 +1,104 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}{% if plan %}ویرایشِ {{ plan.name }}{% else %}پلنِ تازه{% endif %} | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:plans' %}" class="pa-help">← بازگشت به فهرستِ پلن‌ها</a></p>
-<h1>{% if plan %}ویرایشِ «{{ plan.name }}» (نسخه‌ی پیش‌نویسِ تازه){% else %}پلنِ تازه{% endif %}</h1>
+<a class="pa-back" href="{% url 'portal_platform_admin:plans' %}">← پلن‌ها و نسخه‌ها</a>
+<div class="pa-pagehead">
+  <div>
+    <h1>{% if plan %}ویرایشِ «{{ plan.name }}»{% else %}پلنِ تازه{% endif %}</h1>
+    <p>{% if plan %}تغییرات روی <b>نسخه‌ی پیش‌نویس</b> ذخیره می‌شود (اگر نبود، از آخرین نسخه کپی ساخته می‌شود). نسخه‌ی منتشرشده هرگز تغییر نمی‌کند؛ برایِ اعمال، پیش‌نویس را در «پلن‌ها و نسخه‌ها» منتشر کنید.{% else %}پلن و نسخه‌ی پیش‌نویسِ اولِ آن ساخته می‌شود؛ پس از بازبینی، نسخه را منتشر کنید.{% endif %}</p>
+  </div>
+</div>
 
-<form method="post">
+<form method="post" class="pa-form" data-pa-dirty>
   {% csrf_token %}
-  <div class="pa-card"><div class="pa-cardhead"><h3>مشخصات</h3></div><div class="pa-cardbody">
-    <div class="pa-grid2">
-      <div class="pa-field"><label>نامِ داخلی</label><input class="pa-input" type="text" name="name" required value="{{ plan.name|default:'' }}"></div>
-      <div class="pa-field"><label>کد (یکتا، بدونِ تغییر پس از ساخت)</label><input class="pa-input" type="text" name="code" {% if plan %}readonly{% endif %} required value="{{ plan.code|default:'' }}"></div>
-      <div class="pa-field"><label>عنوانِ عمومی</label><input class="pa-input" type="text" name="public_title" value="{{ plan.public_title|default:'' }}"></div>
-      <div class="pa-field"><label>ترتیبِ نمایش</label><input class="pa-input" type="number" name="display_order" value="{{ plan.display_order|default:0 }}"></div>
+  <input type="hidden" name="marketing_submitted" value="1">
+  <input type="hidden" name="public_selectable_submitted" value="1">
+  <input type="hidden" name="trial_once_submitted" value="1">
+
+  <fieldset class="pa-fieldset">
+    <legend>مشخصاتِ پلن</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="f-name">نامِ داخلی</label><input id="f-name" type="text" name="name" required value="{{ plan.name|default:'' }}"></div>
+      <div class="pa-field"><label for="f-code">کدِ پلن</label><input id="f-code" class="pa-ltr" type="text" name="code" {% if plan %}readonly{% endif %} required value="{{ plan.code|default:'' }}"><span class="pa-help">یکتا است و پس از ساخت تغییر نمی‌کند.</span></div>
+      <div class="pa-field"><label for="f-title">عنوانِ عمومی</label><input id="f-title" type="text" name="public_title" value="{{ plan.public_title|default:'' }}"><span class="pa-help">در کارتِ صفحه‌ی تعرفه نمایش داده می‌شود.</span></div>
+      <div class="pa-field"><label for="f-order">ترتیبِ نمایش</label><input id="f-order" type="number" min="0" step="1" name="display_order" value="{{ plan.display_order|default:0 }}"></div>
+      <div class="pa-field pa-full"><label for="f-desc">توضیحات</label><textarea id="f-desc" name="description" rows="2">{{ plan.description|default:"" }}</textarea></div>
     </div>
-    <div class="pa-field" style="margin-top:12px"><label>توضیحات</label><textarea class="pa-input" name="description" rows="2">{{ plan.description|default:"" }}</textarea></div>
-    <input type="hidden" name="marketing_submitted" value="1">
-    <div class="pa-grid3" style="margin-top:12px">
-      <div class="pa-field"><label>شعارِ کوتاهِ کارت</label><input class="pa-input" type="text" name="tagline" maxlength="160" value="{{ plan.tagline|default:'' }}"></div>
-      <div class="pa-field"><label>متنِ نشانِ پیشنهادی</label><input class="pa-input" type="text" name="badge_text" maxlength="40" placeholder="پیشنهادی" value="{{ plan.badge_text|default:'' }}"></div>
-      <div class="pa-field"><label>برچسبِ تبلیغاتیِ پلن</label><input class="pa-input" type="text" name="promo_label" maxlength="60" placeholder="مثلاً: ۲ ماه رایگان" value="{{ plan.promo_label|default:'' }}"></div>
-      <div class="pa-field"><label>متنِ دکمه‌ی کارت</label><input class="pa-input" type="text" name="cta_label" maxlength="40" placeholder="شروع با این پلن" value="{{ plan.cta_label|default:'' }}"></div>
-    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset">
+    <legend>متنِ بازاریابی و نمایش</legend>
     <p class="pa-help">متنِ بازاریابی غیرِ قراردادی است و زنده اعمال می‌شود؛ قیمت و حق‌دسترسی‌ها فقط با نسخه‌ی تازه تغییر می‌کنند.</p>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px"><input type="checkbox" name="is_recommended" {% if plan.is_recommended %}checked{% endif %}> پیشنهادی (هایلایت در صفحه‌ی تعرفه)</label>
-    <input type="hidden" name="public_selectable_submitted" value="1">
-    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px"><input type="checkbox" name="is_publicly_selectable" {% if not plan or plan.is_publicly_selectable %}checked{% endif %}> نمایش در صفحه عمومی تعرفه‌ها (بعد از انتشار نسخه)</label>
-  </div></div>
-
-  <div class="pa-card"><div class="pa-cardhead"><h3>نسخه‌ی پیش‌نویسِ تازه — قیمت و دوره‌ها</h3></div><div class="pa-cardbody">
-    <p class="pa-help">برایِ هر دوره‌ای که می‌فروشید قیمت وارد کنید و یکی را «اصلی» بگذارید. دوره‌ی خالی عرضه نمی‌شود. برایِ پلنِ رایگان «بدونِ دوره» را انتخاب کنید. «قیمتِ قبل از تخفیف» فقط برایِ نمایشِ خط‌خورده است. پس از انتشار، قیمت‌هایِ نسخه تغییرناپذیرند.</p>
-    <div class="pa-tablewrap"><table>
-      <thead><tr><th>اصلی</th><th>دوره</th><th>قیمت (تومان)</th><th>قبل از تخفیف</th><th>برچسب (اختیاری)</th></tr></thead>
-      <tbody>
-      {% for row in price_rows %}
-        <tr>
-          <td><input type="radio" name="billing_interval" value="{{ row.interval }}" {% if row.is_primary %}checked{% endif %} aria-label="گزینه‌ی اصلی: {{ row.label }}"></td>
-          <td>{{ row.label }}</td>
-          <td><input class="pa-input" type="number" min="0" name="price_{{ row.interval }}" value="{{ row.price|default:'' }}"></td>
-          <td><input class="pa-input" type="number" min="0" name="compare_{{ row.interval }}" value="{{ row.compare_at|default:'' }}"></td>
-          <td><input class="pa-input" type="text" maxlength="60" name="label_{{ row.interval }}" value="{{ row.custom_label|default:'' }}"></td>
-        </tr>
-      {% endfor %}
-        <tr><td><input type="radio" name="billing_interval" value="none" {% if primary_interval == "none" %}checked{% endif %} aria-label="بدونِ دوره"></td><td colspan="4">بدونِ دوره (رایگان/آزمایشی)</td></tr>
-      </tbody>
-    </table></div>
-    <div class="pa-grid3" style="margin-top:12px">
-      <div class="pa-field"><label>روزهایِ تریال</label><input class="pa-input" type="number" min="0" name="trial_days" value="{{ latest_version.trial_days|default:0 }}"></div>
-      <div class="pa-field"><label>قیمتِ «بدونِ دوره» (معمولاً ۰)</label><input class="pa-input" type="number" min="0" name="display_price" value="{{ latest_version.display_price|default:0 }}"></div>
-      <div class="pa-field"><input type="hidden" name="trial_once_submitted" value="1"><label style="display:flex;align-items:center;gap:8px;margin-top:26px;font-size:13px"><input type="checkbox" name="trial_once_per_store" {% if not latest_version or latest_version.trial_once_per_store %}checked{% endif %}> تریال فقط یک‌بار برایِ هر فروشگاه</label></div>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="f-tagline">شعارِ کوتاهِ کارت</label><input id="f-tagline" type="text" name="tagline" maxlength="160" value="{{ plan.tagline|default:'' }}"></div>
+      <div class="pa-field"><label for="f-cta">متنِ دکمه‌یِ کارت</label><input id="f-cta" type="text" name="cta_label" maxlength="40" value="{{ plan.cta_label|default:'' }}"><span class="pa-help">اگر خالی باشد، متنِ پیش‌فرض نمایش داده می‌شود.</span></div>
+      <div class="pa-field"><label for="f-badge">متنِ نشانِ پیشنهادی</label><input id="f-badge" type="text" name="badge_text" maxlength="40" value="{{ plan.badge_text|default:'' }}"></div>
+      <div class="pa-field"><label for="f-promo">برچسبِ تبلیغاتیِ پلن</label><input id="f-promo" type="text" name="promo_label" maxlength="60" value="{{ plan.promo_label|default:'' }}"><span class="pa-help">مثلاً «۲ ماه رایگان در پرداخت سالانه»؛ فقط اگر مالک تعیین کند نمایش داده می‌شود.</span></div>
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="is_recommended" {% if plan.is_recommended %}checked{% endif %}> پیشنهادی (هایلایت در صفحه‌ی تعرفه)</label>
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="is_publicly_selectable" {% if not plan or plan.is_publicly_selectable %}checked{% endif %}> نمایش در صفحه‌یِ عمومیِ تعرفه‌ها (پس از انتشارِ نسخه)</label>
     </div>
-  </div></div>
+  </fieldset>
 
-  <div class="pa-card"><div class="pa-cardhead"><h3>حق‌دسترسی‌ها (Entitlements)</h3></div><div class="pa-cardbody">
-    <p class="pa-help">فقط حق‌دسترسی‌هایی که الان در کد اعمال می‌شوند قابلِ‌تنظیم‌اند؛ بقیه تعریف شده‌اند امّا هنوز اعمال نمی‌شوند و در صفحه‌ی عمومی تبلیغ نمی‌شوند.</p>
-    {% for entitlement in entitlements %}
-    <div class="pa-setting-row"{% if not entitlement.enforced %} style="opacity:.55"{% endif %}>
-      <div>
-        <b>{{ entitlement.name }}</b>{% if not entitlement.enforced %} <span class="pa-badge pa-off">هنوز اعمال نمی‌شود</span>{% endif %}
-        <div class="pa-help">{{ entitlement.description }}</div>
-      </div>
-      <div>
-        {% if not entitlement.enforced %}—
-        {% elif entitlement.entitlement_type == "boolean" %}
-        <label><input type="checkbox" name="entitlement_{{ entitlement.key }}" {% if entitlement.existing.is_enabled %}checked{% endif %}> فعال</label>
-        {% else %}
-        <input class="pa-input" style="width:120px;display:inline-block" type="number" name="entitlement_{{ entitlement.key }}" placeholder="محدودیت" value="{{ entitlement.existing.integer_limit|default_if_none:'' }}">
-        <label style="font-size:12px"><input type="checkbox" name="entitlement_{{ entitlement.key }}_unlimited" {% if entitlement.existing.is_unlimited %}checked{% endif %}> نامحدود</label>
-        {% endif %}
+  <fieldset class="pa-fieldset">
+    <legend>قیمت و دوره‌ها {% if latest_version %}<span class="pa-badge {% if latest_version.status == 'draft' %}pa-warn{% else %}pa-info{% endif %}">v{{ latest_version.version_number }} · {{ latest_version.get_status_display }}</span>{% endif %}</legend>
+    <p class="pa-help">برایِ هر دوره‌ای که می‌فروشید قیمت وارد کنید و یکی را «اصلی» بگذارید؛ دوره‌یِ خالی عرضه نمی‌شود. برایِ پلنِ رایگان «بدونِ دوره» را انتخاب کنید. «قبل از تخفیف» فقط برایِ نمایشِ خط‌خورده است. پس از انتشار، قیمت‌هایِ نسخه تغییرناپذیرند.</p>
+    <div class="pa-fieldbody">
+      <div class="pa-tablewrap"><table>
+        <thead><tr><th>اصلی</th><th>دوره</th><th>قیمت (تومان)</th><th>قبل از تخفیف</th><th>برچسب (اختیاری)</th></tr></thead>
+        <tbody>
+        {% for row in price_rows %}
+          <tr>
+            <td><input type="radio" name="billing_interval" value="{{ row.interval }}" {% if row.is_primary %}checked{% endif %} aria-label="گزینه‌ی اصلی: {{ row.label }}"></td>
+            <td>{{ row.label }}</td>
+            <td><input class="pa-input" type="number" min="0" step="1" name="price_{{ row.interval }}" value="{{ row.price|default:'' }}" aria-label="قیمتِ {{ row.label }}"></td>
+            <td><input class="pa-input" type="number" min="0" step="1" name="compare_{{ row.interval }}" value="{{ row.compare_at|default:'' }}" aria-label="قبل از تخفیفِ {{ row.label }}"></td>
+            <td><input class="pa-input" type="text" maxlength="60" name="label_{{ row.interval }}" value="{{ row.custom_label|default:'' }}" aria-label="برچسبِ {{ row.label }}"></td>
+          </tr>
+        {% endfor %}
+          <tr><td><input type="radio" name="billing_interval" value="none" {% if primary_interval == "none" %}checked{% endif %} aria-label="بدونِ دوره"></td><td colspan="4">بدونِ دوره (رایگان/آزمایشی)</td></tr>
+        </tbody>
+      </table></div>
+      <div class="pa-fields pa-mt-4">
+        <div class="pa-field"><label for="f-trial">روزهایِ تریال</label><input id="f-trial" type="number" min="0" step="1" name="trial_days" value="{{ latest_version.trial_days|default:0 }}"></div>
+        <div class="pa-field"><label for="f-dprice">قیمتِ «بدونِ دوره» (تومان)</label><input id="f-dprice" type="number" min="0" step="1" name="display_price" value="{{ latest_version.display_price|default:0 }}"><span class="pa-help">معمولاً ۰.</span></div>
+        <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="trial_once_per_store" {% if not latest_version or latest_version.trial_once_per_store %}checked{% endif %}> تریال فقط یک‌بار برایِ هر فروشگاه</label>
       </div>
     </div>
-    {% empty %}
-    <p class="pa-help">هیچ حق‌دسترسیِ فعالی تعریف نشده.</p>
-    {% endfor %}
-  </div></div>
+  </fieldset>
 
-  <button class="pa-btn pa-primary" type="submit">ذخیره (ساختِ نسخه‌ی پیش‌نویسِ تازه)</button>
+  <fieldset class="pa-fieldset">
+    <legend>حق‌دسترسی‌ها و سقف‌ها</legend>
+    <p class="pa-help">فقط حق‌دسترسی‌هایی که اکنون در کد اعمال می‌شوند اینجا قابلِ‌تنظیم‌اند. قابلیت‌هایِ آینده و سقف‌هایِ سفارشی در «تخصیصِ قابلیت به پلن» مدیریت می‌شوند.</p>
+    <div class="pa-fieldbody">
+      {% for entitlement in entitlements %}{% if entitlement.enforced %}
+      <div class="pa-setting-row">
+        <div><b>{{ entitlement.name }}</b><div class="pa-help">{{ entitlement.description }}</div></div>
+        <div class="pa-row">
+          {% if entitlement.entitlement_type == "boolean" %}
+          <label class="pa-check"><input class="pa-switch" type="checkbox" name="entitlement_{{ entitlement.key }}" {% if entitlement.existing.is_enabled %}checked{% endif %}> فعال</label>
+          {% else %}
+          <input class="pa-input pa-w-sm" type="number" min="0" step="1" name="entitlement_{{ entitlement.key }}" value="{{ entitlement.existing.integer_limit|default_if_none:'' }}" aria-label="سقفِ {{ entitlement.name }}">
+          <label class="pa-check"><input type="checkbox" name="entitlement_{{ entitlement.key }}_unlimited" {% if entitlement.existing.is_unlimited %}checked{% endif %}> نامحدود</label>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}{% endfor %}
+      <details class="pa-acc pa-mt-4">
+        <summary>حق‌دسترسی‌هایِ تعریف‌شده امّا هنوز اعمال‌نشده در کد</summary>
+        <div>
+          <p class="pa-help pa-mb-2">این‌ها به این دلیل قابلِ‌تنظیم نیستند که گیتِ Backend ندارند؛ تبلیغ هم نمی‌شوند.</p>
+          <ul class="pa-help">
+            {% for entitlement in entitlements %}{% if not entitlement.enforced %}<li>{{ entitlement.name }} <span class="pa-code">{{ entitlement.key }}</span></li>{% endif %}{% endfor %}
+          </ul>
+        </div>
+      </details>
+    </div>
+  </fieldset>
+
+  <div class="pa-formbar">
+    <button class="pa-btn pa-primary" type="submit">ذخیره‌ی پیش‌نویس</button>
+    <a class="pa-btn" href="{% url 'portal_platform_admin:plans' %}">انصراف</a>
+  </div>
 </form>
 {% endblock %}

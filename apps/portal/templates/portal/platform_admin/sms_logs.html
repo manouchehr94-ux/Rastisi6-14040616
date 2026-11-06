@@ -4,15 +4,13 @@
 {% block content %}
 <div class="pa-pagehead"><div><h1>گزارش ارسال پیامک</h1><p>تاریخچه‌ی تلاش‌هایِ ارسال — متنِ کاملِ پیامک برایِ حفاظت از کدهایِ یک‌بارمصرف نمایش داده نمی‌شود.</p></div></div>
 
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="گیرنده یا نامِ فروشگاه..." value="{{ query }}"></div>
-    <select class="pa-input" name="status" style="max-width:160px">
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-field"><label for="flt-status">وضعیت</label><select id="flt-status" name="status">
       <option value="">همه‌ی وضعیت‌ها</option>
       {% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    <button class="pa-btn pa-primary" type="submit">فیلتر</button>
-  </div>
+    </select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:sms-logs' %}">پاک‌کردن</a></div>
 </div></form>
 
 <div class="pa-card">
@@ -24,14 +22,14 @@
         {% for log in page.object_list %}
         <tr>
           <td>{{ log.store.name|default:"—" }}</td>
-          <td style="direction:ltr;text-align:left">{{ log.recipient|slice:":4" }}***{{ log.recipient|slice:"-2:" }}</td>
+          <td class="pa-ltr">{{ log.recipient|slice:":4" }}***{{ log.recipient|slice:"-2:" }}</td>
           <td>{{ log.get_event_key_display }}</td>
           <td>
             {% if log.status == "sent" %}<span class="pa-badge pa-ok">ارسال‌شده</span>
             {% elif log.status == "failed" %}<span class="pa-badge pa-off">ناموفق</span>
             {% else %}<span class="pa-badge pa-warn">{{ log.get_status_display }}</span>{% endif %}
           </td>
-          <td style="direction:ltr;text-align:left">{{ log.provider_ref_id|default:"—" }}</td>
+          <td class="pa-ltr">{{ log.provider_ref_id|default:"—" }}</td>
           <td>{{ log.created_at|jalali_dt }}</td>
         </tr>
         {% endfor %}
@@ -40,7 +38,7 @@
   </div>
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">📨</div><p>رخدادی یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-list"/></svg></div><p>رخدادی یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

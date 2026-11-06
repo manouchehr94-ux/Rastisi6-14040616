@@ -7,15 +7,13 @@
   <a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:payment-manual-add' %}">+ ثبتِ پرداختِ دستی</a>
 </div>
 
-<form method="get" class="pa-card"><div class="pa-cardbody">
-  <div class="pa-toolbar">
-    <div style="flex:1"><input class="pa-input" type="search" name="q" placeholder="نامِ فروشگاه یا شماره‌ی فاکتور..." value="{{ query }}"></div>
-    <select class="pa-input" name="status" style="max-width:200px">
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="flt-q">جستجو</label><input id="flt-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-field"><label for="flt-status">وضعیت</label><select id="flt-status" name="status">
       <option value="">همه‌ی وضعیت‌ها</option>
       {% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    <button class="pa-btn pa-primary" type="submit">فیلتر</button>
-  </div>
+    </select></div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button><a class="pa-btn" href="{% url 'portal_platform_admin:payments' %}">پاک‌کردن</a></div>
 </div></form>
 
 <div class="pa-card">
@@ -26,7 +24,7 @@
       <tbody>
         {% for invoice in page.object_list %}
         <tr>
-          <td style="direction:ltr;text-align:left">{{ invoice.number }}</td>
+          <td class="pa-ltr">{{ invoice.number }}</td>
           <td>{{ invoice.store.name }}</td>
           <td>{{ invoice.plan_version.plan.name }}</td>
           <td>{{ invoice.grand_total }}</td>
@@ -46,7 +44,7 @@
   </div>
   {% include "portal/platform_admin/_pagination.html" %}
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">🧾</div><p>فاکتوری یافت نشد.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-card"/></svg></div><p>فاکتوری یافت نشد.</p></div>
   {% endif %}
 </div>
 {% endblock %}

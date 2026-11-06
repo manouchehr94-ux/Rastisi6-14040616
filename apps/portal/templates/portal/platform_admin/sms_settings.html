@@ -1,57 +1,60 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}تنظیماتِ درگاهِ پیامک | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<div class="pa-pagehead"><div><h1>تنظیماتِ درگاهِ پیامک</h1><p>درگاهِ پیامکِ مرکزیِ پلتفرم — این تنظیمات فقط برایِ مدیرِ پلتفرم قابلِ مشاهده است.</p></div></div>
+<div class="pa-pagehead"><div><h1>تنظیماتِ درگاهِ پیامک</h1><p>درگاهِ پیامکِ مرکزیِ پلتفرم — این تنظیمات فقط برایِ مدیرِ پلتفرم قابلِ مشاهده است. (نمایِ ساده‌تر و کامل‌تر: «شرکت‌هایِ پیامکی».)</p></div></div>
 
 {% if test_result %}
-<div class="pa-alert {% if test_result.success %}pa-alert-success{% else %}pa-alert-error{% endif %}">
-  {% if test_result.is_console and not test_result.success %}درگاه واقعی پیامک/OTP هنوز فعال نیست.
+<div class="pa-alert {% if test_result.success %}pa-alert-success{% else %}pa-alert-error{% endif %}" role="status">
+  {% if test_result.is_console and not test_result.success %}درگاهِ واقعیِ پیامک/OTP هنوز فعال نیست.
   {% elif test_result.success and test_result.kind == "otp" %}OTP Pattern آزمایشی با موفقیت پذیرفته شد (شناسه: {{ test_result.provider_ref_id }}).
   {% elif test_result.success %}پیامکِ آزمایشی با موفقیت ارسال شد (شناسه: {{ test_result.provider_ref_id }}).
   {% else %}ارسال ناموفق بود: {{ test_result.error_message }}{% endif %}
 </div>
 {% endif %}
 
-<form method="post" class="pa-card"><div class="pa-cardhead"><h3>پیکربندیِ درگاه</h3></div><div class="pa-cardbody">
+<form method="post" class="pa-form" data-pa-dirty>
   {% csrf_token %}
-  <div class="pa-field"><label>{{ form.sms_backend.label }}</label>{{ form.sms_backend }}</div>
-  <div class="pa-field" style="margin-top:12px"><label>{{ form.sms_sender_number.label }}</label>{{ form.sms_sender_number }}
-    <p class="pa-help">برای پیامک متنی است؛ OTP Pattern به شماره فرستنده وابسته نیست.</p>
-  </div>
-
-  <div class="pa-section" style="margin-top:16px">
-    <b>ملی‌پیامک — Provider اصلی</b>
-    <div class="pa-grid2" style="margin-top:10px">
-      <div class="pa-field"><label>{{ form.sms_melipayamak_username.label }}</label>{{ form.sms_melipayamak_username }}</div>
-      <div class="pa-field"><label>{{ form.sms_melipayamak_password.label }}</label>{{ form.sms_melipayamak_password }}
-        {% if sms_melipayamak_password_is_configured %}<p class="pa-help">رمزِ ذخیره‌شده‌ای موجود است؛ خالی‌گذاشتن یعنی بدونِ تغییر.</p>{% endif %}</div>
+  <fieldset class="pa-fieldset"><legend>پیکربندیِ درگاه</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="{{ form.sms_backend.id_for_label }}">{{ form.sms_backend.label }}</label>{{ form.sms_backend }}</div>
+      <div class="pa-field"><label for="{{ form.sms_sender_number.id_for_label }}">{{ form.sms_sender_number.label }}</label>{{ form.sms_sender_number }}<span class="pa-help">برایِ پیامکِ متنی است؛ OTP Pattern به شماره‌یِ فرستنده وابسته نیست.</span></div>
     </div>
-    <div class="pa-grid2" style="margin-top:10px">
-      <div class="pa-field"><label>{{ form.sms_melipayamak_otp_body_id.label }}</label>{{ form.sms_melipayamak_otp_body_id }}
-        <p class="pa-help">{{ form.sms_melipayamak_otp_body_id.help_text }}</p></div>
-      <div class="pa-field"><label>{{ form.sms_melipayamak_otp_variables_order.label }}</label>{{ form.sms_melipayamak_otp_variables_order }}
-        <p class="pa-help">{{ form.sms_melipayamak_otp_variables_order.help_text }}</p></div>
-    </div>
-    <p class="pa-help">برای ثبت‌نام واقعی، درگاه اصلی را «ملی‌پیامک» بگذار و BodyId تأییدشده‌ی OTP را وارد کن.</p>
-  </div>
-  <div class="pa-section">
-    <b>کاوه‌نگار — فقط رزرو OTP</b>
-    <div class="pa-field" style="margin-top:10px"><label>{{ form.sms_kavenegar_api_key.label }}</label>{{ form.sms_kavenegar_api_key }}
-      {% if sms_kavenegar_api_key_is_configured %}<p class="pa-help">کلیدِ ذخیره‌شده‌ای موجود است؛ خالی‌گذاشتن یعنی بدونِ تغییر.</p>{% endif %}</div>
-    <div class="pa-field" style="margin-top:10px"><label>{{ form.sms_kavenegar_otp_template.label }}</label>{{ form.sms_kavenegar_otp_template }}
-      <p class="pa-help">{{ form.sms_kavenegar_otp_template.help_text }}</p></div>
-    <div class="pa-field" style="margin-top:10px"><label style="display:flex;gap:8px;align-items:center">{{ form.sms_otp_fallback_enabled }} {{ form.sms_otp_fallback_enabled.label }}</label></div>
-  </div>
-  <button class="pa-btn pa-primary" type="submit">ذخیره‌ی تنظیمات</button>
-</div></form>
+  </fieldset>
 
-<form method="post" class="pa-card"><div class="pa-cardhead"><h3>ارسالِ آزمایشی</h3></div><div class="pa-cardbody">
+  <fieldset class="pa-fieldset"><legend>ملی‌پیامک — Provider اصلی</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="{{ form.sms_melipayamak_username.id_for_label }}">{{ form.sms_melipayamak_username.label }}</label>{{ form.sms_melipayamak_username }}</div>
+      <div class="pa-field"><label for="{{ form.sms_melipayamak_password.id_for_label }}">{{ form.sms_melipayamak_password.label }}</label>{{ form.sms_melipayamak_password }}
+        {% if sms_melipayamak_password_is_configured %}<span class="pa-help">رمزِ ذخیره‌شده‌ای موجود است؛ خالی‌گذاشتن یعنی بدونِ تغییر.</span>{% endif %}</div>
+      <div class="pa-field"><label for="{{ form.sms_melipayamak_otp_body_id.id_for_label }}">{{ form.sms_melipayamak_otp_body_id.label }}</label>{{ form.sms_melipayamak_otp_body_id }}<span class="pa-help">{{ form.sms_melipayamak_otp_body_id.help_text }}</span></div>
+      <div class="pa-field"><label for="{{ form.sms_melipayamak_otp_variables_order.id_for_label }}">{{ form.sms_melipayamak_otp_variables_order.label }}</label>{{ form.sms_melipayamak_otp_variables_order }}<span class="pa-help">{{ form.sms_melipayamak_otp_variables_order.help_text }}</span></div>
+    </div>
+    <p class="pa-help">برایِ ثبت‌نامِ واقعی، درگاهِ اصلی را «ملی‌پیامک» بگذارید و BodyId تأییدشده‌یِ OTP را وارد کنید.</p>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>کاوه‌نگار — فقط رزروِ OTP</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="{{ form.sms_kavenegar_api_key.id_for_label }}">{{ form.sms_kavenegar_api_key.label }}</label>{{ form.sms_kavenegar_api_key }}
+        {% if sms_kavenegar_api_key_is_configured %}<span class="pa-help">کلیدِ ذخیره‌شده‌ای موجود است؛ خالی‌گذاشتن یعنی بدونِ تغییر.</span>{% endif %}</div>
+      <div class="pa-field"><label for="{{ form.sms_kavenegar_otp_template.id_for_label }}">{{ form.sms_kavenegar_otp_template.label }}</label>{{ form.sms_kavenegar_otp_template }}<span class="pa-help">{{ form.sms_kavenegar_otp_template.help_text }}</span></div>
+      <label class="pa-check pa-full">{{ form.sms_otp_fallback_enabled }} {{ form.sms_otp_fallback_enabled.label }}</label>
+    </div>
+  </fieldset>
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ذخیره‌یِ تنظیمات</button></div>
+</form>
+
+<form method="post" class="pa-form pa-mt-4" data-no-loading>
   {% csrf_token %}
-  <div class="pa-field"><label>شماره‌ی موبایلِ گیرنده</label><input class="pa-input" type="text" name="test_phone" dir="ltr" placeholder="09xxxxxxxxx"></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-    <button class="pa-btn pa-soft" name="action" value="test_sms" type="submit">تست پیامک متنی</button>
-    <button class="pa-btn pa-primary" name="action" value="test_otp" type="submit">تست OTP واقعی (Pattern)</button>
-  </div>
-  <p class="pa-help">تست OTP یک Pattern واقعی با کد آزمایشی 123456 می‌فرستد و Challenge ورود ایجاد نمی‌کند.</p>
-</div></form>
+  <fieldset class="pa-fieldset"><legend>ارسالِ آزمایشی</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="sms-test-phone">شماره‌یِ موبایلِ گیرنده</label><input id="sms-test-phone" class="pa-ltr" type="tel" name="test_phone" inputmode="tel" placeholder="09xxxxxxxxx"></div>
+    </div>
+    <div class="pa-fieldbody pa-row">
+      <button class="pa-btn" name="action" value="test_sms" type="submit">تستِ پیامکِ متنی</button>
+      <button class="pa-btn pa-primary" name="action" value="test_otp" type="submit">تستِ OTP واقعی (Pattern)</button>
+    </div>
+    <p class="pa-help">تستِ OTP یک Pattern واقعی با کدِ آزمایشیِ 123456 می‌فرستد و Challenge ورود ایجاد نمی‌کند.</p>
+  </fieldset>
+</form>
 {% endblock %}

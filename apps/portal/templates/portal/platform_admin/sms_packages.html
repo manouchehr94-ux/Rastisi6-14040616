@@ -3,29 +3,29 @@
 {% block content %}
 <div class="pa-pagehead">
   <div><h1>بسته‌های پیامک</h1><p>بسته‌هایِ خریدِ اعتبارِ پیامک — فروشگاه‌ها فقط بسته‌هایِ فعال را می‌بینند.</p></div>
-  <a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:sms-package-add' %}">+ بسته‌ی تازه</a>
+  <div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:sms-package-add' %}"><svg class="pa-i"><use href="#i-plus"/></svg>بسته‌یِ تازه</a></div>
 </div>
 <div class="pa-card">
   {% if packages %}
   <div class="pa-tablewrap">
     <table>
-      <thead><tr><th>نام</th><th>تعدادِ اعتبار</th><th>قیمت (تومان)</th><th>وضعیت</th><th></th></tr></thead>
+      <thead><tr><th>نام</th><th class="pa-num">تعدادِ اعتبار</th><th class="pa-num">قیمت (تومان)</th><th>وضعیت</th><th class="pa-actcol"></th></tr></thead>
       <tbody>
         {% for package in packages %}
         <tr>
-          <td>{{ package.name }}</td><td>{{ package.credit_amount }}</td><td>{{ package.price }}</td>
+          <td>{{ package.name }}</td><td class="pa-num">{{ package.credit_amount }}</td><td class="pa-num">{{ package.price }}</td>
           <td>{% if package.is_active %}<span class="pa-badge pa-ok">فعال</span>{% else %}<span class="pa-badge pa-off">غیرفعال</span>{% endif %}</td>
-          <td style="display:flex;gap:6px">
-            <a class="pa-btn pa-small pa-soft" href="{% url 'portal_platform_admin:sms-package-edit' package.pk %}">ویرایش</a>
-            <form method="post" action="{% url 'portal_platform_admin:sms-package-archive' package.pk %}">{% csrf_token %}<button class="pa-btn pa-small pa-danger" type="submit">{% if package.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button></form>
-          </td>
+          <td class="pa-actcol"><div class="pa-row-actions">
+            <a class="pa-btn" href="{% url 'portal_platform_admin:sms-package-edit' package.pk %}">ویرایش</a>
+            <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:sms-package-archive' package.pk %}" {% if package.is_active %}data-confirm="بسته غیرفعال شود؟ فروشگاه‌ها دیگر آن را نمی‌بینند؛ سابقه‌یِ خریدها حفظ می‌شود."{% endif %}>{% csrf_token %}<button class="pa-btn {% if package.is_active %}pa-danger{% endif %}" type="submit">{% if package.is_active %}غیرفعال‌سازی{% else %}فعال‌سازی{% endif %}</button></form>
+          </div></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-  <div class="pa-empty"><div class="pa-empty-icon">📦</div><p>بسته‌ای تعریف نشده.</p></div>
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-list"/></svg></div><p>بسته‌ای تعریف نشده.</p></div>
   {% endif %}
 </div>
 {% endblock %}

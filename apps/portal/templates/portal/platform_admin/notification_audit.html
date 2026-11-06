@@ -2,9 +2,13 @@
 {% load persian %}
 {% block title %}تاریخچه‌ی تغییرات اعلان‌ها{% endblock %}
 {% block content %}
-<div class="pa-pagehead"><div><h1>تاریخچه‌ی تغییرات اعلان‌ها</h1></div></div>
-<div class="pa-card" style="padding:12px;margin-bottom:10px"><h3>نسخه‌های قالب پیش‌فرض</h3>
-  {% for r in revisions %}<div>{{ r.created_at|jalali_dt }} · <span dir="ltr">{{ r.event_key }}</span> · {{ r.channel }} · نسخه {{ r.version }} · {{ r.action }}{% if r.actor %} · {{ r.actor.get_username }}{% endif %}</div>{% empty %}—{% endfor %}</div>
-<div class="pa-card" style="padding:12px"><h3>رخدادهای ممیزی</h3>
-  {% for e in entries %}<div>{{ e.created_at|jalali_dt }} · {{ e.action_code }} · {{ e.object_label }}{% if e.actor %} · {{ e.actor.get_username }}{% endif %}</div>{% empty %}—{% endfor %}</div>
+<div class="pa-pagehead"><div><h1>تاریخچه‌یِ تغییراتِ اعلان‌ها</h1><p>نسخه‌هایِ قالبِ پیش‌فرضِ پلتفرم و رخدادهایِ ممیزیِ بخشِ اعلان‌ها.</p></div></div>
+<section class="pa-card"><div class="pa-cardhead"><h3>نسخه‌هایِ قالبِ پیش‌فرض</h3></div>
+  <div class="pa-cardbody pa-stack">
+    {% for r in revisions %}<div class="pa-sm">{{ r.created_at|jalali_dt }} · <span class="pa-ltr">{{ r.event_key }}</span> · {{ r.channel }} · نسخه {{ r.version }} · {{ r.action }}{% if r.actor %} · {{ r.actor.get_username }}{% endif %}</div>{% empty %}<p class="pa-help">موردی نیست.</p>{% endfor %}
+  </div></section>
+<section class="pa-card"><div class="pa-cardhead"><h3>رخدادهایِ ممیزی</h3></div>
+  <div class="pa-cardbody pa-stack">
+    {% for e in entries %}<div class="pa-sm">{{ e.created_at|jalali_dt }} · {{ e.action_code }} · {{ e.object_label }}{% if e.actor %} · {{ e.actor.get_username }}{% endif %}</div>{% empty %}<p class="pa-help">موردی نیست.</p>{% endfor %}
+  </div></section>
 {% endblock %}

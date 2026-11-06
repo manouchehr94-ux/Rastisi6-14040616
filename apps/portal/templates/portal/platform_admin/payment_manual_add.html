@@ -1,25 +1,26 @@
 {% extends "portal/platform_admin/base.html" %}
 {% block title %}ثبتِ پرداختِ دستی | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:payments' %}" class="pa-help">← بازگشت به فهرستِ پرداخت‌ها</a></p>
-<h1>ثبتِ پرداختِ دستی</h1>
-<p class="pa-help">مبلغ باید دقیقاً برابرِ مبلغِ باقی‌مانده‌ی فاکتور باشد؛ این عملیات همیشه حسابرسی می‌شود و شبیه‌سازیِ نتیجه‌ی درگاه در آن انجام نمی‌شود.</p>
+<a class="pa-back" href="{% url 'portal_platform_admin:payments' %}">← پرداخت‌ها و فاکتورها</a>
+<div class="pa-pagehead"><div><h1>ثبتِ پرداختِ دستی</h1>
+  <p>مبلغ باید دقیقاً برابرِ مبلغِ باقی‌مانده‌یِ فاکتور باشد؛ این عملیات همیشه حسابرسی می‌شود و شبیه‌سازیِ نتیجه‌یِ درگاه در آن انجام نمی‌شود.</p></div></div>
 
-<form method="post" class="pa-card"><div class="pa-cardbody">
+<form method="post" class="pa-form" data-pa-dirty data-confirm="این پرداخت به‌صورتِ دستی ثبت و فاکتور تسویه می‌شود. ادامه می‌دهید؟">
   {% csrf_token %}
-  <div class="pa-field"><label>فاکتور</label>
-    <select class="pa-input" name="invoice_id" required>
-      <option value="">— انتخابِ فاکتور —</option>
-      {% for invoice in invoices %}
-      <option value="{{ invoice.pk }}">{{ invoice.number }} — {{ invoice.store.name }} — باقی‌مانده: {{ invoice.amount_due }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="pa-grid2" style="margin-top:12px">
-    <div class="pa-field"><label>مبلغ (باید دقیقاً برابرِ باقی‌مانده باشد)</label><input class="pa-input" type="text" name="amount" required></div>
-    <div class="pa-field"><label>مرجعِ پرداخت</label><input class="pa-input" type="text" name="reference" required></div>
-  </div>
-  <div class="pa-field" style="margin-top:12px"><label>دلیل / یادداشت</label><textarea class="pa-input" name="note" rows="2" required></textarea></div>
-  <button class="pa-btn pa-primary" style="margin-top:14px" type="submit">ثبتِ پرداخت</button>
-</div></form>
+  <fieldset class="pa-fieldset"><legend>جزئیاتِ پرداخت</legend>
+    <div class="pa-fields">
+      <div class="pa-field pa-full"><label for="mp-invoice">فاکتور</label>
+        <select id="mp-invoice" name="invoice_id" required>
+          <option value="">انتخابِ فاکتور…</option>
+          {% for invoice in invoices %}<option value="{{ invoice.pk }}">{{ invoice.number }} — {{ invoice.store.name }} — باقی‌مانده: {{ invoice.amount_due }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="pa-field"><label for="mp-amount">مبلغ (تومان)</label><input id="mp-amount" type="text" inputmode="numeric" class="pa-ltr" name="amount" required><span class="pa-help">باید دقیقاً برابرِ باقی‌مانده باشد.</span></div>
+      <div class="pa-field"><label for="mp-ref">مرجعِ پرداخت</label><input id="mp-ref" type="text" name="reference" required></div>
+      <div class="pa-field pa-full"><label for="mp-note">دلیل / یادداشت</label><textarea id="mp-note" name="note" rows="2" required></textarea></div>
+    </div>
+  </fieldset>
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ثبتِ پرداخت</button><a class="pa-btn" href="{% url 'portal_platform_admin:payments' %}">انصراف</a></div>
+</form>
 {% endblock %}

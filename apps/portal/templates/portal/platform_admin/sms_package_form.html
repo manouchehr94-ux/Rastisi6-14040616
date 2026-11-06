@@ -1,16 +1,19 @@
 {% extends "portal/platform_admin/base.html" %}
-{% block title %}{% if package %}ویرایشِ بسته{% else %}بسته‌ی تازه{% endif %} | پنل مدیریت پلتفرم{% endblock %}
+{% block title %}{% if package %}ویرایشِ بسته{% else %}بسته‌یِ تازه{% endif %} | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
 {% block content %}
-<p><a href="{% url 'portal_platform_admin:sms-packages' %}" class="pa-help">← بازگشت به فهرستِ بسته‌ها</a></p>
-<h1>{% if package %}ویرایشِ «{{ package.name }}»{% else %}بسته‌ی تازه{% endif %}</h1>
-<form method="post" class="pa-card"><div class="pa-cardbody">
+<a class="pa-back" href="{% url 'portal_platform_admin:sms-packages' %}">← بسته‌هایِ پیامک</a>
+<div class="pa-pagehead"><div><h1>{% if package %}ویرایشِ «{{ package.name }}»{% else %}بسته‌یِ تازه{% endif %}</h1></div></div>
+<form method="post" class="pa-form" data-pa-dirty>
   {% csrf_token %}
-  <div class="pa-grid2">
-    <div class="pa-field"><label>نامِ بسته</label><input class="pa-input" type="text" name="name" required value="{{ package.name|default:'' }}"></div>
-    <div class="pa-field"><label>تعدادِ اعتبار</label><input class="pa-input" type="number" name="credit_amount" min="1" required value="{{ package.credit_amount|default:'' }}"></div>
-    <div class="pa-field"><label>قیمت (تومان)</label><input class="pa-input" type="number" name="price" min="0" required value="{{ package.price|default:'' }}"></div>
-    <div class="pa-field"><label>ترتیبِ نمایش</label><input class="pa-input" type="number" name="display_order" value="{{ package.display_order|default:0 }}"></div>
-  </div>
-  <button class="pa-btn pa-primary" style="margin-top:14px" type="submit">ذخیره</button>
-</div></form>
+  <fieldset class="pa-fieldset"><legend>مشخصاتِ بسته</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="pk-name">نامِ بسته</label><input id="pk-name" type="text" name="name" required value="{{ package.name|default:'' }}"></div>
+      <div class="pa-field"><label for="pk-credit">تعدادِ اعتبار</label><input id="pk-credit" type="number" name="credit_amount" min="1" step="1" required value="{{ package.credit_amount|default:'' }}"></div>
+      <div class="pa-field"><label for="pk-price">قیمت (تومان)</label><input id="pk-price" type="number" name="price" min="0" step="1" required value="{{ package.price|default:'' }}"></div>
+      <div class="pa-field"><label for="pk-order">ترتیبِ نمایش</label><input id="pk-order" type="number" name="display_order" min="0" step="1" value="{{ package.display_order|default:0 }}"></div>
+    </div>
+  </fieldset>
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ذخیره</button><a class="pa-btn" href="{% url 'portal_platform_admin:sms-packages' %}">انصراف</a></div>
+</form>
 {% endblock %}
