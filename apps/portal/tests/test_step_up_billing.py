@@ -30,7 +30,7 @@ def _fixed_code():
     return original, "778899"
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+@override_settings(ALLOWED_HOSTS=[_HOST, ".rastisi.localhost", "testserver"])
 class StepUpBillingTests(TestCase):
     def setUp(self):
         cache.clear()  # OTP rate-limit counters are cache-backed and leak across tests otherwise
@@ -56,6 +56,9 @@ class StepUpBillingTests(TestCase):
             plan=self.plan, version_number=1, status=PlanVersion.Status.PUBLISHED,
             billing_interval=PlanVersion.BillingInterval.MONTHLY, display_price=490_000,
         )
+        from apps.billing.tests.test_platform_card_to_card import enable_platform_card
+
+        enable_platform_card(self)                      # a purchase is refused unless a platform payment method is ready
         self.client.force_login(self.owner)
 
         import apps.portal.services.owner_otp_service as svc
@@ -92,7 +95,7 @@ class StepUpBillingTests(TestCase):
             f"/app/stores/{self.store.public_id}/billing/step-up/", {"code": self.code}, HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 302)
-        self.assertIn(f"/app/stores/{self.store.public_id}/billing/return/", response["Location"])
+        self.assertIn("/admin-portal/handoff/", response["Location"])             # → unified checkout on the store's admin host
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store).count(), 1)
 
     def test_step_up_stays_verified_for_a_second_purchase_on_the_same_store(self):
@@ -103,7 +106,7 @@ class StepUpBillingTests(TestCase):
         # A second checkout on the same Store, still within the verified
         # window, must not require another OTP round-trip.
         response = self._checkout()
-        self.assertIn(f"/app/stores/{self.store.public_id}/billing/return/", response["Location"])
+        self.assertIn("/admin-portal/handoff/", response["Location"])
 
     def test_step_up_verification_does_not_carry_over_to_a_different_store(self):
         self._checkout()

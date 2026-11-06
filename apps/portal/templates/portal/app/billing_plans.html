@@ -13,6 +13,8 @@
   {% endif %}
   {% if request.GET.payment == "ok" %}<div class="p-alert">پرداخت تأیید شد و اشتراک شما اعمال شد.</div>{% elif request.GET.payment == "failed" %}<div class="p-alert p-alert-error">پرداخت تأیید نشد؛ می‌توانید دوباره تلاش کنید.</div>{% elif request.GET.payment == "action" %}<div class="p-alert p-alert-error">پرداخت شما نیازمند بررسی پشتیبانی است؛ دوباره پرداخت نکنید.</div>{% elif request.GET.payment == "pending" %}<div class="p-alert">پرداخت هنوز تأیید نشده است.</div>{% endif %}
   {% if messages %}{% for message in messages %}<div class="p-alert p-alert-error">{{ message }}</div>{% endfor %}{% endif %}
+  {% if not has_payment_methods %}<div class="p-alert p-alert-error" role="alert">در حال حاضر هیچ روشِ پرداختی فعال نیست؛ خرید موقتاً در دسترس نیست.</div>{% endif %}
+  <p style="text-align:center;font-size:12px;color:var(--p-muted);margin:0 0 12px">روشِ پرداخت (درگاه بانکی یا کارت‌به‌کارت) در مرحله‌ی بعد انتخاب می‌شود.</p>
   <div style="display:grid;gap:12px">
     {% for offer in plan_offers %}
     <div style="border:1px solid {% if offer.version.plan_id == selected_plan_id %}var(--p-primary,#6c4cf1){% else %}var(--p-line){% endif %};border-radius:12px;padding:16px;display:grid;gap:10px"{% if offer.version.plan_id == selected_plan_id %} aria-current="true"{% endif %}>
@@ -20,14 +22,9 @@
       {% for period in offer.periods %}
       <form method="post" action="{% url 'portal:billing-checkout' store.public_id offer.version.pk %}" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         {% csrf_token %}
-        {% if gateway_options|length > 1 %}
-        <select name="gateway" aria-label="درگاه پرداخت" style="margin-bottom:6px;width:100%">
-          {% for option in gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
-        </select>
-        {% endif %}
         <input type="hidden" name="billing_interval" value="{{ period.interval }}">
         <div style="font-size:13px"><b>{{ period.price }}</b> تومان / {{ period.label }}{% if period.savings_percent %} <span style="font-size:11px;color:var(--p-muted)">({{ period.savings_percent }}٪ صرفه‌جویی)</span>{% endif %}</div>
-        <button type="submit" class="p-btn p-btn-primary">خرید</button>
+        {% if has_payment_methods %}<button type="submit" class="p-btn p-btn-primary">خرید</button>{% else %}<button type="button" class="p-btn" disabled aria-disabled="true" title="روشِ پرداختی فعال نیست">در دسترس نیست</button>{% endif %}
       </form>
       {% endfor %}
     </div>

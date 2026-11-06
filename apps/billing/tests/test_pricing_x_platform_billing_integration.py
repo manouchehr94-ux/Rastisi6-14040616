@@ -24,7 +24,7 @@ User = get_user_model()
 HOST = "rastisi.localhost"
 
 
-@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", ALLOWED_HOSTS=[HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual")
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", ALLOWED_HOSTS=[HOST, ".rastisi.localhost", "testserver"], RASTISI_BILLING_PROVIDER="manual")
 class GatewayAndPeriodTogetherTests(TestCase):
     MONTHLY, YEARLY = 100_000, 1_000_000
 
@@ -49,7 +49,9 @@ class GatewayAndPeriodTogetherTests(TestCase):
         self.client.force_login(self.owner)
 
     def checkout(self, **data):
-        return self.client.post(f"/app/stores/{self.store.public_id}/billing/checkout/{self.version.pk}/", data, HTTP_HOST=HOST)
+        from apps.billing.tests.platform_payment_support import portal_buy_and_pay
+
+        return portal_buy_and_pay(self, self.client, self.store, self.owner, self.version, host=HOST, **data)
 
     def test_yearly_period_paid_through_the_platform_gateway_activates_for_a_year_and_renews_yearly(self):
         response = self.checkout(gateway="zibal", billing_interval="yearly")
@@ -80,11 +82,11 @@ class GatewayAndPeriodTogetherTests(TestCase):
         self.client.get(f"/billing/return/{attempt.public_token}/?success=1&status=2&trackId=777", HTTP_HOST=HOST)
         self.assertNotEqual(StoreSubscription.objects.get(pk=self.subscription.pk).status, "active")
 
-    def test_step_up_continuation_keeps_both_the_gateway_and_the_period(self):
+    def test_step_up_continuation_keeps_the_period_and_the_method_is_chosen_later_on_the_checkout(self):
         update_platform_configuration(actor=None, step_up_actions={"subscription_purchase_confirm": True})
         response = self.checkout(gateway="zibal", billing_interval="yearly")
         self.assertTrue(response["Location"].endswith("/billing/step-up/"))
         session = self.client.session
-        self.assertEqual(session["portal_pending_purchase_gateway"], "zibal")
+        self.assertNotIn("portal_pending_purchase_gateway", session)                             # method choice moved to the unified checkout
         self.assertEqual(session["portal_pending_purchase_interval"], "yearly")
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store).count(), 0)       # nothing is created before the OTP

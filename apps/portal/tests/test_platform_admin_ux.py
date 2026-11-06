@@ -294,7 +294,7 @@ class OwnerPagesTests(TestCase):
         routes = self.concrete_get_routes()
         self.assertGreater(len(routes), 35)
         failures = []
-        redirects = {"login": 302, "sms-logs": 302}          # logged-in staff are bounced from /login/; /sms/logs/ is a legacy bookmark redirect
+        redirects = {"login": 302, "sms-logs": 302, "billing-zibal-settings": 302}   # /login/ bounces staff; /sms/logs/ and /payments/zibal/ are legacy bookmark redirects
         for name, path in routes:
             response = self.client.get(path, HTTP_HOST=ADMIN)
             if response.status_code != redirects.get(name, 200):
@@ -305,7 +305,7 @@ class OwnerPagesTests(TestCase):
         self.client.force_login(self.owner)
         problems = []
         for name, path in self.concrete_get_routes():
-            if name in ("login", "sms-logs"):
+            if name in ("login", "sms-logs", "billing-zibal-settings"):
                 continue
             html = self.client.get(path, HTTP_HOST=ADMIN).content.decode()
             if "<html" not in html:

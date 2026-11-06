@@ -193,7 +193,7 @@ class RedirectRefererTests(SimpleTestCase):
         self.assertEqual(gateway_redirect_response("https://x.example/", adapter=None).status_code, 302)
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", RASTISI_BILLING_PROVIDER="manual")
+@override_settings(ALLOWED_HOSTS=[_HOST, ".rastisi.localhost", "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", RASTISI_BILLING_PROVIDER="manual")
 class PasargadPlatformFlowTests(TestCase):
     PRICE = 490_000
 
@@ -230,7 +230,9 @@ class PasargadPlatformFlowTests(TestCase):
         self.client.force_login(self.owner)
 
     def checkout(self, **extra):
-        return self.client.post(f"/app/stores/{self.store.public_id}/billing/checkout/{self.version.pk}/", extra, HTTP_HOST=_HOST)
+        from apps.billing.tests.platform_payment_support import portal_buy_and_pay
+
+        return portal_buy_and_pay(self, self.client, self.store, self.owner, self.version, **extra)
 
     def start(self):
         response = self.checkout()
@@ -593,14 +595,17 @@ class OwnerDashboardPlatformBillingTests(TestCase):
             sub, kind=SubscriptionInvoice.Kind.RENEWAL, lines=[invoice_service.plan_line_spec(version)],
         ))
 
-    def test_gateway_chooser_appears_only_when_several_gateways_are_ready_and_lists_only_ready_ones(self):
+    def test_checkout_lists_only_ready_methods_and_the_invoice_page_links_to_it(self):
         invoice = self._invoice()
-        one_ready = self.client.get(f"/admin-portal/billing/invoices/{invoice.pk}/").content.decode()
-        self.assertIn(f"/admin-portal/billing/invoices/{invoice.pk}/pay/", one_ready)
-        self.assertNotIn("<select", one_ready.split('billing/invoices/%d/pay/' % invoice.pk, 1)[1].split("</form>", 1)[0])   # single gateway ⇒ no chooser
+        checkout = f"/admin-portal/billing/checkout/subscription/{invoice.pk}/"
+        detail = self.client.get(f"/admin-portal/billing/invoices/{invoice.pk}/").content.decode()
+        self.assertIn(checkout, detail)                                                       # the invoice page links to the one checkout
+        one_ready = self.client.get(checkout).content.decode()
+        self.assertEqual(one_ready.count('name="method"'), 1)
+        self.assertIn('value="pasargad"', one_ready)
         ready_platform_zibal(self)
-        two_ready = self.client.get(f"/admin-portal/billing/invoices/{invoice.pk}/").content.decode()
-        self.assertIn('name="gateway"', two_ready)
+        two_ready = self.client.get(checkout).content.decode()
+        self.assertEqual(two_ready.count('name="method"'), 2)
         self.assertIn('value="zibal"', two_ready)
         self.assertIn('value="pasargad"', two_ready)
         self.assertNotIn('value="snappay"', two_ready)

@@ -113,16 +113,19 @@ class OwnerFlowTests(CardHttpBase):
         _s, foreign = open_invoice_for(self.other, code="c2cforeign", price="100000")
         self.assertEqual(self.owner_client.get(D("billing-card-claim", foreign.pk)).status_code, 404)
 
-    def test_the_invoice_page_offers_card_to_card_only_when_ready_and_choosing_it_opens_the_claim_page(self):
-        detail = D("billing-invoice-detail", self.invoice.pk)
-        self.assertContains(self.owner_client.get(detail), 'value="platform_card"')
-        pay = self.owner_client.post(D("billing-pay", self.invoice.pk), {"gateway": "platform_card"})
+    def test_the_checkout_offers_card_to_card_only_when_ready_and_choosing_it_opens_the_claim_page(self):
+        checkout = D("platform-checkout", "subscription", self.invoice.pk)
+        self.assertContains(self.owner_client.get(D("billing-invoice-detail", self.invoice.pk)), checkout)
+        self.assertContains(self.owner_client.get(checkout), 'value="platform_card"')
+        pay = self.owner_client.post(D("platform-checkout-pay", "subscription", self.invoice.pk), {"method": "platform_card"})
         self.assertRedirects(pay, D("billing-card-claim", self.invoice.pk), fetch_redirect_response=False)
         self.assertEqual(Claim.objects.count(), 0)                                           # choosing the method creates no claim
         enable_platform_card(self, enabled=False)
-        self.assertNotContains(self.owner_client.get(detail), 'value="platform_card"')
-        pay = self.owner_client.post(D("billing-pay", self.invoice.pk), {"gateway": "platform_card"})
-        self.assertRedirects(pay, detail, fetch_redirect_response=False)
+        self.assertNotContains(self.owner_client.get(checkout), 'value="platform_card"')
+        pay = self.owner_client.post(D("platform-checkout-pay", "subscription", self.invoice.pk), {"method": "platform_card"})
+        self.assertRedirects(pay, checkout, fetch_redirect_response=False)
+        legacy = self.owner_client.post(D("billing-pay", self.invoice.pk), {"gateway": "platform_card"})       # legacy URL, same rules
+        self.assertRedirects(legacy, checkout, fetch_redirect_response=False)
 
     def test_the_sms_purchase_claim_page_works_for_the_owners_own_purchase_only(self):
         SmsBalance.objects.update_or_create(store=self.store, defaults={"credits": 0})

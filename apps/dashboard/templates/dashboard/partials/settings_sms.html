@@ -37,13 +37,8 @@
     {% if sms_pending_purchases %}
     <div style="margin-top:12px;font-size:12px;color:var(--muted)">
       {% for purchase in sms_pending_purchases %}
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">⏳ خریدِ «{{ purchase.package.name }}» ({{ purchase.credit_amount|fa_number }} اعتبار) در انتظارِ تأیید است.
-        {% if platform_gateway_options %}
-        <form method="post" action="{% url 'dashboard:settings-sms-purchase-pay' purchase.pk %}" style="display:inline-flex;gap:6px">{% csrf_token %}
-          {% if platform_gateway_options|length > 1 %}<select name="gateway" aria-label="درگاه پرداخت">{% for option in platform_gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% elif platform_gateway_options|length == 1 %}<input type="hidden" name="gateway" value="{{ platform_gateway_options.0.code }}">{% endif %}
-          <button type="submit" class="btn btn-sm btn-primary">پرداخت</button>
-        </form>
-        {% endif %}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">⏳ خریدِ «{{ purchase.package.name }}» ({{ purchase.credit_amount|fa_number }} اعتبار) در انتظارِ پرداخت است.
+        <a class="btn btn-sm btn-primary" href="{% url 'dashboard:platform-checkout' 'sms' purchase.pk %}">ادامه‌ی پرداخت</a>
       </div>
       {% endfor %}
     </div>
@@ -52,11 +47,11 @@
     {% if sms_purchase_history %}
     <details style="margin-top:14px" id="sms-purchase-history"><summary style="cursor:pointer;font-size:12.5px;font-weight:700">تاریخچه‌ی خریدهای اعتبار</summary>
       <div class="table-wrap" style="margin-top:8px"><table style="font-size:12px">
-        <thead><tr><th>بسته</th><th>اعتبار</th><th>مبلغ</th><th>وضعیت</th><th>پرداختِ آنلاین</th><th>تاریخ</th></tr></thead><tbody>
+        <thead><tr><th>بسته</th><th>اعتبار</th><th>مبلغ</th><th>وضعیت</th><th>پرداخت</th><th>تاریخ</th></tr></thead><tbody>
         {% for purchase in sms_purchase_history %}
         <tr><td>{{ purchase.package.name }}</td><td>{{ purchase.credit_amount|fa_number }}</td><td>{{ purchase.price|toman }}</td>
           <td>{{ purchase.get_status_display }}</td>
-          <td>{% for attempt in purchase.payment_attempts.all %}<div>{{ attempt.get_status_display }}</div>{% empty %}—{% endfor %}</td>
+          <td>{% for attempt in purchase.payment_attempts.all %}<div>{{ attempt.get_status_display }}</div>{% endfor %}{% for claim in purchase.manual_claims.all %}<div>کارت‌به‌کارت: {{ claim.get_status_display }}</div>{% endfor %}{% if not purchase.payment_attempts.all and not purchase.manual_claims.all %}—{% endif %}</td>
           <td>{{ purchase.created_at|jalali:"%Y/%m/%d %H:%M" }}</td></tr>
         {% endfor %}</tbody></table></div>
     </details>
@@ -73,8 +68,7 @@
           <div style="font-weight:700;font-size:13.5px">{{ package.name }}</div>
           <div style="font-size:18px;font-weight:800;color:var(--primary);margin:6px 0">{{ package.credit_amount|fa_number }} <span style="font-size:11px;font-weight:500">اعتبار</span></div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:10px">{{ package.price|toman }}</div>
-          {% if platform_gateway_options|length > 1 %}<select name="gateway" aria-label="درگاه پرداخت" style="width:100%;margin-bottom:6px">{% for option in platform_gateway_options %}<option value="{{ option.code }}"{% if option.is_default %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% elif platform_gateway_options|length == 1 %}<input type="hidden" name="gateway" value="{{ platform_gateway_options.0.code }}">{% endif %}
-          <button type="submit" class="btn btn-sm btn-primary" style="width:100%">{% if platform_gateway_options %}خرید و پرداخت{% else %}خرید{% endif %}</button>
+          {% if platform_gateway_options %}<button type="submit" class="btn btn-sm btn-primary" style="width:100%">خرید و پرداخت</button>{% else %}<button type="button" class="btn btn-sm" style="width:100%" disabled aria-disabled="true" title="روشِ پرداختی فعال نیست">پرداخت در دسترس نیست</button>{% endif %}
         </form>
         {% empty %}
         <p style="color:var(--muted);font-size:13px">در حال حاضر بسته‌ای برای فروش تعریف نشده است.</p>

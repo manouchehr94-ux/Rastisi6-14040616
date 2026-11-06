@@ -6,7 +6,7 @@ from apps.storefront_builder import vision_views as storefront_builder_vision_vi
 from apps.storefront_builder import views as storefront_builder_views
 
 from apps.notifications.inbox_views import VIEWS_DASH, url_patterns as _inbox_patterns
-from . import card_transfer_views, cod_views, engagement_views, journal_views, notification_admin_views, payment_reconciliation_views, views, views_domain
+from . import card_transfer_views, cod_views, platform_checkout_views, engagement_views, journal_views, notification_admin_views, payment_reconciliation_views, views, views_domain
 
 app_name = "dashboard"
 
@@ -574,6 +574,9 @@ urlpatterns = [
     path("billing/card-claims/<int:claim_id>/cancel/", views.billing_card_claim_cancel, name="billing-card-claim-cancel"),
     path("billing/card-claims/<int:claim_id>/receipt/", views.billing_card_claim_receipt, name="billing-card-claim-receipt"),
     path("settings/sms/package/purchase/<int:pk>/card-to-card/", views.sms_purchase_card_claim, name="sms-purchase-card-claim"),
+    path("billing/checkout/<str:kind>/<int:pk>/", platform_checkout_views.platform_checkout, name="platform-checkout"),
+    path("billing/checkout/<str:kind>/<int:pk>/pay/", platform_checkout_views.platform_checkout_pay, name="platform-checkout-pay"),
+    path("billing/checkout/<str:kind>/<int:pk>/status/", platform_checkout_views.platform_checkout_status, name="platform-checkout-status"),
     path("billing/payment-result/", views.billing_payment_result, name="billing-payment-result"),
     path("billing/cancel/", views.billing_cancel, name="billing-cancel"),
 ]

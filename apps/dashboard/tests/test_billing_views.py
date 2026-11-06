@@ -79,11 +79,12 @@ class BillingViewTests(TestCase):
         self.store.billing_account.refresh_from_db()
         self.assertEqual(self.store.billing_account.legal_name, "شرکتِ تست")
 
-    def test_pay_starts_payment_and_redirects(self):
+    def test_pay_without_any_ready_platform_method_is_refused_and_creates_no_dead_attempt(self):
         resp = self.client.post(reverse("dashboard:billing-pay", args=[self.invoice.pk]))
-        self.assertEqual(resp.status_code, 302)
+        self.assertRedirects(resp, reverse("dashboard:platform-checkout", args=["subscription", self.invoice.pk]), fetch_redirect_response=False)
         self.invoice.refresh_from_db()
-        self.assertEqual(self.invoice.status, SubscriptionInvoice.Status.PAYMENT_PENDING)
+        self.assertEqual(self.invoice.status, SubscriptionInvoice.Status.OPEN)
+        self.assertFalse(self.invoice.payment_attempts.exists())
 
     def test_payment_result_renders(self):
         self.client.post(reverse("dashboard:billing-pay", args=[self.invoice.pk]))
@@ -131,7 +132,7 @@ class BillingViewTests(TestCase):
         self.assertEqual(resp.status_code, 404)
 
 
-@override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
+@override_settings(ALLOWED_HOSTS=[HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class ZibalBrowserReturnFlowTests(TestCase):
     """Phase 3: end-to-end merchant-facing flow through the dashboard when
     the platform's active billing provider is Zibal — the browser-return

@@ -158,7 +158,7 @@ class RegistrationSelectionTests(TestCase):
         self.assertTrue(sub.trial_end_at - sub.trial_start_at >= timedelta(days=13))
 
 
-@override_settings(ALLOWED_HOSTS=[PUBLIC, ADMIN, STORE_HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual")
+@override_settings(ALLOWED_HOSTS=[PUBLIC, ADMIN, STORE_HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual", RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class OwnerPurchaseWithPeriodTests(TestCase):
     def setUp(self):
         self.addCleanup(cache.clear)
@@ -170,6 +170,9 @@ class OwnerPurchaseWithPeriodTests(TestCase):
         self.owner = User.objects.create_user(username="09121230077", password="x")
         StoreMembership.objects.create(store=self.store, user=self.owner, role=StoreMembership.Role.OWNER,
                                        status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now())
+        from apps.billing.tests.platform_payment_support import ready_platform_zibal
+
+        ready_platform_zibal(self)                      # a purchase is refused unless a platform payment method is ready
         self.client.force_login(self.owner)
 
     def checkout(self, interval=None, version=None):
@@ -328,7 +331,7 @@ class PlatformAdminPricingManagementTests(TestCase):
         self.assertIn("integrations.api", html)
 
 
-@override_settings(ALLOWED_HOSTS=[PUBLIC, ADMIN, STORE_HOST, "testserver"])
+@override_settings(ALLOWED_HOSTS=[PUBLIC, ADMIN, STORE_HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class DashboardPlanChangeWithPeriodTests(TestCase):
     def setUp(self):
         self.addCleanup(cache.clear)
@@ -337,6 +340,9 @@ class DashboardPlanChangeWithPeriodTests(TestCase):
         self.p2, self.v2 = make_plan("dhigh", base=300000, order=2, extra={"yearly": 3000000}, limits={"catalog.products": 50})
         self.store = Store.objects.create(name="d", slug="pricehttp", admin_subdomain="pricehttp", status=Store.Status.ACTIVE)
         self.sub = sub_svc.activate_subscription(sub_svc.create_subscription(self.store, self.v1), period_end=timezone.now() + timedelta(days=20))
+        from apps.billing.tests.platform_payment_support import ready_platform_zibal
+
+        ready_platform_zibal(self)                      # an upgrade is refused (no dead invoice) unless a platform method is ready
         self.owner = User.objects.create_user(username="dash-owner", password="x", is_staff=True)
         StoreMembership.objects.create(store=self.store, user=self.owner, role=StoreMembership.Role.OWNER,
                                        status=StoreMembership.MembershipStatus.ACTIVE, accepted_at=timezone.now())

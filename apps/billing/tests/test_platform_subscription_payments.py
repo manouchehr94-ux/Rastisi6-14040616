@@ -23,7 +23,7 @@ _HOST = "rastisi.localhost"
 S = SubscriptionPaymentAttempt.Status
 
 
-@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual")
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", ALLOWED_HOSTS=[_HOST, ".rastisi.localhost", "testserver"], RASTISI_BILLING_PROVIDER="manual")
 class PlatformSubscriptionPaymentTests(TestCase):
     PRICE = 490_000
 
@@ -56,9 +56,9 @@ class PlatformSubscriptionPaymentTests(TestCase):
 
     # -- helpers ----------------------------------------------------------------------------------------------------
     def checkout(self, **extra):
-        return self.client.post(
-            f"/app/stores/{self.store.public_id}/billing/checkout/{self.version.pk}/", extra, HTTP_HOST=_HOST,
-        )
+        from apps.billing.tests.platform_payment_support import portal_buy_and_pay
+
+        return portal_buy_and_pay(self, self.client, self.store, self.owner, self.version, **extra)
 
     def start(self):
         response = self.checkout()
@@ -85,7 +85,7 @@ class PlatformSubscriptionPaymentTests(TestCase):
         self.assertEqual(sent["amount"], self.PRICE * 10)                            # Toman → Rial at the single boundary
         self.assertEqual(sent["orderId"], attempt.public_token)
         self.assertTrue(sent["callbackUrl"].endswith(f"/billing/return/{attempt.public_token}/"))
-        self.assertTrue(attempt.return_to.endswith(f"/app/stores/{self.store.public_id}/billing/return/"))
+        self.assertTrue(attempt.return_to.endswith(f"/admin-portal/billing/checkout/subscription/{attempt.invoice_id}/"))
         self.assertTrue(sent["callbackUrl"].startswith("http"))
         self.assertEqual(self.reload_sub().status, StoreSubscription.Status.TRIALING)   # nothing activated by a redirect
 
@@ -110,14 +110,15 @@ class PlatformSubscriptionPaymentTests(TestCase):
         self.assertEqual(attempt.failure_code, "connection_error")
         self.assertEqual(self.invoice(attempt).amount_paid, 0)
 
-    def test_manual_mode_keeps_the_previous_behaviour(self):
+    def test_with_no_ready_method_the_purchase_is_refused_with_a_message_and_no_dead_attempt_or_invoice(self):
         from apps.portal.services import platform_gateway_service as pgs
         pgs.save_gateway("zibal", credentials={}, sandbox=False, enabled=False)
         cache.clear()
         response = self.checkout()
-        attempt = SubscriptionPaymentAttempt.objects.get(store=self.store)
-        self.assertEqual(attempt.provider, "manual")
-        self.assertIn(f"/app/stores/{self.store.public_id}/billing/return/{attempt.public_token}/", response["Location"])
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"/app/stores/{self.store.public_id}/billing/", response["Location"])
+        self.assertFalse(SubscriptionPaymentAttempt.objects.filter(store=self.store).exists())
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.store).exists())
 
     def test_owner_can_choose_among_ready_gateways_but_not_an_unready_one(self):
         ready_platform_zarinpal(self)
@@ -138,7 +139,7 @@ class PlatformSubscriptionPaymentTests(TestCase):
         self.fake.paid(amount_rial=self.PRICE * 10, order_id=attempt.public_token)
         response = self.callback(attempt)
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response["Location"].endswith("/billing/return/?payment=ok"))
+        self.assertTrue(response["Location"].endswith(f"/admin-portal/billing/checkout/subscription/{attempt.invoice_id}/?payment=ok"))
         attempt.refresh_from_db()
         invoice = self.invoice(attempt)
         self.assertEqual(attempt.status, S.SUCCEEDED)

@@ -4862,80 +4862,43 @@ def _platform_gateway_options(purchase_type=None, store=None):
     return platform_gateway_service.checkout_options(purchase_type or platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store)
 
 
-def _start_sms_purchase_payment(request, purchase):
-    """پرداختِ آنلاینِ یک خریدِ pending از درگاهِ **پلتفرم** (نه درگاهِ Store). اگر درگاهِ آماده‌ای نیست
-    ``None`` برمی‌گرداند (مسیرِ قدیمیِ تأییدِ دستی)؛ در غیرِ این صورت ریدایرکت به درگاه یا پیامِ خطا."""
-    from apps.billing.services import payment_flow_service, sms_purchase_payment_service
-    from apps.billing.services.payment_flow_service import PaymentFlowError
-    from apps.portal.services import platform_gateway_service
-
-    store = purchase.store
-    requested = (request.POST.get("gateway") or "").strip()[:40]
-    if requested == platform_gateway_service.PLATFORM_CARD:
-        if not platform_gateway_service.manual_option(platform_gateway_service.PURCHASE_SMS):
-            messages.error(request, "کارت‌به‌کارت برای خریدِ پیامک فعال نیست.")
-            return redirect(_SMS_SETTINGS_PATH)
-        return redirect("dashboard:sms-purchase-card-claim", pk=purchase.pk)
-    if not platform_gateway_service.ready_codes(platform_gateway_service.PURCHASE_SMS, store=store, include_pilot=True):
-        return None
-    try:
-        provider = platform_gateway_service.resolve_checkout_provider(
-            requested, platform_gateway_service.PURCHASE_SMS, store=store,
-        )
-    except platform_gateway_service.PlatformGatewayError as exc:
-        messages.error(request, str(exc))
-        return redirect(_SMS_SETTINGS_PATH)
-    try:
-        attempt, session = sms_purchase_payment_service.start_payment(
-            purchase, callback_base_url=platform_gateway_service.callback_base_url(request),
-            return_to=request.build_absolute_uri(_SMS_SETTINGS_PATH),
-            actor=request.user, provider=provider,
-        )
-    except PaymentFlowError as exc:
-        messages.error(request, str(exc))
-        return redirect(_SMS_SETTINGS_PATH)
-    if session is None:                       # تکرارِ idempotent: جلسه‌ی قبلی؛ به صفحه برگرد
-        return redirect(_SMS_SETTINGS_PATH)
-    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url, (session.extra or {}).get("post_fields"))
-
-
 @require_POST
 @staff_required
 @permission_required(SMS_SETTINGS_MANAGE)
 def settings_sms_package_purchase(request):
-    """خریدِ بسته‌ی اعتبارِ پیامک: خریدِ «در انتظار» ثبت می‌شود و — اگر درگاهِ پرداختِ پلتفرم آماده باشد —
-    مالک مستقیماً به درگاه می‌رود؛ اعتبار **فقط پس از verify سرور-به-سرور** (دقیقاً یک‌بار) افزوده
-    می‌شود. بدونِ درگاهِ آماده، همان مسیرِ قدیمیِ تأییدِ دستیِ Platform Admin می‌ماند."""
+    """خریدِ بسته‌ی اعتبارِ پیامک: خریدِ «در انتظار» (قیمتِ اسنپ‌شاتِ سمتِ سرور) ثبت و مرچنت به **صفحه‌ی تسویه‌ی یکپارچه**
+    (``dashboard:platform-checkout``) می‌رود؛ اعتبار فقط پس از verify سرور-به-سرور یا تأییدِ مالیِ کارت‌به‌کارت (دقیقاً یک‌بار)
+    افزوده می‌شود. اگر هیچ روشِ پرداختِ آماده‌ای نیست، خریدِ بی‌راهی ساخته نمی‌شود."""
+    from apps.billing.services import platform_checkout_service as pcs
+    from apps.dashboard.platform_checkout_views import checkout_url
+
     form = SmsPackagePurchaseForm(request.POST)
     if not form.is_valid():
         messages.error(request, "بسته‌ی انتخاب‌شده نامعتبر است")
         return redirect(_SMS_SETTINGS_PATH)
     store = _resolve_dashboard_store(request)
     package = get_object_or_404(SmsPackage, pk=form.cleaned_data["package_id"], is_active=True)
+    if not _platform_gateway_options("sms_package", store):
+        messages.error(request, "در حال حاضر هیچ روشِ پرداختی برای خریدِ بسته‌ی پیامک فعال نیست؛ بعداً دوباره تلاش کنید.")
+        return redirect(_SMS_SETTINGS_PATH)
     # خریدِ pendingِ همان بسته دوباره استفاده می‌شود (انباشتِ ردیفِ تکراری ممنوع).
     purchase = (
         store.sms_package_purchases.filter(package=package, status=SmsPackagePurchase.Status.PENDING)
         .order_by("-created_at").first()
     ) or balance_service.request_purchase(store=store, package=package)
-    started = _start_sms_purchase_payment(request, purchase)
-    if started is not None:
-        return started
-    messages.success(request, "درخواستِ خرید ثبت شد؛ پس از تأیید، اعتبار به حساب شما افزوده می‌شود")
-    return redirect(_SMS_SETTINGS_PATH)
+    return redirect(checkout_url(pcs.KIND_SMS, purchase.pk))
 
 
 @require_POST
 @staff_required
 @permission_required(SMS_SETTINGS_MANAGE)
 def settings_sms_purchase_pay(request, pk):
-    """پرداختِ آنلاینِ یک خریدِ pendingِ **موجود** (مثلاً ثبت‌شده پیش از وصلِ درگاه). فقط خریدِ همین Store."""
-    store = _resolve_dashboard_store(request)
-    purchase = get_object_or_404(SmsPackagePurchase, pk=pk, store=store, status=SmsPackagePurchase.Status.PENDING)
-    started = _start_sms_purchase_payment(request, purchase)
-    if started is not None:
-        return started
-    messages.error(request, "درگاهِ پرداختِ آنلاین هنوز فعال نشده است؛ خرید پس از تأییدِ مدیر تکمیل می‌شود.")
-    return redirect(_SMS_SETTINGS_PATH)
+    """سازگاری: پرداختِ یک خریدِ pendingِ **موجود** — از همان مسیرِ تسویه‌ی یکپارچه عبور می‌کند."""
+    from apps.dashboard import platform_checkout_views as pcv
+
+    get_object_or_404(SmsPackagePurchase, pk=pk, store=_resolve_dashboard_store(request), status=SmsPackagePurchase.Status.PENDING)
+    target = pcv.resolve_target(request, "sms", pk)
+    return pcv.start_checkout(request, target, request.POST.get("gateway") or request.POST.get("method") or "")
 
 
 @require_POST
@@ -8443,6 +8406,12 @@ def subscription_plan_execute(request):
 
     try:
         billing_interval = (request.POST.get("billing_interval") or "").strip()
+        # هیچ فاکتورِ بی‌راهی نسازیم: اگر ارتقا پرداخت می‌خواهد و هیچ روشِ آماده‌ای نیست، پیش از ساختنِ فاکتور رد می‌شود.
+        if not _platform_gateway_options("subscription", store) and pcb.preview(
+            current_subscription, target_version, billing_interval=billing_interval or None,
+        ).get("billing_effect") == "upgrade_requires_payment":
+            messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
+            return redirect("dashboard:subscription-plans")
         kind, result = pcb.start_plan_change(
             current_subscription, target_version, preview_token=token, actor=request.user,
             billing_interval=billing_interval or None,
@@ -8461,8 +8430,10 @@ def subscription_plan_execute(request):
     # ارتقا: سندِ مالی (فاکتورِ تغییرِ پلن) ساخته/بازیابی شد؛ مرچنت را به همان
     # صفحه‌ی فاکتورِ Billing UIِ موجود می‌فرستیم تا از طریقِ ``dashboard:
     # billing-pay`` پرداخت کند — هیچ رابطِ پرداختِ دومی ساخته نمی‌شود.
-    messages.success(request, "فاکتورِ تغییرِ پلن ایجاد شد؛ پلن پس از تکمیلِ پرداخت فعال می‌شود.")
-    return redirect("dashboard:billing-invoice-detail", pk=result.pk)
+    messages.success(request, "فاکتورِ تغییرِ پلن ایجاد شد؛ روشِ پرداخت را انتخاب کنید. پلن پس از تأییدِ پرداخت فعال می‌شود.")
+    from apps.dashboard.platform_checkout_views import checkout_url
+
+    return redirect(checkout_url("subscription", result.pk))
 
 
 @staff_required
@@ -8586,37 +8557,14 @@ def billing_invoice_detail(request, pk):
 @staff_required
 @permission_required(BILLING_PAYMENT_MANAGE)
 def billing_pay(request, pk):
-    from apps.billing.services import payment_flow_service
-
-    from apps.portal.services import platform_gateway_service
+    """سازگاری: شروعِ پرداختِ فاکتور — از همان مسیرِ تسویه‌ی یکپارچه عبور می‌کند؛ بدونِ روشِ صریح و با چند گزینه،
+    مرچنت به صفحه‌ی تسویه می‌رود (هرگز تلاشِ پرداختِ بی‌پایانِ «manual provider» ساخته نمی‌شود)."""
+    from apps.dashboard import platform_checkout_views as pcv
 
     store = _resolve_dashboard_store(request)
-    invoice = _billing_invoice_or_404(store, pk)
-    requested = (request.POST.get("gateway") or "").strip()[:40]
-    if requested == platform_gateway_service.PLATFORM_CARD:
-        if not platform_gateway_service.manual_option(platform_gateway_service.PURCHASE_SUBSCRIPTION):
-            messages.error(request, "کارت‌به‌کارت برای پرداختِ اشتراک فعال نیست.")
-            return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
-        return redirect("dashboard:billing-card-claim", pk=invoice.pk)
-    try:
-        provider = (
-            platform_gateway_service.resolve_checkout_provider(requested, platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store)
-            if requested else None
-        )
-    except platform_gateway_service.PlatformGatewayError as exc:
-        messages.error(request, str(exc))
-        return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
-    try:
-        attempt, session = payment_flow_service.start_payment(
-            invoice, actor=request.user, provider=provider,
-            callback_base_url=platform_gateway_service.callback_base_url(request),
-            return_to=request.build_absolute_uri(reverse("dashboard:billing-invoice-detail", args=[invoice.pk])),
-        )
-    except payment_flow_service.PaymentFlowError as exc:
-        messages.error(request, str(exc))
-        return redirect("dashboard:billing-invoice-detail", pk=invoice.pk)
-    request.session["billing_last_attempt"] = attempt.public_token
-    return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url, (session.extra or {}).get("post_fields"))
+    _billing_invoice_or_404(store, pk)
+    target = pcv.resolve_target(request, "subscription", pk)
+    return pcv.start_checkout(request, target, request.POST.get("gateway") or request.POST.get("method") or "")
 
 
 @staff_required
@@ -8704,6 +8652,10 @@ def _card_claim_context(request, *, store, target_label, amount, purchase_type, 
 
 def _handle_card_claim(request, *, store, invoice=None, sms_purchase=None, target_label, amount, purchase_type, back_url, post_url):
     from apps.billing.services import manual_card_service as mcs
+    from apps.dashboard.platform_checkout_views import checkout_url
+
+    checkout_return = checkout_url("subscription" if invoice is not None else "sms", (invoice or sms_purchase).pk)
+    back_url = checkout_return
     from apps.billing.services.manual_card_service import ClaimError
     from apps.portal.services import platform_gateway_service
 
@@ -8725,7 +8677,7 @@ def _handle_card_claim(request, *, store, invoice=None, sms_purchase=None, targe
             messages.error(request, str(exc))
         else:
             messages.success(request, "ادعای پرداخت ثبت شد و در انتظارِ بررسیِ مالی است. تا تأییدِ مدیرِ مالی هیچ سرویسی فعال نمی‌شود.")
-            return redirect(post_url)
+            return redirect(checkout_return)
     if not platform_gateway_service.manual_option(purchase_type):
         messages.error(request, "کارت‌به‌کارت برای این خرید فعال نیست.")
         return redirect(back_url)
@@ -8782,9 +8734,9 @@ def billing_card_claim_cancel(request, claim_id):
         messages.success(request, "ادعای پرداخت لغو شد.")
     except mcs.ClaimError as exc:
         messages.error(request, str(exc))
-    return redirect(
-        reverse("dashboard:billing-invoice-detail", args=[claim.invoice_id]) if claim.invoice_id else _SMS_SETTINGS_PATH
-    )
+    from apps.dashboard.platform_checkout_views import checkout_url
+
+    return redirect(checkout_url("subscription", claim.invoice_id) if claim.invoice_id else checkout_url("sms", claim.sms_purchase_id))
 
 
 @staff_required
