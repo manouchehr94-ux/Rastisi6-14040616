@@ -47,7 +47,7 @@ class PlatformAdminPaymentsBase(TestCase):
 
 @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
 class AccessControlTests(PlatformAdminPaymentsBase):
-    PATHS = ["/payments/gateways/", "/payments/transactions/", "/payments/reconciliation/", "/payments/sms-purchases/", "/payments/zibal/"]
+    PATHS = ["/payments/gateways/", "/payments/transactions/", "/payments/reconciliation/", "/payments/sms-purchases/"]
 
     def test_anonymous_and_non_superusers_cannot_reach_any_platform_payment_page(self):
         for who in ("anonymous", "owner", "staff_only"):
@@ -89,7 +89,7 @@ class GatewayPageTests(PlatformAdminPaymentsBase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(pgs.gateway_state("zibal").ready)
-        for path in ("/payments/gateways/", "/payments/zibal/", "/payments/transactions/", "/payments/reconciliation/", "/payments/sms-purchases/"):
+        for path in ("/payments/gateways/", "/payments/transactions/", "/payments/reconciliation/", "/payments/sms-purchases/"):
             page = self.get(path)
             self.assertEqual(page.status_code, 200, path)
             self.assertNotIn(SECRET_FIELD_VALUE, page.content.decode(), path)
@@ -119,14 +119,13 @@ class GatewayPageTests(PlatformAdminPaymentsBase):
         self.post("/payments/gateways/", {"action": "set_default", "gateway_code": "zibal"})
         self.assertEqual(pgs.default_code(), "zibal")
 
-    def test_legacy_zibal_settings_page_still_works_through_the_same_service(self):
+    def test_legacy_zibal_route_redirects_to_the_unified_console_without_writing(self):
         response = self.post("/payments/zibal/", {
             "default_payment_provider": "zibal", "zibal_merchant": SECRET_FIELD_VALUE, "zibal_sandbox_mode": "",
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(pgs.gateway_state("zibal").ready)
-        self.assertEqual(pgs.credentials_and_mode("zibal")[0]["merchant"], SECRET_FIELD_VALUE)
-        self.assertNotIn(SECRET_FIELD_VALUE, self.get("/payments/zibal/").content.decode())
+        self.assertEqual((response.status_code, response["Location"]), (302, "/payments/gateways/#gw-zibal"))
+        self.assertFalse(pgs.gateway_state("zibal").ready)
+        self.assertNotIn(SECRET_FIELD_VALUE, self.get("/payments/gateways/").content.decode())
 
 
 @override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")

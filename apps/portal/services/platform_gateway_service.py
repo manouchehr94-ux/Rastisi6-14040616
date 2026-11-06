@@ -576,15 +576,6 @@ def _config_row(*, lock=False):
     return config
 
 
-def _mirror_zibal_to_legacy(row):
-    config = _config_row()
-    config.zibal_sandbox_mode = row.sandbox_mode
-    creds = row.get_credentials()
-    config.encrypted_zibal_credentials = ""
-    config.set_zibal_credentials(**{k: v for k, v in creds.items() if v})
-    config.save(update_fields=["zibal_sandbox_mode", "encrypted_zibal_credentials", "updated_at"])
-
-
 def _credential_fields_for(code: str) -> set:
     facts = matrix.facts_for(code)
     if facts and facts.kind == matrix.KIND_MANUAL:
@@ -654,8 +645,6 @@ def save_gateway(code: str, *, credentials: dict, sandbox: bool, enabled: bool, 
     row.is_enabled = bool(enabled)
     row.last_test_at, row.last_test_ok, row.last_test_message = None, None, ""     # تغییرِ پیکربندی ⇒ نتیجه‌ی تست کهنه
     row.save()
-    if code == "zibal":                              # آینه برای خوانندگانِ قدیمی (بازگشت‌پذیری)
-        _mirror_zibal_to_legacy(row)
     _fix_default_after_change(code, row, actor)
     _invalidate_config_cache()
     record_platform_audit_event(

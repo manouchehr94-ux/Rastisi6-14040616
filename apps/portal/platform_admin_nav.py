@@ -54,7 +54,6 @@ NAV = (
     )),
     NavGroup("finance", "مالی و پرداخت", "card", (
         NavItem("پرداخت‌ها و فاکتورها", "payments", "card", also=("payment-invoice-detail", "payment-manual-add")),
-        NavItem("زیبال — اشتراکِ پلتفرم", "billing-zibal-settings", "settings"),
         # ماژول‌هایِ PR #40 (فقط اگر در این شاخه ثبت شده باشند):
         NavItem("درگاه‌هایِ پرداختِ پلتفرم", "payment-gateways", "card", optional=True),
         NavItem("تراکنش‌هایِ پلتفرم", "payment-transactions", "list", optional=True),

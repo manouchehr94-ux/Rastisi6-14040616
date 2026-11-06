@@ -1427,39 +1427,12 @@ def payment_manual_add(request):
 
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def billing_zibal_settings(request):
-    """صفحهٔ قدیمیِ زیبال (سازگاری) — اکنون روی همان ``platform_gateway_service`` می‌نویسد تا منبعِ
-    حقیقتِ درگاه‌ها یکی باشد. جایگزین: «درگاه‌های پرداختِ پلتفرم»."""
-    from apps.billing.providers import registry as billing_registry
-    from apps.portal.services import platform_gateway_service as pgs
-
-    config = get_platform_configuration()
+    """مسیرِ قدیمیِ زیبال (فقط برایِ لینک/نشانک‌هایِ قدیمی). **هیچ چیزی نمی‌نویسد**: منبعِ یگانه‌یِ پیکربندیِ
+    همه‌یِ درگاه‌هایِ پلتفرم «درگاه‌هایِ پرداختِ پلتفرم» است. دسترسیِ کارمندِ پلتفرم پیش از ریدایرکت بررسی می‌شود
+    (کاربرِ غیرمجاز به لاگین می‌رود، نه به صفحه‌یِ درگاه‌ها)؛ POST هم بدونِ اثر ریدایرکت می‌شود."""
     if request.method == "POST":
-        active_provider = (request.POST.get("default_payment_provider") or "manual").strip()
-        if active_provider not in {"manual", "zibal"}:
-            messages.error(request, "درگاهِ انتخاب‌شده معتبر نیست.")
-        else:
-            merchant = (request.POST.get("zibal_merchant") or "").strip()
-            try:
-                pgs.save_gateway(
-                    "zibal", credentials={"merchant": merchant},
-                    sandbox="zibal_sandbox_mode" in request.POST, enabled=(active_provider == "zibal"),
-                    actor=request.user,
-                )
-                pgs.set_default(active_provider, actor=request.user)
-            except pgs.PlatformGatewayError as exc:
-                messages.error(request, str(exc))
-            else:
-                messages.success(request, "تنظیماتِ زیبالِ پلتفرم ذخیره شد.")
-                return redirect("portal_platform_admin:billing-zibal-settings")
-
-    config = get_platform_configuration()
-    state = pgs.gateway_state("zibal")
-    return render(request, "portal/platform_admin/billing_zibal_settings.html", {
-        "config": config,
-        "merchant_is_configured": bool(state.fields and state.fields[0]["configured"]),
-        "active_provider_code": billing_registry.active_provider_code(),
-        "active_nav": "payments",
-    })
+        messages.info(request, "تنظیمِ زیبال به «درگاه‌هایِ پرداختِ پلتفرم» منتقل شده است؛ تغییرِ شما اعمال نشد.")
+    return redirect(reverse("portal_platform_admin:payment-gateways") + "#gw-zibal")
 
 
 # ------------------------------------------------- درگاه‌های پرداختِ پلتفرم (مدیریت یکپارچه)

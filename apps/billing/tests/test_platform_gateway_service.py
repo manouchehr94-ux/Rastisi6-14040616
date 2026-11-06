@@ -146,12 +146,16 @@ class LegacyZibalCompatibilityTests(TestCase):
         self.assertEqual(pgs.ready_codes(), ["zibal"])
         self.assertEqual(registry.active_provider_code(), "zibal")
 
-    def test_first_save_through_the_new_ui_preserves_the_legacy_merchant_and_mirrors_back(self):
+    def test_first_save_preserves_the_legacy_merchant_and_no_longer_writes_the_legacy_copy(self):
+        before = PlatformConfiguration.objects.get(pk=1).encrypted_zibal_credentials
         pgs.save_gateway("zibal", credentials={"merchant": ""}, sandbox=False, enabled=True)
         creds, _sandbox, source = pgs.credentials_and_mode("zibal")
         self.assertEqual((creds["merchant"], source), (PLATFORM_MERCHANT, "row"))
-        legacy = PlatformConfiguration.objects.get(pk=1).get_zibal_credentials()
-        self.assertEqual(legacy["merchant"], PLATFORM_MERCHANT)       # rollback-safe: old readers still work
+        legacy = PlatformConfiguration.objects.get(pk=1)
+        self.assertEqual(legacy.encrypted_zibal_credentials, before)        # frozen rollback copy: never rewritten, never cleared
+        pgs.save_gateway("zibal", credentials={"merchant": "ROW-ONLY-NEW"}, sandbox=False, enabled=True)
+        self.assertEqual(PlatformConfiguration.objects.get(pk=1).get_zibal_credentials()["merchant"], PLATFORM_MERCHANT)
+        self.assertEqual(pgs.credentials_and_mode("zibal")[0]["merchant"], "ROW-ONLY-NEW")
 
     def test_upgrade_keeps_the_legacy_subscription_flow_working(self):
         fake = patch_zibal(self)
