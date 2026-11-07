@@ -83,6 +83,6 @@
     <button type="submit" class="btn btn-primary">تأیید و زمان‌بندیِ تغییرِ پلن</button>
     {% endif %}
   </form>
-  <a class="btn" href="{% url 'dashboard:subscription-plans' %}">انصراف</a>
+  <a class="btn" href="{{ plans_url }}">انصراف</a>
 </div>
 {% endblock %}

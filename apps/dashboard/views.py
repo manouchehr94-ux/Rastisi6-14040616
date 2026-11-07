@@ -8309,6 +8309,23 @@ def usage_overview(request):
     })
 
 
+def _valid_interval(value) -> str:
+    """دورهی انتخابیِ کلاینت فقط اگر یکی از دورههایِ شناختهشده باشد؛ وگرنه خالی (بازگشتِ امن به پیشفرضِ پلن).
+    قیمت/فاکتور همیشه سمتِ سرور و بر پایهی ``offers_interval`` تعیین میشود."""
+    from apps.subscriptions.models import PlanVersion
+
+    value = (value or "").strip()
+    return value if value in dict(PlanVersion.BillingInterval.choices) and value != PlanVersion.BillingInterval.NONE else ""
+
+
+def _plans_url(interval="") -> str:
+    from urllib.parse import urlencode
+
+    url = reverse("dashboard:subscription-plans")
+    interval = _valid_interval(interval)
+    return f"{url}?{urlencode({'interval': interval})}" if interval else url
+
+
 @staff_required
 @permission_required(SUBSCRIPTION_CHANGE)
 def subscription_plans(request):
@@ -8319,9 +8336,11 @@ def subscription_plans(request):
     current_plan_id = current_version.plan_id if current_version else None
     from apps.subscriptions.services.pricing_page_service import _period_options
 
+    selected_interval = _valid_interval(request.GET.get("interval"))
     plans = [
         {"plan": plan, "version": version, "is_current": plan.pk == current_plan_id,
-         "periods": [p for p in _period_options(version) if p["price"] > 0]}
+         "periods": [p for p in _period_options(version) if p["price"] > 0],
+         "selected_interval": selected_interval if selected_interval and version.offers_interval(selected_interval) else version.billing_interval}
         for plan, version in _publicly_selectable_versions(store)
     ]
     return render(request, "dashboard/subscription_plans.html", {
@@ -8353,22 +8372,23 @@ def subscription_plan_preview(request):
     from apps.subscriptions.services import plan_change_service as pcs
 
     store = _resolve_dashboard_store(request)
+    billing_interval = (request.POST.get("billing_interval") or "").strip()
     target_version = _resolve_selectable_version_or_404(store, request.POST.get("version_id", ""))
     current_subscription = ent.get_current_subscription(store)
     if current_subscription is None:
         messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
-        return redirect("dashboard:subscription-plans")
-    billing_interval = (request.POST.get("billing_interval") or "").strip()
+        return redirect(_plans_url(billing_interval))
     if billing_interval and not target_version.offers_interval(billing_interval):
         messages.error(request, "این پلن دوره‌ی انتخاب‌شده را عرضه نمی‌کند.")
-        return redirect("dashboard:subscription-plans")
+        return redirect(_plans_url(billing_interval))
     try:
         preview = pcb.preview(current_subscription, target_version, billing_interval=billing_interval or None)
     except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
-        return redirect("dashboard:subscription-plans")
+        return redirect(_plans_url(billing_interval))
     return render(request, "dashboard/subscription_plan_preview.html", {
         "preview": preview,
+        "plans_url": _plans_url(preview.get("billing_interval") or billing_interval),
         "active_page": "subscription",
     })
 
@@ -8396,32 +8416,32 @@ def subscription_plan_execute(request):
     from apps.subscriptions.services import plan_change_service as pcs
 
     store = _resolve_dashboard_store(request)
+    billing_interval = (request.POST.get("billing_interval") or "").strip()
     target_version = _resolve_selectable_version_or_404(store, request.POST.get("version_id", ""))
     token = request.POST.get("preview_token", "")
 
     current_subscription = ent.get_current_subscription(store)
     if current_subscription is None:
         messages.error(request, "این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.")
-        return redirect("dashboard:subscription-plans")
+        return redirect(_plans_url(billing_interval))
 
     try:
-        billing_interval = (request.POST.get("billing_interval") or "").strip()
         # هیچ فاکتورِ بی‌راهی نسازیم: اگر ارتقا پرداخت می‌خواهد و هیچ روشِ آماده‌ای نیست، پیش از ساختنِ فاکتور رد می‌شود.
         if not _platform_gateway_options("subscription", store) and pcb.preview(
             current_subscription, target_version, billing_interval=billing_interval or None,
         ).get("payable_amount", 0) > 0:
             messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
-            return redirect("dashboard:subscription-plans")
+            return redirect(_plans_url(billing_interval))
         kind, result = pcb.start_plan_change(
             current_subscription, target_version, preview_token=token, actor=request.user,
             billing_interval=billing_interval or None,
         )
     except pcs.StalePreviewError as exc:
         messages.error(request, str(exc))
-        return redirect("dashboard:subscription-plans")
+        return redirect(_plans_url(billing_interval))
     except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
-        return redirect("dashboard:subscription-plans")
+        return redirect(_plans_url(billing_interval))
 
     if kind == "scheduled":
         messages.success(request, "تغییرِ پلن برایِ دوره‌ی بعد زمان‌بندی شد؛ اشتراکِ فعلی تا آن زمان بدونِ تغییر باقی می‌ماند.")

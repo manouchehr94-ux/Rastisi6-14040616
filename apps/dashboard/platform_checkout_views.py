@@ -133,6 +133,14 @@ def start_checkout(request, target, requested: str):
     return payment_flow_service.gateway_redirect(attempt.provider, session.redirect_url, (session.extra or {}).get("post_fields"))
 
 
+def _back_to_plans_url(target) -> str:
+    """بازگشت به انتخابِ پلن با همان دورهی فاکتور (دورهی مرجعِ سرور، نه ورودیِ کلاینت)."""
+    from apps.billing.services import invoice_service
+    from apps.dashboard.views import _plans_url
+
+    return _plans_url(invoice_service.invoice_billing_interval(target.obj))
+
+
 @staff_required
 def platform_checkout(request, kind, pk):
     target = resolve_target(request, kind, pk)
@@ -143,7 +151,7 @@ def platform_checkout(request, kind, pk):
         "target": target, "state": state, "methods": options, "default_method": default,
         "post_url": reverse("dashboard:platform-checkout-pay", args=[kind, pk]),
         "status_url": reverse("dashboard:platform-checkout-status", args=[kind, pk]),
-        "back_url": reverse("dashboard:subscription-plans") if kind == pcs.KIND_SUBSCRIPTION else SMS_SETTINGS_PATH,
+        "back_url": _back_to_plans_url(target) if kind == pcs.KIND_SUBSCRIPTION else SMS_SETTINGS_PATH,
         "back_label": "بازگشت به پلن‌ها" if kind == pcs.KIND_SUBSCRIPTION else "بازگشت به تنظیماتِ پیامک",
         "invoice_url": reverse("dashboard:billing-invoice-detail", args=[pk]) if kind == pcs.KIND_SUBSCRIPTION else "",
         "no_method": state.can_pay and not options and not state.free,

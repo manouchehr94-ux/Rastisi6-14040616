@@ -68,7 +68,10 @@ def invoice_target(invoice) -> Target:
     plan_version = getattr(invoice, "plan_version", None)
     interval = ""
     if plan_version is not None:
-        interval = plan_version.get_billing_interval_display() if hasattr(plan_version, "get_billing_interval_display") else ""
+        # دورهی مرجع = اسنپشاتِ ردیفِ پلنِ همین فاکتور (نه پیشفرضِ نسخهی پلن)
+        from apps.billing.services import invoice_service
+
+        interval = dict(plan_version.BillingInterval.choices).get(invoice_service.invoice_billing_interval(invoice), "")
     return Target(
         kind=KIND_SUBSCRIPTION, obj=invoice, store=invoice.store, purchase_type=pgs.PURCHASE_SUBSCRIPTION,
         title=f"اشتراک — {plan_version.plan.public_title or plan_version.plan.name}" if plan_version is not None else f"فاکتور {invoice.number}",

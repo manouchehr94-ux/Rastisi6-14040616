@@ -650,7 +650,7 @@ class PlanChangeThroughCheckoutTests(CheckoutBase):
 
     def test_no_ready_method_creates_no_dead_invoice_and_says_why(self):
         response = self.execute()
-        self.assertRedirects(response, reverse("dashboard:subscription-plans"), fetch_redirect_response=False)
+        self.assertRedirects(response, reverse("dashboard:subscription-plans") + "?interval=yearly", fetch_redirect_response=False)
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2).count(), 0)
 
     def test_upgrade_lands_on_the_unified_checkout_pays_online_and_preserves_the_interval(self):

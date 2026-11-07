@@ -30,7 +30,7 @@
           {% if item.periods|length > 1 %}
           <label style="display:block;font-size:12px;margin-bottom:6px">دوره‌ی پرداخت
             <select name="billing_interval" style="width:100%;margin-top:4px">
-              {% for period in item.periods %}<option value="{{ period.interval }}"{% if period.interval == item.version.billing_interval %} selected{% endif %}>{{ period.label }} — {{ period.price }} {{ item.version.currency }}{% if period.savings_percent %} ({{ period.savings_percent }}٪ صرفه‌جویی){% endif %}</option>{% endfor %}
+              {% for period in item.periods %}<option value="{{ period.interval }}"{% if period.interval == item.selected_interval %} selected{% endif %}>{{ period.label }} — {{ period.price }} {{ item.version.currency }}{% if period.savings_percent %} ({{ period.savings_percent }}٪ صرفه‌جویی){% endif %}</option>{% endfor %}
             </select>
           </label>
           {% endif %}
