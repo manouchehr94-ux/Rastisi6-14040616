@@ -61,6 +61,7 @@ MESSAGES = {
     "reservation_lost": "رزروِ کوپن منقضی شده و ظرفیتِ آن دیگر در دسترس نیست؛ کوپن را بردارید یا دوباره اعمال کنید.",
     "not_zero_value": "این فاکتور با تخفیفِ کامل صفر نشده است و باید پرداخت شود.",
     "forbidden": "اجازه‌ی این عملیات را ندارید.",
+    "rate_limited": "تعدادِ تلاش برایِ کدِ تخفیف بیش از حدِ مجاز است؛ یک دقیقه صبر کنید و دوباره تلاش کنید.",
 }
 
 
@@ -94,6 +95,19 @@ def _fail(code, original=ZERO):
 
 
 # ----------------------------------------------------------------------------------------------- settings / math
+def check_attempt_rate(user, store):
+    """سقفِ تلاشِ کد (اعمال/پیشنمایش) برایِ هر کاربر+فروشگاه در دقیقه؛ جلوگیری از حدسِ کدها. پیامهایِ خطایِ متمایز
+    (غیرفعال/منقضی/تکمیل) خواستهی مالک است، پس مهارِ نرخ جایگزینِ پیامِ یکسان است. backend در دسترس نباشد ⇒ بسته (fail-closed)."""
+    from apps.core.services.rate_limit import RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
+
+    limit = int(getattr(settings, "PLATFORM_COUPON_ATTEMPTS_PER_MINUTE", 10))
+    try:
+        enforce_rate_limit("platform.coupon.attempt", f"{getattr(store, 'pk', '')}:{getattr(user, 'pk', '')}",
+                           max_attempts=limit, window_seconds=60)
+    except (RateLimitExceeded, RateLimitUnavailable) as exc:
+        raise CouponError("rate_limited") from exc
+
+
 def reservation_lifetime() -> timedelta:
     return timedelta(minutes=int(getattr(settings, "PLATFORM_COUPON_RESERVATION_MINUTES", 30)))
 
@@ -272,7 +286,25 @@ def _write_discount(invoice, line, discount, snapshot):
 def _invoice_context(invoice):
     from apps.billing.services import invoice_service
 
-    return invoice_service.invoice_billing_interval(invoice), PURPOSE_BY_KIND[invoice.kind]
+    return invoice_service.invoice_billing_interval(invoice), purpose_for(invoice.store, invoice.kind, subscription=invoice.subscription, exclude_invoice=invoice)
+
+
+def purpose_for(store, kind, *, subscription=None, exclude_invoice=None) -> str:
+    """هدفِ خرید برایِ اهلیتِ کوپن. اولین خریدِ پولیِ پس از تریال در این سیستم یک فاکتورِ ``plan_change`` است (ارتقا از
+    پلنِ آزمایشیِ رایگان؛ ``portal.views._start_purchase``)، ولی برایِ کوپن «خریدِ اولیه» است؛ وگرنه کوپنِ پیشفرض
+    (``allow_initial``) هرگز روی اولین خریدِ پس از تریال کار نمیکرد. شرط: اشتراک pending/trialing است (یا تریال داشته)
+    و فروشگاه هنوز پرداختِ واقعی نداشته. ارتقایِ معمولِ مشتریِ پولی همچنان ``plan_change`` میماند."""
+    if kind != Kind.PLAN_CHANGE:
+        return PURPOSE_BY_KIND[kind]
+    from apps.subscriptions.models import StoreSubscription, SubscriptionEvent
+    from apps.subscriptions.services import entitlement_service
+
+    sub = subscription or entitlement_service.get_current_subscription(store)
+    if sub is None or has_paid_subscription_history(store, exclude_invoice=exclude_invoice):
+        return PURPOSE_BY_KIND[kind]
+    was_trial = sub.status in (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING) or SubscriptionEvent.objects.filter(
+        subscription=sub, event_type=SubscriptionEvent.EventType.TRIAL_STARTED).exists()
+    return "initial" if was_trial else PURPOSE_BY_KIND[kind]
 
 
 # ----------------------------------------------------------------------------------------------- apply / remove
@@ -437,6 +469,7 @@ def redeem_for_paid_invoice(invoice, *, actor=None, now=None):
     if redemption is None or redemption.status in (Redemption.Status.REDEEMED, Redemption.Status.REVERSED):
         return redemption
     was = redemption.status
+    over = _over_capacity(redemption, now)
     redemption.status = Redemption.Status.REDEEMED
     redemption.redeemed_at = now
     redemption.released_at = None
@@ -445,6 +478,51 @@ def redeem_for_paid_invoice(invoice, *, actor=None, now=None):
     _coupon_event(redemption.coupon, "redeemed", actor=actor, store=redemption.store, invoice=redemption.invoice, detail={
         "invoice": invoice.number, "discount": str(redemption.discount_amount), "from": was,
     })
+    if over:
+        # سیاستِ صریح: پول با تخفیفِ ثبتشده دریافت شده، پس تخفیف محترم است (رد نمیشود)؛ ولی تجاوز از سقف ثبت و ردگیری میشود.
+        _coupon_event(redemption.coupon, "over_redeemed", store=redemption.store, invoice=redemption.invoice, detail={
+            "invoice": invoice.number, "from": was, "scope": over,
+            "max_redemptions": redemption.coupon.max_redemptions, "max_per_store": redemption.coupon.max_per_store,
+        })
+        record_audit_event(
+            store=redemption.store, actor=actor, action_code="billing.platform_coupon_over_redeemed",
+            object_type="SubscriptionInvoice", object_id=invoice.pk, object_label=invoice.number,
+            after={"coupon": redemption.code_snapshot, "scope": over, "from": was},
+        )
+    return redemption
+
+
+def _over_capacity(redemption, now) -> str:
+    """پیش از مصرفِ قطعی: آیا با احتسابِ مصرف/رزروهایِ *دیگر* سقفِ کوپن پر شده است؟ ('' | 'total' | 'store')."""
+    coupon = PlatformCoupon.objects.get(pk=redemption.coupon_id)
+    others = counting_queryset(coupon.redemptions.exclude(pk=redemption.pk), now=now)
+    if coupon.max_redemptions is not None and others.count() >= coupon.max_redemptions:
+        return "total"
+    if coupon.max_per_store is not None and others.filter(store_id=redemption.store_id).count() >= coupon.max_per_store:
+        return "store"
+    return ""
+
+
+@transaction.atomic
+def hold_reservation_for_claim(invoice, *, until, now=None):
+    """ادعایِ کارتبهکارت در انتظارِ بررسی: رزروِ کوپن (با بازرزروِ ایمن در صورتِ انقضا) تا ``until`` نگه داشته میشود تا
+    سهمیه در فاصلهی بررسی فروخته نشود. رزروِ ازدسترفته ⇒ ``CouponError(reservation_lost)``. بدونِ کوپن ⇒ بدونِ اثر."""
+    now = now or timezone.now()
+    redemption = ensure_reservation_active(invoice, now=now)
+    if redemption is not None and redemption.status == Redemption.Status.RESERVED and redemption.expires_at < until:
+        redemption.expires_at = until
+        redemption.save(update_fields=["expires_at", "updated_at"])
+    return redemption
+
+
+@transaction.atomic
+def restore_reservation_lifetime(invoice, *, now=None):
+    """ادعا بسته شد (ردّ/لغو/انقضا): رزروِ نگهداشتهشده به عمرِ عادی برمیگردد تا سهمیه بیش از لازم قفل نماند."""
+    now = now or timezone.now()
+    redemption = Redemption.objects.select_for_update().filter(invoice_id=invoice.pk, status=Redemption.Status.RESERVED).first()
+    if redemption is not None and redemption.expires_at and redemption.expires_at > now + reservation_lifetime():
+        redemption.expires_at = now + reservation_lifetime()
+        redemption.save(update_fields=["expires_at", "updated_at"])
     return redemption
 
 

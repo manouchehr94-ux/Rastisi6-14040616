@@ -8359,13 +8359,19 @@ def _resolve_selectable_version_or_404(store, version_id):
     raise Http404
 
 
-def _preview_coupon(store, target_version, interval, raw_code):
+def _preview_coupon(store, target_version, interval, raw_code, user=None):
     """پیشنمایشِ تخفیفِ پلتفرم (فقط خواندن): کدِ واردشده یا بهترین تخفیفِ خودکار. قیمت/تخفیف را سرور میسازد.
     خروجی: (Evaluation یا None، پیامِ خطا)."""
     from apps.billing.services import platform_coupon_service as coupons
 
     code = coupons.normalize_code(raw_code)
-    result = coupons.evaluate(store, plan_version=target_version, interval=interval, purpose="plan_change", code=code)
+    if code:
+        try:
+            coupons.check_attempt_rate(user, store)
+        except coupons.CouponError as exc:
+            return None, exc.message
+    result = coupons.evaluate(store, plan_version=target_version, interval=interval,
+                              purpose=coupons.purpose_for(store, "plan_change"), code=code)
     if result.ok:
         return result, ""
     return None, (result.message if code else "")
@@ -8400,7 +8406,7 @@ def subscription_plan_preview(request):
         return redirect(_plans_url(billing_interval))
     coupon_eval, coupon_error = None, ""
     if preview.get("is_upgrade"):
-        coupon_eval, coupon_error = _preview_coupon(store, target_version, preview.get("billing_interval"), request.POST.get("coupon_code"))
+        coupon_eval, coupon_error = _preview_coupon(store, target_version, preview.get("billing_interval"), request.POST.get("coupon_code"), user=request.user)
     return render(request, "dashboard/subscription_plan_preview.html", {
         "preview": preview,
         "plans_url": _plans_url(preview.get("billing_interval") or billing_interval),
@@ -8454,17 +8460,42 @@ def subscription_plan_execute(request):
             # کدِ نامعتبر پیش از ساختنِ فاکتور رد میشود (فاکتورِ بیراهه ساخته نمیشود)
             from apps.billing.services import platform_coupon_service as coupons
 
+            try:
+                coupons.check_attempt_rate(request.user, store)
+            except coupons.CouponError as exc:
+                messages.error(request, exc.message)
+                return redirect(_plans_url(billing_interval))
             check = coupons.evaluate(
-                store, plan_version=target_version, code=coupon_code, purpose="plan_change",
+                store, plan_version=target_version, code=coupon_code, purpose=coupons.purpose_for(store, "plan_change"),
                 interval=pcb.preview(current_subscription, target_version, billing_interval=billing_interval or None)["billing_interval"],
             )
             if not check.ok:
                 messages.error(request, check.message)
                 return redirect(_plans_url(billing_interval))
-        kind, result = pcb.start_plan_change(
-            current_subscription, target_version, preview_token=token, actor=request.user,
-            billing_interval=billing_interval or None,
-        )
+        from apps.billing.models import SubscriptionInvoice as _Inv
+        from apps.billing.services import platform_coupon_service as coupons
+
+        pre_existing = set(_Inv.objects.filter(store=store, kind=_Inv.Kind.PLAN_CHANGE).values_list("pk", flat=True)) if coupon_code else set()
+        coupon_failure = None
+        try:
+            # اتمیک: فاکتورِ *تازه* و کوپنش یا هر دو ساخته میشوند یا هیچ‌کدام؛ فاکتورِ بدونِ تخفیفی که کاربر در پیش‌نمایش ندیده
+            # هرگز باقی نمیماند. فاکتورِ از قبل موجود (ایدمپوتنت) دست‌نخورده میماند.
+            with transaction.atomic():
+                kind, result = pcb.start_plan_change(
+                    current_subscription, target_version, preview_token=token, actor=request.user,
+                    billing_interval=billing_interval or None,
+                )
+                if kind != "scheduled" and coupon_code:
+                    try:
+                        coupons.apply_coupon_to_invoice(result, code=coupon_code, actor=request.user)   # سمتِ سرور؛ مبلغ از ورودی خوانده نمیشود
+                    except coupons.CouponError as exc:
+                        if result.pk in pre_existing:
+                            coupon_failure = exc.message                    # فاکتورِ قبلی حفظ میشود
+                        else:
+                            raise
+        except coupons.CouponError as exc:
+            messages.error(request, f"{exc.message} فاکتور ایجاد نشد؛ کدِ دیگری وارد کنید یا بدونِ کد ادامه دهید.")
+            return redirect(_plans_url(billing_interval))
     except pcs.StalePreviewError as exc:
         messages.error(request, str(exc))
         return redirect(_plans_url(billing_interval))
@@ -8482,13 +8513,8 @@ def subscription_plan_execute(request):
     messages.success(request, "فاکتورِ تغییرِ پلن ایجاد شد؛ روشِ پرداخت را انتخاب کنید. پلن پس از تأییدِ پرداخت فعال می‌شود.")
     from apps.dashboard.platform_checkout_views import checkout_url
 
-    if coupon_code:
-        from apps.billing.services import platform_coupon_service as coupons
-
-        try:
-            coupons.apply_coupon_to_invoice(result, code=coupon_code, actor=request.user)   # سمتِ سرور؛ مبلغ از ورودی خوانده نمیشود
-        except coupons.CouponError as exc:
-            messages.error(request, f"{exc.message} فاکتور بدونِ این تخفیف ایجاد شد؛ در صفحهی تسویه میتوانید کدِ دیگری وارد کنید.")
+    if coupon_failure:
+        messages.error(request, f"{coupon_failure} فاکتورِ موجود بدونِ تغییر ماند؛ در صفحهی تسویه میتوانید کدِ دیگری وارد کنید.")
     return redirect(checkout_url("subscription", result.pk))
 
 

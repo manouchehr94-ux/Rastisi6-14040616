@@ -182,6 +182,12 @@ def _submit_claim_atomic(*, user, store, reference, transferred_at, payer_card_l
         locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
         if not locked.is_payable or Decimal(locked.amount_due) != amount:
             raise ClaimError("فاکتور تغییر کرده است؛ صفحه را دوباره باز کنید.")
+        from apps.billing.services import platform_coupon_service as coupons
+
+        try:                                    # سهمیهی کوپن در طولِ بررسی نگه داشته میشود (نه فقط ۳۰ دقیقه)
+            coupons.hold_reservation_for_claim(locked, until=now + timedelta(days=REVIEW_WINDOW_DAYS), now=now)
+        except coupons.CouponError as exc:
+            raise ClaimError(exc.message) from exc
         attempt = attempt_service.create_attempt(
             locked, provider=PROVIDER_CODE, idempotency_key=f"manualclaim-inv-{locked.pk}-{secrets.token_hex(6)}", actor=user, now=now,
         )
@@ -265,6 +271,10 @@ def _close(claim, status, *, attempt_status, code, actor, now, note=""):
     if note:
         claim.review_note = note[:500]
     claim.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note", "updated_at"])
+    if claim.subscription_attempt_id:
+        from apps.billing.services import platform_coupon_service as coupons
+
+        coupons.restore_reservation_lifetime(claim.subscription_attempt.invoice, now=now)
     attempt = _attempt_of(claim)
     if attempt is not None and attempt.status not in (type(attempt).Status.SUCCEEDED,):
         attempt.status = getattr(type(attempt).Status, attempt_status.upper())

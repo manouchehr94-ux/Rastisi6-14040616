@@ -188,6 +188,7 @@ def platform_checkout_coupon_apply(request, kind, pk):
         return redirect(page)
     invoice = target.obj
     try:
+        coupons.check_attempt_rate(request.user, invoice.store)
         with transaction.atomic():
             existing = getattr(invoice, "coupon_redemption", None) if invoice.coupon_snapshot else None
             if existing is not None and existing.code_snapshot != code and not existing.coupon.is_automatic:
