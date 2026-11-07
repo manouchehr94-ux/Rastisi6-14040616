@@ -2,7 +2,7 @@
 {% load static public_site persian %}
 {% block title %}{% ps 'plans.meta_title' %}{% endblock %}
 {% block meta_description %}<meta name="description" content="{% ps 'plans.meta_description' %}">{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'portal/css/pricing.css' %}?v=20261105">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'portal/css/pricing.css' %}?v=20261107">{% endblock %}
 {% block content %}
 {% ps 'plans.crumb' as crumb %}{% ps 'plans.title' as title %}{% ps 'plans.lead' as lead %}
 {% include "portal/public_v2/_pghead.html" %}
@@ -31,6 +31,26 @@
 
       <div class="pz-price">
         {% if card.is_free or not card.purchasable %}
+          <b>رایگان</b>
+        {% else %}
+          {% for p in card.periods %}
+          <div data-price="{{ p.interval }}"{% if p.interval != card.initial_interval %} hidden{% endif %}>
+            {% if p.compare_at %}<span class="pz-was num">{{ p.compare_at|toman_raw }}</span>{% endif %}
+            <b class="num">{{ p.price|toman_raw }}</b>
+            <span class="pz-unit">تومان · {{ p.label }}</span>
+            {% if p.discount_percent %}<span class="pz-chip">{{ p.discount_percent|fa_number }}٪ تخفیف</span>
+            {% elif p.savings_percent %}<span class="pz-chip">{{ p.savings_percent|fa_number }}٪ صرفه‌جویی نسبت به ماهانه</span>{% endif %}
+            {% if p.custom_label %}<span class="pz-chip">{{ p.custom_label }}</span>{% endif %}
+            {% if p.interval != "monthly" and p.monthly_equivalent %}<span class="pz-eq">معادلِ ماهانه {{ p.monthly_equivalent|toman }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      {% if card.trial_days %}<div class="pz-trial">{{ card.trial_days|fa_number }} روز دوره‌ی آزمایشیِ رایگان برایِ فروشگاهِ تازه</div>{% endif %}
+
+      <ul>{% for h in card.highlights %}<li><span>{{ h.title }}</span><b>{{ h.text }}</b></li>{% endfor %}</ul>
+
+      {% if card.is_free or not card.purchasable %}
         <a href="{% url 'portal:register' %}?plan={{ card.plan.code }}" class="btn btn-leaf btn-block" data-cta="register">{{ card.cta_label|default:"شروع با این پلن" }}</a>
       {% elif is_owner_authenticated %}
         {# فروشنده‌ی واردشده: مستقیم به خریدِ همین پلن/دوره در پنلِ فروشگاهِ خودش — هرگز به /register/ #}
