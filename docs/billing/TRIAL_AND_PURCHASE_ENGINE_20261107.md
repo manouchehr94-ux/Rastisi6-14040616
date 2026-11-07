@@ -71,7 +71,7 @@ Screenshots: 12 key images + the full 71-check `results.json` in `docs/qa/trial_
 5. A store with a *terminal* (cancelled/expired) subscription still needs a platform-admin reactivation; this work does not add a self-service reactivation (it would have to create a pending subscription, which grants access before payment — see G11).
 
 ## E. Limits and unresolved items
-* The full 13,787-test regression was **not** run to the end (same as before) — see section F for what was run.
+* The full 13,787-test regression is **NOT COMPLETE** (same as before) — section F lists exactly what was run; `apps.stores` was only run for the modules touching subscriptions.
 * Pre-existing failures reproduced at the base `976e4500` and unrelated: `test_seo.test_terms_and_privacy_are_indexable`, `test_terms_page…cache_busted`, `test_public_site_theme_contract…literal_colors` (privacy-draft/public CSS work), `InFlightDeliveryConcurrencyTests` (3) and the transaction-test-case `setUpClass` artifacts in a full portal run.
 * Chromium only; real gateways, SMS and e-mail never contacted; Windows QA not performed.
 * The Trial plan page edits `registered` entitlements only (planned features are managed in the assignment matrix, by design).
@@ -95,7 +95,9 @@ Screenshots: 12 key images + the full 71-check `results.json` in `docs/qa/trial_
 | `apps.billing` | 511 OK |
 | `apps.portal` | 1437 run: **3 failures, 3 errors — all pre-existing / artifacts** (see below) |
 | `apps.dashboard` subscription + industry settings views | 36 OK |
-| `apps.notifications`, `apps.stores`, `apps.core` | see the final line of this section |
+| `apps.notifications` | 465 OK |
+| `apps.core` + every `apps.stores` module that touches subscriptions/entitlements/provisioning | 641 run, 30 skipped: OK except 1 setUpClass error (`test_purchase_tracking.ConcurrentRenderTests`, a TransactionTestCase flush artifact — passes alone) |
+| `apps.stores` as a whole | **not run to completion** (it exceeded 30 minutes; only the relevant modules above were run) |
 
 Portal leftovers, none caused by this work: `test_seo.test_terms_and_privacy_are_indexable`, `test_terms_page…cache_busted`, `test_public_site_theme_contract…literal_colors` (reproduced identically at `976e4500` in a separate worktree); the three `setUpClass` errors are the known TransactionTestCase flush artifact — `ConcurrencyTests` + `PhoneRequestBudgetConcurrencyTests` pass alone (15 OK); `InFlightDeliveryConcurrencyTests` (3) is the known pre-existing failure.
 
