@@ -117,5 +117,5 @@
 .pz-promo{display:inline-block;align-self:flex-start;font-size:12.5px;font-weight:800;padding:2px 12px;border-radius:999px;background:var(--paper-2);border:1px solid var(--saffron-ink);color:var(--saffron-ink)}
 
 /* existing-merchant entry on a plan card: a quiet text link under the main CTA (44px touch target) */
-.pz-existing{display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:6px;font-size:13px;color:var(--ink-2,#475569);text-decoration:underline;text-underline-offset:3px}
-.pz-existing:hover,.pz-existing:focus-visible{color:var(--ink,#0f172a)}
+.pz-existing{display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:6px;font-size:13px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.pz-existing:hover,.pz-existing:focus-visible{color:var(--ink)}

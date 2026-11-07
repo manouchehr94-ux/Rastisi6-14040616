@@ -333,10 +333,17 @@ class FreshSignupTests(_OtpTestMixin, TestCase):
             f"/app/stores/{store.public_id}/onboarding/identity/",
         )
 
-    def test_no_default_plan_configured_means_no_subscription_fail_open(self):
+    @override_settings(RASTISI_DEFAULT_PLAN_CODE="none")
+    def test_explicit_opt_out_means_no_subscription_fail_open(self):
         self.register()
         self.verify()
         self.assertEqual(self.new_rows(StoreSubscription).count(), 0)
+
+    def test_no_default_plan_configured_means_the_platform_initial_trial(self):
+        self.register()
+        self.verify()
+        subscription = self.new_rows(StoreSubscription).get()
+        self.assertEqual((subscription.plan_version.plan.code, subscription.status), ("trial", StoreSubscription.Status.TRIALING))
 
     @override_settings(RASTISI_DEFAULT_PLAN_CODE="trial")
     def test_default_trial_subscription_is_preserved_when_a_plan_is_configured(self):

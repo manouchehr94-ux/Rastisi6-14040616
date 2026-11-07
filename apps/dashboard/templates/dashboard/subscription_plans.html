@@ -31,6 +31,7 @@
         <form method="post" action="{% url 'dashboard:subscription-plan-preview' %}">
           {% csrf_token %}
           <input type="hidden" name="version_id" value="{{ item.version.pk }}">
+          {% if item.periods|length > 1 %}
           <fieldset style="border:0;padding:0;margin:0 0 10px"><legend style="font-size:12px;margin-bottom:6px">دوره‌ی پرداخت</legend>
             {% for period in item.periods %}
             <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
@@ -41,6 +42,12 @@
             </label>
             {% endfor %}
           </fieldset>
+          {% else %}
+          {% for period in item.periods %}
+          <input type="hidden" name="billing_interval" value="{{ period.interval }}">
+          <div style="margin:0 0 10px"><b data-testid="price-{{ item.plan.code }}-{{ period.interval }}">{{ period.price|toman }}</b> <span style="color:var(--muted)">/ {{ period.label }}</span></div>
+          {% endfor %}
+          {% endif %}
           <button type="submit" class="btn btn-primary" style="width:100%" data-testid="choose-{{ item.plan.code }}">ادامه و مشاهده‌ی پیش‌نمایش</button>
         </form>
       {% endif %}

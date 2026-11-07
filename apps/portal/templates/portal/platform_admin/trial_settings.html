@@ -6,7 +6,7 @@
   <p>هر فروشگاهِ تازه یک‌بار دوره‌ی آزمایشی می‌گیرد. پلنِ Trial داخلی است: در صفحه‌ی عمومیِ تعرفه نمایش داده نمی‌شود و قابلِ خرید نیست.</p></div></div>
 
 <div class="pa-card" data-testid="trial-stats"><div class="pa-cardbody">
-  <div class="pa-row" style="gap:28px;flex-wrap:wrap">
+  <div class="pa-row pa-stats">
     <div><b>{{ stats.total|fa_number }}</b><div class="pa-help">فروشگاهِ دارایِ Trial (تاریخچه)</div></div>
     <div><b>{{ stats.running|fa_number }}</b><div class="pa-help">در جریان</div></div>
     <div><b>{{ stats.converted|fa_number }}</b><div class="pa-help">تبدیل‌شده به اشتراکِ پولی</div></div>
@@ -47,7 +47,7 @@
       {% endfor %}
       </tbody>
     </table></div>
-    <div class="pa-fields" style="margin-top:14px">
+    <div class="pa-fields pa-fields-after-table">
       <div class="pa-field"><label for="trial-grace">مهلتِ ارفاقی پس از پایانِ Trial (روز)</label>
         <input id="trial-grace" type="text" inputmode="numeric" name="grace_period_days" value="{{ version.grace_period_days|default:0 }}" autocomplete="off">
         <span class="pa-help">۰ = پس از پایان بلافاصله «منقضی»: ساختِ رکوردِ تازه بسته، مشاهده‌ی داده‌ها باز.</span></div>

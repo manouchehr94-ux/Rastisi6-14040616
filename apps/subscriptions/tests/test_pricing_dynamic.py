@@ -130,7 +130,8 @@ class PricingPageDataTests(TestCase):
     def test_card_prices_periods_discounts_and_trial_come_from_the_real_version(self):
         cards = {c["plan"].code: c for c in page.build_pricing_page()["cards"]}
         base, adv = cards["base"], cards["adv"]
-        self.assertEqual((base["trial_days"], adv["trial_days"]), (14, 0))                  # never a blanket "free trial" claim
+        # the initial Trial is a PLATFORM policy for every new store (default 30 days), not a per-plan property any more
+        self.assertEqual((base["trial_days"], adv["trial_days"]), (30, 30))
         self.assertEqual([p["interval"] for p in base["periods"]], ["monthly", "quarterly", "yearly"])
         yearly = next(p for p in base["periods"] if p["interval"] == "yearly")
         self.assertEqual((yearly["price"], yearly["compare_at"], yearly["discount_percent"], yearly["custom_label"]),
@@ -463,18 +464,16 @@ class BillingLifecycleTests(TestCase):
         self.assertTrue(invoice.is_payable)
         self.assertIsNotNone(attempt)
 
-    def test_trial_eligibility_and_registration_on_the_selected_plan(self):
-        trial_plan, trial_version = make_plan("withtrial", base=200000, trial=14)
-        _np, no_trial_version = make_plan("notrial", base=200000, trial=0)
+    def test_registration_with_a_selected_paid_plan_gets_the_platform_trial_and_no_second_one(self):
+        """Choosing a plan (even one with its own legacy ``trial_days``) at registration never grants that plan or a second trial:
+        the store gets the independent initial Trial of the platform length and the choice is only remembered for the purchase."""
+        _p, paid_with_trial = make_plan("withtrial", base=200000, trial=14)
         fresh = Store.objects.create(name="f1", slug="fresh1", admin_subdomain="fresh1", status=Store.Status.ACTIVE)
-        self.assertTrue(sub_svc.trial_eligible(fresh, trial_version))
-        self.assertFalse(sub_svc.trial_eligible(fresh, no_trial_version))
-        sub = sub_svc.provision_default_subscription(fresh, plan_version=trial_version)
-        self.assertEqual((sub.plan_version_id, sub.status, sub.source), (trial_version.pk, "trialing", "self_service"))
-        self.assertAlmostEqual((sub.trial_end_at - sub.trial_start_at).days, 14, delta=1)
-        # a selected plan WITHOUT a trial never hands out a free paid plan: falls back to the default (here: none configured)
-        other = Store.objects.create(name="f2", slug="fresh2", admin_subdomain="fresh2", status=Store.Status.ACTIVE)
-        self.assertIsNone(sub_svc.provision_default_subscription(other, plan_version=no_trial_version))
+        sub = sub_svc.provision_default_subscription(fresh, plan_version=paid_with_trial)
+        self.assertEqual((sub.plan_version.plan.code, sub.status, sub.source), ("trial", "trialing", "default"))
+        self.assertAlmostEqual((sub.trial_end_at - sub.trial_start_at).days, 30, delta=1)
+        self.assertEqual(sub_svc.provision_default_subscription(fresh, plan_version=paid_with_trial).pk, sub.pk)   # idempotent
+        self.assertEqual(fresh.subscriptions.count(), 1)
 
     def test_trial_once_per_store_is_enforced_but_can_be_switched_off(self):
         plan, version = make_plan("once", base=1000, trial=7)

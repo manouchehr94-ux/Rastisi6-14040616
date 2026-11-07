@@ -43,9 +43,11 @@ class PublicPricingPageTests(TestCase):
         html = self.get().content.decode()
         self.assertEqual(html.count('class="pz-tag'), 3)
         self.assertEqual(html.count('class="pz-tag pop"'), 1)
-        for needle in ("۲۹۰٬۰۰۰", "۶۹۰٬۰۰۰", "۱٬۴۹۰٬۰۰۰", "۱۴ روز دوره آزمایشی", "محبوب‌ترین", "۲ ماه رایگان"):
+        for needle in ("۲۹۰٬۰۰۰", "۶۹۰٬۰۰۰", "۱٬۴۹۰٬۰۰۰", "۳۰ روز دوره‌ی آزمایشیِ رایگان", "محبوب‌ترین", "۲ ماه رایگان"):
             self.assertIn(needle, html, needle)
-        self.assertIn("دوره‌ی آزمایشی برایِ این پلن تعریف نشده است", html)       # no blanket "free trial" claim for plans without one
+        # the initial Trial is ONE platform policy shown on every card (never a per-plan claim)
+        self.assertEqual(html.count("روز دوره‌ی آزمایشیِ رایگان"), 3)
+        self.assertNotIn("دوره‌ی آزمایشی برایِ این پلن تعریف نشده است", html)
         self.assertEqual(html.count("data-period="), 3)                          # monthly / quarterly / yearly toggle
         self.assertIn("پرداختِ اشتراک تک‌مرحله‌ای و بدونِ برداشتِ خودکار", html)
 
@@ -99,8 +101,8 @@ class PublicPricingPageTests(TestCase):
         ps.publish_plan_version(v2)
         html = self.get().content.decode()
         self.assertIn("۳۵۰٬۰۰۰", html)
-        self.assertIn("۷ روز دوره آزمایشی", html)
-        self.assertNotIn("۱۴ روز دوره آزمایشی", html)
+        self.assertIn("۳۰ روز دوره‌ی آزمایشیِ رایگان", html)               # the Trial is a platform policy, not part of the plan version
+        self.assertNotIn("۷ روز دوره", html)
         self.assertEqual(PlanVersion.objects.get(plan=plan, version_number=1).display_price, 290000)
 
     def test_empty_state_when_nothing_is_published(self):
@@ -146,7 +148,7 @@ class RegistrationSelectionTests(TestCase):
         self.client.get("/register/?plan=%27%3Bdrop&period=monthly", HTTP_HOST=PUBLIC)
         self.assertNotIn("portal_selected_plan", self.client.session)
 
-    def test_selected_plan_with_trial_starts_the_trial_on_that_plan_at_provisioning(self):
+    def test_a_selected_plan_never_replaces_the_initial_trial_it_is_only_remembered_for_the_purchase(self):
         from apps.portal.services import provisioning_service
 
         owner = User.objects.create_user(username="09121230066", password="x")
@@ -154,8 +156,9 @@ class RegistrationSelectionTests(TestCase):
         store, created = provisioning_service.provision_initial_trial_store(owner=owner, name="فروشگاه انتخاب", plan_version=version)
         self.assertTrue(created)
         sub = ent.get_current_subscription(store)
-        self.assertEqual((sub.plan_version_id, sub.status), (version.pk, "trialing"))
-        self.assertTrue(sub.trial_end_at - sub.trial_start_at >= timedelta(days=13))
+        self.assertEqual((sub.plan_version.plan.code, sub.status), ("trial", "trialing"))        # the independent initial Trial …
+        self.assertNotEqual(sub.plan_version_id, version.pk)                                      # … not the chosen plan (no second/free paid plan)
+        self.assertAlmostEqual((sub.trial_end_at - sub.trial_start_at).days, 30, delta=1)
 
 
 @override_settings(ALLOWED_HOSTS=[PUBLIC, ADMIN, STORE_HOST, "testserver"], RASTISI_BILLING_PROVIDER="manual", RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
@@ -367,4 +370,5 @@ class DashboardPlanChangeWithPeriodTests(TestCase):
 
     def test_plans_page_offers_a_period_selector_only_when_several_periods_exist(self):
         html = self.client.get("/admin-portal/subscription/plans/", HTTP_HOST=STORE_HOST).content.decode()
-        self.assertEqual(html.count('name="billing_interval"'), 1)           # only the multi-period plan
+        self.assertEqual(html.count('type="radio" name="billing_interval"'), 2)     # the multi-period plan offers its two periods as radios …
+        self.assertEqual(html.count('type="hidden" name="billing_interval"'), 0)    # … the single-period plan is the CURRENT one (no form at all)

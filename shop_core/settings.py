@@ -539,16 +539,13 @@ RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP = resolve_allow_console_otp(
 # the console backend, never over a real provider. See owner_sms_service.dev_otp_code().
 RASTISI_DEV_OTP_CODE = resolve_dev_otp_code(DEBUG)
 
-# Checkpoint 5A â€” default subscription plan for newly onboarded stores.
-# ``RASTISI_DEFAULT_PLAN_CODE`` names a Plan.code whose latest published
-# version a new store is put on (via subscription_service.provision_default_
-# subscription). Empty (the default) means "do not auto-assign a plan" â€” a
-# store then falls back to fail-open entitlements until a plan is chosen, so
-# turning this on is an explicit deployment decision. Existing stores are never
-# touched by this (they get the unlimited Legacy plan via migration/command);
-# only genuinely new stores use the default plan. ``RASTISI_DEFAULT_PLAN_START_
-# TRIAL`` controls whether the default subscription begins in a trial (if the
-# plan version defines trial_days) or goes straight to active.
+# Default subscription for newly created stores.
+# * EMPTY (the default) or ``trial``: the platform's INITIAL TRIAL — the internal, non-purchasable "trial" plan for
+#   ``PlatformConfiguration.default_trial_days`` days, once per store (``subscriptions.services.trial_service``).
+# * ``none`` / ``off`` / ``-``: do NOT create an automatic subscription (legacy fail-open entitlements until a plan is chosen).
+# * any other ``Plan.code``: that plan's latest published version is given to every new store (operator override, as before;
+#   ``RASTISI_DEFAULT_PLAN_START_TRIAL`` decides whether it begins in a trial when the version defines ``trial_days``).
+# Existing stores are never touched by this (they keep the unlimited Legacy plan from the migration/command).
 RASTISI_DEFAULT_PLAN_CODE = env_str("RASTISI_DEFAULT_PLAN_CODE", "")
 RASTISI_DEFAULT_PLAN_START_TRIAL = env_str("RASTISI_DEFAULT_PLAN_START_TRIAL", "true").lower() in ("1", "true", "yes", "on")
 

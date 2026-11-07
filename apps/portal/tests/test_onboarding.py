@@ -424,7 +424,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
         self.assertContains(response, "فروشگاه من")
         self.assertContains(response, "راه‌اندازی ناتمام")
 
-    @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+    @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_DEFAULT_PLAN_CODE="none")
     def test_trial_store_storefront_is_403_until_onboarding_completes(self):
         code = self._fixed_code()
         self.client.post("/register/", {"full_name": "Third", "phone": "09359990003", "accept_terms": "1"}, HTTP_HOST=_HOST)
@@ -437,7 +437,7 @@ class RegistrationAutoProvisionsTrialStoreTests(TestCase):
 
         with self.settings(ALLOWED_HOSTS=[trial_domain.hostname, _HOST, "testserver"]):
             response = self.client.get("/", HTTP_HOST=trial_domain.hostname)
-        # RASTISI_DEFAULT_PLAN_CODE is unset here, so provisioning's call to
+        # RASTISI_DEFAULT_PLAN_CODE is "none" here, so provisioning's call to
         # provision_default_subscription fails open and creates NO subscription.
         # That must never make a portal-provisioned Store public early: the
         # durable ``onboarding_required_at`` signal keeps it private until the

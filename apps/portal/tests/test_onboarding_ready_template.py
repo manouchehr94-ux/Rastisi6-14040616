@@ -59,10 +59,11 @@ class Base(TestCase):
         install_other_industry(self.store)          # the industry choice is mandatory: these tests start AFTER that step
         plan = Plan.objects.create(code="tpl-plan", name="Tpl")
         version = PlanVersion.objects.create(plan=plan, version_number=1, status=PlanVersion.Status.PUBLISHED)
-        StoreSubscription.objects.create(
-            store=self.store, plan_version=version, status=StoreSubscription.Status.TRIALING,
-            is_current=True, trial_end_at=timezone.now(),
-        )
+        if not StoreSubscription.objects.filter(store=self.store, is_current=True).exists():     # provisioning now grants the platform Trial itself
+            StoreSubscription.objects.create(
+                store=self.store, plan_version=version, status=StoreSubscription.Status.TRIALING,
+                is_current=True, trial_end_at=timezone.now(),
+            )
         self.client.force_login(self.owner)
 
     def url(self, stage, store=None):
@@ -625,7 +626,7 @@ class RegressionTests(Base):
 # ── Pre-publish privacy: a modern Store is never public before the final Publish ──────────────────
 
 
-@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], RASTISI_DEFAULT_PLAN_CODE="none")      # premise: NO automatic subscription (AccessState.NONE)
 class PrePublishPrivacyTests(TestCase):
     """The exact misconfigured case: real portal provisioning with NO default subscription plan
     (``AccessState.NONE``). The Store must still be private until ``onboarding_completed_at`` is set."""

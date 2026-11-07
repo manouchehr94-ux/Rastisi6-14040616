@@ -40,14 +40,13 @@ def offered_plans():
 
 
 def is_purchasable_version(version) -> bool:
-    """Server-side purchase gate: only the LATEST published version of an active, publicly selectable, priced plan can be bought.
-    The internal Trial plan, Legacy, archived plans and older/draft versions are never purchasable, whatever id a client posts."""
+    """Server-side purchase/selection gate: only the LATEST published version of an active, publicly selectable plan can be chosen.
+    The internal Trial plan, Legacy, archived plans and older/draft versions are never choosable, whatever id a client posts. (A free
+    selectable plan is a legitimate target — it is scheduled without payment, never blocked.)"""
     if version is None or version.status != PlanVersion.Status.PUBLISHED:
         return False
     plan = version.plan
     if not plan.is_active or not plan.is_publicly_selectable:
-        return False
-    if version.billing_interval == PlanVersion.BillingInterval.NONE or not version.display_price:
         return False
     latest = plan.versions.filter(status=PlanVersion.Status.PUBLISHED).order_by("-version_number").first()
     return latest is not None and latest.pk == version.pk

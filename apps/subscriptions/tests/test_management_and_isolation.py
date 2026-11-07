@@ -148,9 +148,17 @@ class DefaultPlanProvisioningTests(TestCase):
 
 @override_settings(RASTISI_DEFAULT_PLAN_CODE="")
 class NoDefaultPlanTests(TestCase):
-    def test_no_default_configured_returns_none(self):
-        store = Store.objects.create(name="ف", slug="nodef-store", admin_subdomain="nodef-store")
+    @override_settings(RASTISI_DEFAULT_PLAN_CODE="none")
+    def test_explicit_opt_out_creates_no_subscription_legacy_fail_open(self):
+        store = Store.objects.create(name="ف", slug="optout-store", admin_subdomain="optout-store")
         self.assertIsNone(svc.provision_default_subscription(store))
+
+    def test_no_default_configured_now_means_the_platform_initial_trial(self):
+        """Before the Trial engine an unset default plan left a new store with NO subscription (= unlimited, fail-open). Now an unset
+        ``RASTISI_DEFAULT_PLAN_CODE`` means «the internal Trial plan» (see ``trial_service``)."""
+        store = Store.objects.create(name="ف", slug="nodef-store", admin_subdomain="nodef-store")
+        sub = svc.provision_default_subscription(store)
+        self.assertEqual((sub.plan_version.plan.code, sub.status), ("trial", "trialing"))
 
 
 class TenantIsolationTests(TestCase):

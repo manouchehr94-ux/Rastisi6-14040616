@@ -392,3 +392,8 @@ dialog.pa-dialog .pa-modalbox{width:min(560px,calc(100vw - 32px))}
 .pa-legacy{margin-top:var(--pa-s3);padding-top:var(--pa-s3);border-top:1px dashed var(--pa-line);display:grid;gap:var(--pa-s2)}
 @media (max-width:900px){.pa-period-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:480px){.pa-period-grid{grid-template-columns:1fr}}
+
+/* Trial page: headline numbers + spacing after the limits table (no inline styles in Platform Admin templates) */
+.pa-stats{gap:28px;flex-wrap:wrap}
+.pa-stats b{font-size:22px;line-height:1.3}
+.pa-fields-after-table{margin-top:14px}

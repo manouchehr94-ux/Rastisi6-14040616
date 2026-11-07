@@ -14,10 +14,14 @@
     </div>
     {% if trial.limits %}
     <h4 style="margin:18px 0 8px">محدودیت‌هایِ دوره‌ی آزمایشی</h4>
-    <div class="table-wrap"><table>
-      <thead><tr><th>مورد</th><th>مصرف</th><th>سقف</th></tr></thead>
-      <tbody>{% for row in trial.limits %}<tr><td>{{ row.label }}</td><td>{{ row.current|fa_number }}</td><td>{{ row.limit|fa_number }}</td></tr>{% endfor %}</tbody>
-    </table></div>
+    <ul style="list-style:none;margin:0;padding:0" data-testid="trial-limits">
+      {% for row in trial.limits %}
+      <li style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--border)">
+        <span>{{ row.label }}</span>
+        <span style="white-space:nowrap"><b>{{ row.current|fa_number }}</b> از {{ row.limit|fa_number }}</span>
+      </li>
+      {% endfor %}
+    </ul>
     {% endif %}
     <p style="margin:16px 0 0;color:var(--muted);font-size:13px">با خریدِ اشتراک، سقف‌ها و امکاناتِ پلنِ انتخابی فعال می‌شود. دوره‌ی آزمایشیِ باقی‌مانده به دوره‌ی پولی اضافه نمی‌شود.</p>
   </div>

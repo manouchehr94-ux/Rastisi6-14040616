@@ -423,6 +423,11 @@ def trial_eligible(store, plan_version) -> bool:
     ).exists()
 
 
+#: ``RASTISI_DEFAULT_PLAN_CODE`` values meaning «do NOT create an automatic subscription for new stores» (the old fail-open behaviour); an EMPTY value
+#: now means «the platform's initial Trial», see ``provision_default_subscription``.
+NO_AUTOMATIC_PLAN = frozenset({"none", "off", "-"})
+
+
 @transaction.atomic
 def provision_default_subscription(store, *, actor=None, with_trial=None, plan_version=None):
     """اشتراکِ پیش‌فرض را برایِ یک Storeِ تازه می‌سازد. idempotent: اگر Store از قبل اشتراکِ جاری دارد همان برمی‌گردد.
@@ -441,6 +446,8 @@ def provision_default_subscription(store, *, actor=None, with_trial=None, plan_v
     if existing is not None:
         return existing
     configured = getattr(settings, "RASTISI_DEFAULT_PLAN_CODE", "") or ""
+    if configured.lower() in NO_AUTOMATIC_PLAN:
+        return None                    # explicit operator opt-out: no automatic subscription (legacy fail-open)
     if configured in ("", "trial"):
         from apps.subscriptions.services import trial_service
 

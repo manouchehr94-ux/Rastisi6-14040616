@@ -151,7 +151,9 @@ class EditableContentTests(TestCase):
                 response = self.client.get(path, HTTP_HOST=PUBLIC_HOST)
                 self.assertContains(response, "طلایی")
                 self.assertContains(response, "۴۹۰٬۰۰۰")
-                self.assertContains(response, "۱۴ روز دوره آزمایشی")
+                # the initial Trial is a PLATFORM policy (default 30 days) shown on every card — a per-plan ``trial_days`` is not advertised any more
+                self.assertContains(response, "۳۰ روز دوره")
+                self.assertNotContains(response, "۱۴ روز دوره")
                 self.assertContains(response, "پیشنهاد ما")
 
     def test_faq_page_groups_rows_and_exposes_faq_jsonld(self):

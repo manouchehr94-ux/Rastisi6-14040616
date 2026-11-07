@@ -573,7 +573,7 @@ class SubscriptionPurchaseAuthorizationTests(TestCase):
     # plan and do nothing — the paid/active subscription below is instead
     # built explicitly and deterministically via the canonical
     # subscription_service, exactly like apps/portal/tests/test_claim_handle_views.py.
-    RASTISI_DEFAULT_PLAN_CODE="",
+    RASTISI_DEFAULT_PLAN_CODE="none",
 )
 class HandleAndDomainAuthorizationTests(TestCase):
     """DOMAIN_MANAGE gates the permanent-handle claim and every custom-domain
@@ -611,7 +611,7 @@ class HandleAndDomainAuthorizationTests(TestCase):
         StoreSubscription fields, and never dependent on
         RASTISI_DEFAULT_PLAN_CODE / provision_trial_store()'s own (fail-open,
         possibly no-op) default-subscription provisioning. With
-        RASTISI_DEFAULT_PLAN_CODE="" (forced above),
+        RASTISI_DEFAULT_PLAN_CODE="none" (forced above: no automatic subscription),
         provision_trial_store() never creates any subscription for this
         Store, so ``create_subscription`` is guaranteed to find none and
         will not raise the "already has a current subscription" error."""
@@ -621,7 +621,7 @@ class HandleAndDomainAuthorizationTests(TestCase):
         self.assertFalse(
             StoreSubscription.objects.filter(store=self.store, is_current=True).exists(),
             "precondition: provision_trial_store must not have created a subscription "
-            "when RASTISI_DEFAULT_PLAN_CODE is empty — otherwise this fixture is not "
+            "when RASTISI_DEFAULT_PLAN_CODE is 'none' — otherwise this fixture is not "
             "actually exercising the explicit create_subscription/activate_subscription path.",
         )
         plan = Plan.objects.create(
