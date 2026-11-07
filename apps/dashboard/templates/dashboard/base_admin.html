@@ -1,4 +1,4 @@
-{% load static dashboard_nav storefront_builder_extras %}<!DOCTYPE html>
+{% load static dashboard_nav storefront_builder_extras persian %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -186,6 +186,13 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
     {% admin_section_tabs %}
 
     <main class="content">
+      {% if trial_banner %}
+      <div class="alert" data-testid="trial-banner" role="status"
+           style="margin-bottom:16px;padding:12px 16px;border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e8f3ff;color:#0b3d75">
+        <span style="flex:1">دوره‌ی آزمایشیِ فروشگاه شما: <b>{{ trial_banner.days_left|fa_number }} روز</b> مانده (تا {{ trial_banner.end_at|jalali }}).</span>
+        {% if can_view_subscription %}<a href="{% url 'dashboard:subscription-overview' %}" style="font-weight:600;text-decoration:underline">خرید اشتراک</a>{% endif %}
+      </div>
+      {% endif %}
       {% if subscription_banner_warning %}
       <div class="alert {% if subscription_banner_blocks_growth %}alert-error{% else %}alert-warning{% endif %}" role="alert"
            style="margin-bottom:16px;padding:12px 16px;border-radius:10px;display:flex;align-items:center;gap:10px;

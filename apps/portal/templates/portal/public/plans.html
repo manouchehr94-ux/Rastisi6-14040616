@@ -40,7 +40,7 @@
           <h2>{{ row.plan.public_title|default:row.plan.name }}</h2>
           <p>{{ row.plan.description }}</p>
           <div class="rs-plan-price">{{ row.version.display_price|toman }}<small>{{ row.version.get_billing_interval_display }}</small></div>
-          {% if row.version.trial_days %}<span class="rs-plan-trial">{{ row.version.trial_days|fa_number }} روز دوره آزمایشی</span>{% endif %}
+          {% if row.trial_days %}<span class="rs-plan-trial">{{ row.trial_days|fa_number }} روز دوره آزمایشی</span>{% endif %}
         </div>
         <a class="rs-btn {% if row.plan.is_recommended %}rs-btn-primary{% else %}rs-btn-outline{% endif %}" href="{% url 'portal:register' %}">شروع با این پلن</a>
       </article>

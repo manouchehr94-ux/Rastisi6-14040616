@@ -46,6 +46,7 @@ NAV = (
         NavItem("صنف‌ها و قالب‌ها", "industries", "layers", also=("industry-detail",)),
     )),
     NavGroup("pricing", "اشتراک و قیمت‌گذاری", "tag", (
+        NavItem("دوره‌ی آزمایشی (Trial)", "trial-settings", "clock"),
         NavItem("پلن‌ها و نسخه‌ها", "plans", "tag", also=("plan-add", "plan-edit", "plan-migration")),
         NavItem("کاتالوگِ قابلیت‌ها", "features", "puzzle", also=("feature-add", "feature-edit")),
         NavItem("تخصیصِ قابلیت به پلن", "assignment-matrix", "grid"),

@@ -29,8 +29,11 @@ class IllegalTransitionError(SubscriptionError):
 #: صریحاً غیرمجاز: expired→active (بدونِ اشتراکِ تازه)، cancelled→trialing،
 #: suspended→trialing.
 ALLOWED_TRANSITIONS = {
-    S.PENDING: {S.TRIALING, S.ACTIVE, S.CANCELLED},
-    S.TRIALING: {S.ACTIVE, S.GRACE_PERIOD, S.EXPIRED, S.CANCELLED},
+    # PENDING→SUSPENDED: created but never started (the platform disabled the initial Trial) — restricted until the store buys.
+    S.PENDING: {S.TRIALING, S.ACTIVE, S.CANCELLED, S.SUSPENDED},
+    # TRIALING→SUSPENDED: the internal Trial ended with no grace. NON-terminal on purpose: the store keeps a current subscription, so it can
+    # still buy (a terminal row would leave it with no subscription to upgrade from).
+    S.TRIALING: {S.ACTIVE, S.GRACE_PERIOD, S.SUSPENDED, S.EXPIRED, S.CANCELLED},
     S.ACTIVE: {S.GRACE_PERIOD, S.PAST_DUE, S.SUSPENDED, S.CANCELLED, S.EXPIRED},
     S.GRACE_PERIOD: {S.ACTIVE, S.PAST_DUE, S.SUSPENDED, S.EXPIRED, S.CANCELLED},
     S.PAST_DUE: {S.ACTIVE, S.GRACE_PERIOD, S.SUSPENDED, S.EXPIRED, S.CANCELLED},
@@ -116,11 +119,11 @@ def create_subscription(store, plan_version, *, source=StoreSubscription.Source.
 # ================================================================== انتقال‌ها
 
 @transaction.atomic
-def start_trial(subscription, *, actor=None, idempotency_key="") -> StoreSubscription:
-    """اشتراک را به ``trialing`` می‌برد و بازه‌ی تریال را از ``trial_days``ِ
-    نسخه محاسبه می‌کند (ADR-67). تغییرِ پلن مدتِ تریال را ریست نمی‌کند."""
+def start_trial(subscription, *, actor=None, idempotency_key="", days=None) -> StoreSubscription:
+    """اشتراک را به ``trialing`` می‌برد و بازه‌ی تریال را محاسبه می‌کند (ADR-67): ``days`` صریح (سیاستِ پلتفرم برایِ Trialِ
+    اولیه، ``trial_service``) یا ``trial_days``ِ نسخه. تغییرِ پلن مدتِ تریال را ریست نمی‌کند."""
     now = timezone.now()
-    days = subscription.plan_version.trial_days
+    days = subscription.plan_version.trial_days if days is None else days
     end = now + timezone.timedelta(days=days) if days else now
     return _transition(
         subscription, to_status=S.TRIALING, event_type=ET.TRIAL_STARTED, actor=actor,
@@ -422,34 +425,33 @@ def trial_eligible(store, plan_version) -> bool:
 
 @transaction.atomic
 def provision_default_subscription(store, *, actor=None, with_trial=None, plan_version=None):
-    """اشتراکِ پیش‌فرض را برایِ یک Storeِ تازه می‌سازد و (بسته به تنظیمات و
-    وجودِ ``trial_days``) آن را trialing یا active می‌کند. idempotent: اگر
-    Store از قبل اشتراکِ جاری دارد همان برمی‌گردد. اگر پلنِ پیش‌فرض پیکربندی
-    نشده باشد ``None`` برمی‌گرداند و هیچ کاری نمی‌کند — تا ساختِ Store هرگز
-    به‌خاطرِ نبودِ پلن شکست نخورد (fail-open، ADR-65).
+    """اشتراکِ پیش‌فرض را برایِ یک Storeِ تازه می‌سازد. idempotent: اگر Store از قبل اشتراکِ جاری دارد همان برمی‌گردد.
 
-    فروشگاه‌هایِ *موجود* هرگز از این مسیر عبور نمی‌کنند — آن‌ها پلنِ نامحدودِ
-    Legacy را از مهاجرت/فرمان می‌گیرند؛ این فقط برایِ Storeهایِ واقعاً تازه است."""
+    * پیش‌فرض (و رفتارِ محصولیِ نهایی): **Trialِ اولیه** از پلنِ داخلیِ «trial» با مدتِ ``PlatformConfiguration.default_trial_days``
+      (``trial_service.grant_initial_trial``) — برایِ هر فروشگاه حداکثر یک‌بار. ``plan_version`` (پلنِ پولیِ انتخاب‌شده در سایتِ عمومی)
+      **هیچ Trial دومی نمی‌دهد** و هیچ اشتراکِ پولی بدونِ پرداخت ساخته نمی‌شود؛ انتخاب فقط در نشست برایِ هدایتِ خرید یادآوری می‌شود.
+    * استثنا (سازگاریِ عملیاتی): اگر اپراتور صراحتاً ``RASTISI_DEFAULT_PLAN_CODE`` را روی پلنی جز «trial» تنظیم کرده باشد، همان پلن مثلِ قبل
+      داده می‌شود (فعال، یا با Trial اگر ``with_trial`` و نسخه ``trial_days`` داشته باشد).
+
+    اگر هیچ پلنی ساخته نشود ``None`` برمی‌گرداند و ساختِ Store هرگز شکست نمی‌خورد (fail-open، ADR-65). فروشگاه‌هایِ *موجود* از این مسیر عبور
+    نمی‌کنند — آن‌ها پلنِ نامحدودِ Legacy را از مهاجرت/فرمان می‌گیرند."""
+    from django.conf import settings
+
     existing = StoreSubscription.objects.filter(store=store, is_current=True).first()
     if existing is not None:
         return existing
+    configured = getattr(settings, "RASTISI_DEFAULT_PLAN_CODE", "") or ""
+    if configured in ("", "trial"):
+        from apps.subscriptions.services import trial_service
+
+        return trial_service.grant_initial_trial(store, actor=actor)
     version = resolve_default_plan_version()
-    if plan_version is not None:
-        # ثبت‌نام با پلنِ انتخاب‌شده: فقط اگر همان نسخه‌ی منتشرشده تریالِ واقعی دارد و فروشگاه واجد است، تریال روی
-        # *همان* پلن شروع می‌شود؛ وگرنه فروشگاه مثلِ همیشه روی پلنِ پیش‌فرض می‌ماند و انتخاب فقط یادآوری می‌شود
-        # (هرگز پلنِ پولی بدونِ پرداخت داده نمی‌شود).
-        fresh = PlanVersion.objects.filter(pk=plan_version.pk, status=PlanVersion.Status.PUBLISHED, plan__is_active=True).first()
-        if fresh is not None and fresh.plan.is_publicly_selectable and trial_eligible(store, fresh):
-            subscription = create_subscription(store, fresh, source=StoreSubscription.Source.SELF_SERVICE, actor=actor)
-            return start_trial(subscription, actor=actor)
     if version is None:
         return None
     if with_trial is None:
-        from django.conf import settings
-
         with_trial = getattr(settings, "RASTISI_DEFAULT_PLAN_START_TRIAL", True)
     subscription = create_subscription(store, version, source=StoreSubscription.Source.DEFAULT, actor=actor)
-    if with_trial and version.trial_days:
+    if with_trial and version.trial_days and trial_eligible(store, version):
         return start_trial(subscription, actor=actor)
     return activate_subscription(subscription, actor=actor)
 
@@ -462,7 +464,10 @@ def _due_action(sub, now):
     if sub.cancel_at_period_end and sub.current_period_end and sub.current_period_end <= now:
         return "cancelled"
     if sub.status == S.TRIALING and sub.trial_end_at and sub.trial_end_at <= now:
-        return "grace" if sub.plan_version.grace_period_days else "expired"
+        if sub.plan_version.grace_period_days:
+            return "grace"
+        # the internal Trial ends into the restricted (non-terminal) state so the store can still buy; other plans keep the old «expired»
+        return "suspended" if sub.plan_version.plan.code == "trial" else "expired"
     if sub.status == S.GRACE_PERIOD and sub.grace_period_end and sub.grace_period_end <= now:
         return "suspended"
     if sub.status in (S.ACTIVE, S.PAST_DUE) and sub.current_period_end and sub.current_period_end <= now:
@@ -476,7 +481,7 @@ def _apply_due_action(sub, action, *, actor=None):
     elif action == "grace":
         enter_grace_period(sub, actor=actor)
     elif action == "suspended":
-        suspend_subscription(sub, actor=actor, reason="پایانِ مهلتِ ارفاقی")
+        suspend_subscription(sub, actor=actor, reason="پایانِ دوره‌ی آزمایشی" if sub.status == S.TRIALING else "پایانِ مهلتِ ارفاقی")
     elif action == "expired":
         expire_subscription(sub, actor=actor)
 

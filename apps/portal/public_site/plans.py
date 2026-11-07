@@ -27,10 +27,14 @@ def _features(version) -> list:
 
 
 def public_plan_rows() -> list:
+    from apps.subscriptions.services import trial_service
+
+    policy = trial_service.current_policy()
+    platform_trial_days = policy.days if policy.enabled else 0     # the initial Trial is a platform policy shown on every plan
     rows = []
     plans = Plan.objects.filter(is_active=True, is_publicly_selectable=True).order_by("display_order", "code")
     for plan in plans:
         version = plan.versions.filter(status=PlanVersion.Status.PUBLISHED).order_by("-version_number").first()
         if version is not None:
-            rows.append({"plan": plan, "version": version, "features": _features(version)})
+            rows.append({"plan": plan, "version": version, "features": _features(version), "trial_days": platform_trial_days})
     return rows

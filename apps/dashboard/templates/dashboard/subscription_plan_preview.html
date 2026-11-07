@@ -1,4 +1,5 @@
 {% extends "dashboard/base_admin.html" %}
+{% load persian %}
 {% block title %}پیش‌نمایشِ تغییرِ پلن | پنل مدیریت{% endblock %}
 {% block page_title %}پیش‌نمایشِ تغییرِ پلن{% endblock %}
 {% block page_sub %}از «{{ preview.current_plan.public_title|default:preview.current_plan.name }}» به «{{ preview.target_plan.public_title|default:preview.target_plan.name }}»{% endblock %}
@@ -6,13 +7,13 @@
 
 {% if preview.is_upgrade %}
 <div class="card" style="margin-bottom:16px;border:1px solid #cfe3ff">
-  <div class="card-head"><b>این تغییر نیازمندِ پرداخت است</b></div>
+  <div class="card-head"><b>{% if is_trial_conversion %}خریدِ اشتراک{% else %}این تغییر نیازمندِ پرداخت است{% endif %}</b></div>
   <div style="padding:14px 18px">
-    <p style="margin-bottom:0">
-      این یک ارتقاست — مبلغِ {{ preview.payable_amount }} {{ preview.target_version.currency }} یک
-      فاکتورِ «تغییرِ پلن» ایجاد می‌شود. پلنِ شما فقط <b>پس از تکمیلِ پرداختِ همین فاکتور</b> به
-      «{{ preview.target_plan.public_title|default:preview.target_plan.name }}» تغییر می‌کند؛ این درخواست به‌تنهایی
-      هیچ Entitlementی را عوض نمی‌کند.
+    <p style="margin-bottom:0" data-testid="payable-amount">
+      {% if is_trial_conversion %}مبلغِ اشتراکِ «{{ preview.target_plan.public_title|default:preview.target_plan.name }}» ({{ preview.billing_interval_label|default:preview.billing_interval }}):
+      <b>{{ preview.payable_amount|toman }}</b>.{% else %}این یک ارتقاست — مبلغِ <b>{{ preview.payable_amount|toman }}</b>.{% endif %}
+      یک فاکتور ساخته می‌شود و در صفحه‌ی پرداخت روشِ پرداخت را انتخاب می‌کنید. پلنِ شما فقط <b>پس از تأییدِ واقعیِ پرداخت</b> به
+      «{{ preview.target_plan.public_title|default:preview.target_plan.name }}» تغییر می‌کند؛ پرداختِ ناموفق، رهاشده یا نامعلوم هیچ‌چیز را فعال نمی‌کند.
     </p>
   </div>
 </div>

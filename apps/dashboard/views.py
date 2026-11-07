@@ -8301,10 +8301,13 @@ def _publicly_selectable_versions(store):
 def subscription_overview(request):
     from apps.subscriptions.services import entitlement_service as ent
 
+    from apps.subscriptions.services import trial_service
+
     store = _resolve_dashboard_store(request)
     summary = ent.get_subscription_summary(store)
     return render(request, "dashboard/subscription_overview.html", {
         "summary": summary,
+        "trial": trial_service.trial_info(store),
         "active_page": "subscription",
         "can_change_subscription": membership_has_permission(request.store_membership, SUBSCRIPTION_CHANGE),
     })
@@ -8332,15 +8335,27 @@ def subscription_plans(request):
     current_plan_id = current_version.plan_id if current_version else None
     from apps.subscriptions.services.pricing_page_service import _period_options
 
-    plans = [
-        {"plan": plan, "version": version, "is_current": plan.pk == current_plan_id,
-         "periods": [p for p in _period_options(version) if p["price"] > 0]}
-        for plan, version in _publicly_selectable_versions(store)
-    ]
+    from apps.subscriptions.services import trial_service
+    from apps.subscriptions.services.pricing_page_service import is_purchasable_version
+
+    # Only paid, purchasable plans are offered here (the internal Trial plan, Legacy and free tiers never are). The selected plan/period can be pre-chosen
+    # from the public pricing page (``?plan=<code>&period=<interval>``) — validated against the same server-side offers, never trusted.
+    plans = []
+    for plan, version in _publicly_selectable_versions(store):
+        if not is_purchasable_version(version):
+            continue
+        plans.append({"plan": plan, "version": version, "is_current": plan.pk == current_plan_id,
+                      "periods": [p for p in _period_options(version) if p["price"] > 0]})
+    wanted_code, wanted_period = (request.GET.get("plan") or "")[:50], (request.GET.get("period") or "")[:20]
+    for item in plans:
+        item["preselected"] = bool(wanted_code) and item["plan"].code == wanted_code
+        item["default_interval"] = (wanted_period if item["preselected"] and any(p["interval"] == wanted_period for p in item["periods"])
+                                    else item["version"].billing_interval)
     return render(request, "dashboard/subscription_plans.html", {
         "plans": plans,
         "active_page": "subscription",
         "has_subscription": current_version is not None,
+        "trial": trial_service.trial_info(store),
     })
 
 
@@ -8380,8 +8395,14 @@ def subscription_plan_preview(request):
     except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
         return redirect("dashboard:subscription-plans")
+    from apps.subscriptions.services import trial_service
+    from apps.subscriptions.services.pricing_page_service import INTERVAL_LABELS
+
+    preview["billing_interval_label"] = INTERVAL_LABELS.get(preview.get("billing_interval"), preview.get("billing_interval"))
+
     return render(request, "dashboard/subscription_plan_preview.html", {
         "preview": preview,
+        "is_trial_conversion": trial_service.is_trial_plan(current_subscription.plan_version.plan),
         "active_page": "subscription",
     })
 

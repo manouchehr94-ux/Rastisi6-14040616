@@ -217,6 +217,13 @@ def get_subscription_access_state(store) -> AccessStateResult:
     state, allows_growth, warning = _STATE_POLICY.get(
         sub.status, (AccessState.FULL, True, "")
     )
+    if sub.plan_version.plan.code == "trial" and sub.status in (
+        StoreSubscription.Status.GRACE_PERIOD, StoreSubscription.Status.SUSPENDED,
+    ):
+        # دوره‌ی آزمایشی تمام شده: متنِ دقیق و راهِ ادامه (خریدِ اشتراک)، نه «معلق/ارفاقی» عمومی.
+        warning = ("دوره‌ی آزمایشیِ شما به پایان رسیده است؛ برایِ ساختِ کالا و سفارشِ تازه و ادامه‌ی کار، یک اشتراکِ پولی بخرید. "
+                   "داده‌هایِ شما نگهداری می‌شود.") if sub.status == StoreSubscription.Status.SUSPENDED else (
+            "دوره‌ی آزمایشیِ شما به پایان رسیده و در مهلتِ ارفاقی هستید؛ لطفاً اشتراکِ پولی بخرید.")
     return AccessStateResult(
         state=state, subscription_status=sub.status,
         message=warning or "", allows_growth=allows_growth, warning=warning,

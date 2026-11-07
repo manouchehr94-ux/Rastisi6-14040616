@@ -4,6 +4,7 @@ from apps.notifications.inbox_views import VIEWS_PLAT, url_patterns as _inbox_pa
 from . import platform_admin_views as views
 from . import platform_admin_features as feature_views
 from . import platform_admin_photo_views as photo_views
+from . import platform_admin_trial as trial_views
 from . import platform_admin_site_views as site_views
 from . import notification_admin_views as notif_views
 
@@ -47,6 +48,7 @@ urlpatterns = [
     path("public-site/<slug:slug>/reset/", site_views.public_site_reset, name="public-site-reset"),
 
     # --- پلن‌های اشتراک ---
+    path("trial/", trial_views.trial_settings, name="trial-settings"),
     path("plans/", views.plans, name="plans"),
     path("plans/content/", views.pricing_content, name="pricing-content"),
     path("plans/assignments/", feature_views.assignment_matrix, name="assignment-matrix"),

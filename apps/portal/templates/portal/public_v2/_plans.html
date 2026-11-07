@@ -10,7 +10,7 @@
       {% if row.version.display_price %}<b class="num">{{ row.version.display_price|toman_raw }}</b><small>تومان{% if row.version.billing_interval != 'none' %} · {{ row.version.get_billing_interval_display }}{% endif %}</small>
       {% else %}<b>رایگان</b>{% endif %}
     </div>
-    <div class="price-sub">{% if row.version.trial_days %}{% ps 'plans.trial' days=row.version.trial_days %}{% endif %}</div>
+    <div class="price-sub">{% if row.trial_days %}{% ps 'plans.trial' days=row.trial_days %}{% endif %}</div>
     {% if row.features %}<ul>{% for feature in row.features %}<li><svg aria-hidden="true"><use href="#i-check"/></svg>{{ feature }}</li>{% endfor %}</ul>{% endif %}
     <a href="{% url 'portal:register' %}?plan={{ row.plan.code }}" class="btn btn-leaf btn-block">{% ps 'plans.cta' %}</a>
   </div>

@@ -1,0 +1,83 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}دوره‌ی آزمایشی (Trial) | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead"><div><h1>دوره‌ی آزمایشی (Trial)</h1>
+  <p>هر فروشگاهِ تازه یک‌بار دوره‌ی آزمایشی می‌گیرد. پلنِ Trial داخلی است: در صفحه‌ی عمومیِ تعرفه نمایش داده نمی‌شود و قابلِ خرید نیست.</p></div></div>
+
+<div class="pa-card" data-testid="trial-stats"><div class="pa-cardbody">
+  <div class="pa-row" style="gap:28px;flex-wrap:wrap">
+    <div><b>{{ stats.total|fa_number }}</b><div class="pa-help">فروشگاهِ دارایِ Trial (تاریخچه)</div></div>
+    <div><b>{{ stats.running|fa_number }}</b><div class="pa-help">در جریان</div></div>
+    <div><b>{{ stats.converted|fa_number }}</b><div class="pa-help">تبدیل‌شده به اشتراکِ پولی</div></div>
+    <div><b>{{ stats.ended|fa_number }}</b><div class="pa-help">پایان‌یافته بدونِ خرید</div></div>
+  </div>
+</div></div>
+
+<form method="post" class="pa-form" data-testid="trial-policy-form">
+  {% csrf_token %}<input type="hidden" name="action" value="policy">
+  <fieldset class="pa-fieldset"><legend>سیاستِ اعطایِ Trial</legend>
+    <div class="pa-fields">
+      <label class="pa-check pa-full"><input type="checkbox" name="trial_enabled" {% if config.trial_enabled %}checked{% endif %}> اعطایِ دوره‌ی آزمایشی به فروشگاه‌هایِ تازه</label>
+      <div class="pa-field"><label for="trial-days">مدتِ پیش‌فرض (روز)</label>
+        <input id="trial-days" type="text" inputmode="numeric" name="default_trial_days" value="{{ config.default_trial_days }}" autocomplete="off">
+        <span class="pa-help">بین ۱ تا ۳۶۵. فقط فروشگاه‌هایِ ساخته‌شده پس از ذخیره اثر می‌پذیرند؛ Trialِ فروشگاه‌هایِ فعلی (حتی اگر مدت‌شان فرق کند) تغییر نمی‌کند.</span></div>
+    </div>
+    <p class="pa-help">اگر اعطا خاموش باشد، فروشگاهِ تازه بدونِ Trial ساخته می‌شود و برایِ ادامه باید پلنِ پولی بخرد (داده‌ها حذف نمی‌شوند).</p>
+    <div class="pa-actions"><button class="pa-btn pa-primary" type="submit">ذخیره‌ی سیاست</button></div>
+  </fieldset>
+</form>
+
+<form method="post" class="pa-form" data-testid="trial-limits-form">
+  {% csrf_token %}<input type="hidden" name="action" value="limits">
+  <fieldset class="pa-fieldset"><legend>سقف‌ها و امکاناتِ پلنِ Trial {% if version %}<span class="pa-badge pa-info">نسخه‌ی {{ version.version_number|fa_number }}</span>{% endif %}</legend>
+    <p class="pa-help">هر ذخیره‌ی تغییردار یک نسخه‌ی تازه‌ی تغییرناپذیر می‌سازد (همان موتورِ پلن‌ها). فروشگاه‌هایِ دارایِ Trialِ فعلی روی نسخه‌ی خودشان می‌مانند مگر اینکه گزینه‌ی «اعمال روی Trialهای در جریان» را بزنید.</p>
+    <div class="pa-tablewrap"><table>
+      <thead><tr><th>قابلیت / سقف</th><th>فعال</th><th>نامحدود</th><th>سقف</th></tr></thead>
+      <tbody>
+      {% for row in limit_rows %}
+        <tr data-key="{{ row.key }}">
+          <td>{{ row.name }} <span class="pa-code pa-ltr">{{ row.key }}</span>{% if not row.defined %} <span class="pa-help">(در این نسخه تعریف نشده ⇒ نامحدود/پیش‌فرض)</span>{% endif %}</td>
+          <td><input type="checkbox" name="ent_{{ row.key }}_enabled" {% if row.enabled %}checked{% endif %} aria-label="فعال: {{ row.name }}"></td>
+          {% if row.numeric %}
+          <td><input type="checkbox" name="ent_{{ row.key }}_unlimited" {% if row.unlimited %}checked{% endif %} aria-label="نامحدود: {{ row.name }}"></td>
+          <td><input type="text" inputmode="numeric" class="pa-ltr" name="ent_{{ row.key }}_limit" value="{% if not row.unlimited and row.limit is not None %}{{ row.limit }}{% endif %}" autocomplete="off" aria-label="سقف: {{ row.name }}"></td>
+          {% else %}<td>—</td><td>—</td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="pa-fields" style="margin-top:14px">
+      <div class="pa-field"><label for="trial-grace">مهلتِ ارفاقی پس از پایانِ Trial (روز)</label>
+        <input id="trial-grace" type="text" inputmode="numeric" name="grace_period_days" value="{{ version.grace_period_days|default:0 }}" autocomplete="off">
+        <span class="pa-help">۰ = پس از پایان بلافاصله «منقضی»: ساختِ رکوردِ تازه بسته، مشاهده‌ی داده‌ها باز.</span></div>
+      <label class="pa-check pa-full"><input type="checkbox" name="apply_to_active"> اعمال نسخه‌ی تازه روی Trialهای در جریان{% if active_on_old_version %} ({{ active_on_old_version|fa_number }} فروشگاه روی نسخه‌ی قدیمی‌اند){% endif %}</label>
+      <div class="pa-field pa-full"><label for="trial-reason">دلیل (فقط برایِ اعمال روی Trialهای در جریان الزامی است)</label><input id="trial-reason" type="text" name="reason" maxlength="200"></div>
+    </div>
+    <div class="pa-actions"><button class="pa-btn pa-primary" type="submit">انتشار سقف‌ها و امکانات</button></div>
+  </fieldset>
+</form>
+
+<div class="pa-card" data-testid="trial-history">
+  <div class="pa-cardhead"><h2>تاریخچه‌ی استفاده از Trial</h2></div>
+  {% if page.object_list %}
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th>فروشگاه</th><th>شروع</th><th>پایان</th><th>وضعیت</th><th>پلنِ فعلی</th><th>مانده</th></tr></thead>
+    <tbody>
+    {% for sub in page.object_list %}
+      <tr>
+        <td><a href="{% url 'portal_platform_admin:store-detail' sub.store.public_id %}?tab=subscription">{{ sub.store.name }}</a></td>
+        <td>{{ sub.trial_start_at|jalali }}</td><td>{{ sub.trial_end_at|jalali|default:"—" }}</td>
+        <td><span class="pa-badge {{ sub.history_tone }}">{{ sub.history_state }}</span></td>
+        <td>{{ sub.plan_version.plan.name }}</td>
+        <td>{% if sub.days_left is not None %}{{ sub.days_left|fa_number }} روز{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% include "portal/platform_admin/_pagination.html" %}
+  {% else %}
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-clock"/></svg></div><p>هنوز هیچ فروشگاهی Trial نگرفته است.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

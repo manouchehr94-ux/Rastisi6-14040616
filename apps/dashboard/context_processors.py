@@ -179,9 +179,16 @@ def subscription_banner(request):
     from apps.subscriptions.services.entitlement_service import AccessState, get_subscription_access_state
 
     access = get_subscription_access_state(store)
+    context = {}
+    from apps.subscriptions.services import trial_service
+
+    trial = trial_service.trial_info(store)
+    if trial["state"] == "trialing":
+        context["trial_banner"] = {"days_left": trial["days_left"], "end_at": trial["trial_end_at"]}
     if access.state in (AccessState.FULL, AccessState.NONE) or not access.warning:
-        return {}
-    return {
+        return context
+    context.update({
         "subscription_banner_warning": access.warning,
         "subscription_banner_blocks_growth": not access.allows_growth,
-    }
+    })
+    return context

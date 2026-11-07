@@ -200,14 +200,20 @@ def _activate_or_renew(invoice, *, actor, now):
             reason="ارتقایِ تأییدشده‌یِ پرداخت جایِ تنزلِ زمان‌بندی‌شده‌یِ باقی‌مانده را گرفت",
             replacement_intent=f"paid_plan_change_invoice:{invoice.pk}",
         )
+        was_trial_plan = subscription.plan_version.plan.code == "trial"          # the internal Trial plan (read BEFORE the version changes)
         sub_svc.change_plan_version(
             subscription, invoice.plan_version, actor=actor, reason="ارتقا پس از پرداخت",
             idempotency_key=idem,
         )
         # اگر این ارتقا همان اولین پرداختِ واقعیِ Store بود (هنوز trialing/
         # pending، مثلِ تبدیلِ آزمایشی به پولی) — تغییرِ پلن به‌تنهایی وضعیت را
-        # عوض نمی‌کند؛ پس اینجا هم فعال می‌شود، دقیقاً مثلِ kind=INITIAL.
-        if subscription.status in (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING):
+        # عوض نمی‌کند؛ پس اینجا هم فعال می‌شود، دقیقاً مثلِ kind=INITIAL. همین برایِ فروشگاهی که Trialش *تمام شده*
+        # (restricted/grace/past_due روی پلنِ Trial) و حالا اولین اشتراکِ پولی‌اش را می‌خرد هم صادق است: پرداختِ تأییدشده آن را
+        # دوباره فعال می‌کند (فقط پس از تأییدِ واقعیِ پرداخت — این تابع تنها از confirm_payment/تأییدِ دستیِ مالی فراخوانی می‌شود).
+        reactivate = (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING)
+        if was_trial_plan:
+            reactivate += (StoreSubscription.Status.GRACE_PERIOD, StoreSubscription.Status.SUSPENDED, StoreSubscription.Status.PAST_DUE)
+        if subscription.status in reactivate:
             sub_svc.activate_subscription(
                 subscription, actor=actor, period_end=period_end, idempotency_key=f"{idem}-activate",
             )

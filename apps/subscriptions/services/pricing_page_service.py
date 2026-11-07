@@ -39,6 +39,20 @@ def offered_plans():
     return rows
 
 
+def is_purchasable_version(version) -> bool:
+    """Server-side purchase gate: only the LATEST published version of an active, publicly selectable, priced plan can be bought.
+    The internal Trial plan, Legacy, archived plans and older/draft versions are never purchasable, whatever id a client posts."""
+    if version is None or version.status != PlanVersion.Status.PUBLISHED:
+        return False
+    plan = version.plan
+    if not plan.is_active or not plan.is_publicly_selectable:
+        return False
+    if version.billing_interval == PlanVersion.BillingInterval.NONE or not version.display_price:
+        return False
+    latest = plan.versions.filter(status=PlanVersion.Status.PUBLISHED).order_by("-version_number").first()
+    return latest is not None and latest.pk == version.pk
+
+
 def resolve_selection(code, interval=""):
     """انتخابِ عمومی (کدِ پلن + دوره) را فقط وقتی برمی‌گرداند که همین الان واقعاً قابلِ‌عرضه باشد:
     ``(plan_version, interval)`` یا ``None``. ورودیِ کاربر هرگز مستقیم اعتماد نمی‌شود."""
@@ -216,6 +230,10 @@ def build_pricing_page() -> dict:
     """ساختارِ کاملِ صفحه: کارت‌ها، دوره‌ها، ماتریس، خدماتِ اختیاری و FAQ."""
     plan_versions = offered_plans()
     highlights = _highlights(plan_versions)
+    from apps.subscriptions.services import trial_service
+
+    policy = trial_service.current_policy()
+    platform_trial_days = policy.days if policy.enabled else 0       # every NEW store gets this once, whatever plan it looks at
     cards = []
     for index, (plan, version) in enumerate(plan_versions):
         periods = _period_options(version)
@@ -226,7 +244,7 @@ def build_pricing_page() -> dict:
             "description": plan.description, "is_recommended": plan.is_recommended,
             "badge": plan.badge_text or "پیشنهادی", "promo_label": plan.promo_label, "cta_label": plan.cta_label, "periods": periods,
             "default_interval": default["interval"] if default else "", "is_free": free,
-            "trial_days": version.trial_days, "highlights": highlights[index],
+            "trial_days": platform_trial_days, "highlights": highlights[index],
             "purchasable": bool(periods) and any(p["price"] > 0 for p in periods),
             "offered": [p["interval"] for p in periods],
             "offered_json": json.dumps([p["interval"] for p in periods]),

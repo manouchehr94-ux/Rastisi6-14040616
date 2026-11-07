@@ -18,8 +18,11 @@
     cards.forEach(function (card) {
       var eff = effective(card);
       card.querySelectorAll('[data-price]').forEach(function (el) { el.hidden = el.getAttribute('data-price') !== eff; });
-      var cta = card.querySelector('[data-cta="register"][data-base]');
-      if (cta) cta.setAttribute('href', cta.getAttribute('data-base') + '&period=' + encodeURIComponent(eff));
+      // every CTA that carries the plan (register / upgrade / «I already have a store») keeps the CHOSEN period; ``data-sep`` is the
+      // separator for links whose plan lives inside an encoded ``next=`` parameter (login)
+      card.querySelectorAll('a[data-base]').forEach(function (cta) {
+        cta.setAttribute('href', cta.getAttribute('data-base') + (cta.getAttribute('data-sep') || '&period=') + encodeURIComponent(eff));
+      });
       var note = card.querySelector('[data-note]');
       var offered = (card.getAttribute('data-offered') || '').split(',').filter(Boolean);
       if (note) note.hidden = !offered.length || offered.indexOf(period) !== -1;

@@ -1,25 +1,28 @@
 {% extends "dashboard/base_admin.html" %}
 {% load persian %}
-{% block title %}پلن‌ها | پنل مدیریت{% endblock %}
-{% block page_title %}انتخابِ پلن{% endblock %}
-{% block page_sub %}پیش از تغییر، پیش‌نمایشِ تفاوتِ قابلیت‌ها را ببینید{% endblock %}
+{% block title %}خرید اشتراک | پنل مدیریت{% endblock %}
+{% block page_title %}{% if trial.state == "trialing" or trial.state == "ended" %}خرید اشتراک{% else %}انتخاب / ارتقایِ پلن{% endif %}{% endblock %}
+{% block page_sub %}پلن و دوره را انتخاب کنید؛ مبلغ از قیمتِ منتشرشده‌یِ پلتفرم محاسبه می‌شود و پیش از پرداخت پیش‌نمایش می‌بینید{% endblock %}
 {% block content %}
 {% if not has_subscription %}
 <div style="margin-bottom:16px;padding:12px 16px;border-radius:10px;background:#fef3c7;color:#92400e">
-  این فروشگاه اشتراکِ جاری ندارد؛ تغییرِ پلن ممکن نیست.
+  این فروشگاه اشتراکِ جاری ندارد؛ خریدِ اشتراک از این صفحه ممکن نیست. با پشتیبانی تماس بگیرید.
 </div>
 {% endif %}
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+{% if trial.state == "trialing" %}
+<div style="margin-bottom:16px;padding:12px 16px;border-radius:10px;background:#e8f3ff;color:#0b3d75">
+  دوره‌ی آزمایشیِ شما {{ trial.days_left|fa_number }} روزِ دیگر پایان می‌یابد. اشتراک را همین حالا بخرید یا تا پایانِ دوره‌ی آزمایشی صبر کنید.
+</div>
+{% endif %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px" data-testid="plan-grid">
   {% for item in plans %}
-  <div class="card" style="display:flex;flex-direction:column">
+  <div class="card{% if item.preselected %} is-preselected{% endif %}" style="display:flex;flex-direction:column;{% if item.preselected %}border:2px solid var(--accent,#10a37a){% endif %}" data-plan="{{ item.plan.code }}">
     <div style="padding:18px;flex:1">
       <div style="font-size:18px;font-weight:700">{{ item.plan.public_title|default:item.plan.name }}</div>
       {% if item.plan.is_recommended %}<span class="badge b-green" style="margin-top:6px">پیشنهادی</span>{% endif %}
       {% if item.is_current %}<span class="badge b-amber" style="margin-top:6px">پلنِ فعلی</span>{% endif %}
+      {% if item.preselected %}<span class="badge b-green" style="margin-top:6px">انتخابِ شما در صفحه‌ی تعرفه</span>{% endif %}
       <p style="color:var(--muted);margin-top:10px;font-size:13px">{{ item.version.public_description_snapshot|default:item.plan.description }}</p>
-      {% if item.version.display_price %}
-      <div style="margin-top:10px;font-weight:600">{{ item.version.display_price }} {{ item.version.currency }}</div>
-      {% endif %}
     </div>
     <div style="padding:14px 18px;border-top:1px solid var(--border)">
       {% if item.is_current %}
@@ -28,20 +31,23 @@
         <form method="post" action="{% url 'dashboard:subscription-plan-preview' %}">
           {% csrf_token %}
           <input type="hidden" name="version_id" value="{{ item.version.pk }}">
-          {% if item.periods|length > 1 %}
-          <label style="display:block;font-size:12px;margin-bottom:6px">دوره‌ی پرداخت
-            <select name="billing_interval" style="width:100%;margin-top:4px">
-              {% for period in item.periods %}<option value="{{ period.interval }}"{% if period.interval == item.version.billing_interval %} selected{% endif %}>{{ period.label }} — {{ period.price|toman }}{% if period.savings_percent %} ({{ period.savings_percent|fa_number }}٪ تخفیف){% endif %}</option>{% endfor %}
-            </select>
-          </label>
-          {% endif %}
-          <button type="submit" class="btn btn-primary" style="width:100%">پیش‌نمایشِ تغییر</button>
+          <fieldset style="border:0;padding:0;margin:0 0 10px"><legend style="font-size:12px;margin-bottom:6px">دوره‌ی پرداخت</legend>
+            {% for period in item.periods %}
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+              <input type="radio" name="billing_interval" value="{{ period.interval }}"{% if period.interval == item.default_interval %} checked{% endif %}>
+              <span style="flex:1">{{ period.label }}</span>
+              <b data-testid="price-{{ item.plan.code }}-{{ period.interval }}">{{ period.price|toman }}</b>
+              {% if period.savings_percent %}<span class="badge b-green">{{ period.savings_percent|fa_number }}٪ تخفیف</span>{% endif %}
+            </label>
+            {% endfor %}
+          </fieldset>
+          <button type="submit" class="btn btn-primary" style="width:100%" data-testid="choose-{{ item.plan.code }}">ادامه و مشاهده‌ی پیش‌نمایش</button>
         </form>
       {% endif %}
     </div>
   </div>
   {% empty %}
-  <p style="color:var(--muted)">هیچ پلنِ قابلِ انتخابی موجود نیست.</p>
+  <p style="color:var(--muted)">هیچ پلنِ قابلِ خریدی موجود نیست.</p>
   {% endfor %}
 </div>
 {% endblock %}

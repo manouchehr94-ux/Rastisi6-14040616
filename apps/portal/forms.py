@@ -386,6 +386,14 @@ class PlatformConfigurationForm(forms.ModelForm):
         cleaned_data["enamad_auth_code"] = auth_code
         return cleaned_data
 
+    def clean_default_trial_days(self):
+        from apps.subscriptions.services import trial_service
+
+        try:
+            return trial_service.validate_days(self.cleaned_data["default_trial_days"])
+        except trial_service.TrialPolicyError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
     def clean_deletion_retention_days(self):
         days = self.cleaned_data["deletion_retention_days"]
         if not (180 <= days <= 365):

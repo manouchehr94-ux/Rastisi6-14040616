@@ -221,7 +221,14 @@ class PlatformConfiguration(TimeStampedModel):
     audited (``PlatformAuditLogEntry``).
     """
 
-    default_trial_days = models.PositiveIntegerField("روزهای پیش‌فرض دوره‌ی آزمایشی", default=30)
+    default_trial_days = models.PositiveIntegerField(
+        "روزهای پیش‌فرض دوره‌ی آزمایشی", default=30,
+        help_text="فقط روی فروشگاه‌هایِ تازه اثر می‌گذارد؛ دوره‌یِ آزمایشیِ فروشگاه‌هایِ دارایِ Trial تغییر نمی‌کند.",
+    )
+    trial_enabled = models.BooleanField(
+        "اعطایِ دوره‌ی آزمایشیِ اولیه به فروشگاه‌هایِ تازه", default=True,
+        help_text="اگر خاموش باشد فروشگاهِ تازه Trial نمی‌گیرد و باید پلنِ پولی بخرد.",
+    )
     deletion_retention_days = models.PositiveIntegerField(
         "روزهای نگهداریِ داده پس از درخواست حذف", default=365,
         help_text="بین ۱۸۰ تا ۳۶۵ روز (۶ تا ۱۲ ماه).",

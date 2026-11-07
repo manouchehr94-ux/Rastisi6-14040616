@@ -1786,6 +1786,7 @@ def billing_plans(request, store_public_id):
     """فهرستِ پلن‌هایِ پولیِ قابلِ‌خرید برایِ این Store — فقط نسخه‌هایِ
     منتشرشده و پولی (Section 9)."""
     store = _get_owned_store_or_404(request, store_public_id)
+    _remember_plan_selection(request)             # ``?plan=<code>&period=<interval>`` from the public pricing page (validated server-side)
     current_subscription = ent.get_current_subscription(store)
 
     offerable_versions = []
@@ -1888,6 +1889,10 @@ def billing_checkout(request, store_public_id, plan_version_id):
     if not portal_actions_allowed(request, store, SUBSCRIPTION_CHANGE, BILLING_PAYMENT_MANAGE):
         return portal_permission_denied(request)
     plan_version = get_object_or_404(PlanVersion, pk=plan_version_id, status=PlanVersion.Status.PUBLISHED)
+    from apps.subscriptions.services.pricing_page_service import is_purchasable_version
+
+    if not is_purchasable_version(plan_version):
+        raise Http404                              # internal Trial / Legacy / archived / older version: never purchasable
     # دوره‌ی انتخابی فقط وقتی پذیرفته می‌شود که همین نسخه‌ی منتشرشده آن را عرضه کند (ورودیِ کاربر هرگز اعتماد نمی‌شود).
     billing_interval = (request.POST.get("billing_interval") or "").strip()
     if billing_interval and not plan_version.offers_interval(billing_interval):

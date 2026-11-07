@@ -2,8 +2,33 @@
 {% load persian %}
 {% block title %}اشتراک و صورتحساب | پنل مدیریت{% endblock %}
 {% block page_title %}اشتراک و صورتحساب{% endblock %}
-{% block page_sub %}پلنِ فعلی، وضعیت، و دسترسی به تغییرِ پلن{% endblock %}
+{% block page_sub %}پلنِ فعلی، وضعیتِ دوره‌ی آزمایشی، و خریدِ اشتراک{% endblock %}
 {% block content %}
+{% if trial.state == "trialing" %}
+<div class="card" style="margin-bottom:16px;border:1px solid #bcd7f5" data-testid="trial-card">
+  <div class="card-head"><b>دوره‌ی آزمایشی</b><span class="badge b-green">در جریان</span></div>
+  <div style="padding:18px">
+    <div style="display:flex;flex-wrap:wrap;gap:28px">
+      <div><div style="color:var(--muted);font-size:12px">روزِ باقی‌مانده</div><div style="font-size:24px;font-weight:700" data-testid="trial-days-left">{{ trial.days_left|fa_number }}</div></div>
+      <div><div style="color:var(--muted);font-size:12px">پایانِ دوره‌ی آزمایشی</div><div>{{ trial.trial_end_at|jalali }}</div></div>
+    </div>
+    {% if trial.limits %}
+    <h4 style="margin:18px 0 8px">محدودیت‌هایِ دوره‌ی آزمایشی</h4>
+    <div class="table-wrap"><table>
+      <thead><tr><th>مورد</th><th>مصرف</th><th>سقف</th></tr></thead>
+      <tbody>{% for row in trial.limits %}<tr><td>{{ row.label }}</td><td>{{ row.current|fa_number }}</td><td>{{ row.limit|fa_number }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    <p style="margin:16px 0 0;color:var(--muted);font-size:13px">با خریدِ اشتراک، سقف‌ها و امکاناتِ پلنِ انتخابی فعال می‌شود. دوره‌ی آزمایشیِ باقی‌مانده به دوره‌ی پولی اضافه نمی‌شود.</p>
+  </div>
+</div>
+{% elif trial.state == "ended" %}
+<div class="card" style="margin-bottom:16px;border:1px solid #f5c2c2" data-testid="trial-ended-card"><div style="padding:18px">
+  <b>{% if trial.never_started %}دوره‌ی آزمایشی برایِ فروشگاهِ شما فعال نشده است.{% else %}دوره‌ی آزمایشی شما پایان یافته است.{% endif %}</b>
+  <p style="margin:8px 0 0">داده‌هایِ فروشگاه شما نگهداری می‌شود و قابلِ مشاهده است؛ برایِ ساختِ کالا/سفارش‌هایِ تازه و ادامه‌ی کار یک اشتراکِ پولی بخرید.{% if not trial.never_started %} هر فروشگاه فقط یک‌بار دوره‌ی آزمایشی می‌گیرد.{% endif %}</p>
+</div></div>
+{% endif %}
+
 <div class="card" style="margin-bottom:16px">
   <div class="card-head"><b>پلنِ فعلی</b></div>
   <div style="padding:18px">
@@ -11,7 +36,7 @@
       <div style="display:flex;flex-wrap:wrap;gap:24px">
         <div>
           <div style="color:var(--muted);font-size:12px">پلن</div>
-          <div style="font-size:18px;font-weight:700">{{ summary.plan.public_title|default:summary.plan.name }}</div>
+          <div style="font-size:18px;font-weight:700" data-testid="current-plan-name">{{ summary.plan.public_title|default:summary.plan.name }}</div>
         </div>
         <div>
           <div style="color:var(--muted);font-size:12px">وضعیت</div>
@@ -45,9 +70,14 @@
   </div>
 </div>
 
-<div style="display:flex;gap:10px;flex-wrap:wrap">
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+  {% if can_change_subscription %}
+    <a class="btn btn-primary" data-testid="buy-subscription" href="{% url 'dashboard:subscription-plans' %}">{% if trial.state == "trialing" or trial.state == "ended" or not summary.has_subscription %}خرید اشتراک{% else %}انتخاب / ارتقایِ پلن{% endif %}</a>
+  {% else %}
+    <span class="badge b-amber" data-testid="owner-only-note">خریدِ اشتراک فقط توسطِ مالکِ فروشگاه انجام می‌شود.</span>
+  {% endif %}
   {% if can_view_usage %}<a class="btn" href="{% url 'dashboard:usage-overview' %}">مصرف و سقف‌ها</a>{% endif %}
-  {% if can_change_subscription %}<a class="btn btn-primary" href="{% url 'dashboard:subscription-plans' %}">تغییرِ پلن</a>{% endif %}
+  <a class="btn" href="{% url 'dashboard:billing-invoices' %}">فاکتورها و پرداخت‌ها</a>
   <a class="btn" href="{% url 'dashboard:subscription-history' %}">تاریخچه‌ی اشتراک</a>
 </div>
 {% endblock %}
