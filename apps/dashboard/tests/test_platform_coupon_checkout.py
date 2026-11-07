@@ -5,7 +5,8 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
-from django.test import Client
+from django.conf import settings
+from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -244,6 +245,22 @@ class CouponCheckoutTests(CheckoutBase):
         self.assertFalse(PlatformCouponRedemption.objects.filter(invoice=self.invoice).exists())
 
 
+    def test_apply_endpoint_is_throttled_and_does_not_evaluate_when_limited(self):
+        from django.core.cache import caches
+        from django.test import override_settings
+
+        caches["ratelimit"].clear()
+        self.addCleanup(caches["ratelimit"].clear)
+        coupon(self.finance, "OFF20")
+        with override_settings(PLATFORM_COUPON_ATTEMPTS_PER_MINUTE=3):
+            for _ in range(3):
+                self.apply("NOPE")
+            r = self.apply("OFF20")
+        self.assertIn(svc.MESSAGES["rate_limited"], self.msgs(r))
+        self.assertEqual(self.fresh().discount_total, Decimal(0))
+        self.assertFalse(PlatformCouponRedemption.objects.exists())
+
+
 class CouponPlanChangeTests(CheckoutBase):
     """Plan upgrade flow: the preview validates the code, the execute step creates the invoice and applies it server-side."""
 
@@ -310,3 +327,138 @@ class CouponPlanChangeTests(CheckoutBase):
         self.assertNotContains(r, "SECRET</")
         self.execute("SECRET")
         self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2).count(), 0)
+
+    def test_preview_is_throttled(self):
+        from django.core.cache import caches
+        from django.test import override_settings
+
+        caches["ratelimit"].clear()
+        self.addCleanup(caches["ratelimit"].clear)
+        with override_settings(PLATFORM_COUPON_ATTEMPTS_PER_MINUTE=2):
+            self.preview("NOPE1")
+            self.preview("NOPE2")
+            r = self.preview("UP20")
+        self.assertContains(r, svc.MESSAGES["rate_limited"])
+        self.assertIsNone(r.context["coupon_eval"])
+
+    def test_execute_is_throttled_and_creates_no_invoice(self):
+        from django.core.cache import caches
+        from django.test import override_settings
+
+        caches["ratelimit"].clear()
+        self.addCleanup(caches["ratelimit"].clear)
+        token = self.preview("UP20").context["preview"]["token"]
+        with override_settings(PLATFORM_COUPON_ATTEMPTS_PER_MINUTE=1):
+            self.preview("UP20")                                                 # consumes the single allowed attempt
+            self.client2.post("/admin-portal/subscription/plans/change/", {
+                "version_id": self.v2.pk, "preview_token": token, "billing_interval": "yearly", "coupon_code": "UP20"})
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2).count(), 0)
+
+    def test_plan_change_coupon_failure_is_atomic_and_leaves_no_invoice(self):
+        """Race: the code passed pre-validation but applying fails. The new invoice must be rolled back (no undiscounted
+        invoice the user never saw), no redemption remains, and the user is told why."""
+        from unittest import mock
+
+        with mock.patch.object(svc, "apply_coupon_to_invoice", side_effect=svc.CouponError("limit_reached")):
+            r = self.execute("UP20")
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2, kind="plan_change").count(), 0)
+        self.assertFalse(PlatformCouponRedemption.objects.exists())
+        texts = [str(m) for m in self.client2.get(r["Location"]).context["messages"]]
+        self.assertTrue(any(svc.MESSAGES["limit_reached"] in t and "فاکتور ایجاد نشد" in t for t in texts))
+        self.execute("")                                                         # retry without a code still works
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2, kind="plan_change").count(), 1)
+
+    def test_reused_plan_change_invoice_with_another_manual_coupon_reports_incompatible(self):
+        coupon(self.finance, "OTHER10", percent=10, allow_plan_change=True, allow_initial=False)
+        self.execute("UP20")
+        r = self.execute("OTHER10")                                              # idempotent invoice reuse
+        inv = SubscriptionInvoice.objects.get(store=self.store2, kind="plan_change")
+        self.assertEqual(inv.discount_total, Decimal("600000"))                  # first coupon stays
+        texts = [str(m) for m in self.client2.get(r["Location"]).context["messages"]]
+        self.assertTrue(any(svc.MESSAGES["incompatible"] in t for t in texts))
+
+
+TRIAL_HOST = f"pctrial.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
+
+
+@override_settings(ALLOWED_HOSTS=[TRIAL_HOST, UP_HOST, "testserver"], RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
+class CouponFirstPaidPurchaseAfterTrialTests(CheckoutBase):
+    """The first paid purchase after Trial is a PLAN_CHANGE invoice (free trial plan -> paid plan). A default coupon
+    (allow_initial only) must apply to it; once the store has paid, an ordinary upgrade is a plan change again."""
+
+    def setUp(self):
+        super().setUp()
+        _t, self.trial_v = make_plan("cptrial-free", base=0, order=0, trial=14, limits={"catalog.products": 5})
+        _p, self.paid_v = make_plan("cptrial-paid", base=300000, order=1, extra={"yearly": 3000000}, limits={"catalog.products": 50})
+        _p3, self.top_v = make_plan("cptrial-top", base=900000, order=2, extra={"yearly": 9000000}, limits={"catalog.products": 500})
+        self.store3 = Store.objects.create(name="تریال", slug="pctrial", admin_subdomain="pctrial", status=Store.Status.ACTIVE)
+        self.owner3 = self._member(self.store3, "pctrial-owner")
+        self.sub3 = ss.start_trial(ss.create_subscription(self.store3, self.trial_v))
+        self.client3 = Client(HTTP_HOST=TRIAL_HOST)
+        self.client3.login(username="pctrial-owner", password="pass12345")
+        ready_platform_zibal(self)
+        enable_platform_card(self)
+        caches_clear()
+
+    def buy(self, version, code="", interval="monthly"):
+        r = self.client3.post("/admin-portal/subscription/plans/preview/",
+                              {"version_id": version.pk, "billing_interval": interval, "coupon_code": code})
+        token = r.context["preview"]["token"]
+        return r, self.client3.post("/admin-portal/subscription/plans/change/", {
+            "version_id": version.pk, "preview_token": token, "billing_interval": interval, "coupon_code": code})
+
+    def test_default_coupon_applies_to_the_first_paid_purchase_after_trial_then_redeems_on_payment(self):
+        from apps.billing.services import attempt_service, confirmation_service
+        from apps.subscriptions.models import StoreSubscription
+
+        c = coupon(self.finance, "TRIAL20")                                      # defaults: allow_initial=True, allow_plan_change=False
+        preview, _ = self.buy(self.paid_v, "TRIAL20")
+        self.assertEqual(preview.context["coupon_eval"].discount_amount, Decimal("60000"))
+        inv = SubscriptionInvoice.objects.get(store=self.store3)
+        self.assertEqual(inv.kind, SubscriptionInvoice.Kind.PLAN_CHANGE)
+        self.assertEqual((inv.subtotal, inv.discount_total, inv.amount_due), (Decimal("300000"), Decimal("60000"), Decimal("240000")))
+        self.assertEqual(inv.coupon_redemption.status, PlatformCouponRedemption.Status.RESERVED)
+        attempt = attempt_service.create_attempt(inv, provider="manual")
+        confirmation_service.confirm_payment(attempt=attempt, amount=inv.amount_due, currency="IRT", provider_payment_id="trial-pay-1")
+        inv.refresh_from_db()
+        self.assertEqual((inv.status, inv.amount_paid), ("paid", Decimal("240000")))
+        self.assertEqual(inv.coupon_redemption.status, PlatformCouponRedemption.Status.REDEEMED)
+        self.assertEqual(StoreSubscription.objects.get(pk=self.sub3.pk).status, StoreSubscription.Status.ACTIVE)
+        self.assertEqual(c.counted_redemptions(), 1)
+
+    def test_the_same_coupon_is_not_valid_for_a_later_ordinary_upgrade(self):
+        from apps.billing.services import attempt_service, confirmation_service
+
+        coupon(self.finance, "TRIAL20")
+        self.buy(self.paid_v, "TRIAL20")
+        inv = SubscriptionInvoice.objects.get(store=self.store3)
+        confirmation_service.confirm_payment(attempt=attempt_service.create_attempt(inv, provider="manual"), amount=inv.amount_due,
+                                             currency="IRT", provider_payment_id="trial-pay-2")
+        result = svc.evaluate(self.store3, plan_version=self.top_v, interval="monthly",
+                              purpose=svc.purpose_for(self.store3, "plan_change"), code="TRIAL20")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, "ineligible_purpose")
+
+    def test_a_plan_change_only_coupon_does_not_apply_to_the_first_paid_purchase(self):
+        coupon(self.finance, "ONLYUP", allow_plan_change=True, allow_initial=False)
+        preview, _ = self.buy(self.paid_v, "ONLYUP")
+        self.assertContains(preview, svc.MESSAGES["ineligible_purpose"])
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store3).count(), 0)
+
+    def test_first_purchase_only_coupon_accepts_trial_conversion(self):
+        coupon(self.finance, "FIRSTONLY", first_purchase_only=True)
+        _, r = self.buy(self.paid_v, "FIRSTONLY")
+        self.assertEqual(SubscriptionInvoice.objects.get(store=self.store3).discount_total, Decimal("60000"))
+
+    def test_active_store_with_no_trial_history_keeps_plan_change_purpose(self):
+        active, _sub = (Store.objects.create(name="فعال", slug="pcact", admin_subdomain="pcact"), None)
+        ss.activate_subscription(ss.create_subscription(active, self.paid_v), period_end=timezone.now() + timedelta(days=20))
+        self.assertEqual(svc.purpose_for(active, "plan_change"), "plan_change")
+        self.assertEqual(svc.purpose_for(self.store3, "plan_change"), "initial")
+        self.assertEqual(svc.purpose_for(self.store3, "renewal"), "renewal")
+
+
+def caches_clear():
+    from django.core.cache import caches
+
+    caches["ratelimit"].clear()
