@@ -1,0 +1,357 @@
+[
+ {
+  "name": "5: the internal Trial plan is NOT in the public pricing list",
+  "ok": true,
+  "detail": "e2e-lite,e2e-pro"
+ },
+ {
+  "name": "1: the public page advertises the platform Trial (۳۰ روز)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "anonymous: a register CTA keeps plan+period and an existing-merchant login keeps them in next=",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "choosing the yearly period updates the register AND login links",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "public_plans @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "public_plans @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "public_plans @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "registration reaches the onboarding (store created)",
+  "ok": true,
+  "detail": "http://rastisi.localhost:8020/app/stores/43a9a025-ee1c-454b-a097-ddb82d8fb5c4/onboarding/identity/"
+ },
+ {
+  "name": "1: the new store got the internal Trial plan, trialing, 30 days, exactly one subscription",
+  "ok": true,
+  "detail": "trial,trialing,30,1"
+ },
+ {
+  "name": "4: choosing a paid plan at sign-up did not add a paid/second subscription",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "platform trial page: policy, limits, history sections exist",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "trial page lists the existing store in the history",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "platform_trial_page @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "platform_trial_page @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "platform_trial_page @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "2: an invalid length (0) is rejected with a message",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "2: valid change saved",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "platform audit entry written for the change",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "2: a store created AFTER the change gets 14 days",
+  "ok": true,
+  "detail": "14"
+ },
+ {
+  "name": "3: the earlier store keeps its 30-day trial",
+  "ok": true,
+  "detail": "30"
+ },
+ {
+  "name": "merchant enters the admin panel through the portal handoff",
+  "ok": true,
+  "detail": "http://store-43a9a025ee1c.rastisi.localhost:8020/admin-portal/subscription/"
+ },
+ {
+  "name": "7: the trial card, the days left and a clear «خرید اشتراک» button are visible",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "7: days left is 29 or 30",
+  "ok": true,
+  "detail": "30"
+ },
+ {
+  "name": "7: the trial banner is on the page",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "6: the trial limits (products cap 20) are shown to the merchant",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "merchant_overview_trial @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_overview_trial @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_overview_trial @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant plans page lists paid plans only (no trial)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "9: monthly price on the page = published version (1000000)",
+  "ok": true,
+  "detail": "1000000"
+ },
+ {
+  "name": "9: quarterly price on the page = published version (2850000)",
+  "ok": true,
+  "detail": "2850000"
+ },
+ {
+  "name": "9: semiannual price on the page = published version (5400000)",
+  "ok": true,
+  "detail": "5400000"
+ },
+ {
+  "name": "9: yearly price on the page = published version (10200000)",
+  "ok": true,
+  "detail": "10200000"
+ },
+ {
+  "name": "merchant_plans @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_plans @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_plans @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "9: preview shows the yearly published price",
+  "ok": true,
+  "detail": "10200000"
+ },
+ {
+  "name": "merchant_purchase_preview @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_purchase_preview @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_purchase_preview @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "checkout page reached (unified platform checkout)",
+  "ok": true,
+  "detail": "http://store-43a9a025ee1c.rastisi.localhost:8020/admin-portal/billing/checkout/subscription/1/"
+ },
+ {
+  "name": "9: the invoice amount equals the yearly published price",
+  "ok": true,
+  "detail": "1,10200000,open"
+ },
+ {
+  "name": "merchant_checkout @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_checkout @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_checkout @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "gateway page (fake) reached",
+  "ok": true,
+  "detail": "http://store-43a9a025ee1c.rastisi.localhost:8020/admin-portal/billing/checkout/subscription/1/pay/"
+ },
+ {
+  "name": "9: the amount sent to the gateway = price × 10 (RIAL)",
+  "ok": true,
+  "detail": "10200000"
+ },
+ {
+  "name": "10: a cancelled payment leaves the store on the Trial",
+  "ok": true,
+  "detail": "trial|trialing"
+ },
+ {
+  "name": "11: verified payment activated the purchased plan (e2e-pro, active, yearly), trial history kept",
+  "ok": true,
+  "detail": "e2e-pro|active|yearly|true"
+ },
+ {
+  "name": "12: replayed gateway returns never activate twice",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "11: the invoice is paid in full",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "after purchase: no trial card/banner, current plan shown",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "merchant_overview_paid @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_overview_paid @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_overview_paid @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "existing merchant sees an «upgrade/buy» CTA (not register) that keeps plan+period",
+  "ok": true,
+  "detail": "/app/stores/43a9a025-ee1c-454b-a097-ddb82d8fb5c4/billing/?plan=e2e-pro&period=monthly"
+ },
+ {
+  "name": "public_plans_logged_in_owner @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "public_plans_logged_in_owner @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "public_plans_logged_in_owner @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "existing merchant opening /register/ is sent to the app, not a second sign-up",
+  "ok": true,
+  "detail": "http://rastisi.localhost:8020/app/"
+ },
+ {
+  "name": "14: a legacy store still opens its subscription page, no trial card, no banner",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "14: the legacy subscription is unchanged in the database",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "13: owner 2 cannot obtain an admin handoff into store 1 (404)",
+  "ok": true,
+  "detail": "404"
+ },
+ {
+  "name": "13: owner 2 cannot open store 1's invoice/checkout directly on its host",
+  "ok": true,
+  "detail": "200 http://rastisi.localhost:8020/app/"
+ },
+ {
+  "name": "13: no store-1 data is in that response",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "8: after the trial ends the page says so and still offers «خرید اشتراک»",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "8: the data is kept and the store is restricted, not deleted",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "merchant_overview_trial_ended @1440: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":1440,\"iw\":1440,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_overview_trial_ended @768: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":768,\"iw\":768,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "merchant_overview_trial_ended @390: no horizontal overflow, RTL",
+  "ok": true,
+  "detail": "{\"sw\":390,\"iw\":390,\"dir\":\"rtl\"}"
+ },
+ {
+  "name": "no JavaScript console errors on any page",
+  "ok": true,
+  "detail": ""
+ }
+]
