@@ -55,6 +55,14 @@
   <a href="{% url 'dashboard:staff-add' %}" class="btn btn-primary">افزودن عضو تیم</a>
 </div>
 
+{% if show_roles %}
+<div class="card" data-testid="roles-reference"><div class="card-head"><h3>نقش‌ها و دسترسی‌ها</h3></div>
+  <div class="card-body"><ul class="team-roles-ref">
+    {% for r in roles_info %}<li><b>{{ r.label }}</b>{% if r.description %} — {{ r.description }}{% endif %}</li>{% endfor %}
+  </ul>
+  <p class="team-help">نقشِ هر عضو را از فهرستِ اعضا تغییر دهید. فقط مالکِ فروشگاه می‌تواند اشتراک را انتخاب یا خریداری کند.</p></div></div>
+{% endif %}
+
 <div class="team-summary" role="navigation" aria-label="فیلتر وضعیت">
   <a href="{% url 'dashboard:staff-list' %}" class="{% if not filters.status %}on{% endif %}"><b>{{ memberships|length }}</b><span>{% if has_filters %}نتیجه{% else %}همهٔ اعضا{% endif %}</span></a>
   <a href="?status=active" class="{% if filters.status == 'active' %}on{% endif %}"><b>{{ summary.active }}</b><span>فعال</span></a>

@@ -707,7 +707,7 @@ class CheckoutNavigationTests(CheckoutBase):
 
         self.assertEqual(navigation.resolve_active("sms-checkout", None, "settings"), ("settings", "messaging"))
         self.assertEqual(navigation.resolve_active("sms-checkout-pay", None, "settings"), ("settings", "messaging"))
-        self.assertEqual(navigation.resolve_active("platform-checkout", None, "billing"), ("settings", "account"))
+        self.assertEqual(navigation.resolve_active("platform-checkout", None, "billing"), ("settings", "subscription"))
 
     def test_both_routes_resolve_to_the_same_view_and_the_generic_reverse_gives_the_same_path(self):
         self.assertEqual(self.url(SMS), f"/admin-portal/billing/checkout/sms/{self.purchase.pk}/")

@@ -41,7 +41,7 @@ EXPECTED_TABS = {
     "reports": ["گزارش‌های حرفه‌ای", "گزارش رخدادها"],
     # one category bar; sub-screens (مالیات، درگاه‌ها، ورود/خروج اطلاعات، اعضا/اشتراک…) are Level-3 children of these
     "settings": ["اطلاعات فروشگاه", "دامنه و آدرس", "مالی و پرداخت", "ارسال و تحویل", "پیام‌رسانی",
-                 "یکپارچه‌سازی‌ها", "ورود و خروج اطلاعات", "تیم و اشتراک"],
+                 "یکپارچه‌سازی‌ها", "ورود و خروج اطلاعات", "تیم و اعضا", "اشتراک و صورتحساب"],
 }
 
 
@@ -148,10 +148,10 @@ class NavigationMapTests(SimpleTestCase):
             "gift-wrap-products": ("settings", "settings-finance"),
             "sms-log-list": ("settings", "messaging"),
             "sms-outbox-list": ("settings", "messaging"),
-            "staff-add": ("settings", "account"),
-            "subscription-plans": ("settings", "account"),
-            "billing-invoice-detail": ("settings", "account"),
-            "usage-overview": ("settings", "account"),
+            "staff-add": ("settings", "team"),
+            "subscription-plans": ("settings", "subscription"),
+            "billing-invoice-detail": ("settings", "subscription"),
+            "usage-overview": ("settings", "subscription"),
             "import-detail": ("settings", "data-transfer"),
             "export-create": ("settings", "data-transfer"),
         }
@@ -285,7 +285,7 @@ class NavigationRenderingTests(PermissionEnforcementTestCase):
             (("settings",), "", ("settings", "settings-general")),
             (("settings",), "?section=finance", ("settings", "settings-finance")),
             (("shipping-setup",), "", ("settings", "shipping")),
-            (("staff-list",), "", ("settings", "account")),
+            (("staff-list",), "", ("settings", "team")),
         ]
         for args, query, expected in cases:
             with self.subTest(page=args[0], query=query):

@@ -6385,6 +6385,8 @@ def staff_list(request):
         "filters": {"q": q, "status": status, "role": role},
         "has_filters": bool(q or status or role),
         "current_user_id": request.user.pk,
+        "show_roles": request.GET.get("view") == "roles",
+        "roles_info": _staff_roles_info() if request.GET.get("view") == "roles" else [],
     })
 
 

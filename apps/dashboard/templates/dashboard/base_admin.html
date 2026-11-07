@@ -190,7 +190,8 @@ ClassicEditor فراخوانی می‌شود و بی‌سروصدا (بدون خ
       <div class="alert" data-testid="trial-banner" role="status"
            style="margin-bottom:16px;padding:12px 16px;border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#e8f3ff;color:#0b3d75">
         <span style="flex:1">دوره‌ی آزمایشیِ فروشگاه شما: <b>{{ trial_banner.days_left|fa_number }} روز</b> مانده (تا {{ trial_banner.end_at|jalali }}).</span>
-        {% if can_view_subscription %}<a href="{% url 'dashboard:subscription-overview' %}" style="font-weight:600;text-decoration:underline">خرید اشتراک</a>{% endif %}
+        {% if can_change_subscription %}<a href="{% url 'dashboard:subscription-plans' %}" data-testid="trial-banner-buy" style="font-weight:600;text-decoration:underline">خرید اشتراک</a>
+        {% elif can_view_subscription %}<a href="{% url 'dashboard:subscription-overview' %}" style="font-weight:600;text-decoration:underline">وضعیت اشتراک</a>{% endif %}
       </div>
       {% endif %}
       {% if subscription_banner_warning %}
