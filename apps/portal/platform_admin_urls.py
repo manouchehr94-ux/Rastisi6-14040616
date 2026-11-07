@@ -6,6 +6,7 @@ from . import platform_admin_features as feature_views
 from . import platform_admin_photo_views as photo_views
 from . import platform_admin_site_views as site_views
 from . import notification_admin_views as notif_views
+from . import platform_admin_coupon_views as coupon_views
 
 app_name = "portal_platform_admin"
 
@@ -83,6 +84,14 @@ urlpatterns = [
     path("payments/refund/<int:refund_id>/complete/", views.payment_refund_complete, name="payment-refund-complete"),
     path("payments/sms-purchases/", views.sms_purchases, name="sms-purchases"),
     path("payments/sms-purchases/<int:purchase_id>/<str:action>/", views.sms_purchase_action, name="sms-purchase-action"),
+
+    # --- کوپن و کمپینِ پلتفرم ---
+    path("coupons/", coupon_views.coupons, name="coupons"),
+    path("coupons/add/", coupon_views.coupon_form, name="coupon-add"),
+    path("coupons/<int:coupon_id>/", coupon_views.coupon_detail, name="coupon-detail"),
+    path("coupons/<int:coupon_id>/edit/", coupon_views.coupon_form, name="coupon-edit"),
+    path("coupons/<int:coupon_id>/duplicate/", coupon_views.coupon_duplicate, name="coupon-duplicate"),
+    path("coupons/<int:coupon_id>/<str:action>/", coupon_views.coupon_status, name="coupon-status"),
 
     # --- پیامک ---
     path("sms/settings/", views.sms_settings, name="sms-settings"),  # legacy alias

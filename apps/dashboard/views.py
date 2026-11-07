@@ -8359,6 +8359,18 @@ def _resolve_selectable_version_or_404(store, version_id):
     raise Http404
 
 
+def _preview_coupon(store, target_version, interval, raw_code):
+    """پیشنمایشِ تخفیفِ پلتفرم (فقط خواندن): کدِ واردشده یا بهترین تخفیفِ خودکار. قیمت/تخفیف را سرور میسازد.
+    خروجی: (Evaluation یا None، پیامِ خطا)."""
+    from apps.billing.services import platform_coupon_service as coupons
+
+    code = coupons.normalize_code(raw_code)
+    result = coupons.evaluate(store, plan_version=target_version, interval=interval, purpose="plan_change", code=code)
+    if result.ok:
+        return result, ""
+    return None, (result.message if code else "")
+
+
 @require_POST
 @staff_required
 @permission_required(SUBSCRIPTION_CHANGE)
@@ -8386,10 +8398,15 @@ def subscription_plan_preview(request):
     except (pcs.PlanChangeError, pcb.PlanChangeBillingError) as exc:
         messages.error(request, str(exc))
         return redirect(_plans_url(billing_interval))
+    coupon_eval, coupon_error = None, ""
+    if preview.get("is_upgrade"):
+        coupon_eval, coupon_error = _preview_coupon(store, target_version, preview.get("billing_interval"), request.POST.get("coupon_code"))
     return render(request, "dashboard/subscription_plan_preview.html", {
         "preview": preview,
         "plans_url": _plans_url(preview.get("billing_interval") or billing_interval),
         "active_page": "subscription",
+        "coupon_eval": coupon_eval, "coupon_error": coupon_error,
+        "coupon_code": (request.POST.get("coupon_code") or "").strip()[:40],
     })
 
 
@@ -8432,6 +8449,18 @@ def subscription_plan_execute(request):
         ).get("payable_amount", 0) > 0:
             messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
             return redirect(_plans_url(billing_interval))
+        coupon_code = (request.POST.get("coupon_code") or "").strip()[:40]
+        if coupon_code:
+            # کدِ نامعتبر پیش از ساختنِ فاکتور رد میشود (فاکتورِ بیراهه ساخته نمیشود)
+            from apps.billing.services import platform_coupon_service as coupons
+
+            check = coupons.evaluate(
+                store, plan_version=target_version, code=coupon_code, purpose="plan_change",
+                interval=pcb.preview(current_subscription, target_version, billing_interval=billing_interval or None)["billing_interval"],
+            )
+            if not check.ok:
+                messages.error(request, check.message)
+                return redirect(_plans_url(billing_interval))
         kind, result = pcb.start_plan_change(
             current_subscription, target_version, preview_token=token, actor=request.user,
             billing_interval=billing_interval or None,
@@ -8453,6 +8482,13 @@ def subscription_plan_execute(request):
     messages.success(request, "فاکتورِ تغییرِ پلن ایجاد شد؛ روشِ پرداخت را انتخاب کنید. پلن پس از تأییدِ پرداخت فعال می‌شود.")
     from apps.dashboard.platform_checkout_views import checkout_url
 
+    if coupon_code:
+        from apps.billing.services import platform_coupon_service as coupons
+
+        try:
+            coupons.apply_coupon_to_invoice(result, code=coupon_code, actor=request.user)   # سمتِ سرور؛ مبلغ از ورودی خوانده نمیشود
+        except coupons.CouponError as exc:
+            messages.error(request, f"{exc.message} فاکتور بدونِ این تخفیف ایجاد شد؛ در صفحهی تسویه میتوانید کدِ دیگری وارد کنید.")
     return redirect(checkout_url("subscription", result.pk))
 
 

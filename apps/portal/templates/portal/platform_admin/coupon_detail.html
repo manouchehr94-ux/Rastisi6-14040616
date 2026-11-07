@@ -1,0 +1,77 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}{{ coupon.name }} | کوپن و کمپین | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<a class="pa-back" href="{% url 'portal_platform_admin:coupons' %}">← کوپن و کمپین</a>
+<div class="pa-pagehead">
+  <div><h1>{{ coupon.name }} <span class="pa-badge {{ state_class }}">{{ state_label }}</span></h1>
+    <p>{% if coupon.code %}کد: <b class="pa-ltr">{{ coupon.code }}</b>{% else %}بدون کد (خودکار){% endif %}{% if coupon.description %} · {{ coupon.description }}{% endif %}</p></div>
+  <div class="pa-actions">
+    {% if coupon.status != 'archived' %}<a class="pa-btn" href="{% url 'portal_platform_admin:coupon-edit' coupon.pk %}">ویرایش</a>{% endif %}
+    <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:coupon-duplicate' coupon.pk %}">{% csrf_token %}<button class="pa-btn" type="submit">کپی</button></form>
+    {% if coupon.status != 'active' %}
+    <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:coupon-status' coupon.pk 'enable' %}">{% csrf_token %}<button class="pa-btn pa-primary" type="submit">{% if coupon.status == 'archived' %}بازگردانی و فعال‌سازی{% else %}فعال‌سازی{% endif %}</button></form>
+    {% endif %}
+    {% if coupon.status == 'active' %}
+    <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:coupon-status' coupon.pk 'disable' %}" data-confirm="کوپن غیرفعال شود؟ از این پس قابلِ استفاده نیست.">{% csrf_token %}<button class="pa-btn pa-danger" type="submit">غیرفعال‌سازی</button></form>
+    {% endif %}
+    {% if coupon.status != 'archived' %}
+    <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:coupon-status' coupon.pk 'archive' %}" data-confirm="کوپن بایگانی شود؟ سابقهٔ مصرف و فاکتورها حفظ می‌شود و کوپن دیگر قابلِ استفاده نخواهد بود.">{% csrf_token %}<button class="pa-btn pa-danger" type="submit">بایگانی</button></form>
+    {% endif %}
+  </div>
+</div>
+
+<section aria-labelledby="cp-stats" class="pa-card">
+  <h2 id="cp-stats" class="pa-sr">آمارِ استفاده</h2>
+  <div class="pa-grid4">
+    <div class="pa-kpi pa-green"><span>مصرف‌شده</span><b>{{ stats.redeemed }}</b><small>پرداخت‌شده</small></div>
+    <div class="pa-kpi pa-blue"><span>رزروشده</span><b>{{ stats.reserved }}</b><small>در انتظارِ پرداخت</small></div>
+    <div class="pa-kpi pa-purple"><span>باقی‌مانده</span><b>{% if stats.remaining is None %}نامحدود{% else %}{{ stats.remaining }}{% endif %}</b><small>از سقفِ کل{% if coupon.max_redemptions %} ({{ coupon.max_redemptions }}){% endif %}</small></div>
+    <div class="pa-kpi pa-orange"><span>فاکتورهایِ متأثر</span><b>{{ stats.affected_invoices }}</b><small>رزرو یا مصرف</small></div>
+    <div class="pa-kpi pa-red"><span>مجموعِ تخفیف</span><b>{{ stats.total_discount|toman }}</b><small>فاکتورهایِ پرداخت‌شده</small></div>
+    <div class="pa-kpi pa-green"><span>درآمدِ مرتبط با کمپین</span><b>{{ stats.revenue|toman }}</b><small>مبلغِ پرداختی پس از تخفیف</small></div>
+  </div>
+</section>
+
+<section class="pa-card" aria-labelledby="cp-terms">
+  <h2 id="cp-terms">شرایط</h2>
+  <dl class="pa-dl">
+    <dt>تخفیف</dt><dd>{% if coupon.kind == 'percent' %}{{ coupon.percent }}٪{% if coupon.max_discount_amount %} (سقف {{ coupon.max_discount_amount|toman }}){% endif %}{% else %}{{ coupon.fixed_amount|toman }}{% endif %}</dd>
+    <dt>حداقلِ مبلغ</dt><dd>{% if coupon.min_amount %}{{ coupon.min_amount|toman }}{% else %}ندارد{% endif %}</dd>
+    <dt>پلن‌ها</dt><dd>{% for p in plans %}{{ p.public_title|default:p.name }}{% if not forloop.last %}، {% endif %}{% empty %}همه{% endfor %}</dd>
+    <dt>دوره‌ها</dt><dd>{% for l in interval_labels %}{{ l }}{% if not forloop.last %}، {% endif %}{% empty %}همه{% endfor %}</dd>
+    <dt>نوعِ خرید</dt><dd>{% if coupon.allow_initial %}اولیه · {% endif %}{% if coupon.allow_renewal %}تمدید · {% endif %}{% if coupon.allow_plan_change %}تغییرِ پلن · {% endif %}{% if coupon.first_purchase_only %}فقط اولین خریدِ پولی{% endif %}</dd>
+    <dt>زمان</dt><dd>{% if coupon.starts_at %}از {{ coupon.starts_at|jalali_dt }}{% endif %} {% if coupon.ends_at %}تا {{ coupon.ends_at|jalali_dt }}{% endif %}{% if not coupon.starts_at and not coupon.ends_at %}بدون محدودیت{% endif %}</dd>
+    <dt>سقفِ استفاده</dt><dd>کل: {{ coupon.max_redemptions|default:"نامحدود" }} · هر فروشگاه: {{ coupon.max_per_store|default:"نامحدود" }}</dd>
+    <dt>فروشگاه‌ها</dt><dd>{% for s in stores %}{{ s.name }}{% if not forloop.last %}، {% endif %}{% empty %}عمومی{% endfor %}</dd>
+    <dt>اعمال</dt><dd>{% if coupon.is_automatic %}خودکار{% else %}با واردکردنِ کد{% endif %}</dd>
+    <dt>ترکیب</dt><dd data-testid="not-combinable">قابلِ ترکیب نیست (حداکثر یک تخفیف روی هر فاکتور)</dd>
+  </dl>
+</section>
+
+<section class="pa-card" aria-labelledby="cp-red">
+  <h2 id="cp-red">فاکتورهایِ متأثر</h2>
+  {% if redemptions %}
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th scope="col">فاکتور</th><th scope="col">فروشگاه</th><th scope="col">وضعیت</th><th scope="col" class="pa-num">مبلغِ اصلی</th><th scope="col" class="pa-num">تخفیف</th><th scope="col" class="pa-num">پرداختی</th></tr></thead>
+    <tbody>{% for r in redemptions %}
+      <tr><td><a href="{% url 'portal_platform_admin:payment-invoice-detail' r.invoice_id %}">{{ r.invoice.number }}</a></td><td>{{ r.store.name }}</td><td>{{ r.get_status_display }}</td>
+      <td class="pa-num">{{ r.original_amount|toman }}</td><td class="pa-num">{{ r.discount_amount|toman }}</td><td class="pa-num">{{ r.final_amount|toman }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="pa-help">هنوز فاکتوری از این کوپن استفاده نکرده است.</p>{% endif %}
+</section>
+
+<section class="pa-card" aria-labelledby="cp-hist">
+  <h2 id="cp-hist">تاریخچهٔ تغییرات</h2>
+  {% if events %}
+  <div class="pa-tablewrap"><table>
+    <thead><tr><th scope="col">زمان</th><th scope="col">رخداد</th><th scope="col">کاربر</th><th scope="col">جزئیات</th></tr></thead>
+    <tbody>{% for e in events %}
+      <tr><td>{{ e.event.created_at|jalali_dt }}</td><td>{{ e.label }}</td><td class="pa-ltr">{{ e.event.actor.get_username|default:"سیستم" }}</td>
+      <td>{% if e.event.invoice %}فاکتور {{ e.event.invoice.number }} {% endif %}{% if e.event.store %}· {{ e.event.store.name }}{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="pa-help">رخدادی ثبت نشده است.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "portal/platform_admin/base.html" %}
+{% block title %}{% if coupon %}ویرایشِ کوپن{% else %}کوپنِ تازه{% endif %} | پنل مدیریت پلتفرم{% endblock %}
+{% block page_class %}pa-narrow{% endblock %}
+{% block content %}
+<a class="pa-back" href="{% url 'portal_platform_admin:coupons' %}">← کوپن و کمپین</a>
+<div class="pa-pagehead"><div>
+  <h1>{% if coupon %}ویرایشِ «{{ coupon.name }}»{% else %}کوپنِ تازه{% endif %}</h1>
+  <p>ویرایش روی فاکتورهایِ صادرشده و رزروهایِ فعال اثری ندارد (مبلغ هنگامِ اعمال ثبت می‌شود). تخفیف فقط برایِ همان فاکتور است و تکرارشونده نیست.</p>
+</div></div>
+
+<form method="post" class="pa-form" data-pa-dirty>
+  {% csrf_token %}
+  <fieldset class="pa-fieldset"><legend>مشخصات</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="c-name">نامِ داخلی</label><input id="c-name" type="text" name="name" maxlength="120" required value="{{ v.name|default:'' }}"></div>
+      <div class="pa-field"><label for="c-code">کدِ تخفیف</label><input id="c-code" class="pa-ltr" type="text" name="code" maxlength="40" value="{{ v.code|default:'' }}"><span class="pa-help">یکتا؛ حروفِ کوچک و بزرگ فرقی ندارد. برایِ کمپینِ خودکار خالی بگذارید.</span></div>
+      <div class="pa-field pa-full"><label for="c-desc">توضیحِ داخلی</label><input id="c-desc" type="text" name="description" maxlength="300" value="{{ v.description|default:'' }}"></div>
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="is_automatic" {% if v.is_automatic %}checked{% endif %}> اعمالِ خودکار (بدونِ نیاز به واردکردنِ کد، در صورتِ واجد شرایط بودن)</label>
+    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>نوع و مقدارِ تخفیف</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="c-kind">نوع</label>
+        <select id="c-kind" name="kind"><option value="percent" {% if v.kind == 'percent' %}selected{% endif %}>درصدی</option><option value="fixed" {% if v.kind == 'fixed' %}selected{% endif %}>مبلغِ ثابت (تومان)</option></select></div>
+      <div class="pa-field"><label for="c-percent">درصد (۱ تا ۱۰۰)</label><input id="c-percent" type="text" inputmode="numeric" name="percent" value="{{ v.percent|default:'' }}"></div>
+      <div class="pa-field"><label for="c-fixed">مبلغِ ثابت (تومان)</label><input id="c-fixed" type="text" inputmode="numeric" name="fixed_amount" value="{{ v.fixed_amount|default:'' }}"></div>
+      <div class="pa-field"><label for="c-cap">سقفِ تخفیفِ درصدی (تومان)</label><input id="c-cap" type="text" inputmode="numeric" name="max_discount_amount" value="{{ v.max_discount_amount|default:'' }}"><span class="pa-help">اختیاری.</span></div>
+      <div class="pa-field"><label for="c-min">حداقلِ مبلغِ خریدِ واجد شرایط (تومان)</label><input id="c-min" type="text" inputmode="numeric" name="min_amount" value="{{ v.min_amount|default:'' }}"><span class="pa-help">اختیاری.</span></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>پلن‌ها و دوره‌هایِ مجاز</legend>
+    <p class="pa-help">اگر هیچ‌کدام انتخاب نشود، برایِ همه مجاز است.</p>
+    <div class="pa-fields">
+      <div class="pa-field pa-full"><span class="pa-label" id="c-plans-l">پلن‌هایِ مجاز</span>
+        <div role="group" aria-labelledby="c-plans-l">{% for plan in plans %}<label class="pa-check"><input type="checkbox" name="plans" value="{{ plan.pk }}" {% if plan.pk in v.plan_ids %}checked{% endif %}> {{ plan.public_title|default:plan.name }}</label>{% endfor %}</div></div>
+      <div class="pa-field pa-full"><span class="pa-label" id="c-int-l">دوره‌هایِ پرداختِ مجاز</span>
+        <div role="group" aria-labelledby="c-int-l">{% for value, label in interval_choices %}<label class="pa-check"><input type="checkbox" name="intervals" value="{{ value }}" {% if value in v.intervals %}checked{% endif %}> {{ label }}</label>{% endfor %}</div></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>نوعِ خریدِ مجاز</legend>
+    <div class="pa-fields">
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="allow_initial" {% if v.allow_initial %}checked{% endif %}> خریدِ اولیه</label>
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="allow_renewal" {% if v.allow_renewal %}checked{% endif %}> تمدید (فقط همان فاکتورِ تمدید، نه دوره‌هایِ بعد)</label>
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="allow_plan_change" {% if v.allow_plan_change %}checked{% endif %}> ارتقا/تغییرِ پلن</label>
+      <label class="pa-check pa-full"><input class="pa-switch" type="checkbox" name="first_purchase_only" {% if v.first_purchase_only %}checked{% endif %}> فقط اولین خریدِ پولی (فروشگاهی که تا کنون اشتراکِ پولی نپرداخته است)</label>
+    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>زمان‌بندی</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="c-start">شروع</label><input id="c-start" type="datetime-local" name="starts_at" value="{{ v.starts_at|default:'' }}"><span class="pa-help">اختیاری؛ به وقتِ تهران.</span></div>
+      <div class="pa-field"><label for="c-end">پایان</label><input id="c-end" type="datetime-local" name="ends_at" value="{{ v.ends_at|default:'' }}"><span class="pa-help">اختیاری؛ به وقتِ تهران.</span></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>سقفِ استفاده و فروشگاه‌هایِ مجاز</legend>
+    <div class="pa-fields">
+      <div class="pa-field"><label for="c-max">سقفِ کلِ استفاده</label><input id="c-max" type="text" inputmode="numeric" name="max_redemptions" value="{{ v.max_redemptions|default:'' }}"><span class="pa-help">خالی = نامحدود.</span></div>
+      <div class="pa-field"><label for="c-per">سقفِ استفاده برایِ هر فروشگاه</label><input id="c-per" type="text" inputmode="numeric" name="max_per_store" value="{{ v.max_per_store|default:'' }}"><span class="pa-help">خالی = نامحدود.</span></div>
+      <div class="pa-field pa-full"><label for="c-stores">فروشگاه‌هایِ مجاز (شناسهٔ slug، هر خط یکی)</label><textarea id="c-stores" class="pa-ltr" name="store_slugs" rows="3">{{ v.store_slugs|default:'' }}</textarea><span class="pa-help">خالی = عمومی. اگر پر شود کوپن خصوصی است و برایِ دیگران «نامعتبر» نمایش داده می‌شود.</span></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="pa-fieldset"><legend>ترکیب با تخفیفِ دیگر</legend>
+    <p class="pa-help" data-testid="not-combinable">این کوپن با تخفیف‌هایِ دیگر <b>قابلِ ترکیب نیست</b>؛ روی هر فاکتور حداکثر یک تخفیف اعمال می‌شود (پشتیبانی نمی‌شود).</p>
+  </fieldset>
+
+  <div class="pa-formbar"><button class="pa-btn pa-primary" type="submit">ذخیره</button><a class="pa-btn" href="{% if coupon %}{% url 'portal_platform_admin:coupon-detail' coupon.pk %}{% else %}{% url 'portal_platform_admin:coupons' %}{% endif %}">انصراف</a></div>
+</form>
+{% endblock %}

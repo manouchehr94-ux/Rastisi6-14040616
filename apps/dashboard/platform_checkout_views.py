@@ -60,12 +60,17 @@ def _settle_free(request, target, page):
     from apps.billing.services import confirmation_service, sms_purchase_payment_service
     from apps.billing.services.payment_flow_service import PaymentFlowError
 
+    from apps.billing.services import platform_coupon_service as coupons
+
     try:
-        if target.kind == pcs.KIND_SUBSCRIPTION:
+        if target.kind == pcs.KIND_SUBSCRIPTION and target.obj.coupon_snapshot:
+            # تخفیفِ کامل: تسویهی داخلیِ حسابرسیشده (بدونِ درگاه و بدونِ callbackِ جعلی)
+            coupons.settle_zero_value_invoice(target.obj, actor=request.user)
+        elif target.kind == pcs.KIND_SUBSCRIPTION:
             confirmation_service.settle_zero_due_invoice(target.obj, actor=request.user)
         else:
             sms_purchase_payment_service.settle_free_purchase(target.obj, actor=request.user)
-    except (confirmation_service.ConfirmationError, PaymentFlowError) as exc:
+    except (confirmation_service.ConfirmationError, PaymentFlowError, coupons.CouponError) as exc:
         messages.error(request, str(exc))
     else:
         messages.success(request, "خرید بدونِ پرداخت تأیید و اعمال شد.")
@@ -141,6 +146,78 @@ def _back_to_plans_url(target) -> str:
     return _plans_url(invoice_service.invoice_billing_interval(target.obj))
 
 
+def coupon_context(target, state):
+    """نمای تخفیفِ فاکتورِ اشتراک: همه از رکوردِ سرور (اسنپشاتِ فاکتور)؛ مبلغی از مرورگر خوانده نمیشود."""
+    if target.kind != pcs.KIND_SUBSCRIPTION:
+        return None
+    from apps.billing.services import platform_coupon_service as coupons
+    from apps.billing.models import SubscriptionInvoice
+
+    invoice = target.obj
+    S = SubscriptionInvoice.Status
+    snap = invoice.coupon_snapshot or {}
+    editable = (
+        invoice.status in (S.DRAFT, S.OPEN, S.PAST_DUE) and invoice.amount_paid == 0 and state.can_pay
+        and not coupons._has_inflight_payment(invoice) and invoice.lines.count() == 1
+    )
+    return {
+        "applied": bool(snap), "code": snap.get("code") or "", "automatic": bool(snap.get("automatic")),
+        "original": invoice.subtotal, "discount": invoice.discount_total, "payable": invoice.amount_due,
+        "editable": editable,
+        "apply_url": reverse("dashboard:platform-checkout-coupon-apply", args=[target.kind, invoice.pk]),
+        "remove_url": reverse("dashboard:platform-checkout-coupon-remove", args=[target.kind, invoice.pk]),
+    }
+
+
+@require_POST
+@staff_required
+def platform_checkout_coupon_apply(request, kind, pk):
+    """اعمال/جایگزینیِ کد. فقط ``coupon_code`` از مرورگر خوانده میشود؛ تخفیف/مبلغ/فروشگاه را سرور میسازد."""
+    from django.db import transaction
+
+    from apps.billing.services import platform_coupon_service as coupons
+
+    target = resolve_target(request, kind, pk)
+    page = checkout_url(kind, pk)
+    if kind != pcs.KIND_SUBSCRIPTION:
+        messages.error(request, coupons.MESSAGES["unsupported_invoice"])
+        return redirect(page)
+    code = coupons.normalize_code(request.POST.get("coupon_code"))
+    if not code:
+        messages.error(request, "کد تخفیف را وارد کنید.")
+        return redirect(page)
+    invoice = target.obj
+    try:
+        with transaction.atomic():
+            existing = getattr(invoice, "coupon_redemption", None) if invoice.coupon_snapshot else None
+            if existing is not None and existing.code_snapshot != code and not existing.coupon.is_automatic:
+                coupons.remove_coupon_from_invoice(invoice, actor=request.user)     # جایگزینی؛ در صورتِ خطا همه برمیگردد
+            coupons.apply_coupon_to_invoice(invoice, code=code, actor=request.user)
+    except coupons.CouponError as exc:
+        messages.error(request, exc.message)
+    else:
+        messages.success(request, "کد تخفیف اعمال شد؛ مبلغِ نهایی بهروز شد. این تخفیف فقط برایِ همین فاکتور است.")
+    return redirect(page)
+
+
+@require_POST
+@staff_required
+def platform_checkout_coupon_remove(request, kind, pk):
+    from apps.billing.services import platform_coupon_service as coupons
+
+    target = resolve_target(request, kind, pk)
+    page = checkout_url(kind, pk)
+    if kind != pcs.KIND_SUBSCRIPTION:
+        return redirect(page)
+    try:
+        coupons.remove_coupon_from_invoice(target.obj, actor=request.user)
+    except coupons.CouponError as exc:
+        messages.error(request, exc.message)
+    else:
+        messages.success(request, "کد تخفیف برداشته شد.")
+    return redirect(page)
+
+
 @staff_required
 def platform_checkout(request, kind, pk):
     target = resolve_target(request, kind, pk)
@@ -148,7 +225,7 @@ def platform_checkout(request, kind, pk):
     options = pcs.methods(target) if state.can_pay and not state.free else []
     default = next((m["code"] for m in options if m.get("is_default")), options[0]["code"] if options else "")
     return render(request, "dashboard/platform_checkout.html", {
-        "target": target, "state": state, "methods": options, "default_method": default,
+        "target": target, "state": state, "methods": options, "coupon": coupon_context(target, state), "default_method": default,
         "post_url": reverse("dashboard:platform-checkout-pay", args=[kind, pk]),
         "status_url": reverse("dashboard:platform-checkout-status", args=[kind, pk]),
         "back_url": _back_to_plans_url(target) if kind == pcs.KIND_SUBSCRIPTION else SMS_SETTINGS_PATH,

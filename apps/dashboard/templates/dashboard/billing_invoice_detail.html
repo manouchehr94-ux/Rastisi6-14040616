@@ -32,6 +32,10 @@
     {% endfor %}
     </tbody>
     <tfoot>
+      {% if invoice.coupon_snapshot %}
+      <tr><td colspan="6" style="text-align:left">قیمتِ اصلی</td><td>{{ invoice.subtotal }}</td></tr>
+      <tr data-testid="invoice-discount"><td colspan="6" style="text-align:left">تخفیف (کد {{ invoice.coupon_snapshot.code|default:"خودکار" }}، فقط همین فاکتور)</td><td>− {{ invoice.discount_total }}</td></tr>
+      {% endif %}
       <tr><td colspan="6" style="text-align:left">جمعِ کل</td><td><b>{{ invoice.grand_total }} {{ invoice.currency }}</b></td></tr>
       <tr><td colspan="6" style="text-align:left">پرداخت‌شده</td><td>{{ invoice.amount_paid }}</td></tr>
       <tr><td colspan="6" style="text-align:left">باقی‌مانده</td><td>{{ invoice.amount_due }}</td></tr>

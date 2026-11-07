@@ -1,0 +1,50 @@
+{% extends "portal/platform_admin/base.html" %}
+{% load persian %}
+{% block title %}کوپن و کمپین | پنل مدیریت پلتفرم{% endblock %}
+{% block content %}
+<div class="pa-pagehead">
+  <div><h1>کوپن و کمپینِ پلتفرم</h1><p>تخفیفِ خریدِ اشتراکِ فروشگاه‌ها که راستیسی تعریف می‌کند؛ جدا از کوپن‌هایِ فروشگاهیِ مرچنت‌ها. تخفیف فقط روی همان فاکتور اعمال می‌شود و تکرارشونده نیست.</p></div>
+  <div class="pa-actions"><a class="pa-btn pa-primary" href="{% url 'portal_platform_admin:coupon-add' %}"><svg class="pa-i"><use href="#i-plus"/></svg>کوپنِ تازه</a></div>
+</div>
+
+<form method="get" class="pa-card" role="search"><div class="pa-cardbody pa-filters">
+  <div class="pa-field pa-grow"><label for="cp-q">جستجو (نام یا کد)</label><input id="cp-q" type="search" name="q" value="{{ query }}"></div>
+  <div class="pa-field"><label for="cp-state">نمایش</label>
+    <select id="cp-state" name="state">
+      <option value="" {% if not state_filter %}selected{% endif %}>بدونِ بایگانی</option>
+      <option value="archived" {% if state_filter == 'archived' %}selected{% endif %}>فقط بایگانی‌شده‌ها</option>
+      <option value="all" {% if state_filter == 'all' %}selected{% endif %}>همه</option>
+    </select>
+  </div>
+  <div class="pa-filter-actions"><button class="pa-btn pa-primary" type="submit">اعمالِ فیلتر</button></div>
+</div></form>
+
+<div class="pa-card">
+  {% if rows %}
+  <div class="pa-tablewrap">
+    <table>
+      <caption class="pa-sr">فهرستِ کوپن‌ها و کمپین‌ها</caption>
+      <thead><tr><th scope="col">نام</th><th scope="col">کد</th><th scope="col">تخفیف</th><th scope="col">وضعیت</th><th scope="col">اعتبار</th><th scope="col" class="pa-num">مصرف</th><th scope="col" class="pa-actcol"></th></tr></thead>
+      <tbody>
+        {% for row in rows %}{% with c=row.coupon %}
+        <tr>
+          <td><a href="{% url 'portal_platform_admin:coupon-detail' c.pk %}">{{ c.name }}</a>{% if c.is_automatic %} <span class="pa-badge pa-info">خودکار</span>{% endif %}</td>
+          <td class="pa-ltr">{{ c.code|default:"—" }}</td>
+          <td>{% if c.kind == 'percent' %}{{ c.percent }}٪{% else %}{{ c.fixed_amount|toman }}{% endif %}</td>
+          <td><span class="pa-badge {{ row.state_class }}">{{ row.state_label }}</span></td>
+          <td>{% if c.starts_at %}از {{ c.starts_at|jalali_dt }}{% endif %}{% if c.ends_at %} تا {{ c.ends_at|jalali_dt }}{% endif %}{% if not c.starts_at and not c.ends_at %}بدون محدودیتِ زمانی{% endif %}</td>
+          <td class="pa-num">{{ row.counted }}{% if c.max_redemptions %} / {{ c.max_redemptions }}{% endif %}</td>
+          <td class="pa-actcol"><div class="pa-row-actions">
+            <a class="pa-btn" href="{% url 'portal_platform_admin:coupon-detail' c.pk %}">جزئیات</a>
+          </div></td>
+        </tr>
+        {% endwith %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "portal/platform_admin/_pagination.html" %}
+  {% else %}
+  <div class="pa-empty"><div class="pa-empty-icon"><svg class="pa-i"><use href="#i-list"/></svg></div><p>کوپنی تعریف نشده است.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

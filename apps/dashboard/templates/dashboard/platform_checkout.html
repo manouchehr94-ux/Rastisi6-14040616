@@ -29,6 +29,11 @@
   .pco-pay{width:100%;font-size:15px;padding:12px 16px}
   .pco-pay[disabled]{opacity:.7;cursor:progress}
   .pco-meta{font-size:12.5px;color:var(--muted);line-height:2}
+  .pco-break{margin:8px 0 0}.pco-break dt,.pco-break dd{margin:0}.pco-break .pco-line{border-bottom:0}
+  .pco-disc{color:#065f46}.pco-coupon{margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)}
+  .pco-auto{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.9;margin:0 0 10px}
+  .pco-crow{display:flex;gap:8px;margin:6px 0}.pco-cinput{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px}
+  .pco-cinput:focus-visible{outline:3px solid #c7d2fe}
   .pco-meta dir,.pco-meta .ltr{direction:ltr;unicode-bidi:embed}
 </style>
 {% endblock %}
@@ -50,7 +55,32 @@
           <div class="pco-line"><span>{{ label }}</span><span>{{ amount|toman }}</span></div>
           {% endfor %}
         </div>
+        {% if coupon and coupon.applied %}
+        <dl class="pco-break" data-testid="price-breakdown" aria-label="جزئیاتِ قیمت">
+          <div class="pco-line"><dt>قیمتِ اصلی</dt><dd data-testid="original-amount">{{ coupon.original|toman }}</dd></div>
+          <div class="pco-line pco-disc"><dt>{% if coupon.automatic %}تخفیفِ خودکار{% else %}تخفیفِ کد {{ coupon.code }}{% endif %}</dt><dd data-testid="discount-amount">− {{ coupon.discount|toman }}</dd></div>
+        </dl>
+        {% endif %}
         <div class="pco-total"><span>{% if state.code == 'paid' %}مبلغِ پرداخت‌شده{% elif state.code == 'refunded' or state.code == 'closed' %}مبلغِ خرید{% else %}مبلغِ قابلِ پرداخت{% endif %}</span><b data-testid="payable-amount">{{ target.amount|toman }}</b></div>
+        {% if coupon %}
+        <div class="pco-coupon" data-testid="coupon-box">
+          {% if coupon.applied and coupon.automatic %}
+          <p class="pco-auto" role="status" data-testid="auto-promo">🎁 تخفیفِ خودکار روی این فاکتور اعمال شده است. این تخفیف فقط برایِ همین فاکتور است و برایِ تمدیدهای بعدی تضمین نمیشود.</p>
+          {% elif coupon.applied %}
+          <p class="pco-auto" role="status" data-testid="coupon-applied">کد <b dir="ltr">{{ coupon.code }}</b> اعمال شده است. این تخفیف فقط برایِ همین فاکتور است و برایِ تمدیدهای بعدی تضمین نمیشود.</p>
+          {% endif %}
+          {% if coupon.editable %}
+          <form method="post" action="{{ coupon.apply_url }}" class="pco-cform">{% csrf_token %}
+            <label for="pco-code" class="pco-meta">{% if coupon.applied %}جایگزینیِ کد تخفیف{% else %}کد تخفیف دارید؟{% endif %}</label>
+            <div class="pco-crow"><input id="pco-code" name="coupon_code" type="text" dir="ltr" autocomplete="off" maxlength="40" class="pco-cinput" aria-describedby="pco-code-help"><button class="btn" type="submit" data-testid="coupon-apply">{% if coupon.applied %}جایگزینی{% else %}اعمال کد{% endif %}</button></div>
+            <small id="pco-code-help" class="pco-meta">مبلغِ نهایی را سرور محاسبه میکند.</small>
+          </form>
+          {% if coupon.applied %}
+          <form method="post" action="{{ coupon.remove_url }}" style="margin-top:6px">{% csrf_token %}<button class="btn" type="submit" data-testid="coupon-remove">برداشتنِ تخفیف</button></form>
+          {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
         <p class="pco-meta" style="margin:10px 0 0">مبلغ را سرور از فاکتور/بسته می‌خواند؛ هیچ مبلغی از مرورگر پذیرفته نمی‌شود.</p>
       </div>
     </section>

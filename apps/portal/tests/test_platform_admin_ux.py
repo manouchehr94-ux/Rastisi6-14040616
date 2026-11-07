@@ -40,7 +40,7 @@ POST_ONLY = {
     "domain-check", "domain-set-primary", "notification-sender-toggle", "notification-platform-template-preview",
     "notification-platform-template-test",
     # PR #40 finance actions
-    "payment-verify-now", "payment-duplicate-action", "manual-claim-action", "payment-invoice-refund", "payment-refund-complete", "sms-purchase-action",
+    "coupon-duplicate", "coupon-status", "payment-verify-now", "payment-duplicate-action", "manual-claim-action", "payment-invoice-refund", "payment-refund-complete", "sms-purchase-action",
 }
 FILE_DOWNLOADS = {"manual-claim-receipt"}          # streams a private receipt file; not an HTML page
 NOT_IN_SIDEBAR = POST_ONLY | FILE_DOWNLOADS | {"login"}
@@ -249,6 +249,9 @@ class OwnerPagesTests(TestCase):
                                                 verification_status=StoreDomain.VerificationStatus.VERIFIED, verified_at=timezone.now())
         cls.template = IndustryTemplate.objects.create(slug="uxind", name="صنفِ تست", version=1)
         cls.package = SmsPackage.objects.create(name="بسته‌یِ تست", credit_amount=100, price=10000)
+        from apps.billing.services import platform_coupon_service as _pcs
+
+        cls.coupon = _pcs.create_coupon(actor=cls.owner, code="UXCOUPON", name="کوپن UX", kind="percent", percent=10)
         from apps.billing.models import PlatformManualPaymentClaim
 
         cls.claim = PlatformManualPaymentClaim.objects.create(
@@ -264,7 +267,7 @@ class OwnerPagesTests(TestCase):
             "store_public_id": str(self.store.public_id), "user_id": self.owner.pk, "plan_id": self.plan.pk, "version_id": self.version.pk,
             "subscription_id": self.sub.pk, "invoice_id": self.invoice.pk, "template_id": self.template.pk, "domain_id": self.domain.pk,
             "package_id": self.package.pk, "feature_id": self._feature_id(), "claim_id": self.claim.pk,
-            "event_key": None, "slot": PublicSitePhoto.SLOT_CHOICES[0][0], "slug": registry.GROUPS[0].slug,
+            "coupon_id": self.coupon.pk, "event_key": None, "slot": PublicSitePhoto.SLOT_CHOICES[0][0], "slug": registry.GROUPS[0].slug,
             "sms_event": SmsTemplate.objects.order_by("event_key").first().event_key, "notif_event": next(iter(notif_events.EVENTS)), "pk": 1,
         }
 
