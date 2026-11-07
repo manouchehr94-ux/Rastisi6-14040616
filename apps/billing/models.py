@@ -127,6 +127,8 @@ class SubscriptionInvoice(TimeStampedModel):
     plan_code_snapshot = models.CharField("کدِ پلن (اسنپ‌شات)", max_length=64, blank=True, default="")
     plan_version_snapshot = models.JSONField("اسنپ‌شاتِ نسخه‌ی پلن", blank=True, default=dict)
     billing_account_snapshot = models.JSONField("اسنپ‌شاتِ حسابِ صورتحساب", blank=True, default=dict)
+    #: اسنپ‌شاتِ تخفیفِ کوپنِ پلتفرم (خالی = بدونِ کوپن)؛ پس از ثبت با ویرایشِ بعدیِ کوپن تغییر نمی‌کند.
+    coupon_snapshot = models.JSONField("اسنپ‌شاتِ کوپن", blank=True, default=dict)
 
     number = models.CharField("شماره‌ی فاکتور", max_length=40, unique=True)
     kind = models.CharField("نوع", max_length=12, choices=Kind.choices, default=Kind.RENEWAL, db_index=True)
@@ -721,3 +723,10 @@ class PlatformManualPaymentClaimEvent(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValueError("رخدادِ ادعا حذف‌شدنی نیست.")
+
+
+from apps.billing.platform_coupon_models import (  # noqa: E402,F401
+    PlatformCoupon,
+    PlatformCouponAuditEvent,
+    PlatformCouponRedemption,
+)

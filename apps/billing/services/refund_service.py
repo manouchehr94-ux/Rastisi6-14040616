@@ -52,6 +52,9 @@ def _sync_invoice_refund_status(invoice, *, now):
         return
     if succeeded >= invoice.amount_paid:
         invoice.status = SubscriptionInvoice.Status.REFUNDED
+        from apps.billing.services import platform_coupon_service
+
+        platform_coupon_service.reverse_for_refund(invoice, now=now)   # سیاستِ کوپن: فقط بازپرداختِ کامل در پنجره‌ی مجاز
     else:
         invoice.status = SubscriptionInvoice.Status.PARTIALLY_REFUNDED
     invoice.save(update_fields=["status", "updated_at"])

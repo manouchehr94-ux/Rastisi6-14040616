@@ -104,6 +104,9 @@ def _generate_one(subscription, *, now):
             subscription=subscription, kind=SubscriptionInvoice.Kind.RENEWAL,
             billing_period_start=period_start,
         ), False
+    from apps.billing.services import platform_coupon_service
+
+    platform_coupon_service.apply_automatic_to_invoice(invoice, now=now)       # تخفیفِ خودکارِ تمدید (فقط همین دوره)
     invoice = invoice_service.open_invoice(invoice, due_at=period_start, now=now)
     return invoice, True
 

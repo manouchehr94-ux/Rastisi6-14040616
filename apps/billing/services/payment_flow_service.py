@@ -111,6 +111,13 @@ def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now
                     "زمانِ ساختنِ این فاکتور تغییر کرده)؛ پرداخت شروع نمی‌شود."
                 )
 
+        from apps.billing.services import platform_coupon_service
+
+        try:
+            platform_coupon_service.ensure_reservation_active(locked, now=now)     # Retry: رزرو تمدید می‌شود، تخفیف تکرار نمی‌شود
+        except platform_coupon_service.CouponError as exc:
+            raise PaymentFlowError(exc.message) from exc
+
         attempt = attempt_service.create_attempt(
             locked, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now,
         )
