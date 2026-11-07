@@ -469,6 +469,18 @@ def resolve_dev_otp_code(debug, *, environ=None):
     return raw
 
 
+def resolve_qa_payment_simulator(debug, *, environ=None):
+    """``RASTISI_QA_PAYMENT_SIMULATOR`` — opt-in LOCAL-QA fake of the Zibal platform gateway (no network, no money).
+
+    Off by default. Turning it on with ``DJANGO_DEBUG=False`` raises at startup, so a production process can never run with it. The runtime
+    guard (``apps.billing.providers.qa_simulator.is_active``) additionally requires non-production mode and an isolated QA database."""
+    name = "RASTISI_QA_PAYMENT_SIMULATOR"
+    enabled = env_bool(name, default=False, environ=environ)
+    if enabled and not debug:
+        raise ImproperlyConfigured(f"{name} is a LOCAL-QA-ONLY setting and must be unset when DJANGO_DEBUG=False.")
+    return bool(enabled)
+
+
 def resolve_allow_console_otp(debug, *, running_tests, environ=None):
     """``RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP``: lets the *console* platform provider report
     success. Defaults to on only for ``manage.py test``. Explicitly enabling it with

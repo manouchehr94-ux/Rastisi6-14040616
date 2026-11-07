@@ -34,6 +34,8 @@ from apps.billing.providers.base import (
     WebhookVerificationError,
 )
 
+from apps.billing.providers import qa_simulator  # noqa: E402
+
 logger = logging.getLogger("billing")
 
 IPG_BASE_URL = "https://gateway.zibal.ir/v1/"
@@ -110,9 +112,12 @@ class ZibalBillingProvider(BillingPaymentProvider):
                 "شناسه‌ی پیگیری از زیبال دریافت نشد.", code="missing_track_id",
             )
         track_id_str = str(track_id)
+        redirect_url = f"{PAYMENT_BASE_URL}{track_id_str}"
+        if qa_simulator.is_active():                                  # LOCAL QA only (explicit opt-in + DEBUG + isolated QA DB)
+            redirect_url = qa_simulator.start_url(return_url, track_id_str)
         return PaymentSessionResult(
             session_id=track_id_str,
-            redirect_url=f"{PAYMENT_BASE_URL}{track_id_str}",
+            redirect_url=redirect_url,
             extra={"track_id": track_id_str, "sandbox": sandbox, "amount_rial_sent": amount_rial},
         )
 
@@ -190,6 +195,8 @@ class ZibalBillingProvider(BillingPaymentProvider):
         )
 
     def _post(self, path: str, payload: dict, *, context: str) -> dict:
+        if qa_simulator.is_active():                                  # no network: answered locally, same shape as Zibal v1
+            return qa_simulator.handle(path, payload)
         try:
             response = requests.post(
                 f"{IPG_BASE_URL}{path}", json=payload, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),

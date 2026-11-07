@@ -27,6 +27,7 @@ from shop_core.env_config import (
     resolve_allow_console_otp,
     resolve_allowed_hosts,
     resolve_dev_otp_code,
+    resolve_qa_payment_simulator,
     resolve_log_level,
     resolve_secret_key,
     resolve_secure_proxy_ssl_header,
@@ -538,6 +539,10 @@ RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP = resolve_allow_console_otp(
 # is set while DJANGO_DEBUG=False; it only ever takes effect when the platform SMS provider is
 # the console backend, never over a real provider. See owner_sms_service.dev_otp_code().
 RASTISI_DEV_OTP_CODE = resolve_dev_otp_code(DEBUG)
+# LOCAL QA ONLY: in-process fake of the Zibal platform gateway (apps/billing/providers/qa_simulator.py). Needs DEBUG, non-production mode and an
+# isolated QA database (name contains «qa», or RASTISI_QA_SIMULATOR_DB_CONFIRM == the exact database name). Startup fails if enabled with DEBUG off.
+RASTISI_QA_PAYMENT_SIMULATOR = resolve_qa_payment_simulator(DEBUG)
+RASTISI_QA_SIMULATOR_DB_CONFIRM = env_str("RASTISI_QA_SIMULATOR_DB_CONFIRM", "")
 
 # Default subscription for newly created stores.
 # * EMPTY (the default) or ``trial``: the platform's INITIAL TRIAL — the internal, non-purchasable "trial" plan for
