@@ -299,10 +299,15 @@ def purpose_for(store, kind, *, subscription=None, exclude_invoice=None) -> str:
     from apps.subscriptions.models import StoreSubscription, SubscriptionEvent
     from apps.subscriptions.services import entitlement_service
 
+    from apps.subscriptions.services import trial_service
+
     sub = subscription or entitlement_service.get_current_subscription(store)
     if sub is None or has_paid_subscription_history(store, exclude_invoice=exclude_invoice):
         return PURPOSE_BY_KIND[kind]
-    was_trial = sub.status in (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING) or SubscriptionEvent.objects.filter(
+    # The internal Trial plan itself is the authoritative marker: a Trial the platform disabled is provisioned on that plan
+    # but never started (status suspended, no TRIAL_STARTED event), and its first paid purchase is still an initial purchase.
+    on_trial_plan = trial_service.is_trial_plan(getattr(getattr(sub, "plan_version", None), "plan", None))
+    was_trial = on_trial_plan or sub.status in (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING) or SubscriptionEvent.objects.filter(
         subscription=sub, event_type=SubscriptionEvent.EventType.TRIAL_STARTED).exists()
     return "initial" if was_trial else PURPOSE_BY_KIND[kind]
 
