@@ -38,12 +38,37 @@ class CheckoutIntervalTests(PlanChangeThroughCheckoutTests):
         response = self.client2.get(reverse("dashboard:platform-checkout", args=["subscription", invoice.pk]))
         self.assertEqual(response.context["back_url"], PLANS + "?interval=yearly")
 
+    @staticmethod
+    def _selected_intervals(html):
+        """Interval values the page renders as selected, for either control type.
+
+        This branch renders a <select> (``<option ... selected>``); the validated QA UI renders radio inputs
+        (``<input type="radio" name="billing_interval" ... checked>``). The assertion is about the *selected value*,
+        so it reads both, and fails if the page renders no selected interval at all."""
+        import re
+
+        found = []
+        for tag in re.findall(r"<option\b[^>]*>", html):
+            if re.search(r"\bselected\b", tag):
+                m = re.search(r'value="([^"]*)"', tag)
+                if m:
+                    found.append(m.group(1))
+        for tag in re.findall(r"<input\b[^>]*>", html):
+            if re.search(r'type="radio"', tag) and re.search(r'name="billing_interval"', tag) and re.search(r"\bchecked\b", tag):
+                m = re.search(r'value="([^"]*)"', tag)
+                if m:
+                    found.append(m.group(1))
+        return found
+
     def test_plans_page_preselects_valid_interval_and_ignores_tampered_one(self):
         ok = self.client2.get(PLANS, {"interval": "yearly"}).content.decode()
-        self.assertRegex(ok, r'<option value="yearly" selected>')
+        self.assertIn("yearly", self._selected_intervals(ok))
+        self.assertNotIn("monthly", self._selected_intervals(ok))
         for bad in ("bogus", "none", "<script>"):
             html = self.client2.get(PLANS, {"interval": bad}).content.decode()
-            self.assertRegex(html, r'<option value="monthly" selected>')
+            selected = self._selected_intervals(html)
+            self.assertIn("monthly", selected)
+            self.assertNotIn("yearly", selected)
 
     def test_preview_cancel_link_keeps_interval_and_validation_error_redirect_keeps_it(self):
         response = self.client2.post(PLANS + "preview/", {"version_id": self.v2.pk, "billing_interval": "yearly"})

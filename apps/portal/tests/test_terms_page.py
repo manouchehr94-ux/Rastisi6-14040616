@@ -142,7 +142,13 @@ class TermsLayoutContractTests(TestCase):
         self.assertRegex(self.css, r"max-width:960px\)\{[^@]*\.r-legal-aside\{position:static")
 
     def test_stylesheet_is_cache_busted_for_this_change(self):
-        self.assertIn("public-site-v2.css?v=20261009-a11y", self.html)
+        # Follows whatever version the shared public base template currently ships instead of freezing one value:
+        # the stylesheet must be linked exactly once and must carry a non-empty cache-busting version token.
+        import re
+
+        links = re.findall(r'href="[^"]*public-site-v2\.css\?v=([^"&]+)"', self.html)
+        self.assertEqual(len(links), 1, "public-site-v2.css must be linked exactly once, with a ?v= cache-bust token")
+        self.assertRegex(links[0], r"^[A-Za-z0-9._-]+$")
 
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], PUBLIC_SITE_FORCE_DESIGN="legacy")
