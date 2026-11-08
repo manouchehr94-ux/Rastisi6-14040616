@@ -145,6 +145,33 @@ def has_paid_subscription_history(store, *, exclude_invoice=None) -> bool:
     return qs.exists()
 
 
+def has_completed_initial_conversion(store, *, exclude_invoice=None) -> bool:
+    """Has this store already completed its conversion to a paid (non-Trial) plan?
+
+    Deliberately NOT the same question as ``has_paid_subscription_history``. That one asks "did money change hands" and
+    keeps ``first_purchase_only`` meaning exactly what it always meant. This one asks "was a purchase of a real plan
+    settled", so a first purchase that was fully discounted (amount_paid == 0, settled through the internal zero-value
+    path) still ENDS ``initial`` eligibility. Without it the store keeps its historical TRIAL_STARTED event and its
+    next upgrade would be classified ``initial`` again, letting an initial-only campaign apply repeatedly.
+
+    Source of truth is the store's own SETTLED subscription invoices (a refund does not undo a conversion), on a plan that
+    is not the internal Trial plan. ``exclude_invoice`` is honoured so an invoice that is being (re-)evaluated, e.g. when
+    its reservation is renewed around settlement, can never disqualify itself."""
+    from apps.subscriptions.services import trial_service
+
+    qs = SubscriptionInvoice.objects.filter(
+        store=store,
+        status__in=(
+            SubscriptionInvoice.Status.PAID, SubscriptionInvoice.Status.REFUNDED,
+            SubscriptionInvoice.Status.PARTIALLY_REFUNDED,
+        ),
+        kind__in=(SubscriptionInvoice.Kind.INITIAL, SubscriptionInvoice.Kind.PLAN_CHANGE, SubscriptionInvoice.Kind.RENEWAL),
+    ).exclude(plan_version__plan__code=trial_service.TRIAL_PLAN_CODE)
+    if exclude_invoice is not None:
+        qs = qs.exclude(pk=exclude_invoice.pk)
+    return qs.exists()
+
+
 def _evaluate_coupon(coupon, store, plan_version, interval, purpose, amount, *, now, exclude_invoice=None, automatic=False):
     amount = Decimal(amount)
     if coupon.stores.exists() and not coupon.stores.filter(pk=store.pk).exists():
@@ -302,7 +329,8 @@ def purpose_for(store, kind, *, subscription=None, exclude_invoice=None) -> str:
     from apps.subscriptions.services import trial_service
 
     sub = subscription or entitlement_service.get_current_subscription(store)
-    if sub is None or has_paid_subscription_history(store, exclude_invoice=exclude_invoice):
+    if (sub is None or has_paid_subscription_history(store, exclude_invoice=exclude_invoice)
+            or has_completed_initial_conversion(store, exclude_invoice=exclude_invoice)):
         return PURPOSE_BY_KIND[kind]
     # The internal Trial plan itself is the authoritative marker: a Trial the platform disabled is provisioned on that plan
     # but never started (status suspended, no TRIAL_STARTED event), and its first paid purchase is still an initial purchase.
