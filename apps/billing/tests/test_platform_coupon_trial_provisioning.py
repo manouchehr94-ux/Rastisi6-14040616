@@ -1,4 +1,4 @@
-"""Review probe: first-paid-purchase eligibility for stores provisioned through the REAL Trial engine
+"""First-paid-purchase eligibility for stores provisioned through the REAL Trial engine
 (``trial_service.grant_initial_trial``), not through the hand-built subscriptions used by the coupon tests.
 
 Covers: running Trial, expired Trial, and Trial disabled by the platform (never-started, suspended)."""
@@ -45,7 +45,8 @@ class TrialProvisioningPurposeTests(TestCase):
         with mock.patch.object(trial_service, "current_policy", return_value=trial_service.TrialPolicy(enabled=False, days=30)):
             sub = trial_service.grant_initial_trial(store)
         self.assertIsNotNone(sub)
-        self.assertFalse(sub.is_terminal if hasattr(sub, "is_terminal") else False)
+        self.assertNotIn(sub.status, StoreSubscription.TERMINAL_STATUSES)           # still current, so the store can buy
+        self.assertTrue(sub.is_current)
         # never-started Trial: no TRIAL_STARTED event exists, status is suspended
         self.assertEqual(svc.purpose_for(store, "plan_change", subscription=sub), "initial",
                          f"status={sub.status!r}: a store that never bought anything and is buying its first plan "
