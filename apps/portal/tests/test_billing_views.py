@@ -229,3 +229,77 @@ class BillingWebhookConfirmationViewTests(BillingViewsTestCase):
             f"/app/stores/{other_store.public_id}/billing/return/{attempt.public_token}/", HTTP_HOST=_HOST,
         )
         self.assertEqual(response.status_code, 404)
+
+
+class BillingCheckoutNoGatewayCouponTests(BillingViewsTestCase):
+    """The portal first-purchase path must judge gateway availability on the POST-discount invoice amount, inside the
+    same atomic block as the invoice and its automatic campaign. A fully discounted invoice needs no gateway; a partially
+    discounted one does, and then NOTHING (invoice, redemption reservation) may remain."""
+
+    def _staff(self):
+        return User.objects.create_user(username="npgw-fin@example.com", password="pass12345", is_staff=True, is_superuser=True)
+
+    def _no_gateway(self):
+        from unittest import mock
+
+        return mock.patch("apps.portal.services.platform_gateway_service.checkout_options", return_value=[])
+
+    def test_automatic_100_percent_campaign_needs_no_gateway(self):
+        from apps.billing.models import PlatformCouponRedemption
+        from apps.billing.services import platform_coupon_service as svc
+
+        svc.create_coupon(actor=self._staff(), name="free-first", code=None, is_automatic=True, kind="percent", percent=100)
+        with self._no_gateway():
+            response = self._checkout()
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin-portal/handoff/", response["Location"])
+        invoice = SubscriptionInvoice.objects.get(store=self.store)
+        self.assertEqual(invoice.amount_due, 0)
+        self.assertTrue(PlatformCouponRedemption.objects.filter(invoice=invoice).exists())
+
+    def test_partial_automatic_campaign_without_gateway_rolls_back_invoice_and_reservation(self):
+        from apps.billing.models import PlatformCouponRedemption
+        from apps.billing.services import platform_coupon_service as svc
+
+        svc.create_coupon(actor=self._staff(), name="part-first", code=None, is_automatic=True, kind="percent", percent=20)
+        with self._no_gateway():
+            response = self._checkout()
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("billing", response["Location"])
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.store).exists())
+        self.assertFalse(PlatformCouponRedemption.objects.exists())
+
+    def test_no_coupon_positive_amount_without_gateway_is_still_refused(self):
+        with self._no_gateway():
+            self._checkout()
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.store).exists())
+
+    def test_repeat_submit_reuses_the_invoice_and_never_duplicates_the_redemption(self):
+        from apps.billing.models import PlatformCouponRedemption
+        from apps.billing.services import platform_coupon_service as svc
+
+        svc.create_coupon(actor=self._staff(), name="reuse-auto", code=None, is_automatic=True, kind="percent", percent=20)
+        first = self._checkout()
+        second = self._checkout()                                   # double click / browser retry
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store).count(), 1)
+        invoice = SubscriptionInvoice.objects.get(store=self.store)
+        self.assertEqual(PlatformCouponRedemption.objects.filter(invoice=invoice).count(), 1)
+        self.assertEqual(invoice.discount_total, invoice.subtotal * 20 // 100)
+        self.assertEqual(invoice.amount_due, invoice.subtotal - invoice.discount_total)
+
+    def test_refused_reuse_without_gateway_leaves_the_existing_discounted_invoice_untouched(self):
+        from apps.billing.models import PlatformCouponRedemption
+        from apps.billing.services import platform_coupon_service as svc
+
+        svc.create_coupon(actor=self._staff(), name="reuse-keep", code=None, is_automatic=True, kind="percent", percent=20)
+        self._checkout()
+        before = SubscriptionInvoice.objects.get(store=self.store)
+        snapshot = (before.discount_total, before.amount_due, before.status)
+        with self._no_gateway():
+            self._checkout()                                        # gateways vanished between the two submits
+        after = SubscriptionInvoice.objects.get(store=self.store)
+        self.assertEqual((after.discount_total, after.amount_due, after.status), snapshot)
+        self.assertEqual(PlatformCouponRedemption.objects.filter(invoice=after).count(), 1)
+        self.assertEqual(PlatformCouponRedemption.objects.get(invoice=after).status, "reserved")

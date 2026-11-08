@@ -1837,24 +1837,24 @@ def _start_purchase(request, *, store, plan_version, billing_interval=""):
     from apps.billing.services import platform_checkout_service
     from apps.portal.services import platform_gateway_service
 
-    # فقط وقتی که این تغییر **واقعاً پرداخت می‌خواهد** و هیچ روشِ آماده‌ای نیست رد می‌شود؛ تنزل/هم‌قیمت/رایگان بدونِ درگاه
-    # زمان‌بندی می‌شود و مسدود نمی‌گردد. تصمیمِ «نیازمندِ پرداخت» از پیش‌نمایشِ سمتِ سرور می‌آید، نه ورودیِ مرورگر.
-    try:
-        requires_payment = plan_change_billing_service.preview(
-            current, plan_version, billing_interval=billing_interval or None,
-        ).get("payable_amount", 0) > 0
-    except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
-        messages.error(request, str(exc))
-        return redirect("portal:billing-plans", store_public_id=store.public_id)
-    if requires_payment and not platform_gateway_service.checkout_options(platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store):
-        messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
-        return redirect("portal:billing-plans", store_public_id=store.public_id)
+    # Gateway availability is judged on the amount_due of the invoice that is actually created, AFTER any automatic
+    # campaign, inside the same atomic block that creates the invoice and its coupon reservation. A zero amount never
+    # needs a gateway; a positive amount with no ready method raises and rolls the invoice and reservation back.
+    # Nothing here reads a browser-supplied amount.
+    from django.db import transaction
 
     token = plan_change_service._preview_token(current, plan_version)
     try:
-        kind, result = plan_change_billing_service.start_plan_change(
-            current, plan_version, preview_token=token, actor=request.user, billing_interval=billing_interval or None,
-        )
+        with transaction.atomic():
+            kind, result = plan_change_billing_service.start_plan_change(
+                current, plan_version, preview_token=token, actor=request.user, billing_interval=billing_interval or None,
+            )
+            if kind != "scheduled":
+                result.refresh_from_db(fields=["amount_due"])
+                if result.amount_due > 0 and not platform_gateway_service.checkout_options(
+                    platform_gateway_service.PURCHASE_SUBSCRIPTION, store=store,
+                ):
+                    raise plan_change_billing_service.PlanChangeBillingError("در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
     except (plan_change_service.PlanChangeError, plan_change_billing_service.PlanChangeBillingError) as exc:
         # SUB-001 Repair 3: ``start_plan_change`` now also raises
         # ``PlanChangeBillingError`` when a competing, unresolved
