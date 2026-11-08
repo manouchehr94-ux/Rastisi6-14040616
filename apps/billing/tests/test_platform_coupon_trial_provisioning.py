@@ -31,12 +31,19 @@ class TrialProvisioningPurposeTests(TestCase):
         self.assertEqual(svc.purpose_for(store, "plan_change"), "initial")
 
     def test_expired_trial_is_still_initial_purchase(self):
+        """Runs the REAL subscription-state evaluator (the scheduled job) instead of assuming what expiry does."""
         store = self._store("trprov-exp")
         sub = trial_service.grant_initial_trial(store)
-        StoreSubscription.objects.filter(pk=sub.pk).update(trial_end_at=timezone.now() - timedelta(days=1))
-        # the engine's own expiry path, if any, would restrict the store but leave a non-terminal current row
+        StoreSubscription.objects.filter(pk=sub.pk).update(trial_end_at=timezone.now() - timedelta(minutes=1))
+        result = ss.evaluate_subscription_states()
+        self.assertGreaterEqual(result["scanned"], 1)
         current = StoreSubscription.objects.get(pk=sub.pk)
-        self.assertEqual(svc.purpose_for(store, "plan_change", subscription=current), "initial")
+        # the evaluator really moved it: it is no longer TRIALING, yet it stays the current, non-terminal row (so it can buy)
+        self.assertNotEqual(current.status, StoreSubscription.Status.TRIALING)
+        self.assertEqual(current.status, StoreSubscription.Status.SUSPENDED)
+        self.assertTrue(current.is_current)
+        self.assertNotIn(current.status, StoreSubscription.TERMINAL_STATUSES)
+        self.assertEqual(svc.purpose_for(store, "plan_change"), "initial")
 
     def test_trial_disabled_by_platform_store_buying_first_plan_is_initial_purchase(self):
         from unittest import mock

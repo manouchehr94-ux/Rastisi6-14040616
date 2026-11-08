@@ -357,3 +357,140 @@ class PortalPurchaseContentionTests(TransactionTestCase):
         self.assertEqual((invoices[0].discount_total, invoices[0].amount_due), (Decimal(EXPECTED["monthly"]), Decimal(0)))
         self.assertEqual(Redemption.objects.count(), 1)
         self.assertEqual(self.campaign.counted_redemptions(), 1)
+
+
+class ZeroValueConversionEndsInitialEligibilityTests(Base):
+    """Finding: a fully discounted first Trial-to-paid conversion settles with amount_paid == 0, so positive-money history never
+    saw it and the next upgrade was classified ``initial`` again. A settled conversion must end ``initial`` eligibility, while
+    ``first_purchase_only`` keeps its positive-payment meaning."""
+
+    def _free_first_conversion(self, store=None, owner=None, version=None):
+        store, owner, version = store or self.store, owner or self.owner, version or self.lite
+        client = self.client if store is self.store else self.client_for(store, owner)
+        self.portal_buy(store, owner, version)
+        inv = SubscriptionInvoice.objects.filter(store=store, kind="plan_change").latest("pk")
+        client.post(reverse("dashboard:platform-checkout-pay", args=["subscription", inv.pk]), {"method": "zibal"})
+        inv.refresh_from_db()
+        return inv, client
+
+    def _assert_settled_free(self, inv, store):
+        self.assertEqual((inv.status, inv.amount_paid, inv.amount_due), ("paid", Decimal(0), Decimal(0)))
+        self.assertEqual(inv.coupon_redemption.status, Redemption.Status.REDEEMED)
+        self.assertEqual(self.sub(store).status, StoreSubscription.Status.ACTIVE)
+        self.assertNotEqual(self.sub(store).plan_version.plan.code, "trial")
+
+    def test_second_upgrade_after_enabled_trial_free_conversion_is_plan_change_and_not_discounted_again(self):
+        campaign = self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        inv, _ = self._free_first_conversion()
+        self._assert_settled_free(inv, self.store)
+        # the historical TRIAL_STARTED event is still there: that is exactly what used to resurrect `initial`
+        self.assertTrue(SubscriptionEvent.objects.filter(subscription__store=self.store, event_type="trial_started").exists())
+        self.assertFalse(svc.has_paid_subscription_history(self.store))                 # positive-money semantics untouched
+        self.assertTrue(svc.has_completed_initial_conversion(self.store))
+        self.assertEqual(svc.purpose_for(self.store, "plan_change"), "plan_change")
+
+        self.portal_buy(self.store, self.owner, self.pro)
+        upgrade = SubscriptionInvoice.objects.filter(store=self.store, kind="plan_change").latest("pk")
+        self.assertNotEqual(upgrade.pk, inv.pk)
+        self.assertEqual((upgrade.discount_total, upgrade.amount_due), (Decimal(0), Decimal(EXPECTED["monthly"])))
+        self.assertFalse(Redemption.objects.filter(invoice=upgrade).exists())
+        self.assertEqual(campaign.counted_redemptions(), 1)
+
+    def test_free_conversion_after_a_naturally_expired_trial_ends_initial_eligibility(self):
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        self.end_trial()
+        self.assertEqual(self.sub().status, StoreSubscription.Status.SUSPENDED)
+        inv, _ = self._free_first_conversion()
+        self._assert_settled_free(inv, self.store)
+        self.assertEqual(svc.purpose_for(self.store, "plan_change"), "plan_change")
+        self.portal_buy(self.store, self.owner, self.pro)
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store, kind="plan_change").latest("pk").discount_total, Decimal(0))
+
+    def test_free_conversion_when_the_platform_disabled_the_trial_ends_initial_eligibility(self):
+        from apps.subscriptions.tests.test_trial_engine import configure
+
+        configure(enabled=False)
+        owner, store = make_owner("notrial-conv@example.com", "بدون آزمایشی")
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        self.assertIsNone(self.sub(store).trial_start_at)
+        inv, _ = self._free_first_conversion(store, owner)
+        self._assert_settled_free(inv, store)
+        self.assertEqual(svc.purpose_for(store, "plan_change"), "plan_change")
+        self.portal_buy(store, owner, self.pro)
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=store, kind="plan_change").latest("pk").discount_total, Decimal(0))
+
+    def test_an_initial_only_campaign_cannot_be_chained_across_repeated_zero_value_upgrades(self):
+        campaign = self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        self._free_first_conversion()
+        for version in (self.pro, self.lite, self.pro):                                  # keeps trying to upgrade/switch
+            self.portal_buy(self.store, self.owner, version)
+        free_redeemed = Redemption.objects.filter(store=self.store, status=Redemption.Status.REDEEMED)
+        self.assertEqual(free_redeemed.count(), 1)
+        self.assertEqual(campaign.counted_redemptions(), 1)
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.store, kind="plan_change", discount_total__gt=0).exclude(
+            pk__in=free_redeemed.values("invoice_id")).exists())
+
+    def test_the_converting_invoice_never_disqualifies_itself_when_its_reservation_is_renewed_after_settlement(self):
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        inv, _ = self._free_first_conversion()
+        self.assertEqual(svc.purpose_for(self.store, "plan_change", exclude_invoice=inv), "initial")   # evaluating ITSELF
+        self.assertEqual(svc.purpose_for(self.store, "plan_change"), "plan_change")                  # anyone else after it
+        self.assertEqual(svc.ensure_reservation_active(inv).status, Redemption.Status.REDEEMED)       # settled: untouched
+
+    def test_first_purchase_only_keeps_its_positive_payment_meaning(self):
+        """Not changed by this correction: a free conversion moved no money, so first_purchase_only is still accepted afterwards,
+        and it is refused only once real money has been paid."""
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        self.coupon("FIRSTONLY", first_purchase_only=True, allow_plan_change=True)
+        self._free_first_conversion()
+        result = svc.evaluate(self.store, plan_version=self.pro, interval="monthly", purpose="plan_change", code="FIRSTONLY")
+        self.assertTrue(result.ok)
+        self.buy_with_code(self.pro, "FIRSTONLY")
+        paid = self.invoice()
+        self.settle_online(paid)
+        again = svc.evaluate(self.store, plan_version=self.lite, interval="monthly", purpose="plan_change", code="FIRSTONLY")
+        self.assertFalse(again.ok)
+        self.assertEqual(again.code, "first_purchase_only")
+
+    def test_a_refund_does_not_reopen_initial_eligibility(self):
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        inv, _ = self._free_first_conversion()
+        SubscriptionInvoice.objects.filter(pk=inv.pk).update(status=SubscriptionInvoice.Status.REFUNDED)
+        self.assertEqual(svc.purpose_for(self.store, "plan_change"), "plan_change")
+
+    def test_a_trial_plan_invoice_alone_is_not_a_conversion(self):
+        """Only a settled invoice on a REAL plan ends initial eligibility; nothing on the internal Trial plan does."""
+        self.assertFalse(svc.has_completed_initial_conversion(self.store))
+        self.assertEqual(svc.purpose_for(self.store, "plan_change"), "initial")
+        self.portal_buy(self.store, self.owner, self.pro)                                 # an OPEN (unsettled) invoice
+        self.assertFalse(svc.has_completed_initial_conversion(self.store))
+        self.assertEqual(svc.purpose_for(self.store, "plan_change"), "initial")
+
+    def test_cross_tenant_zero_value_conversion_is_denied_and_creates_no_invoice_or_reservation(self):
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        intruder_owner, intruder_store = make_owner("intruder-conv@example.com", "مهاجم")
+        before = (SubscriptionInvoice.objects.count(), Redemption.objects.count())
+        denied = self.portal_buy(self.store, intruder_owner, self.lite)                 # intruder owner, victim store
+        self.assertIn(denied.status_code, (403, 404))
+        self.assertEqual((SubscriptionInvoice.objects.count(), Redemption.objects.count()), before)
+        self.assertEqual(self.sub().status, StoreSubscription.Status.TRIALING)
+        self.assertEqual(self.sub(intruder_store).status, StoreSubscription.Status.TRIALING)
+
+    def test_zero_value_settlement_creates_only_the_internal_zero_value_record_and_never_calls_a_gateway(self):
+        self.coupon(None, name="free-auto", is_automatic=True, percent=100)
+        self.portal_buy(self.store, self.owner, self.lite)
+        inv = self.invoice()
+        pay = reverse("dashboard:platform-checkout-pay", args=["subscription", inv.pk])
+        with mock.patch("apps.billing.services.payment_flow_service.start_payment") as start, \
+                mock.patch("apps.billing.providers.zibal.requests.post", side_effect=AssertionError("NETWORK CALL")) as http:
+            self.client.post(pay, {"method": "zibal"})
+            self.client.post(pay, {"method": "zibal"})                                   # repeated settlement request
+            start.assert_not_called()
+            http.assert_not_called()
+        attempts = list(SubscriptionPaymentAttempt.objects.filter(invoice=inv))
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual((attempts[0].provider, attempts[0].amount, attempts[0].status), ("manual", Decimal(0), "succeeded"))
+        self.assertTrue(attempts[0].provider_payment_id.startswith("zero-due-"))
+        self.assertFalse(SubscriptionPaymentAttempt.objects.exclude(provider="manual").filter(invoice=inv).exists())
+        self.assertEqual(self.activations(self.store), 1)
+        self.assertEqual(Redemption.objects.filter(invoice=inv, status=Redemption.Status.REDEEMED).count(), 1)
