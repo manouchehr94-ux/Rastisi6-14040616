@@ -8449,12 +8449,6 @@ def subscription_plan_execute(request):
         return redirect(_plans_url(billing_interval))
 
     try:
-        # هیچ فاکتورِ بی‌راهی نسازیم: اگر ارتقا پرداخت می‌خواهد و هیچ روشِ آماده‌ای نیست، پیش از ساختنِ فاکتور رد می‌شود.
-        if not _platform_gateway_options("subscription", store) and pcb.preview(
-            current_subscription, target_version, billing_interval=billing_interval or None,
-        ).get("payable_amount", 0) > 0:
-            messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
-            return redirect(_plans_url(billing_interval))
         coupon_code = (request.POST.get("coupon_code") or "").strip()[:40]
         if coupon_code:
             # کدِ نامعتبر پیش از ساختنِ فاکتور رد میشود (فاکتورِ بیراهه ساخته نمیشود)
@@ -8477,6 +8471,10 @@ def subscription_plan_execute(request):
 
         pre_existing = set(_Inv.objects.filter(store=store, kind=_Inv.Kind.PLAN_CHANGE).values_list("pk", flat=True)) if coupon_code else set()
         coupon_failure = None
+
+        class _NoGatewayForPayable(Exception):
+            pass
+
         try:
             # اتمیک: فاکتورِ *تازه* و کوپنش یا هر دو ساخته میشوند یا هیچ‌کدام؛ فاکتورِ بدونِ تخفیفی که کاربر در پیش‌نمایش ندیده
             # هرگز باقی نمیماند. فاکتورِ از قبل موجود (ایدمپوتنت) دست‌نخورده میماند.
@@ -8493,6 +8491,14 @@ def subscription_plan_execute(request):
                             coupon_failure = exc.message                    # فاکتورِ قبلی حفظ میشود
                         else:
                             raise
+                if kind != "scheduled":
+                    # بررسیِ روشِ پرداخت *پس از* کوپن و با مبلغِ واقعیِ فاکتور؛ مبلغِ صفر هرگز درگاه نمیخواهد.
+                    result.refresh_from_db()
+                    if (result.amount_due or 0) > 0 and not _platform_gateway_options("subscription", store):
+                        raise _NoGatewayForPayable()   # رولبک: فاکتورِ تازه و رزروِ کوپن
+        except _NoGatewayForPayable:
+            messages.error(request, "در حال حاضر هیچ روشِ پرداختی برایِ خریدِ اشتراک فعال نیست؛ بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.")
+            return redirect(_plans_url(billing_interval))
         except coupons.CouponError as exc:
             messages.error(request, f"{exc.message} فاکتور ایجاد نشد؛ کدِ دیگری وارد کنید یا بدونِ کد ادامه دهید.")
             return redirect(_plans_url(billing_interval))

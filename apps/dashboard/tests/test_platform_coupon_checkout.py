@@ -377,6 +377,47 @@ class CouponPlanChangeTests(CheckoutBase):
         texts = [str(m) for m in self.client2.get(r["Location"]).context["messages"]]
         self.assertTrue(any(svc.MESSAGES["incompatible"] in t for t in texts))
 
+    # ---- gateway availability is judged on the post-coupon invoice amount (inside the atomic block)
+    def _no_gateway(self):
+        return mock.patch("apps.dashboard.views._platform_gateway_options", return_value=[])
+
+    def test_full_coupon_plan_change_works_without_any_gateway(self):
+        coupon(self.finance, "FREEUP", percent=100, allow_plan_change=True, allow_initial=False)
+        with self._no_gateway():
+            r = self.execute("FREEUP")
+        inv = SubscriptionInvoice.objects.get(store=self.store2, kind="plan_change")
+        self.assertRedirects(r, reverse("dashboard:platform-checkout", args=["subscription", inv.pk]), fetch_redirect_response=False)
+        self.assertEqual(inv.amount_due, Decimal(0))
+        self.assertTrue(PlatformCouponRedemption.objects.filter(invoice=inv).exists())
+
+    def test_partial_coupon_plan_change_without_gateway_rolls_back_invoice_and_reservation(self):
+        with self._no_gateway():
+            r = self.execute("UP20")
+        self.assertEqual(SubscriptionInvoice.objects.filter(store=self.store2, kind="plan_change").count(), 0)
+        self.assertFalse(PlatformCouponRedemption.objects.exists())
+        texts = [str(m) for m in self.client2.get(r["Location"]).context["messages"]]
+        self.assertTrue(any("هیچ روشِ پرداختی" in t for t in texts))
+
+    def test_no_coupon_positive_plan_change_without_gateway_is_refused(self):
+        with self._no_gateway():
+            self.execute("")
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=self.store2, kind="plan_change").exists())
+
+    def test_scheduled_downgrade_is_unaffected_by_missing_gateway(self):
+        from apps.billing.models import ScheduledPlanChange
+
+        store3 = Store.objects.create(name="تنزل", slug="pcdown", admin_subdomain="pcdown", status=Store.Status.ACTIVE)
+        self._member(store3, "pcdown-owner")
+        ss.activate_subscription(ss.create_subscription(store3, self.v2), period_end=timezone.now() + timedelta(days=20))
+        c = Client(HTTP_HOST=f"pcdown.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}")
+        c.login(username="pcdown-owner", password="pass12345")
+        post = {"version_id": self.v1.pk, "billing_interval": "monthly"}
+        with override_settings(ALLOWED_HOSTS=["*"]), self._no_gateway():
+            token = c.post("/admin-portal/subscription/plans/preview/", post).context["preview"]["token"]
+            c.post("/admin-portal/subscription/plans/change/", {**post, "preview_token": token})
+        self.assertFalse(SubscriptionInvoice.objects.filter(store=store3, kind="plan_change").exists())
+        self.assertTrue(ScheduledPlanChange.objects.filter(subscription__store=store3, target_plan_version=self.v1).exists())
+
 
 TRIAL_HOST = f"pctrial.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}"
 
