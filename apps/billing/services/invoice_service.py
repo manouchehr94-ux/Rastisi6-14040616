@@ -192,6 +192,9 @@ def void_invoice(invoice, *, actor=None, now=None, reason=""):
     locked.status = SubscriptionInvoice.Status.VOID
     locked.voided_at = now
     locked.save(update_fields=["status", "voided_at", "updated_at"])
+    from apps.billing.services import platform_coupon_service
+
+    platform_coupon_service.release_for_invoice(locked, "invoice_void", actor=actor, now=now)
     record_audit_event(
         store=locked.store, actor=actor, action_code="billing.invoice_voided",
         object_type="SubscriptionInvoice", object_id=locked.pk, object_label=locked.number,

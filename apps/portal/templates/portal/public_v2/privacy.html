@@ -7,16 +7,14 @@
 {% ps 'privacy.crumb' as crumb %}
 <div class="pg-sign"><div class="wrap">
   <div class="crumbs"><a href="{% url 'portal:home' %}">خانه</a> / {{ crumb }}</div>
-  <h1>حریم خصوصی</h1>
+  <h1>سیاست حفظ حریم خصوصی کاربران راستی‌سی</h1>
   <p>چه اطلاعاتی نگهداری می‌شود، برای چه کاری استفاده می‌شود و چه کسانی در آن نقش دارند.</p>
-  {% if not privacy_approved %}<p class="legal-version" data-privacy-draft>وضعیت: پیش‌نویس، در انتظار تأیید حقوقی و تجاری</p>{% endif %}
 </div></div>
 <div class="sec"><div class="wrap">
   <div class="legal-layout">
     <aside><details class="legal-toc" data-legal-toc open><summary>فهرست مطالب</summary><nav aria-label="فهرست مطالب">{% include "portal/public/_privacy_toc.html" %}</nav></details></aside>
     <div class="legal">
-      {% if not privacy_approved %}<div class="note" role="note" data-privacy-draft-notice>{% include "portal/public/_privacy_notice.html" %}</div>{% endif %}
-      <div class="legal-doc">{% include "portal/public/_privacy_body.html" %}</div>
+      <div class="legal-doc" dir="rtl">{% include "portal/public/_privacy_body.html" %}</div>
     </div>
   </div>
 </div></div>

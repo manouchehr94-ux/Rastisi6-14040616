@@ -51,14 +51,13 @@ class TermsPageTests(TestCase):
         self.assertGreater(len(body.split()), 1200)
         self.assertGreaterEqual(self.html.count("<p>"), 30)
 
-    def test_the_draft_and_legal_review_notice_is_prominent_and_repeated_at_the_end(self):
-        top = self.html.index("data-legal-draft-notice")
-        self.assertLess(top, self.html.index('id="scope"'))
-        self.assertRegex(self.html, r"پیش‌نویس[^<]*نیازمند بازبینی حقوقی")
-        self.assertIn("تأیید حقوقی", self.html)
-        disclaimer = self.html[self.html.index('id="disclaimer"'):]
-        self.assertIn("هنوز توسط مشاور حقوقی یا صاحب پلتفرم بازبینی و تأیید نشده است", disclaimer)
-        self.assertIn("مشاوره‌ی حقوقی", disclaimer)
+    def test_the_owner_removed_draft_disclaimer_paragraph_is_absent(self):
+        """Regression: the top-of-page draft/legal-review notice was removed from the template source."""
+        self.assertNotIn("data-legal-draft-notice", self.html)
+        self.assertNotIn("نیازمند بازبینی حقوقی. این متن بر اساس رفتار فعلی پلتفرم", self.html)
+        self.assertNotIn("استفاده\u200cی رسمی و تجاری از آن منوط به بازبینی و تأیید حقوقی است", self.html)
+        self.assertNotIn("هنوز توسط صاحب پلتفرم و مشاور حقوقی تأیید نشده است", self.html)
+        self.assertIn('id="scope"', self.html)
 
     def test_the_merchant_is_the_seller_and_rastisi_is_infrastructure(self):
         role = self.html[self.html.index('id="role"'):self.html.index('id="plans"')]
@@ -143,7 +142,7 @@ class TermsLayoutContractTests(TestCase):
         self.assertRegex(self.css, r"max-width:960px\)\{[^@]*\.r-legal-aside\{position:static")
 
     def test_stylesheet_is_cache_busted_for_this_change(self):
-        self.assertIn("public-site-v2.css?v=20261009-a11y", self.html)
+        self.assertIn("public-site-v2.css?v=20261106-1", self.html)
 
 
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], PUBLIC_SITE_FORCE_DESIGN="legacy")

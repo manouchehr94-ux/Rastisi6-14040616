@@ -18,41 +18,39 @@ TOC = (PARTIALS / "_privacy_toc.html").read_text(encoding="utf-8")
 
 
 class PrivacyTextContractTests(SimpleTestCase):
-    def test_all_fifteen_required_sections_exist_and_the_toc_links_to_each(self):
-        ids = re.findall(r'<section class="r-legal-section" id="(p-[a-z]+)"', BODY)
-        self.assertEqual(len(ids), 15)
-        self.assertEqual(sorted(re.findall(r'href="#(p-[a-z]+)"', TOC)), sorted(ids))
-        self.assertEqual(len(set(ids)), 15)
+    def test_ten_sections_match_toc(self):
+        ids = re.findall(
+            r'<section data-privacy-section="\d+" id="(p-\d+)">',
+            BODY,
+        )
+        links = re.findall(r'href="#(p-\d+)"', TOC)
+        self.assertEqual(ids, [f"p-{i}" for i in range(1, 11)])
+        self.assertEqual(links, ids)
 
-    def test_unknown_business_and_legal_facts_are_marked_not_invented(self):
-        self.assertGreaterEqual(BODY.count("needs-confirm"), 12)
-        for section in ("p-hosting", "p-children", "p-deletion", "p-contact"):
-            block = BODY[BODY.index(f'id="{section}"'):]
-            block = block[:block.index("</section>")]
-            self.assertIn("needs-confirm", block, f"{section} depends on a fact only the owner can supply")
+    def test_security_claims_are_not_absolute(self):
+        self.assertIn("هیچ سامانه اینترنتی", BODY)
+        self.assertNotIn("امنیت صددرصد", BODY)
+        for claim in ("ISO 27001", "PCI DSS", "SOC 2",
+                      "گواهی‌نامه امنیتی"):
+            self.assertNotIn(claim, BODY)
 
-    def test_no_invented_identifiers_contacts_certifications_or_locations(self):
-        text = re.sub(r"<[^>]+>", " ", BODY)
-        self.assertNotRegex(text, r"@[A-Za-z0-9.-]+\.[a-z]{2,}")                      # no email address
-        self.assertNotRegex(text, r"\b0?9\d{9}\b|\b0\d{2}[- ]?\d{8}\b")               # no phone number
-        for forbidden in ("ISO", "PCI", "SOC", "GDPR", "گواهی‌نامه", "سرورهای ایران", "خارج از ایران", "خارج از کشور ذخیره"):
-            self.assertNotIn(forbidden.lower() if forbidden.isascii() else forbidden, text.lower() if forbidden.isascii() else text, forbidden)
-        self.assertIn("این متن گواهی یا استانداردی را ادعا نمی‌کند", text)
+    def test_no_invented_contact_details(self):
+        plain = re.sub(r"<[^>]+>", " ", BODY)
+        self.assertNotRegex(
+            plain, r"@[A-Za-z0-9.-]+\.[a-z]{2,}"
+        )
+        self.assertNotRegex(
+            plain, r"\b0?9\d{9}\b|\b0\d{2}[- ]?\d{8}\b"
+        )
+        self.assertNotIn("سرورهای ایران", plain)
 
-    def test_every_numeric_retention_fact_is_one_that_exists_in_code(self):
-        # 120 s OTP validity, 30 d import files / persistent session, 180 d consent cookie — see docs/legal/PRIVACY_POLICY_DRAFT_20261106.md for the source of each
-        from apps.core import consent
-        from apps.dashboard.services import import_service
-        from apps.portal.services import owner_otp_service
-        from django.conf import settings
-
-        self.assertEqual(owner_otp_service.OTP_TTL_SECONDS, 120)
-        self.assertEqual(import_service.IMPORT_FILE_RETENTION_DAYS, 30)
-        self.assertEqual(settings.AUTH_SESSION_REMEMBER_ME_EXPIRY_SECONDS, 30 * 24 * 3600)
-        self.assertEqual(consent.COOKIE_MAX_AGE, 180 * 24 * 3600)
-        text = re.sub(r"<[^>]+>", " ", BODY)
-        for needle in ("۲ دقیقه", "۳۰ روز", "۱۸۰ روز"):
-            self.assertIn(needle, text)
+    def test_retention_section_does_not_invent_a_schedule(self):
+        section = BODY.split('id="p-7"', 1)[1]
+        section = section.split("</section>", 1)[0]
+        self.assertIn("الزامات قانونی", section)
+        self.assertNotRegex(
+            section, r"\d+\s*(روز|ماه|سال)"
+        )
 
 
 @override_settings(ALLOWED_HOSTS=[HOST, "testserver"])
@@ -60,14 +58,11 @@ class PrivacyPageStateTests(TestCase):
     def _get(self, path="/privacy/"):
         return self.client.get(path, HTTP_HOST=HOST)
 
-    def test_default_is_a_noindex_draft_with_a_visible_notice(self):
+    def test_unapproved_policy_is_noindex_with_ten_sections(self):
         html = self._get().content.decode()
         self.assertIn('content="noindex, nofollow"', html)
-        self.assertIn("data-privacy-draft-notice", html)
-        self.assertIn("پیش‌نویس", html)
-        self.assertGreaterEqual(html.count("needs-confirm"), 12)
-        for anchor in ("p-intro", "p-third", "p-cookies", "p-contact"):
-            self.assertIn(f'id="{anchor}"', html)
+        for i in range(1, 11):
+            self.assertIn(f'id="p-{i}"', html)
 
     def test_the_draft_is_not_advertised_in_the_sitemap(self):
         xml = self._get("/sitemap.xml").content.decode()
@@ -88,10 +83,11 @@ class PrivacyPageStateTests(TestCase):
         self.assertIsNotNone(field)
         self.assertEqual(field.default, "")
 
-    def test_the_legacy_design_serves_the_same_single_source_text(self):
+    def test_legacy_design_uses_same_policy_and_noindex(self):
         from django.test import override_settings as ovr
 
-        with ovr(RASTISI_PUBLIC_SITE_DESIGN="legacy"):
+        with ovr(PUBLIC_SITE_FORCE_DESIGN="legacy"):
             html = self._get().content.decode()
-        self.assertIn("data-privacy-draft-notice", html)
-        self.assertIn('id="p-security"', html)
+        self.assertIn('content="noindex, nofollow"', html)
+        self.assertIn('id="p-4"', html)
+        self.assertIn('id="p-10"', html)

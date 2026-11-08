@@ -260,6 +260,9 @@ def start_plan_change(subscription, target_version, *, preview_token, actor=None
         )
         invoice.idempotency_key = expected
         invoice.save(update_fields=["idempotency_key", "updated_at"])
+        from apps.billing.services import platform_coupon_service
+
+        platform_coupon_service.apply_automatic_to_invoice(invoice, actor=actor, now=now)   # تخفیفِ خودکار (فقط همین فاکتور)
         invoice = invoice_service.open_invoice(invoice, now=now)
         record_audit_event(
             store=current.store, actor=actor, action_code="billing.plan_change_invoiced",

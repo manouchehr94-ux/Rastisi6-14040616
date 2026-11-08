@@ -455,7 +455,7 @@ input::placeholder,textarea::placeholder{color:var(--rs-muted);opacity:1}
 .r-legal-toc a::before{content:counter(legal-toc);flex:none;min-width:20px;color:var(--rs-brand);font-weight:700}
 .r-legal-toc a:hover,.r-legal-toc a:focus-visible{background:var(--rs-soft);color:var(--rs-ink)}
 .r-legal-doc{min-width:0;max-width:780px;color:var(--rs-muted);font-size:15px;line-height:2.15}
-.r-legal-doc p{color:var(--rs-muted)}.r-legal-doc ol{padding-inline-start:22px}.r-legal-doc li{margin:0 0 14px}
+.r-legal-doc p{color:var(--rs-muted)}.r-legal-doc ol,.r-legal-doc ul{padding-inline-start:22px}.r-legal-doc h2{margin:32px 0 12px;color:var(--rs-ink);font-size:20px}.r-legal-doc hr{margin:32px 0;border:0;border-top:1px solid var(--rs-line)}.r-legal-doc li{margin:0 0 14px}
 .r-legal-section{padding:30px 0;border-top:1px solid var(--rs-line);scroll-margin-top:calc(var(--r-legal-header) + var(--r-legal-gap))}
 .r-legal-section:first-child{border-top:0;padding-top:0}
 .r-legal-section:target h2{color:var(--rs-brand)}

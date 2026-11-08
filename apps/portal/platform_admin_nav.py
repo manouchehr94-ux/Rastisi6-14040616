@@ -52,6 +52,7 @@ NAV = (
         NavItem("تخصیصِ قابلیت به پلن", "assignment-matrix", "grid"),
         NavItem("محتوایِ صفحه‌ی تعرفه", "pricing-content", "file"),
         NavItem("اشتراکِ فروشگاه‌ها", "subscriptions", "repeat"),
+        NavItem("کوپن و کمپین", "coupons", "tag", also=("coupon-add", "coupon-edit", "coupon-detail")),
     )),
     NavGroup("finance", "مالی و پرداخت", "card", (
         NavItem("پرداخت‌ها و فاکتورها", "payments", "card", also=("payment-invoice-detail", "payment-manual-add")),

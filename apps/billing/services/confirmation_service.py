@@ -89,6 +89,9 @@ def confirm_payment(*, attempt, amount, currency, provider_payment_id="", actor=
     )
 
     if invoice.status == SubscriptionInvoice.Status.PAID:
+        from apps.billing.services import platform_coupon_service
+
+        platform_coupon_service.redeem_for_paid_invoice(invoice, actor=actor, now=now)   # مصرفِ کوپن دقیقاً یک‌بار
         _activate_or_renew(invoice, actor=actor, now=now)
     return locked_attempt
 
@@ -140,6 +143,12 @@ def settle_zero_due_invoice(invoice, *, actor=None, now=None):
         current = StoreSubscription.objects.get(pk=locked.subscription_id)
         if not locked.idempotency_key or locked.idempotency_key != pcs._preview_token(current, locked.plan_version):
             raise ConfirmationError("این فاکتورِ تغییرِ پلن دیگر تصمیمِ معتبرِ فعلی نیست.")
+    from apps.billing.services import platform_coupon_service
+
+    try:
+        platform_coupon_service.ensure_reservation_active(locked, now=now)
+    except platform_coupon_service.CouponError as exc:
+        raise ConfirmationError(exc.message) from exc
     attempt = attempt_service.create_attempt(locked, provider="manual", actor=actor, now=now)
     record_audit_event(
         store=locked.store, actor=actor, action_code="billing.zero_invoice_settled",

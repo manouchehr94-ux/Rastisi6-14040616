@@ -418,11 +418,11 @@ class ExistingOwnersAndVersionTests(_Base):
         self.assertNotEqual(CURRENT_TERMS_VERSION.lower(), "latest")
         self.assertRegex(CURRENT_TERMS_VERSION, r"^\d{4}-\d{2}-v\d+$")
 
-    def test_terms_page_still_has_toc_anchors_and_the_draft_notice(self):
+    def test_terms_page_still_has_toc_anchors_and_no_draft_notice(self):
         html = self.client.get("/terms/", HTTP_HOST=_HOST).content.decode()
         self.assertIn("data-legal-toc", html)
         self.assertIn('href="#notifications"', html)
-        self.assertIn("data-legal-draft-notice", html)
+        self.assertNotIn("data-legal-draft-notice", html)
 
     def test_registration_closed_page_is_unchanged(self):
         config, _ = PlatformConfiguration.objects.get_or_create(pk=1)
