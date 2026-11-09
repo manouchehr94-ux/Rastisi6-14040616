@@ -437,20 +437,17 @@ class ZeroValueConversionEndsInitialEligibilityTests(Base):
         self.assertEqual(svc.purpose_for(self.store, "plan_change"), "plan_change")                  # anyone else after it
         self.assertEqual(svc.ensure_reservation_active(inv).status, Redemption.Status.REDEEMED)       # settled: untouched
 
-    def test_first_purchase_only_keeps_its_positive_payment_meaning(self):
-        """Not changed by this correction: a free conversion moved no money, so first_purchase_only is still accepted afterwards,
-        and it is refused only once real money has been paid."""
+    def test_first_purchase_only_is_consumed_by_a_zero_value_conversion_and_by_a_real_payment(self):
+        """Policy (superseding the earlier positive-payment-only meaning): a settled conversion consumes first-purchase
+        eligibility even when it moved no money; real positive payments still do. Detail: test_platform_coupon_first_purchase_zero_value."""
         self.coupon(None, name="free-auto", is_automatic=True, percent=100)
         self.coupon("FIRSTONLY", first_purchase_only=True, allow_plan_change=True)
+        self.assertTrue(svc.evaluate(self.store, plan_version=self.pro, interval="monthly", purpose="plan_change", code="FIRSTONLY").ok)
         self._free_first_conversion()
+        self.assertFalse(svc.has_paid_subscription_history(self.store))                  # still no positive payment
         result = svc.evaluate(self.store, plan_version=self.pro, interval="monthly", purpose="plan_change", code="FIRSTONLY")
-        self.assertTrue(result.ok)
-        self.buy_with_code(self.pro, "FIRSTONLY")
-        paid = self.invoice()
-        self.settle_online(paid)
-        again = svc.evaluate(self.store, plan_version=self.lite, interval="monthly", purpose="plan_change", code="FIRSTONLY")
-        self.assertFalse(again.ok)
-        self.assertEqual(again.code, "first_purchase_only")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, "first_purchase_only")
 
     def test_a_refund_does_not_reopen_initial_eligibility(self):
         self.coupon(None, name="free-auto", is_automatic=True, percent=100)
