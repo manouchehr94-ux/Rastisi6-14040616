@@ -52,7 +52,7 @@
             {% else %}<span class="badge b-amber">{{ summary.status_display }}</span>{% endif %}
           </div>
         </div>
-        {% if summary.trial_end_at %}
+        {% if summary.trial_end_at and summary.plan.code == "trial" %}
         <div>
           <div style="color:var(--muted);font-size:12px">پایانِ دوره‌ی آزمایشی</div>
           <div>{{ summary.trial_end_at|jalali }}</div>

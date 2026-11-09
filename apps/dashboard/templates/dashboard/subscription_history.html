@@ -13,11 +13,13 @@
       <tr>
         <td style="white-space:nowrap;color:var(--muted);font-size:12px">{{ event.created_at|jalali_dt }}</td>
         <td>{{ event.get_event_type_display }}</td>
-        <td>{{ event.get_from_status_display|default:"—" }}</td>
-        <td>{{ event.get_to_status_display|default:"—" }}</td>
+        <td data-testid="event-from-status">{{ event.from_status_label|default:"—" }}</td>
+        <td data-testid="event-to-status">{{ event.to_status_label|default:"—" }}</td>
         <td>
-          {% if event.to_plan_version %}
-            {{ event.from_plan_version.plan.name|default:"—" }} ← {{ event.to_plan_version.plan.name }}
+          {% if event.to_plan_version and event.from_plan_version %}
+            {{ event.from_plan_version.plan.name }} ← {{ event.to_plan_version.plan.name }}
+          {% elif event.to_plan_version %}
+            {{ event.to_plan_version.plan.name }}
           {% else %}—{% endif %}
         </td>
         <td>{{ event.actor.username|default:"سیستم" }}</td>

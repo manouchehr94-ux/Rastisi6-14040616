@@ -472,6 +472,26 @@ class SubscriptionEvent(TimeStampedModel):
             models.Index(fields=["subscription", "-created_at"], name="idx_subevent_sub_created"),
         ]
 
+    # ``from_status`` / ``to_status`` are plain CharFields (no ``choices``), so Django generates no ``get_*_display``.
+    # These resolve the stored value against ``StoreSubscription.Status`` for display; an empty value (the ``created``
+    # event has no previous status) or an unknown legacy value is returned as-is instead of raising.
+    @property
+    def from_status_label(self) -> str:
+        return self._status_label(self.from_status)
+
+    @property
+    def to_status_label(self) -> str:
+        return self._status_label(self.to_status)
+
+    @staticmethod
+    def _status_label(value: str) -> str:
+        if not value:
+            return ""
+        try:
+            return str(StoreSubscription.Status(value).label)
+        except ValueError:
+            return value
+
     def __str__(self):
         return f"{self.get_event_type_display()} — {self.store.slug}"
 
