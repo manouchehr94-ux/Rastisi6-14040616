@@ -148,10 +148,10 @@ def has_paid_subscription_history(store, *, exclude_invoice=None) -> bool:
 def has_completed_initial_conversion(store, *, exclude_invoice=None) -> bool:
     """Has this store already completed its conversion to a paid (non-Trial) plan?
 
-    Deliberately NOT the same question as ``has_paid_subscription_history``. That one asks "did money change hands" and
-    keeps ``first_purchase_only`` meaning exactly what it always meant. This one asks "was a purchase of a real plan
-    settled", so a first purchase that was fully discounted (amount_paid == 0, settled through the internal zero-value
-    path) still ENDS ``initial`` eligibility. Without it the store keeps its historical TRIAL_STARTED event and its
+    Deliberately NOT the same question as ``has_paid_subscription_history``. That one asks "did money change hands". This
+    one asks "was a purchase of a real plan settled", so a first purchase that was fully discounted (amount_paid == 0,
+    settled through the internal zero-value path) still ENDS ``initial`` eligibility. ``first_purchase_only`` is consumed by
+    EITHER of the two. Without it the store keeps its historical TRIAL_STARTED event and its
     next upgrade would be classified ``initial`` again, letting an initial-only campaign apply repeatedly.
 
     Source of truth is the store's own SETTLED subscription invoices (a refund does not undo a conversion), on a plan that
@@ -198,7 +198,11 @@ def _evaluate_coupon(coupon, store, plan_version, interval, purpose, amount, *, 
         return _fail("ineligible_interval", amount)
     if not plan_version.offers_interval(interval):
         return _fail("ineligible_interval", amount)
-    if coupon.first_purchase_only and has_paid_subscription_history(store, exclude_invoice=exclude_invoice):
+    # First purchase is consumed by positive-payment history OR by a settled conversion to a real plan, so a fully discounted
+    # (zero-value) first purchase counts too. Both helpers honour ``exclude_invoice`` (an invoice never disqualifies itself),
+    # and a refund never restores eligibility.
+    if coupon.first_purchase_only and (has_paid_subscription_history(store, exclude_invoice=exclude_invoice)
+                                       or has_completed_initial_conversion(store, exclude_invoice=exclude_invoice)):
         return _fail("first_purchase_only", amount)
     if coupon.min_amount is not None and amount < coupon.min_amount:
         return _fail("min_amount", amount)
