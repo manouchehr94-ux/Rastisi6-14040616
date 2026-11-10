@@ -125,9 +125,16 @@ def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now
         except platform_coupon_service.CouponError as exc:
             raise PaymentFlowError(exc.message) from exc
 
-        attempt = attempt_service.create_attempt(
-            locked, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now,
-        )
+        try:
+            attempt, created = attempt_service.get_or_create_attempt(
+                locked, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now,
+            )
+        except attempt_service.PaymentAttemptError as exc:
+            raise PaymentFlowError(str(exc)) from exc
+        if not created:
+            # A repeat of an earlier request (same key, same invoice): hand back that attempt and open NO second provider session.
+            # A final attempt is never reopened here; a payment that must be re-checked goes through verification (F-14).
+            return attempt, None
         attempt.return_to = safe_return_to(return_to)
         callback = callback_url_for(callback_base_url, attempt) if callback_base_url else return_url
         try:

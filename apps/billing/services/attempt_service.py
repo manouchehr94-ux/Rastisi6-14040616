@@ -23,22 +23,28 @@ def _new_token() -> str:
 
 
 @transaction.atomic
-def create_attempt(invoice, *, provider=None, idempotency_key="", actor=None, now=None):
-    """یک تلاشِ پرداختِ تازه برایِ یک فاکتورِ قابلِ‌پرداخت می‌سازد. idempotent
-    روی ``idempotency_key``. مبلغ/ارز از خودِ فاکتور می‌آید (نه از مرورگر)."""
+def get_or_create_attempt(invoice, *, provider=None, idempotency_key="", actor=None, now=None):
+    """``(attempt, created)``. idempotent روی ``idempotency_key`` و *متعلق به همان فاکتور*: کلیدِ یک تلاشِ موجود فقط برایِ همان
+    فاکتور/فروشگاه/درگاه/ارز دوباره‌استفاده می‌شود؛ هر ناهمخوانی خطاست (F-13) و هیچ تلاشی عوض یا باز نمی‌شود. مبلغ/ارز از خودِ
+    فاکتور می‌آید (نه از مرورگر)."""
     now = now or timezone.now()
     locked = SubscriptionInvoice.objects.select_for_update().get(pk=invoice.pk)
     if not locked.is_payable:
-        raise PaymentAttemptError("این فاکتور در وضعیتِ قابلِ‌پرداخت نیست.")
+        raise PaymentAttemptError("این فاکتور در وضعیتِ قابلِپرداخت نیست.")
 
+    provider_code = provider or registry.active_provider_code()
     if idempotency_key:
         existing = SubscriptionPaymentAttempt.objects.filter(idempotency_key=idempotency_key).first()
         if existing is not None:
-            return existing
+            if (
+                existing.invoice_id != locked.pk or existing.store_id != locked.store_id
+                or existing.provider != provider_code or existing.currency != locked.currency
+            ):
+                raise PaymentAttemptError("کلید یکتای پرداخت با این فاکتور مطابقت ندارد.")
+            return existing, False
     else:
         idempotency_key = f"attempt-{locked.pk}-{secrets.token_hex(8)}"
 
-    provider_code = provider or registry.active_provider_code()
     attempt_number = SubscriptionPaymentAttempt.objects.filter(invoice=locked).count() + 1
 
     attempt = SubscriptionPaymentAttempt.objects.create(
@@ -53,4 +59,9 @@ def create_attempt(invoice, *, provider=None, idempotency_key="", actor=None, no
         object_type="SubscriptionPaymentAttempt", object_id=attempt.pk, object_label=attempt.public_token,
         after={"invoice": locked.number, "amount": str(attempt.amount), "provider": provider_code},
     )
-    return attempt
+    return attempt, True
+
+
+def create_attempt(invoice, *, provider=None, idempotency_key="", actor=None, now=None):
+    """Compatibility wrapper: the attempt only (see ``get_or_create_attempt``)."""
+    return get_or_create_attempt(invoice, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now)[0]
