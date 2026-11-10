@@ -73,6 +73,26 @@ def _sync_invoice_refund_status(invoice, *, now, refund=None):
     else:
         invoice.status = SubscriptionInvoice.Status.PARTIALLY_REFUNDED
     invoice.save(update_fields=["status", "updated_at"])
+    if invoice.status == SubscriptionInvoice.Status.REFUNDED:
+        _revoke_entitlement(invoice, refund, now=now)
+
+
+def _revoke_entitlement(invoice, refund, *, now):
+    """F-08: a FULL refund of the period in force suspends the subscription (see ``financial_suspension_service``). A failure here
+    must NEVER undo or hide a refund that really paid money out, so it runs in a savepoint and degrades to an audit entry that
+    asks finance to review the subscription."""
+    from apps.billing.services import financial_suspension_service
+
+    try:
+        with transaction.atomic():
+            financial_suspension_service.apply_refund(invoice, refund, now=now)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("refund %s: entitlement revocation failed; finance review needed", getattr(refund, "pk", None))
+        record_audit_event(
+            store=invoice.store, action_code="billing.refund_entitlement_review_needed", object_type="SubscriptionInvoice",
+            object_id=invoice.pk, object_label=invoice.number,
+            after={"refund": getattr(refund, "pk", None), "error": type(exc).__name__},
+        )
 
 
 def _validate_existing_subscription_refund(

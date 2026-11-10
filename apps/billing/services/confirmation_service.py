@@ -249,6 +249,15 @@ def _remember_interval(subscription, interval):
         subscription.save(update_fields=["billing_interval", "updated_at"])
 
 
+def funded_period_metadata(invoice, period_start, period_end) -> dict:
+    """The period a paid invoice funds, as event metadata: ISO strings, ``funded_end`` ``None`` when open-ended."""
+    return {
+        "invoice_id": invoice.pk,
+        "funded_start": period_start.isoformat() if period_start else None,
+        "funded_end": period_end.isoformat() if period_end else None,
+    }
+
+
 def _activate_or_renew(invoice, *, actor, now):
     """پس از پرداختِ کاملِ فاکتور، اشتراک را فعال یا تمدید می‌کند. تغییرِ پلن
     (kind=plan_change) در commit 8 مدیریت می‌شود."""
@@ -257,15 +266,20 @@ def _activate_or_renew(invoice, *, actor, now):
     period_start = invoice.billing_period_start or now
     period_end = invoice.billing_period_end or next_period_end(period_start, interval)
     idem = f"invoice-{invoice.pk}"
+    # F-08: remember WHICH period this payment funded (on the event that applies it) so a later full refund can tell a refund of
+    # the period in force from a refund of a past or future one. No schema change: SubscriptionEvent.metadata already exists.
+    funded = funded_period_metadata(invoice, period_start, period_end)
 
     if invoice.kind == SubscriptionInvoice.Kind.INITIAL:
         # پرداختِ اولین فاکتور: pending/trialing → active (هرگز پیش از تأیید).
         if subscription.status in (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING):
-            sub_svc.activate_subscription(subscription, actor=actor, period_end=period_end, idempotency_key=idem)
+            sub_svc.activate_subscription(
+                subscription, actor=actor, period_end=period_end, idempotency_key=idem, metadata=funded)
             _remember_interval(subscription, interval)
     elif invoice.kind == SubscriptionInvoice.Kind.RENEWAL:
         sub_svc.renew_subscription(
             subscription, period_start=period_start, period_end=period_end, actor=actor, idempotency_key=idem,
+            metadata=funded,
         )
     elif invoice.kind == SubscriptionInvoice.Kind.PLAN_CHANGE:
         # SUB-001 Repair 4 (همگراییِ دفاعی، تصمیمِ معمار): در عملیاتِ
@@ -289,21 +303,24 @@ def _activate_or_renew(invoice, *, actor, now):
             replacement_intent=f"paid_plan_change_invoice:{invoice.pk}",
         )
         was_trial_plan = subscription.plan_version.plan.code == "trial"          # the internal Trial plan (read BEFORE the version changes)
+        reactivate = (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING)
+        if was_trial_plan:
+            reactivate += (StoreSubscription.Status.GRACE_PERIOD, StoreSubscription.Status.SUSPENDED, StoreSubscription.Status.PAST_DUE)
+        will_activate = subscription.status in reactivate
         sub_svc.change_plan_version(
             subscription, invoice.plan_version, actor=actor, reason="ارتقا پس از پرداخت",
             idempotency_key=idem,
+            # a paid-plan upgrade differential funds NO new period; a trial conversion's period is recorded on the activation event
+            metadata={"invoice_id": invoice.pk} if will_activate else {"invoice_id": invoice.pk, "funded": False},
         )
         # اگر این ارتقا همان اولین پرداختِ واقعیِ Store بود (هنوز trialing/
         # pending، مثلِ تبدیلِ آزمایشی به پولی) — تغییرِ پلن به‌تنهایی وضعیت را
         # عوض نمی‌کند؛ پس اینجا هم فعال می‌شود، دقیقاً مثلِ kind=INITIAL. همین برایِ فروشگاهی که Trialش *تمام شده*
         # (restricted/grace/past_due روی پلنِ Trial) و حالا اولین اشتراکِ پولی‌اش را می‌خرد هم صادق است: پرداختِ تأییدشده آن را
         # دوباره فعال می‌کند (فقط پس از تأییدِ واقعیِ پرداخت — این تابع تنها از confirm_payment/تأییدِ دستیِ مالی فراخوانی می‌شود).
-        reactivate = (StoreSubscription.Status.PENDING, StoreSubscription.Status.TRIALING)
-        if was_trial_plan:
-            reactivate += (StoreSubscription.Status.GRACE_PERIOD, StoreSubscription.Status.SUSPENDED, StoreSubscription.Status.PAST_DUE)
         if subscription.status in reactivate:
             sub_svc.activate_subscription(
-                subscription, actor=actor, period_end=period_end, idempotency_key=f"{idem}-activate",
+                subscription, actor=actor, period_end=period_end, idempotency_key=f"{idem}-activate", metadata=funded,
             )
         _remember_interval(subscription, interval)
     ent.clear_entitlement_cache()

@@ -38,6 +38,12 @@ def _is_platform_staff(user):
     return user.is_authenticated and user.is_staff and user.is_superuser
 
 
+def sub_svc_is_financially_suspended(subscription) -> bool:
+    from apps.subscriptions.services.subscription_service import is_financially_suspended
+
+    return is_financially_suspended(subscription)
+
+
 def _is_notification_team(user) -> bool:
     """Platform team member with at least one granular notification permission (NOT a superuser): may sign in to
     the platform host, but every non-notification page still requires ``_is_platform_staff``."""
@@ -639,6 +645,7 @@ def store_detail(request, store_public_id):
         "target_versions": target_versions,
         "store": store, "domains": domains, "memberships": memberships, "owner_membership": owner_membership,
         "current_subscription": current_subscription, "subscription_history": subscription_history,
+        "financially_suspended": bool(current_subscription) and sub_svc_is_financially_suspended(current_subscription),
         "invoices": invoices, "audit_entries": audit_entries, "notes": notes, "sms_balance": sms_balance,
         "industry_installation": industry_installation, "product_count": product_count, "order_count": order_count,
         "tab": tab, "active_nav": "stores",
@@ -841,6 +848,10 @@ def store_extend_subscription(request, store_public_id):
         messages.error(request, "این فروشگاه اشتراکِ جاری ندارد.")
         return redirect("portal_platform_admin:store-detail", store_public_id)
 
+    if sub_svc_is_financially_suspended(subscription):
+        messages.error(request, "این اشتراک در تعلیقِ مالی است؛ ابتدا با «رفعِ تعلیقِ مالی» (و ثبتِ دلیل) آن را رفع کنید.")
+        return redirect("portal_platform_admin:store-detail", store_public_id)
+
     raw_days = (request.POST.get("days") or "").strip()
     days = int(raw_days) if raw_days.isdigit() and int(raw_days) > 0 else None
     if days is None:
@@ -851,6 +862,36 @@ def store_extend_subscription(request, store_public_id):
     period_end = (subscription.current_period_end or timezone.now()) + timedelta(days=days)
     renew_subscription(subscription, period_start=period_start, period_end=period_end, actor=request.user)
     messages.success(request, f"اشتراکِ «{store.name}» به‌مدتِ {days} روز تمدید شد.")
+    return redirect("portal_platform_admin:store-detail", store_public_id)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def store_reinstate_financial_suspension(request, store_public_id):
+    """F-08: lift a FINANCIAL suspension (caused by a full refund of the period in force). Platform superusers only (enforced
+    again in the service), reason mandatory, audited on the store and on the platform log."""
+    from django.utils import timezone
+
+    from apps.billing.services import financial_suspension_service as fss
+
+    store = get_object_or_404(Store, public_id=store_public_id)
+    subscription = store.subscriptions.filter(is_current=True).first()
+    if subscription is None:
+        messages.error(request, "این فروشگاه اشتراکِ جاری ندارد.")
+        return redirect("portal_platform_admin:store-detail", store_public_id)
+    try:
+        updated = fss.reinstate(subscription, actor=request.user, reason=request.POST.get("reason", ""))
+    except fss.FinancialSuspensionError as exc:
+        messages.error(request, str(exc))
+        return redirect("portal_platform_admin:store-detail", store_public_id)
+    record_platform_audit_event(
+        actor=request.user, action_code="platform_admin.financial_suspension_reinstated", object_type="StoreSubscription",
+        object_id=str(subscription.pk), object_label=store.name, metadata={"reason": (request.POST.get("reason") or "")[:300]},
+    )
+    if updated.current_period_end is not None and updated.current_period_end <= timezone.now():
+        messages.warning(request, "تعلیق رفع شد؛ امّا پایانِ دورهٔ جاری گذشته است و اشتراک در بررسیِ بعدی وارد مهلتِ ارفاقی می‌شود. در صورتِ نیاز دورهٔ اشتراک را تمدید کنید.")
+    else:
+        messages.success(request, "تعلیقِ مالی رفع شد.")
     return redirect("portal_platform_admin:store-detail", store_public_id)
 
 
@@ -1447,6 +1488,9 @@ def subscription_resume(request, subscription_id):
     from apps.subscriptions.services.subscription_service import resume_subscription
 
     subscription = get_object_or_404(StoreSubscription, pk=subscription_id)
+    if sub_svc_is_financially_suspended(subscription):
+        messages.error(request, "این اشتراک در تعلیقِ مالی است؛ فقط با «رفعِ تعلیقِ مالی» در صفحهٔ فروشگاه (با ثبتِ دلیل) رفع می‌شود.")
+        return redirect("portal_platform_admin:subscriptions")
     try:
         resume_subscription(subscription, actor=request.user)
         messages.success(request, f"اشتراکِ «{subscription.store.name}» از سر گرفته شد.")

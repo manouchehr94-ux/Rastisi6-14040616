@@ -34,7 +34,7 @@ CSS = ROOT / "static" / "portal" / "css" / "platform-admin-panel.css"
 # Routes that are deliberately NOT sidebar destinations: auth, POST-only actions, or contextual sub-pages reached from a listed page.
 POST_ONLY = {
     "logout", "store-suspend", "store-activate", "store-support-login", "store-extend-trial", "store-set-trial-end",
-    "store-end-trial-now", "store-change-plan", "store-extend-subscription", "store-add-note", "user-activate", "user-suspend",
+    "store-end-trial-now", "store-change-plan", "store-extend-subscription", "store-reinstate-financial-suspension", "store-add-note", "user-activate", "user-suspend",
     "user-add-note", "public-photo-reset", "public-site-switch", "public-site-reset", "plan-archive", "plan-version-publish",
     "subscription-cancel", "subscription-suspend", "subscription-resume", "sms-package-archive", "sms-credit-adjust",
     "domain-check", "domain-set-primary", "notification-sender-toggle", "notification-platform-template-preview",

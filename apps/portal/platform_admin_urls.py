@@ -28,6 +28,7 @@ urlpatterns = [
     path("stores/<uuid:store_public_id>/end-trial-now/", views.store_end_trial_now, name="store-end-trial-now"),
     path("stores/<uuid:store_public_id>/change-plan/", views.store_change_plan, name="store-change-plan"),
     path("stores/<uuid:store_public_id>/extend-subscription/", views.store_extend_subscription, name="store-extend-subscription"),
+    path("stores/<uuid:store_public_id>/reinstate-financial-suspension/", views.store_reinstate_financial_suspension, name="store-reinstate-financial-suspension"),
     path("stores/<uuid:store_public_id>/add-note/", views.store_add_note, name="store-add-note"),
 
     # --- کاربران ---

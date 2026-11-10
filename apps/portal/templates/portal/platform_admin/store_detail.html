@@ -74,6 +74,10 @@
   <div class="pa-cardbody">
     {% if current_subscription %}
     <p><b>{{ current_subscription.plan_version.plan.name }}</b> — <span class="pa-badge pa-info">{{ current_subscription.get_status_display }}</span></p>
+    {% if financially_suspended %}
+    <div class="pa-alert pa-alert-error"><div><p><b>تعلیقِ مالی:</b> این اشتراک پس از بازپرداخت کاملِ پرداختِ دورهٔ جاری معلق شده است. داده‌ها (کالا، سفارش، مشتری) حفظ شده‌اند. اگر دورهٔ پرداخت‌شدهٔ دیگری آغاز شود، سامانه خودکار آن را رفع می‌کند؛ در غیر این صورت فقط مدیرِ ارشد با ثبتِ دلیل می‌تواند آن را رفع کند.</p>
+      <button class="pa-btn pa-small" type="button" data-pa-open="dlg-reinstate-fin">رفعِ تعلیقِ مالی</button></div></div>
+    {% endif %}
     <p class="pa-help">دوره‌ی جاری: {{ current_subscription.current_period_start|jalali|default:"—" }} تا {{ current_subscription.current_period_end|jalali|default:"—" }}{% if current_subscription.trial_end_at %} · پایانِ آزمایشی: {{ current_subscription.trial_end_at|jalali }}{% endif %}</p>
     {% else %}
     <p class="pa-help">این فروشگاه اشتراکِ جاری ندارد.</p>
@@ -266,6 +270,17 @@
         <div class="pa-field pa-mt-3"><label>دلیل</label><input class="pa-input" type="text" name="reason"></div>
       </div>
       <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">تغییرِ پلن</button></div>
+    </form>
+  </div>
+</dialog>
+
+<dialog class="pa-dialog" id="dlg-reinstate-fin" aria-labelledby="dlg-reinstate-fin-t">
+  <div class="pa-modalbox">
+    <div class="pa-modalhead"><h3>رفعِ تعلیقِ مالی</h3><button class="pa-x" type="button" data-pa-close>✕</button></div>
+    <form method="post" action="{% url 'portal_platform_admin:store-reinstate-financial-suspension' store.public_id %}" data-confirm="تعلیقِ مالیِ این اشتراک رفع شود؟ این اقدام با نام و دلیلِ شما ثبت می‌شود.">
+      {% csrf_token %}
+      <div class="pa-modalbody"><div class="pa-field"><label>دلیل (الزامی)</label><input class="pa-input" type="text" name="reason" minlength="6" required></div></div>
+      <div class="pa-modalfoot"><button class="pa-btn" type="button" data-pa-close>انصراف</button><button class="pa-btn pa-primary" type="submit">رفعِ تعلیق</button></div>
     </form>
   </div>
 </dialog>

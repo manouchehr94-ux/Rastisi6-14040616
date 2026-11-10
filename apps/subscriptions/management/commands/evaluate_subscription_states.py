@@ -22,6 +22,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         results = evaluate_subscription_states(dry_run=dry_run)
+        # F-08: restore financially suspended subscriptions whose paid (e.g. future) period has begun. Always attempted, even if
+        # the state transitions above reported an error, so one failure cannot keep a paid store suspended.
+        from apps.billing.services import financial_suspension_service
+
+        restored = financial_suspension_service.evaluate_restorations(dry_run=dry_run)
+        results["errors"] = list(results.get("errors") or []) + restored["errors"]
+        self.stdout.write(f"financial_suspension_restored={restored['restored']} (scanned={restored['scanned']})")
         prefix = "[dry-run] " if dry_run else ""
         self.stdout.write(self.style.SUCCESS(
             f"{prefix}بررسی‌شده={results['scanned']}, "
@@ -31,5 +38,5 @@ class Command(BaseCommand):
 
         if results.get("errors"):
             # The remaining rows WERE processed. A non-zero exit makes cron/run_job.sh alert, so a failing row is never silent.
-            raise CommandError(f"{len(results['errors'])} item(s) failed (state transitions): " + ", ".join(
+            raise CommandError(f"{len(results['errors'])} item(s) failed (state transitions / financial restoration): " + ", ".join(
                 f"{list(e.values())[0]}:{e['error']}" for e in results["errors"][:10]))

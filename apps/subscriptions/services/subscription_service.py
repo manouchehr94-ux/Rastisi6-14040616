@@ -138,13 +138,13 @@ def start_trial(subscription, *, actor=None, idempotency_key="", days=None) -> S
 
 
 @transaction.atomic
-def activate_subscription(subscription, *, actor=None, period_end=None, idempotency_key="") -> StoreSubscription:
+def activate_subscription(subscription, *, actor=None, period_end=None, idempotency_key="", metadata=None) -> StoreSubscription:
     """اشتراک را فعال می‌کند. دوره‌ی جاری را تنظیم می‌کند. در 5A پول واقعی
     دریافت نمی‌شود (ADR-72) — فعال‌سازی یک اقدامِ اداری/سرویسی است."""
     now = timezone.now()
     return _transition(
         subscription, to_status=S.ACTIVE, event_type=ET.ACTIVATED, actor=actor,
-        reason="", idempotency_key=idempotency_key,
+        reason="", idempotency_key=idempotency_key, metadata=metadata,
         extra_fields={
             "start_at": subscription.start_at or now,
             "current_period_start": subscription.current_period_start or now,
@@ -191,11 +191,11 @@ def mark_past_due(subscription, *, actor=None, idempotency_key="") -> StoreSubsc
 
 
 @transaction.atomic
-def suspend_subscription(subscription, *, actor=None, reason="", idempotency_key="") -> StoreSubscription:
+def suspend_subscription(subscription, *, actor=None, reason="", idempotency_key="", metadata=None) -> StoreSubscription:
     before = _status_of(subscription)
     result = _transition(
         subscription, to_status=S.SUSPENDED, event_type=ET.SUSPENDED, actor=actor,
-        reason=reason, idempotency_key=idempotency_key,
+        reason=reason, idempotency_key=idempotency_key, metadata=metadata,
         extra_fields={"suspended_at": timezone.now()},
     )
     if before != S.SUSPENDED:
@@ -206,12 +206,12 @@ def suspend_subscription(subscription, *, actor=None, reason="", idempotency_key
 
 
 @transaction.atomic
-def resume_subscription(subscription, *, actor=None, idempotency_key="") -> StoreSubscription:
+def resume_subscription(subscription, *, actor=None, idempotency_key="", reason="", metadata=None) -> StoreSubscription:
     """اشتراکِ معلق/معوق/grace را دوباره فعال می‌کند (ADR-66) — هرگز به
     ``trialing`` برنمی‌گردد."""
     return _transition(
         subscription, to_status=S.ACTIVE, event_type=ET.RESUMED, actor=actor,
-        reason="", idempotency_key=idempotency_key, extra_fields={"suspended_at": None},
+        reason=reason, idempotency_key=idempotency_key, metadata=metadata, extra_fields={"suspended_at": None},
     )
 
 
@@ -249,7 +249,7 @@ def expire_subscription(subscription, *, actor=None, idempotency_key="") -> Stor
 
 
 @transaction.atomic
-def renew_subscription(subscription, *, period_start, period_end, actor=None, idempotency_key="") -> StoreSubscription:
+def renew_subscription(subscription, *, period_start, period_end, actor=None, idempotency_key="", metadata=None) -> StoreSubscription:
     """اشتراک را برایِ دوره‌ی تازه تمدید می‌کند (پس از پرداختِ موفقِ فاکتورِ
     تمدید — ADR-78). دوره‌ی جاری را جلو می‌برد، وضعیتِ grace/past_due را (در
     صورتِ قانونی‌بودن) به active برمی‌گرداند، و رخدادِ ``renewed`` ثبت می‌کند.
@@ -272,13 +272,13 @@ def renew_subscription(subscription, *, period_start, period_end, actor=None, id
     _record_event(
         locked, event_type=ET.RENEWED, from_status=from_status, to_status=locked.status,
         actor=actor, reason="", idempotency_key=idempotency_key,
-        metadata={"period_start": str(period_start), "period_end": str(period_end)},
+        metadata={"period_start": str(period_start), "period_end": str(period_end), **(metadata or {})},
     )
     return locked
 
 
 @transaction.atomic
-def change_plan_version(subscription, target_version, *, actor=None, reason="", idempotency_key="") -> StoreSubscription:
+def change_plan_version(subscription, target_version, *, actor=None, reason="", idempotency_key="", metadata=None) -> StoreSubscription:
     """نسخه‌ی پلنِ اشتراک را عوض می‌کند (ارتقا/تنزل) — وضعیت را تغییر نمی‌دهد،
     فقط ``plan_version`` و رخدادِ ``plan_changed`` (ADR-70). مدتِ تریال ریست
     نمی‌شود (ADR-67). نسخه‌ی هدف باید منتشرشده باشد.
@@ -301,7 +301,7 @@ def change_plan_version(subscription, target_version, *, actor=None, reason="", 
         locked, event_type=ET.PLAN_CHANGED, from_status=locked.status, to_status=locked.status,
         actor=actor, reason=reason, from_plan_version=from_version, to_plan_version=target_version,
         idempotency_key=idempotency_key,
-        metadata={"from_version": from_version.pk, "to_version": target_version.pk},
+        metadata={"from_version": from_version.pk, "to_version": target_version.pk, **(metadata or {})},
     )
     return locked
 
@@ -394,6 +394,30 @@ def end_trial_now(subscription, *, actor, reason: str, idempotency_key="") -> St
         metadata={"previous_trial_end_at": str(before) if before else None, "new_trial_end_at": str(now)},
     )
     return result
+
+
+# ================================================================== F-08 financial suspension
+
+#: ``metadata["kind"]`` of a ``suspended`` event written because a refund removed the money that funded the current period. It is
+#: the only durable discriminator between a financial suspension and a dunning / grace / trial / manual one (no schema change).
+FINANCIAL_SUSPENSION_KIND = "financial"
+
+
+def financial_suspension_event(subscription):
+    """The ``suspended`` event that put ``subscription`` into its CURRENT suspension when that suspension is financial, else
+    ``None``. A subscription that was financially suspended, then renewed/resumed and later suspended for another reason is NOT
+    financially suspended: only the latest ``suspended`` event counts."""
+    if subscription is None or subscription.status != S.SUSPENDED:
+        return None
+    event = subscription.events.filter(event_type=ET.SUSPENDED).order_by("-pk").first()
+    if event is not None and (event.metadata or {}).get("kind") == FINANCIAL_SUSPENSION_KIND:
+        return event
+    return None
+
+
+def is_financially_suspended(subscription) -> bool:
+    return financial_suspension_event(subscription) is not None
+
 
 
 # ================================================================== پلنِ پیش‌فرض
