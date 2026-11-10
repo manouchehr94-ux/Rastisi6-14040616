@@ -1,10 +1,11 @@
-import logging
 """تولیدِ فاکتورِ تمدید (ADR-78).
 
 برایِ اشتراک‌هایِ فعالِ نزدیک به پایانِ دوره، دقیقاً یک فاکتورِ تمدید به‌ازایِ
 هر دوره ساخته می‌شود — idempotent (قیدِ یکتا رویِ subscription + دوره)، batch-
 safe، با احترام به «لغو در پایانِ دوره» و رد کردنِ اشتراک‌هایِ نهایی‌شده. مبلغ
 و ارز رویِ فاکتور از نسخه‌ی پلنِ جاری *فریز* می‌شوند."""
+
+import logging
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
