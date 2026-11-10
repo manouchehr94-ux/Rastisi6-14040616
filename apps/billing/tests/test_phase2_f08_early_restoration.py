@@ -49,10 +49,10 @@ class EarlyRestorationTests(FinBase):
         self.assertEqual(future.status, SubscriptionInvoice.Status.PAID)
         self.assert_restricted()                                                    # before the fix: ACTIVE immediately
         self.assertTrue(sub_svc.is_financially_suspended(self.sub))                 # still recognised as financial
-        self.assertEqual(self.sub.current_period_end, future.billing_period_end)    # the paid period is recorded, not lost
-        kept = self.events(ET.RENEWED)[-1]
+        kept = self.events(ET.RENEWED)[-1]                                          # the paid period is recorded, not lost
         self.assertEqual((kept.from_status, kept.to_status), (S.SUSPENDED, S.SUSPENDED))
-        self.assertTrue(kept.metadata.get("kept_suspended"))
+        self.assertEqual(kept.metadata.get("funded_start"), future.billing_period_start.isoformat())
+        self.assertEqual(kept.metadata.get("deferred"), "financial_suspension")
 
     def test_no_access_before_the_future_period_begins_and_restoration_exactly_when_it_begins(self):
         self.full_refund(self.current)

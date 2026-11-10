@@ -36,7 +36,10 @@ Awaiting user QA and approval.
 2. Real `PROCESSING` / `UNKNOWN` refund statuses and the new refund columns: need a migration. Interim behaviour is in place.
 3. Production scheduler (F-03) must be installed and verified by an operator using the runbook checklist.
 4. Bank refund idempotency / inquiry for Pasargad, Saman and Mellat is unverified; the code treats any doubtful call as unknown.
-5. (Closed in revision 2.) A renewal paid for a FUTURE period no longer lifts a financial suspension; see section 6.
+5. (Resolved in the F-08 follow-up.) A paid RENEWAL for a period that has not begun no longer resumes a financially suspended
+   subscription: `renew_subscription` records the funded period on the `invoice-<pk>` event, leaves the status and current period
+   unchanged, and `evaluate_subscription_states` resumes the subscription (once) when that period covers the present. A renewal
+   whose period already covers the present, and every non-financial suspension, behave as before. No schema change.
 6. F-07 maker/checker, F-09 and the F-11 window are not implemented.
 
 Proposal for the migration-dependent items: `docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md` (not created, not applied).
@@ -112,9 +115,10 @@ Resolved in revision 2: the remaining PostgreSQL runs (dashboard, stores, core, 
 Defect found in review: `renew_subscription` moved a financially suspended subscription to ACTIVE as soon as any renewal was paid,
 including a period starting in the future, so a store regained access before the period it paid for began.
 
-Fix (`subscription_service.renew_subscription`): the paid period is recorded, but a financially suspended subscription stays
-suspended unless that period's start is not in the future (the funded period covers now). The event metadata carries
-`kept_suspended: true`. Automatic restoration remains the scheduled evaluator, which restores only when a settled, non-refunded
+Fix (`subscription_service.renew_subscription`, `_period_covers`): when the subscription is financially suspended and the renewed period
+does not cover the present, the payment is recorded on the `invoice-<pk>` `renewed` event (funded period, `deferred: "financial_suspension"`),
+and the status and the current period are left unchanged. (The same fix was also published as commit `49ba9d8c` by a parallel session;
+the two were merged and a single implementation is kept, with both sets of tests.) Automatic restoration remains the scheduled evaluator, which restores only when a settled, non-refunded
 invoice's funded period covers the current time (start inclusive, end exclusive). The audited, superuser-only reinstatement is the
 only early path. A non-financial suspension (dunning, grace) is unchanged. I checked every other code path that can move a
 subscription out of SUSPENDED (`activate_subscription` callers, `resume_subscription` callers, platform-admin extend/resume): none
