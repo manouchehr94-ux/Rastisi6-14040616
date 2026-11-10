@@ -6,6 +6,7 @@ ADR-66/67.
 دوره‌ای از یک زمان‌بندِ خارجی (cron/systemd timer) اجرا شود."""
 
 from django.core.management.base import BaseCommand, CommandError
+from apps.core.job_lock import exclusive
 
 from apps.subscriptions.services.subscription_service import evaluate_subscription_states
 
@@ -19,6 +20,7 @@ class Command(BaseCommand):
             help="فقط گزارش می‌دهد چه چیزی تغییر می‌کرد، بدونِ اعمالِ واقعی.",
         )
 
+    @exclusive("evaluate_subscription_states")
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         results = evaluate_subscription_states(dry_run=dry_run)

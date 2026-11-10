@@ -11,6 +11,7 @@ import logging
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand, CommandError
+from apps.core.job_lock import exclusive
 from django.db.models import Q
 from django.utils import timezone
 
@@ -47,6 +48,7 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=100)
         parser.add_argument("--dry-run", action="store_true")
 
+    @exclusive("reprocess_billing_webhooks")
     def handle(self, *args, **opts):
         now = timezone.now()
         counts = {"due": 0, "processed": 0, "still_failed": 0, "unexpected_errors": 0}

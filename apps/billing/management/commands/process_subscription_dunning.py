@@ -4,6 +4,7 @@ idempotent و batch-safe؛ فاکتورِ پرداخت‌شده/باطل را Re
 زمان‌بندِ خارجی (cron) اجرا شود (بدونِ صفِ کار — ADR-49)."""
 
 from django.core.management.base import BaseCommand, CommandError
+from apps.core.job_lock import exclusive
 
 from apps.billing.services.dunning_service import process_dunning
 from apps.stores.models import Store
@@ -16,6 +17,7 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true", help="فقط گزارش، بدونِ تغییر.")
         parser.add_argument("--store", default=None, help="فقط این اسلاگِ فروشگاه.")
 
+    @exclusive("process_subscription_dunning")
     def handle(self, *args, **options):
         store = None
         if options["store"]:

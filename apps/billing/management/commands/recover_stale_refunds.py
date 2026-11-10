@@ -10,6 +10,7 @@ It exits non-zero while any refund is waiting in the unknown state so the schedu
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand, CommandError
+from apps.core.job_lock import exclusive
 from django.utils import timezone
 
 from apps.billing.models import SubscriptionRefund
@@ -22,6 +23,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--older-than-minutes", type=int, default=10)
 
+    @exclusive("recover_stale_refunds")
     def handle(self, *args, **opts):
         now = timezone.now()
         older = timedelta(minutes=opts["older_than_minutes"])

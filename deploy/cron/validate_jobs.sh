@@ -15,6 +15,17 @@ step "6. engagement (queue only)";             run engagement run_engagement_job
 step "7. health";                              ALLOW=1 run health check_background_jobs
 step "8. second run of the idempotent jobs must create nothing new"; run engagement2 run_engagement_jobs --no-deliver
 step "9. e-mail sender identities (provider identity API only; RASTISI_EMAIL_PROVIDER=fake is a no-op)"; run email-senders refresh_email_identities
+step "10. platform billing jobs (dry-run / read-only; nothing is charged, refunded, invoiced or changed)"
+run billing-recon         reconcile_platform_payments --dry-run
+run billing-webhooks      reprocess_billing_webhooks --dry-run
+run billing-states        evaluate_subscription_states --dry-run
+run billing-renewals      generate_subscription_renewals --dry-run
+run billing-dunning       process_subscription_dunning --dry-run
+run billing-claims        expire_platform_card_claims --dry-run
+run billing-coupons       release_expired_platform_coupon_reservations --dry-run
+ALLOW=1 run billing-verify verify_billing_consistency
+ALLOW=1 run subs-verify    verify_subscription_consistency
+step "11. billing health symptoms (exit 1 WARNING / 2 CRITICAL is a finding, not a script failure)"; ALLOW=2 run billing-health check_background_jobs
 echo
 echo "Next, by hand: (a) crontab -l shows the installed entries; (b) after 5 min the log /var/log/rastisi/outbox.log has a new '=== … end outbox rc=0';"
 echo "(c) stop the DB briefly (staging only) and confirm the alert command fires and check_background_jobs/exit codes are non-zero;"

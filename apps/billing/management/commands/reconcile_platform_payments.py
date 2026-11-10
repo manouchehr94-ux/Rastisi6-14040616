@@ -9,6 +9,7 @@ import logging
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand, CommandError
+from apps.core.job_lock import exclusive
 from django.db.models import Q
 from django.utils import timezone
 
@@ -33,6 +34,7 @@ class Command(BaseCommand):
                             help="Also re-verify attempts marked failed only by a browser hint (gateway_declined) newer than this.")
         parser.add_argument("--dry-run", action="store_true")
 
+    @exclusive("reconcile_platform_payments")
     def handle(self, *args, **opts):
         now = timezone.now()
         newest = now - timedelta(minutes=opts["min_age_minutes"])
