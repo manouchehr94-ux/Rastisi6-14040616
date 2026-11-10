@@ -214,7 +214,13 @@ def refund_purchase(purchase, *, actor=None, reason="", idempotency_key=""):
     """بازپرداختِ یک خریدِ پیامکِ **پرداخت‌شده‌یِ آنلاین**: اعتبارِ مصرف‌نشده از موجودی برگردانده می‌شود
     (ردیفِ دفترِ ``purchase_reversal``، دقیقاً یک‌بار) و بازپرداختِ پول از Providerِ همان پرداخت
     درخواست می‌شود. Providerی که بازپرداختِ خودکار ندارد «در انتظارِ پردازشِ دستی» می‌ماند (ثبت در
-    حسابرسی). اگر اعتبار مصرف شده باشد خطا می‌دهد — سیاستِ بازپرداختِ جزئی نیازمندِ تأییدِ مالک است."""
+    حسابرسی). اگر اعتبار مصرف شده باشد خطا می‌دهد — سیاستِ بازپرداختِ جزئی نیازمندِ تأییدِ مالک است.
+
+    NOT PRODUCTION-READY for providers with an automatic reversal (Pasargad, Saman, Mellat) (Phase 2 / F-06, BLOCKED): the credits
+    are reversed BEFORE the provider is called, inside one transaction. A definite provider error rolls the reversal back, but an
+    ambiguous outcome (timeout) or a database failure after a successful provider call leaves credits and money out of step. The
+    approved design (freeze credits, call the provider, reverse only after confirmed success) needs a schema change that is not
+    approved yet: see docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md. Manual providers ("pending manual") are not exposed."""
     reason = (reason or "").strip()
     if not reason:
         raise SmsRefundError("دلیلِ بازپرداخت الزامی است.")
