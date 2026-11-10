@@ -22,6 +22,13 @@ from apps.billing.services import attempt_service, webhook_service
 from apps.billing.services.confirmation_service import ConfirmationError, confirm_payment
 
 
+#: A REQUIRES_ACTION attempt with one of these codes is a confirmed payment already recorded for finance reconciliation; it is
+#: never re-verified or re-audited by callbacks (resolution is a finance action: refund or documented allocation).
+_TERMINAL_RECONCILIATION_CODES = frozenset({
+    "duplicate_payment", "purchase_completed", "fulfilment_blocked", "late_payment_void", "late_payment_uncollectible", "stale_decision",
+})
+
+
 class PaymentFlowError(Exception):
     """خطای قابل‌نمایش هنگام شروعِ پرداخت."""
 
@@ -150,6 +157,20 @@ def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now
     return attempt, session
 
 
+def needs_verification(attempt) -> bool:
+    """Should the public return / status button / reconciler ask the gateway about this attempt?
+
+    A non-final attempt: yes. A ``FAILED`` attempt whose only evidence of failure is a browser-supplied hint
+    (``gateway_declined``, set by ``verify_and_confirm`` when the gateway did not confirm AND the callback claimed failure): yes
+    too. The hint is unauthenticated (anyone holding the callback URL can send ``success=0``), and a bank may redirect back
+    before the transaction is final, so such an attempt must stay verifiable or a payment that later settles is stranded (F-01).
+    Provider-decided failures (``provider_terminal_failure``) and every other final status stay final."""
+    S = type(attempt).Status
+    if not attempt.is_final:
+        return True
+    return attempt.status == S.FAILED and attempt.failure_code == "gateway_declined"
+
+
 def flag_requires_action(attempt, *, code, now):
     """پولی که درگاه تأیید کرده امّا با رکوردِ ما نمی‌خواند (مبلغ/سفارش/پرداختِ تکراری): تلاش به
     «نیازمندِ اقدام» می‌رود تا در فهرستِ تطبیقِ مدیر دیده شود؛ هیچ اعمالِ مالی انجام نمی‌شود."""
@@ -173,7 +194,7 @@ def verify_and_confirm(attempt, *, confirm, confirmation_error, actor=None, now=
     S = model.Status
     if attempt.status == S.SUCCEEDED:
         return attempt
-    if attempt.status == S.REQUIRES_ACTION and attempt.failure_code in ("duplicate_payment", "purchase_completed"):
+    if attempt.status == S.REQUIRES_ACTION and attempt.failure_code in _TERMINAL_RECONCILIATION_CODES:
         return attempt                                 # پرداختِ تکراریِ شناسایی‌شده؛ دوباره verify/حسابرسی نمی‌شود (تسویه با اقدامِ مدیرِ مالی)
 
     provider = registry.get_provider(attempt.provider)

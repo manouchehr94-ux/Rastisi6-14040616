@@ -82,6 +82,16 @@ def _callback_data(request) -> dict:
     return data
 
 
+def _throttle_allows(key: str) -> bool:
+    """Per-attempt verify throttle. A cache fault must never turn the post-payment return page into a 500 (F-10): if the
+    cache is unavailable we allow the verify (it is idempotent and bounded by the per-token lookup)."""
+    try:
+        return bool(cache.add(key, 1, _VERIFY_MIN_INTERVAL))
+    except Exception:  # noqa: BLE001
+        logger.warning("billing verify throttle cache unavailable; allowing verify")
+        return True
+
+
 _STATE_BY_STATUS = {"succeeded": "ok", "failed": "failed", "cancelled": "failed", "expired": "failed",
                     "requires_action": "action"}
 
@@ -97,9 +107,9 @@ def payment_return(request, token):
     if attempt is None:
         raise Http404
 
-    if not attempt.is_final:
+    if payment_flow_service.needs_verification(attempt):
         throttle_key = f"billing:verify:{token}"
-        if cache.add(throttle_key, 1, _VERIFY_MIN_INTERVAL):
+        if _throttle_allows(throttle_key):
             data = _callback_data(request)
             try:
                 if kind == "sms":
