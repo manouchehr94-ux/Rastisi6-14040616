@@ -158,16 +158,17 @@ I can add a code-level kill switch if you want one; that is a separate decision.
 ## 7. Final regression evidence (baseline vs remediation, same configuration)
 
 Configuration for every row: disposable PostgreSQL 16.2, `manage.py test <labels> --parallel 4`, SQLite not involved,
-baseline = `abab0041003d284c61c1990db7e865ce7a012bee`, remediation = `1aff25a0366ea218830d4c6f2b0e784154356e25`.
+baseline = `abab0041003d284c61c1990db7e865ce7a012bee`. Remediation = `9503fc9e0f118cf16e00c78b9c7fa875a3e15a47` for the first row and
+`1aff25a0` for the dashboard/stores row (the later commits change only `subscription_service.renew_subscription`, tests and docs; neither app imports it).
 Reproduce with `bash docs/payments/run_phase2_pg_tests.sh <outfile> 4 <labels>` (set `WT=<worktree>` to pick baseline or remediation).
 
 | Labels | Baseline | Remediation | Failing set |
 |---|---|---|---|
-| `apps.billing apps.subscriptions apps.core apps.sms` | 1515 run, 3 errors, 30 skipped | 1667 run, 3 errors, 30 skipped | identical (3 `setUpClass` errors) |
+| `apps.billing apps.subscriptions apps.core apps.sms` | 1515 run, 3 errors, 30 skipped | 1677 run, 3 errors, 30 skipped | identical (3 `setUpClass` errors) |
 | `apps.dashboard apps.stores` | 2900 run, 2 failures, 8 errors, 7 skipped | 2900 run, 2 failures, 8 errors, 7 skipped | identical (10) |
 | `apps.billing apps.subscriptions apps.portal` (earlier, `5c372308`) | see section 3 | 2499 run, 2 failures, 3 errors | identical to the baseline set |
 
-The 152 extra tests on the remediation side are exactly the new Phase 2 tests (142 + 10 from revision 2).
+The 162 extra tests in the first row are the new Phase 2 tests (142 + 10 + 10 from the merged F-08 follow-up); the dashboard/stores row has 2900 on both sides.
 
 Failing set, all present on the baseline with the same count:
 * `setUpClass` UniqueViolation on `django_content_type` under `--parallel 4` (TransactionTestCase classes):
