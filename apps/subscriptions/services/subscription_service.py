@@ -248,6 +248,11 @@ def expire_subscription(subscription, *, actor=None, idempotency_key="") -> Stor
     )
 
 
+def _period_covers(period_start, period_end, now) -> bool:
+    """True when ``now`` lies inside [period_start, period_end); either bound may be ``None`` (open)."""
+    return (period_start is None or period_start <= now) and (period_end is None or now < period_end)
+
+
 @transaction.atomic
 def renew_subscription(subscription, *, period_start, period_end, actor=None, idempotency_key="", metadata=None) -> StoreSubscription:
     """اشتراک را برایِ دوره‌ی تازه تمدید می‌کند (پس از پرداختِ موفقِ فاکتورِ
@@ -260,6 +265,20 @@ def renew_subscription(subscription, *, period_start, period_end, actor=None, id
     if idempotency_key and locked.events.filter(idempotency_key=idempotency_key).exists():
         return locked
     from_status = locked.status
+    now = timezone.now()
+    if (from_status == S.SUSPENDED and not _period_covers(period_start, period_end, now)
+            and financial_suspension_event(locked) is not None):
+        # F-08: a FINANCIAL suspension (full refund of the period in force) is lifted only by a settled payment whose period covers
+        # the present. This payment (typically an early renewal of a FUTURE period) is preserved: the event below records the funded
+        # period, but the status and the current period are left alone. ``evaluate_restorations`` resumes the subscription when
+        # that period begins. Any other suspension reason, and every non-suspended status, renews exactly as before.
+        _record_event(
+            locked, event_type=ET.RENEWED, from_status=from_status, to_status=from_status,
+            actor=actor, reason="", idempotency_key=idempotency_key,
+            metadata={"period_start": str(period_start), "period_end": str(period_end), **(metadata or {}),
+                      "deferred": "financial_suspension"},
+        )
+        return locked
     locked.current_period_start = period_start
     locked.current_period_end = period_end
     locked.grace_period_end = None

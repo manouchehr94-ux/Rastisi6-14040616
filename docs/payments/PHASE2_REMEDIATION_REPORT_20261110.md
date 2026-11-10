@@ -36,8 +36,10 @@ Awaiting user QA and approval.
 2. Real `PROCESSING` / `UNKNOWN` refund statuses and the new refund columns: need a migration. Interim behaviour is in place.
 3. Production scheduler (F-03) must be installed and verified by an operator using the runbook checklist.
 4. Bank refund idempotency / inquiry for Pasargad, Saman and Mellat is unverified; the code treats any doubtful call as unknown.
-5. A paid RENEWAL invoice still resumes a financially suspended subscription through `renew_subscription`, even if that period starts
-   later. Accepted residual risk (new money was received); not changed.
+5. (Resolved in the F-08 follow-up.) A paid RENEWAL for a period that has not begun no longer resumes a financially suspended
+   subscription: `renew_subscription` records the funded period on the `invoice-<pk>` event, leaves the status and current period
+   unchanged, and `evaluate_subscription_states` resumes the subscription (once) when that period covers the present. A renewal
+   whose period already covers the present, and every non-financial suspension, behave as before. No schema change.
 6. F-07 maker/checker, F-09 and the F-11 window are not implemented.
 
 Proposal for the migration-dependent items: `docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md` (not created, not applied).
@@ -106,3 +108,23 @@ environment); those ran on SQLite. Remaining validation: run them on PostgreSQL 
 * Operations: `apps/core/job_lock.py`, `check_background_jobs`, `deploy/cron/rastisi.crontab`, `deploy/cron/validate_jobs.sh`.
 * Tests: seven new `test_phase2_*` modules; two existing tests updated.
 * Docs: this report, the migration proposal, the jobs runbook.
+
+## 5. F-08 follow-up and open SMS-refund release blocker
+
+**F-08 follow-up (no schema change).** `subscription_service.renew_subscription` no longer lifts a *financial* suspension when the renewed
+period does not cover the present (`_period_covers`). It records the `renewed` event (`metadata.deferred="financial_suspension"`, funded
+period included, same `invoice-<pk>` idempotency key) and leaves status and current period alone. `financial_suspension_service.
+evaluate_restorations` (run by `evaluate_subscription_states`) resumes the subscription once, when the funded period covers the present.
+Dunning/grace/trial/manual suspensions, renewals covering the present, Trial-to-paid, plan changes and zero-value invoices are unchanged.
+Tests: `EarlyPaidFutureRenewalDoesNotResumeTests` in `apps/billing/tests/test_phase2_financial_suspension.py`.
+
+**SMS purchase refunds remain a RELEASE BLOCKER (not fixed, migration-dependent, not approved).** The only caller of
+`sms_purchase_payment_service.refund_purchase` is the platform-admin action
+`POST /payments/sms-purchases/<purchase_id>/refund/` (`portal_platform_admin:sms-purchase-action`, view `sms_purchase_action`, button
+in `portal/platform_admin/sms_purchases.html` for purchases with status `completed`), reachable only by platform superusers. It reverses the
+credits first and calls the provider afterwards, so an ambiguous provider outcome can leave credits and money out of step. Exposure depends
+on the provider that took the payment (`registry.get_provider(attempt.provider)`; setting `RASTISI_BILLING_PROVIDER`, default `manual`):
+`manual`/`zibal` return "manual processing" (no automatic bank call); `pasargad`, `saman`, `mellat` (adapter-backed, `CANCEL` reversal
+for a full-amount payment) are the unsafe ones. Until the freeze design in the migration proposal is approved and built: keep the
+`refund` action unused for purchases paid through `pasargad`/`saman`/`mellat` (restrict it at the proxy/WAF or by not granting platform
+superuser access to non-finance staff), and do not enable those providers for SMS purchases in production.

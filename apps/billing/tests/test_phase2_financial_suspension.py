@@ -242,13 +242,130 @@ class PastFutureAndOverlappingPeriodTests(FinBase):
         self.full_refund(current)
         self.sub.refresh_from_db()
         self.assertTrue(sub_svc.is_financially_suspended(self.sub))
-        renewed = self.renewal_paid(self.day(30), self.day(60))                           # paying again resumes it
+        renewed = self.renewal_paid(self.day(30), self.day(60))                           # early payment: preserved, NOT yet in force
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        self.assertEqual(fss.evaluate_restorations(now=self.day(31))["restored"], 1)       # the paid period begins -> restored
         self.assertEqual(self.refresh(), S.ACTIVE)
         sub_svc.suspend_subscription(self.sub, reason="پایانِ Dunning")
         self.sub.refresh_from_db()
         self.assertFalse(sub_svc.is_financially_suspended(self.sub))
         self.assertEqual(fss.evaluate_restorations(now=self.day(31))["restored"], 0)
         self.assertEqual(renewed.status, SubscriptionInvoice.Status.PAID)
+
+
+class EarlyPaidFutureRenewalDoesNotResumeTests(FinBase):
+    """F-08 follow-up: a renewal paid EARLY for a period that has not begun must be preserved but must not lift a financial
+    suspension (no premature entitlement); the evaluator resumes the subscription when that funded period begins."""
+
+    def setUp(self):
+        super().setUp()
+        sub_svc.activate_subscription(self.sub, period_end=self.day(-30))
+        self.sub.refresh_from_db()
+        self.current = self.renewal_paid(self.day(-30), self.day(30))
+
+    def suspended_with_future_paid(self):
+        self.full_refund(self.current)
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        return self.renewal_paid(self.day(30), self.day(60))
+
+    def test_A_fully_refunded_current_period_with_no_other_payment_is_financially_suspended(self):
+        self.full_refund(self.current)
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        self.assertTrue(sub_svc.is_financially_suspended(self.sub))
+        access = ent.get_subscription_access_state(self.store)
+        self.assertEqual((access.state, access.allows_growth), (ent.AccessState.RESTRICTED, False))
+        self.assertTrue(Store.objects.filter(pk=self.store.pk).exists())
+
+    def test_B_early_paid_future_renewal_is_preserved_but_leaves_the_subscription_suspended(self):
+        self.full_refund(self.current)
+        self.sub.refresh_from_db()
+        period_before = (self.sub.current_period_start, self.sub.current_period_end)
+        future = self.renewal_paid(self.day(30), self.day(60))
+        self.assertEqual(future.status, SubscriptionInvoice.Status.PAID)                  # the money is kept
+        self.assertEqual(self.refresh(), S.SUSPENDED)                                     # ...but buys nothing before it starts
+        self.assertTrue(sub_svc.is_financially_suspended(self.sub))
+        self.assertEqual((self.sub.current_period_start, self.sub.current_period_end), period_before)
+        self.assertEqual(self.events(ET.RESUMED), [])
+        self.assertFalse(ent.get_subscription_access_state(self.store).allows_growth)
+        recorded = self.sub.events.get(idempotency_key=f"invoice-{future.pk}")            # the funded period is recorded
+        self.assertEqual((recorded.metadata["invoice_id"], recorded.to_status), (future.pk, S.SUSPENDED))
+        self.assertEqual(fss.funded_period(future)[0], "period")
+        self.assertEqual(fss.evaluate_restorations(now=self.now)["restored"], 0)           # nothing covers the present yet
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+
+    def test_C_the_evaluator_activates_the_subscription_exactly_once_when_the_future_period_begins(self):
+        future = self.suspended_with_future_paid()
+        self.assertEqual(fss.evaluate_restorations(now=self.day(29))["restored"], 0)       # still before the funded start
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        later = self.day(30) + timedelta(seconds=1)
+        out = io.StringIO()
+        with mock.patch("django.utils.timezone.now", return_value=later):
+            call_command("evaluate_subscription_states", stdout=out)                      # the real scheduled entry point
+        self.assertIn("financial_suspension_restored=1", out.getvalue())
+        self.assertEqual(self.refresh(), S.ACTIVE)
+        self.assertEqual((self.sub.current_period_start, self.sub.current_period_end),
+                         (future.billing_period_start, future.billing_period_end))
+        self.assertEqual(len(self.events(ET.RESUMED)), 1)
+        self.assertTrue(ent.get_subscription_access_state(self.store).allows_growth)
+
+    def test_the_exact_funded_start_instant_is_covered(self):
+        future = self.suspended_with_future_paid()
+        self.assertEqual(fss.evaluate_restorations(now=future.billing_period_start)["restored"], 1)
+        self.assertEqual(self.refresh(), S.ACTIVE)
+
+    def test_D_a_historical_refund_with_a_separate_payment_covering_the_present_keeps_the_subscription_active(self):
+        past = self.renewal_paid(self.day(-60), self.day(-30))
+        self.full_refund(past)
+        self.assertEqual(self.refresh(), S.ACTIVE)
+        self.assertEqual(self.events(ET.SUSPENDED), [])
+        self.assertFalse(sub_svc.is_financially_suspended(self.sub))
+        self.assertTrue(ent.get_subscription_access_state(self.store).allows_growth)
+
+    def test_E_a_non_financial_suspension_is_never_resumed_by_the_financial_evaluator(self):
+        sub_svc.suspend_subscription(self.sub, reason="پایانِ Dunning")                    # a paid, non-refunded invoice covers now
+        self.assertEqual(fss.evaluate_restorations(now=self.now)["scanned"], 0)
+        self.assertEqual(fss.evaluate_restorations(now=self.day(31))["restored"], 0)
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        self.assertEqual(self.events(ET.RESUMED), [])
+
+    def test_a_non_financial_suspension_is_still_lifted_by_a_normal_renewal_payment(self):
+        sub_svc.suspend_subscription(self.sub, reason="پایانِ Dunning")
+        future = self.renewal_paid(self.day(30), self.day(60))
+        self.assertEqual(self.refresh(), S.ACTIVE)                                         # unchanged behaviour for dunning
+        self.assertEqual(self.sub.current_period_end, future.billing_period_end)
+        self.assertEqual(len(self.events(ET.RESUMED)), 0)
+
+    def test_a_renewal_whose_period_already_covers_now_still_resumes_a_financial_suspension(self):
+        self.full_refund(self.current)
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        replacement = self.renewal_paid(self.day(-1), self.day(29))
+        self.assertEqual(self.refresh(), S.ACTIVE)
+        self.assertEqual(self.sub.current_period_end, replacement.billing_period_end)
+
+    def test_F_repeated_evaluation_and_repeated_confirmation_produce_no_duplicate_transition_event_or_effect(self):
+        future = self.suspended_with_future_paid()
+        before_events = self.sub.events.count()
+        self.assertEqual(fss.evaluate_restorations(now=self.day(10))["restored"], 0)
+        self.assertEqual(fss.evaluate_restorations(now=self.day(11))["restored"], 0)
+        self.assertEqual(self.sub.events.count(), before_events)                           # nothing changed while unfunded
+        confirmation_service._activate_or_renew(future, actor=None, now=self.now)          # replayed fulfilment: idempotent
+        self.assertEqual(self.sub.events.filter(idempotency_key=f"invoice-{future.pk}").count(), 1)
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        later = self.day(31)
+        runs = [fss.evaluate_restorations(now=later)["restored"] for _ in range(4)]
+        self.assertEqual(runs, [1, 0, 0, 0])
+        self.assertEqual(self.refresh(), S.ACTIVE)
+        self.assertEqual(len(self.events(ET.RESUMED)), 1)
+        self.assertEqual(AuditLogEntry.objects.filter(action_code="billing.financial_suspension_restored").count(), 1)
+        self.assertEqual(self.sub.events.filter(event_type=ET.SUSPENDED).count(), 1)
+        self.assertEqual(self.sub.events.count(), before_events + 1)                       # exactly one new event: the resume
+
+    def test_a_full_refund_of_the_deferred_future_period_before_it_begins_changes_nothing_and_never_restores(self):
+        future = self.suspended_with_future_paid()
+        self.full_refund(future)
+        self.assertEqual(self.refresh(), S.SUSPENDED)
+        self.assertEqual(fss.evaluate_restorations(now=self.day(31))["restored"], 0)       # a refunded period funds nothing
+        self.assertEqual(self.refresh(), S.SUSPENDED)
 
 
 class UndeterminableAndFailureTests(FinBase):
