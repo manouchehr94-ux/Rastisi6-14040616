@@ -559,6 +559,9 @@ RASTISI_DEFAULT_PLAN_START_TRIAL = env_str("RASTISI_DEFAULT_PLAN_START_TRIAL", "
 # a production payment; wire a real gateway behind the same interface later).
 # Secrets come only from the environment, never the database or code.
 RASTISI_BILLING_PROVIDER = env_str("RASTISI_BILLING_PROVIDER", "manual")
+# SMS package refunds are DISABLED (fail-closed) until the credit-freeze refund design (needs a migration) is built and approved:
+# see docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md. Do NOT set this in production.
+RASTISI_SMS_REFUND_ENABLED = env_bool("RASTISI_SMS_REFUND_ENABLED", default=False)
 RASTISI_BILLING_WEBHOOK_SECRET = env_str("RASTISI_BILLING_WEBHOOK_SECRET", "")
 # Max webhook body accepted before rejection (bytes) and signature timestamp
 # tolerance (seconds) â€” see ADR-76.

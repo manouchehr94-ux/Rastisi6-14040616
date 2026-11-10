@@ -257,7 +257,8 @@ class SmsFulfilmentTests(SmsPaymentBase):
         self.assertEqual((entry.balance_before, entry.balance_after), (99, 99 + self.CREDITS))
 
 
-@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
+# These exercise the LEGACY refund implementation, which is disabled by default (see test_sms_refund_disabled.py); enabled explicitly here.
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", RASTISI_SMS_REFUND_ENABLED=True)
 class SmsRefundAndCancelTests(SmsPaymentBase):
     def completed(self):
         _r, purchase, attempt = self.purchase_and_attempt()

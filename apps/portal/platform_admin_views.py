@@ -1889,6 +1889,7 @@ def payment_duplicate_action(request, kind, attempt_id, action):
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def sms_purchases(request):
     """خریدهای بستهٔ پیامک با اقدام‌های مالیِ ایمن: تکمیلِ دستی، لغو، بازپرداخت (با دفترِ اعتبار)."""
+    from apps.billing.services import sms_purchase_payment_service
     from apps.sms.models import SmsPackagePurchase
 
     status = (request.GET.get("status") or "").strip()
@@ -1898,6 +1899,7 @@ def sms_purchases(request):
     page = Paginator(qs.order_by("-created_at"), 25).get_page(request.GET.get("page"))
     return render(request, "portal/platform_admin/sms_purchases.html", {
         "page": page, "status": status, "status_choices": SmsPackagePurchase.Status.choices, "active_nav": "sms-purchases",
+        "sms_refund_enabled": sms_purchase_payment_service.sms_refunds_enabled(),
     })
 
 
@@ -1917,6 +1919,7 @@ def sms_purchase_action(request, purchase_id, action):
             balance_service.cancel_purchase(purchase=purchase)
             messages.success(request, "خرید لغو شد.")
         elif action == "refund":
+            svc.ensure_refunds_enabled()                 # disabled -> controlled error; refund_purchase re-checks (defence in depth)
             svc.refund_purchase(purchase, actor=request.user, reason=(request.POST.get("reason") or "").strip())
             messages.success(request, "بازپرداخت ثبت شد؛ اعتبار برگردانده شد (بازپرداختِ پول طبقِ وضعیتِ درگاه).")
         else:

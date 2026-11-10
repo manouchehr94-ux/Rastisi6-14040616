@@ -479,6 +479,7 @@ class SmsCardToCardTests(CardToCardBase):
         self.assertEqual(SmsCreditLedger.objects.count(), 1)
         self.assertEqual(SmsPackagePaymentAttempt.objects.get(pk=claim.sms_attempt_id).failure_code, "purchase_completed")
 
+    @override_settings(RASTISI_SMS_REFUND_ENABLED=True)          # legacy path, disabled by default (test_sms_refund_disabled.py)
     def test_authorised_refund_reverses_the_credits_once_and_the_money_refund_stays_a_manual_step(self):
         claim = self.sms_claim()
         self.approve(claim)

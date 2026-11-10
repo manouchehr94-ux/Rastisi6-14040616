@@ -133,8 +133,7 @@ One earlier test that asserted the old behaviour was corrected.
 
 ### 6.2 SMS refund: still a production release blocker. NOT fixed.
 
-The credit-freeze design needs a schema change and has not been implemented or approved. `refund_purchase` is unchanged except for a
-docstring warning. These routes must stay unavailable in production until the approved schema work is complete:
+The credit-freeze design needs a schema change and has not been implemented or approved. `refund_purchase` is now disabled by default (kill switch below). These routes must stay unavailable in production until the approved schema work is complete:
 
 | Route | Where | What it does | Keep unavailable for |
 |---|---|---|---|
@@ -151,9 +150,13 @@ Why every provider, not only the automatic ones:
 Not part of this blocker: the duplicate-payment refund for an SMS attempt (`payment-duplicate-action`, kind `sms`, action `refund`)
 touches no credits and uses the new intent/call/outcome shape; SMS purchase "complete" and "cancel"; manual credit adjustment.
 
-**This branch does not disable the route in code.** Until the schema work is approved, the operational control must be applied
-outside this branch (block `POST /payments/sms-purchases/*/refund/` at the proxy, or an agreed instruction to finance not to use it).
-I can add a code-level kill switch if you want one; that is a separate decision.
+**Code-level kill switch (added).** `refund_purchase` now raises `SmsRefundDisabledError` as its first statement unless
+`settings.RASTISI_SMS_REFUND_ENABLED is True` (env `RASTISI_SMS_REFUND_ENABLED`, default and fail-closed value: off). While off, no credit
+is reversed, no purchase/ledger/audit row is written and no provider is resolved or called. The platform-admin action returns a
+controlled error message and the page shows "بازپرداخت موقتاً غیرفعال" instead of the refund form (history stays read-only).
+**Never set `RASTISI_SMS_REFUND_ENABLED` in production.** The blocker itself stays open: the safe design (credit freeze, reverse
+only after a confirmed refund) still needs the unapproved migration. Tests: `apps/billing/tests/test_sms_refund_disabled.py`; the legacy
+refund tests now enable the flag explicitly.
 
 ## 7. Final regression evidence (baseline vs remediation, same configuration)
 
