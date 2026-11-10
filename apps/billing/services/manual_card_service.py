@@ -164,7 +164,10 @@ def _submit_claim_atomic(*, user, store, reference, transferred_at, payer_card_l
     content_type = ""
     digest = ""
     if receipt is not None:
-        data = receipt.read()
+        declared = getattr(receipt, "size", None)
+        if declared is not None and declared > MAX_RECEIPT_BYTES:          # refuse WITHOUT reading the body (F-19)
+            raise ClaimError("حجمِ رسید بیش از ۵ مگابایت است.")
+        data = receipt.read(MAX_RECEIPT_BYTES + 1)                          # never more than limit+1 bytes into memory
         if len(data) > MAX_RECEIPT_BYTES:
             raise ClaimError("حجمِ رسید بیش از ۵ مگابایت است.")
         content_type = sniff_receipt(data)

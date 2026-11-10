@@ -68,7 +68,8 @@ class SubscriptionInvoiceAdmin(SuperuserOnlyBillingAdmin):
     search_fields = ("number", "store__slug", "idempotency_key")
     date_hierarchy = "created_at"
     inlines = [SubscriptionInvoiceLineInline]
-    actions = ["action_mark_paid"]
+    # F-07: the bulk «mark paid» action was removed. Marking an invoice paid moves money-equivalent state, so it must carry an
+    # amount, a bank/receipt reference and a reason: use Platform Admin > Payments > manual payment (audited, one invoice at a time).
     # فیلدهایِ مالی همیشه read-only در Admin — تغییرِ مالی فقط از سرویس.
     readonly_fields = (
         "store", "subscription", "plan_version", "number", "kind", "status", "currency",
@@ -78,22 +79,6 @@ class SubscriptionInvoiceAdmin(SuperuserOnlyBillingAdmin):
         "amount_paid", "amount_due", "provider_reference", "idempotency_key",
         "created_at", "updated_at",
     )
-
-    @admin.action(description="علامت‌گذاریِ دستیِ «پرداخت‌شده» (با ثبتِ Audit)")
-    def action_mark_paid(self, request, queryset):
-        from apps.billing.services.confirmation_service import ConfirmationError, mark_invoice_paid_manually
-
-        done, skipped = 0, 0
-        for invoice in queryset:
-            try:
-                mark_invoice_paid_manually(invoice, actor=request.user, note="Django Admin mark-paid")
-                done += 1
-            except ConfirmationError:
-                skipped += 1
-        self.message_user(
-            request, f"{done} فاکتور دستی پرداخت‌شده شد؛ {skipped} رد شد.",
-            level=messages.SUCCESS if done else messages.WARNING,
-        )
 
 
 @admin.register(SubscriptionPaymentAttempt)

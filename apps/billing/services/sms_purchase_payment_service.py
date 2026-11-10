@@ -96,7 +96,7 @@ def start_payment(purchase, *, callback_base_url, return_to="", actor=None, prov
     failure = None
     session = None
     with transaction.atomic():
-        attempt.return_to = safe_return_to(return_to)
+        attempt.return_to = safe_return_to(return_to, store=attempt.store)
         callback = callback_url_for(callback_base_url, attempt)
         try:
             provider_obj = registry.get_provider(attempt.provider)

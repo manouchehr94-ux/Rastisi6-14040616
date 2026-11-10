@@ -129,7 +129,7 @@ def payment_return(request, token):
                 attempt = type(attempt).objects.get(pk=attempt.pk)
 
     state = _STATE_BY_STATUS.get(attempt.status, "pending")
-    return_to = payment_flow_service.safe_return_to(attempt.return_to)
+    return_to = payment_flow_service.safe_return_to(attempt.return_to, store=attempt.store)
     if return_to:
         sep = "&" if "?" in return_to else "?"
         return HttpResponseRedirect(f"{return_to}{sep}payment={state}")
