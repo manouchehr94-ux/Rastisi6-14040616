@@ -50,8 +50,13 @@ def billing_webhook(request, provider_code):
     # برمی‌گردانیم تا Provider بی‌مورد Retry نکند.
     try:
         payment_flow_service.process_webhook_event(event)
-    except Exception:  # noqa: BLE001 — خطا رویِ رخداد ثبت می‌شود، پاسخ ۲۰۰ می‌ماند
+    except Exception as exc:  # noqa: BLE001
+        # An UNEXPECTED error (database blip, bug): record it durably on the event so staff can see it and the reprocess job
+        # retries it, and answer 503 so a provider that redelivers does so. Business outcomes (mismatch, unknown attempt) are
+        # recorded by process_webhook_event itself and still answer 200: retrying those cannot help (F-16).
         logger.exception("webhook processing failed for event %s", event.pk)
+        webhook_service.record_unexpected_failure(event, exc)
+        return HttpResponse("retry", status=503)
     return HttpResponse("ok", status=200)
 
 

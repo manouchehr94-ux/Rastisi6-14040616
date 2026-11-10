@@ -81,12 +81,16 @@ def ingest_webhook(*, provider_code, headers, body: bytes, now=None):
         raw = {}
 
     try:
-        event = BillingWebhookEvent.objects.create(
-            provider=provider.code, external_event_id=event_data.event_id,
-            event_type=event_data.event_type, signature_valid=True,
-            processing_status=BillingWebhookEvent.ProcessingStatus.RECEIVED,
-            payload_hash=payload_hash, sanitized_payload=_redact(raw), received_at=now,
-        )
+        # The INSERT runs in its own savepoint. A unique-constraint violation inside the OUTER atomic block would otherwise
+        # leave that transaction marked for rollback, and the re-query below would raise TransactionManagementError (an HTTP
+        # 500 on a perfectly legitimate concurrent duplicate delivery) (F-15).
+        with transaction.atomic():
+            event = BillingWebhookEvent.objects.create(
+                provider=provider.code, external_event_id=event_data.event_id,
+                event_type=event_data.event_type, signature_valid=True,
+                processing_status=BillingWebhookEvent.ProcessingStatus.RECEIVED,
+                payload_hash=payload_hash, sanitized_payload=_redact(raw), received_at=now,
+            )
     except IntegrityError:
         # مسابقه: تحویلِ هم‌زمانِ همان رخداد — ردیفِ موجود را برگردان.
         return BillingWebhookEvent.objects.get(
@@ -96,19 +100,38 @@ def ingest_webhook(*, provider_code, headers, body: bytes, now=None):
 
 
 def mark_processed(event, *, now=None):
+    """RECEIVED/FAILED/IGNORED -> PROCESSED. Idempotent; a processed event stays processed."""
     now = now or timezone.now()
-    event.processing_status = BillingWebhookEvent.ProcessingStatus.PROCESSED
-    event.processed_at = now
-    event.error_summary = ""
-    event.save(update_fields=["processing_status", "processed_at", "error_summary", "updated_at"])
+    BillingWebhookEvent.objects.filter(pk=event.pk).update(
+        processing_status=BillingWebhookEvent.ProcessingStatus.PROCESSED, processed_at=now, error_summary="", updated_at=now,
+    )
+    event.refresh_from_db()
     return event
 
 
 def mark_failed(event, *, error, now=None):
+    """Record a failure. A PROCESSED event is terminal: a stale or late writer can never move it back to FAILED (F-17).
+    The conditional UPDATE is atomic, so concurrent workers cannot overwrite each other's terminal state."""
     now = now or timezone.now()
-    event.processing_status = BillingWebhookEvent.ProcessingStatus.FAILED
-    event.processed_at = now
-    event.error_summary = str(error)[:300]
-    event.retry_count = event.retry_count + 1
-    event.save(update_fields=["processing_status", "processed_at", "error_summary", "retry_count", "updated_at"])
+    from django.db.models import F
+
+    BillingWebhookEvent.objects.filter(pk=event.pk).exclude(
+        processing_status=BillingWebhookEvent.ProcessingStatus.PROCESSED,
+    ).update(
+        processing_status=BillingWebhookEvent.ProcessingStatus.FAILED, processed_at=now,
+        error_summary=str(error)[:300], retry_count=F("retry_count") + 1, updated_at=now,
+    )
+    event.refresh_from_db()
     return event
+
+
+def record_unexpected_failure(event, exc, *, now=None):
+    """Durably record an unexpected processing error WITHOUT ever raising (it runs in an error path). Only the exception
+    class name is stored: no payload, no message that could carry sensitive data."""
+    try:
+        return mark_failed(event, error=f"unexpected:{type(exc).__name__}", now=now)
+    except Exception:  # noqa: BLE001 — the caller is already handling a failure; recording it is best-effort but attempted
+        import logging
+
+        logging.getLogger("billing").exception("could not record webhook failure for event %s", getattr(event, "pk", "?"))
+        return event

@@ -1753,7 +1753,12 @@ def reconciliation_snapshot():
             SmsPackagePurchase.objects.filter(status=SmsPackagePurchase.Status.COMPLETED, payment_attempts__status=sms_s.SUCCEEDED)
             .exclude(ledger_entries__kind=SmsCreditLedger.Kind.PURCHASE).select_related("store", "package").distinct()[:100]
         ),
-        "failed_webhooks": list(BillingWebhookEvent.objects.filter(processing_status=BillingWebhookEvent.ProcessingStatus.FAILED)[:50]),
+        # FAILED events, plus RECEIVED events that have been stuck for more than 15 minutes (a crashed worker leaves them
+        # `received`; they used to be invisible to staff) (F-16).
+        "failed_webhooks": list(BillingWebhookEvent.objects.filter(
+            Q(processing_status=BillingWebhookEvent.ProcessingStatus.FAILED)
+            | Q(processing_status=BillingWebhookEvent.ProcessingStatus.RECEIVED, created_at__lt=now - timedelta(minutes=15))
+        ).order_by("created_at")[:50]),
         "open_refunds": list(SubscriptionRefund.objects.filter(status__in=SubscriptionRefund.OPEN_STATUSES).select_related("store", "invoice")[:50]),
     }
 

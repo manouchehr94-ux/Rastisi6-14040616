@@ -244,6 +244,7 @@ def process_webhook_event(event, *, actor=None, now=None):
     """یک رخدادِ Webhookِ ذخیره‌شده (امضا-تأییدشده) را پردازش می‌کند. idempotent:
     رخدادِ از قبل پردازش‌شده دوباره اعمال نمی‌شود."""
     now = now or timezone.now()
+    event.refresh_from_db()                               # never trust a stale in-memory snapshot of the status (F-17)
     if event.processing_status == BillingWebhookEvent.ProcessingStatus.PROCESSED:
         return event
 
