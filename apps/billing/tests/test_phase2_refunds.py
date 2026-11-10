@@ -457,11 +457,11 @@ class PostgresConcurrentRefundTests(TransactionTestCase):
         provider = FakeProvider(ok)
 
         def go(_i):
-            with patched(provider):
-                return refund_service.request_refund(
-                    SubscriptionInvoice.objects.get(pk=self.invoice.pk), amount=Decimal("100000"), idempotency_key="same").pk
+            return refund_service.request_refund(
+                SubscriptionInvoice.objects.get(pk=self.invoice.pk), amount=Decimal("100000"), idempotency_key="same").pk
 
-        pks = self.run_parallel(8, go)
+        with patched(provider):
+            pks = self.run_parallel(8, go)
         self.assertEqual(len(set(pks)), 1, pks)
         self.assertEqual(SubscriptionRefund.objects.filter(invoice=self.invoice).count(), 1)
         self.assertEqual(len(provider.calls), 1)
@@ -470,11 +470,11 @@ class PostgresConcurrentRefundTests(TransactionTestCase):
         provider = FakeProvider(ok)
 
         def go(i):
-            with patched(provider):
-                return refund_service.request_refund(
-                    SubscriptionInvoice.objects.get(pk=self.invoice.pk), amount=Decimal("100000"), idempotency_key=f"k{i}").status
+            return refund_service.request_refund(
+                SubscriptionInvoice.objects.get(pk=self.invoice.pk), amount=Decimal("100000"), idempotency_key=f"k{i}").status
 
-        out = Counter(self.run_parallel(6, go))
+        with patched(provider):
+            out = Counter(self.run_parallel(6, go))
         rows = SubscriptionRefund.objects.filter(invoice=self.invoice)
         self.assertEqual(rows.count(), 4, out)                                    # 400000 / 100000
         self.assertEqual(out.get("RefundError"), 2, out)
@@ -514,11 +514,11 @@ class PostgresConcurrentRefundTests(TransactionTestCase):
         provider = FakeProvider(timeout)
 
         def go(_i):
-            with patched(provider):
-                return refund_service.request_refund(
-                    SubscriptionInvoice.objects.get(pk=self.invoice.pk), amount=Decimal("400000"), idempotency_key="t1").status
+            return refund_service.request_refund(
+                SubscriptionInvoice.objects.get(pk=self.invoice.pk), amount=Decimal("400000"), idempotency_key="t1").status
 
-        self.run_parallel(5, go)
+        with patched(provider):
+            self.run_parallel(5, go)
         row = SubscriptionRefund.objects.get(idempotency_key="t1")
         self.assertEqual((row.status, row.failure_code), (R.PENDING, refund_service.UNKNOWN_OUTCOME))
         self.assertEqual(len(provider.calls), 1)
@@ -531,9 +531,9 @@ class PostgresConcurrentRefundTests(TransactionTestCase):
         provider = FakeProvider(ok)
 
         def go(_i):
-            with mock.patch.object(dups.registry, "get_provider", return_value=provider):
-                return dups.refund_duplicate("subscription", attempt.pk, actor=None, reason="duplicate")[1]
+            return dups.refund_duplicate("subscription", attempt.pk, actor=None, reason="duplicate")[1]
 
-        out = Counter(self.run_parallel(6, go))
+        with mock.patch.object(dups.registry, "get_provider", return_value=provider):
+            out = Counter(self.run_parallel(6, go))
         self.assertEqual(len(provider.calls), 1, out)
         self.assertEqual(provider.in_transaction_flags, [False])

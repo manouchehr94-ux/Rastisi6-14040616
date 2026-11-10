@@ -129,16 +129,15 @@ class PostgresConcurrentStartTests(TransactionTestCase):
             close_old_connections()
             try:
                 barrier.wait(timeout=20)
-                with with_provider(fake):
-                    attempt, session = payment_flow_service.start_payment(
-                        SubscriptionInvoice.objects.get(pk=invoice.pk), provider="manual", idempotency_key="conc", callback_base_url="http://t")
+                attempt, session = payment_flow_service.start_payment(
+                    SubscriptionInvoice.objects.get(pk=invoice.pk), provider="manual", idempotency_key="conc", callback_base_url="http://t")
                 return ("session" if session is not None else "repeat", attempt.pk)
             except Exception as exc:  # noqa: BLE001
                 return (type(exc).__name__, None)
             finally:
                 connection.close()
 
-        with ThreadPoolExecutor(max_workers=5) as pool:
+        with with_provider(fake), ThreadPoolExecutor(max_workers=5) as pool:        # patched ONCE, in the main thread (mock.patch is not thread-safe)
             out = list(pool.map(worker, range(5)))
         self.assertEqual(Counter(kind for kind, _ in out), {"session": 1, "repeat": 4}, out)    # before the fix: 5 sessions
         self.assertEqual(len({pk for _, pk in out}), 1)
