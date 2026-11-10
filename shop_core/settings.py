@@ -562,6 +562,9 @@ RASTISI_BILLING_PROVIDER = env_str("RASTISI_BILLING_PROVIDER", "manual")
 # SMS package refunds are DISABLED (fail-closed) until the credit-freeze refund design (needs a migration) is built and approved:
 # see docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md. Do NOT set this in production.
 RASTISI_SMS_REFUND_ENABLED = env_bool("RASTISI_SMS_REFUND_ENABLED", default=False)
+# Automatic bank reversal/refund calls (Pasargad, Saman, Mellat) are DISABLED (fail-closed): no verified idempotency contract. Comma-separated
+# gateway codes enable them one by one AFTER the contract is verified. Do NOT set in production: docs/payments/BANK_REFUND_SAFETY_20261110.md
+RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS = env_str("RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS", "")
 RASTISI_BILLING_WEBHOOK_SECRET = env_str("RASTISI_BILLING_WEBHOOK_SECRET", "")
 # Max webhook body accepted before rejection (bytes) and signature timestamp
 # tolerance (seconds) â€” see ADR-76.

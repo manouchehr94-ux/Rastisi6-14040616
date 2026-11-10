@@ -19,7 +19,7 @@ from apps.billing.models import (
     SubscriptionPaymentAttempt,
     SubscriptionRefund,
 )
-from apps.billing.providers import registry
+from apps.billing.providers import bank_refund_policy, registry
 from apps.billing.providers.base import BillingProviderError
 from apps.core.services.audit_service import record_audit_event
 
@@ -204,6 +204,10 @@ def _execute_with_provider(refund_pk, *, now=None):
     """Steps 2 and 3. At most one provider call per refund row, ever (the caller only gets here for a newly created row)."""
     now = now or timezone.now()
     refund = SubscriptionRefund.objects.select_related("payment_attempt").get(pk=refund_pk)
+    if not bank_refund_policy.automatic_refund_allowed(refund.provider):
+        # Service-layer fail-closed stop (before the provider is even resolved): manual processing, amount stays reserved.
+        return _record_outcome(refund_pk, "manual", failure_code=bank_refund_policy.AUTOMATIC_REFUND_DISABLED,
+                               detail="automatic bank refund disabled", now=now)
     try:
         provider = registry.get_provider(refund.provider)
     except BillingProviderError as exc:
@@ -224,6 +228,9 @@ def _execute_with_provider(refund_pk, *, now=None):
         logger.exception("refund %s: provider call failed with an ambiguous outcome", refund_pk)
         return _record_outcome(refund_pk, "unknown", failure_code=UNKNOWN_OUTCOME, detail=type(exc).__name__, now=now)
     summary = result.raw_summary or {}
+    if not result.succeeded and summary.get(bank_refund_policy.AUTOMATIC_REFUND_DISABLED):
+        return _record_outcome(refund_pk, "manual", failure_code=bank_refund_policy.AUTOMATIC_REFUND_DISABLED,
+                               provider_refund_id=result.provider_refund_id, detail="automatic bank refund disabled", now=now)
     if result.succeeded:
         return _record_outcome(refund_pk, "succeeded", provider_refund_id=result.provider_refund_id, now=now)
     if summary.get("unknown"):
@@ -255,6 +262,9 @@ def _record_outcome(refund_pk, outcome, *, provider_refund_id="", failure_code="
         refund.failure_message = ("نتیجهٔ بازپرداخت نزد درگاه نامشخص است؛ دوباره درخواست نکنید. با ارجاعِ بانکی بررسی و تعیین تکلیف شود.")[:300]
     else:                                              # "manual": the provider has no automatic refund; finance completes it
         refund.status = SubscriptionRefund.Status.PENDING
+        if failure_code == bank_refund_policy.AUTOMATIC_REFUND_DISABLED:
+            refund.failure_code = failure_code
+            refund.failure_message = bank_refund_policy.DISABLED_MESSAGE[:300]
     refund.save(update_fields=["provider_refund_id", "status", "failure_code", "failure_message", "completed_at", "updated_at"])
     if refund.status == SubscriptionRefund.Status.SUCCEEDED:
         _sync_invoice_refund_status(invoice, now=now, refund=refund)
@@ -296,8 +306,8 @@ def recover_stale_intents(*, now=None, older_than=STALE_INTENT_AFTER) -> int:
 
 def _require_reference(refund, reference):
     reference = (reference or "").strip()
-    if refund.failure_code == UNKNOWN_OUTCOME and len(reference) < _MIN_REFERENCE_LEN:
-        raise RefundError("برای بازپرداختِ با نتیجهٔ نامشخص، ارجاعِ مستندِ بانکی (حداقل ۶ نویسه) الزامی است.")
+    if refund.failure_code in (UNKNOWN_OUTCOME, bank_refund_policy.AUTOMATIC_REFUND_DISABLED) and len(reference) < _MIN_REFERENCE_LEN:
+        raise RefundError("برای بازپرداختِ با نتیجهٔ نامشخص یا بازپرداختِ دستیِ درگاهِ بانکی، ارجاعِ مستندِ بانکی (حداقل ۶ نویسه) الزامی است.")
     return reference
 
 

@@ -2041,6 +2041,8 @@ def payment_invoice_refund(request, invoice_id):
         )
         if refund.failure_code == refund_service.UNKNOWN_OUTCOME:
             messages.warning(request, "نتیجهٔ بازپرداخت نزد درگاه نامشخص است؛ دوباره درخواست نکنید و با بانک تطبیق دهید.")
+        elif refund.failure_code == refund_service.bank_refund_policy.AUTOMATIC_REFUND_DISABLED:
+            messages.warning(request, refund_service.bank_refund_policy.DISABLED_MESSAGE)
         else:
             messages.success(request, f"بازپرداخت ثبت شد ({refund.get_status_display()}).")
     except (InvalidOperation, ValueError):

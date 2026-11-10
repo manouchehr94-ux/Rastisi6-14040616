@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.billing.models import SubscriptionPaymentAttempt
-from apps.billing.providers import registry
+from apps.billing.providers import bank_refund_policy, registry
 from apps.billing.providers.base import BillingProviderError
 from apps.billing.services.refund_service import NOT_SENT_CODES
 from apps.core.services.audit_service import record_audit_event
@@ -114,21 +114,26 @@ def refund_duplicate(kind, attempt_id, *, actor, reason, idempotency_key=""):
         amount, currency = attempt.amount, attempt.currency
 
     outcome, refund_id, detail = "unknown", "", ""
-    try:
-        result = registry.get_provider(provider_code).refund_payment(
-            provider_payment_id=payment_id, amount=amount, currency=currency, idempotency_key=key,
-        )
-    except BillingProviderError as exc:
-        if (getattr(exc, "code", "") or "") in NOT_SENT_CODES:
-            outcome, detail = "not_sent", exc.code                         # nothing reached the bank: definite, safe
-        else:
-            outcome, detail = "unknown", getattr(exc, "code", "") or type(exc).__name__
-    except Exception as exc:  # noqa: BLE001 — after contacting a bank any failure is ambiguous
-        detail = type(exc).__name__
+    if not bank_refund_policy.automatic_refund_allowed(provider_code):
+        # Service-layer fail-closed stop: no provider call. Finance refunds in the bank panel and records it with mark_resolved.
+        outcome, detail = "pending_manual", bank_refund_policy.AUTOMATIC_REFUND_DISABLED
+        refund_id = f"{provider_code}-manual-refund-{key}"[:120]
     else:
-        refund_id = str(result.provider_refund_id or "")[:120]
-        summary = result.raw_summary or {}
-        outcome = "refunded" if result.succeeded else ("unknown" if summary.get("unknown") else "pending_manual")
+        try:
+            result = registry.get_provider(provider_code).refund_payment(
+                provider_payment_id=payment_id, amount=amount, currency=currency, idempotency_key=key,
+            )
+        except BillingProviderError as exc:
+            if (getattr(exc, "code", "") or "") in NOT_SENT_CODES:
+                outcome, detail = "not_sent", exc.code                     # nothing reached the bank: definite, safe
+            else:
+                outcome, detail = "unknown", getattr(exc, "code", "") or type(exc).__name__
+        except Exception as exc:  # noqa: BLE001 — after contacting a bank any failure is ambiguous
+            detail = type(exc).__name__
+        else:
+            refund_id = str(result.provider_refund_id or "")[:120]
+            summary = result.raw_summary or {}
+            outcome = "refunded" if result.succeeded else ("unknown" if summary.get("unknown") else "pending_manual")
 
     not_sent = outcome == "not_sent"
     with transaction.atomic():

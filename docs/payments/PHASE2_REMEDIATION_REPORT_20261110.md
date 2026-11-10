@@ -35,7 +35,9 @@ Awaiting user QA and approval.
    design in the migration proposal is approved and built.
 2. Real `PROCESSING` / `UNKNOWN` refund statuses and the new refund columns: need a migration. Interim behaviour is in place.
 3. Production scheduler (F-03) must be installed and verified by an operator using the runbook checklist.
-4. Bank refund idempotency / inquiry for Pasargad, Saman and Mellat is unverified; the code treats any doubtful call as unknown.
+4. Bank refund idempotency / inquiry for Pasargad, Saman and Mellat could NOT be verified from any official contract. Automatic bank
+   reversal is therefore disabled by default (`RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS`, empty) at the service and provider layers;
+   refunds on these gateways are recorded for manual completion with a bank reference. See `BANK_REFUND_SAFETY_20261110.md`.
 5. (Resolved in the F-08 follow-up.) A paid RENEWAL for a period that has not begun no longer resumes a financially suspended
    subscription: `renew_subscription` records the funded period on the `invoice-<pk>` event, leaves the status and current period
    unchanged, and `evaluate_subscription_states` resumes the subscription (once) when that period covers the present. A renewal
@@ -187,4 +189,4 @@ No test fails on the remediation branch that does not also fail on the baseline 
 Financial authorization (platform admin finance views, superuser-only reinstatement, refund/duplicate gates) is covered by the
 billing and portal suites above and by the new modules; all pass.
 
-Remaining validation: none required for these suites. The production scheduler (F-03) and bank refund idempotency remain unverified.
+Remaining validation: none required for these suites. The production scheduler (F-03) is not installed. Automatic bank refunds are disabled; idempotency remains unverified.

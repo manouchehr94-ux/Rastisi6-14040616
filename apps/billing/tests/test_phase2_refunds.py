@@ -20,7 +20,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import close_old_connections, connection, transaction
-from django.test import Client, TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from apps.billing.models import SubscriptionInvoice, SubscriptionPaymentAttempt, SubscriptionRefund
@@ -310,6 +310,7 @@ class PlatformAdminRefundViewTests(RefundBase):
         self.assertEqual(refund.status, R.PENDING)
 
 
+@override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="saman")        # the ENABLED path; disabled behaviour: test_bank_refund_disabled.py
 class AdapterUnknownOutcomeTests(TestCase):
     """The real adapter-backed provider must report a transport failure during a reverse as UNKNOWN, a plain gateway refusal as
     a manual follow-up, and a pre-send failure (credentials) as a definite not-executed."""
