@@ -264,7 +264,13 @@ def renew_subscription(subscription, *, period_start, period_end, actor=None, id
     locked.current_period_end = period_end
     locked.grace_period_end = None
     # پرداختِ موفق، دوره‌ی معوق/ارفاقی را پاک می‌کند و اشتراک را فعال می‌کند.
-    if locked.status != S.ACTIVE:
+    # F-08: a FINANCIAL suspension is only lifted by a funded period that covers NOW. A period paid in advance (starting in the
+    # future) is recorded but the subscription stays suspended; the scheduled evaluator restores it when that period begins.
+    keep_suspended = (
+        locked.status == S.SUSPENDED and period_start is not None and period_start > timezone.now()
+        and financial_suspension_event(locked) is not None
+    )
+    if locked.status != S.ACTIVE and not keep_suspended:
         locked.status = S.ACTIVE
     locked.save(update_fields=[
         "current_period_start", "current_period_end", "grace_period_end", "status", "updated_at",
@@ -272,7 +278,8 @@ def renew_subscription(subscription, *, period_start, period_end, actor=None, id
     _record_event(
         locked, event_type=ET.RENEWED, from_status=from_status, to_status=locked.status,
         actor=actor, reason="", idempotency_key=idempotency_key,
-        metadata={"period_start": str(period_start), "period_end": str(period_end), **(metadata or {})},
+        metadata={"period_start": str(period_start), "period_end": str(period_end), **(metadata or {}),
+                  **({"kept_suspended": True} if keep_suspended else {})},
     )
     return locked
 
