@@ -242,12 +242,12 @@ class PastFutureAndOverlappingPeriodTests(FinBase):
         self.full_refund(current)
         self.sub.refresh_from_db()
         self.assertTrue(sub_svc.is_financially_suspended(self.sub))
-        renewed = self.renewal_paid(self.day(30), self.day(60))                           # paying again resumes it
+        renewed = self.renewal_paid(self.day(-1), self.day(29))                           # a payment covering NOW resumes it
         self.assertEqual(self.refresh(), S.ACTIVE)
         sub_svc.suspend_subscription(self.sub, reason="پایانِ Dunning")
         self.sub.refresh_from_db()
         self.assertFalse(sub_svc.is_financially_suspended(self.sub))
-        self.assertEqual(fss.evaluate_restorations(now=self.day(31))["restored"], 0)
+        self.assertEqual(fss.evaluate_restorations(now=self.day(10))["restored"], 0)
         self.assertEqual(renewed.status, SubscriptionInvoice.Status.PAID)
 
 

@@ -32,7 +32,7 @@ covers only the parts that were **paused** because they need a schema change, an
 
 Preferred design (smallest change that is correct):
 
-* `SmsCreditBalance.frozen_credits` `PositiveIntegerField(default=0)`. Spendable credits are `credits - frozen_credits`. Every consumer
+* `SmsBalance.frozen_credits` `PositiveIntegerField(default=0)`. Spendable credits are `credits - frozen_credits`. Every consumer
   of credits (`balance_service` debit paths) must use the spendable amount.
 * `SmsCreditLedger.Kind` gains `REFUND_HOLD = "refund_hold"` and `REFUND_RELEASE = "refund_release"`. `PURCHASE_REVERSAL` stays the
   final reversal and stays unique per purchase.
