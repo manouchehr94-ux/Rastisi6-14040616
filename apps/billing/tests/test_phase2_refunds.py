@@ -8,6 +8,7 @@ Synthetic providers only (no network, no real bank). The contract under test:
 * no provider call happens inside a transaction or while a row lock is held.
 The PostgreSQL class uses real threads and is skipped on SQLite (which ignores row locks)."""
 
+import contextlib
 import io
 import threading
 from collections import Counter
@@ -73,8 +74,26 @@ def not_configured(_p):
     raise BillingProviderError("not configured", code="not_configured")
 
 
+@contextlib.contextmanager
 def patched(provider):
-    return mock.patch("apps.billing.services.refund_service.registry.get_provider", return_value=provider)
+    """Exercises the DORMANT automatic-refund code path (kept for a future, separately approved decision): the owner-approval constant
+    is switched on for the duration of the block and the registry returns the synthetic provider. By default (production) the
+    constant is False and none of this runs: see test_refund_review_policy.py."""
+    from apps.billing.providers import bank_refund_policy
+
+    with mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True), \
+            mock.patch("apps.billing.services.refund_service.registry.get_provider", return_value=provider):
+        yield
+
+
+@contextlib.contextmanager
+def patched_dups(provider):
+    """Same as ``patched`` for the duplicate-payment refund service."""
+    from apps.billing.providers import bank_refund_policy
+
+    with mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True), \
+            mock.patch.object(dups.registry, "get_provider", return_value=provider):
+        yield
 
 
 class RefundBase(TestCase):
@@ -229,9 +248,14 @@ class UnknownRefundResolutionTests(RefundBase):
         self.assertEqual(self.invoice.status, SubscriptionInvoice.Status.REFUNDED)
         self.assertEqual(refund_service.complete_refund_manually(done, actor=None, reference="BANK-REF-12345").pk, done.pk)  # idempotent
 
-    def test_a_manual_pending_refund_still_completes_without_a_reference(self):
+    def test_a_manual_pending_refund_needs_approval_and_a_reference_to_complete(self):
         refund = self.refund(FakeProvider(manual), amount="400000")
-        self.assertEqual(refund_service.complete_refund_manually(refund, actor=None).status, R.SUCCEEDED)
+        with self.assertRaises(refund_service.RefundError):                     # not approved yet
+            refund_service.complete_refund_manually(refund, actor=None, reference="BANK-REF-12345")
+        refund_service.approve_refund_for_manual_processing(refund, actor=None)
+        with self.assertRaises(refund_service.RefundError):                     # approved, but no evidence
+            refund_service.complete_refund_manually(refund, actor=None)
+        self.assertEqual(refund_service.complete_refund_manually(refund, actor=None, reference="BANK-REF-12345").status, R.SUCCEEDED)
 
     def test_finance_can_prove_non_execution_which_releases_the_amount_for_a_corrected_refund(self):
         refund = self.unknown()
@@ -310,6 +334,7 @@ class PlatformAdminRefundViewTests(RefundBase):
         self.assertEqual(refund.status, R.PENDING)
 
 
+@mock.patch("apps.billing.providers.bank_refund_policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)   # DORMANT path, off by owner decision
 @override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="saman")        # the ENABLED path; disabled behaviour: test_bank_refund_disabled.py
 class AdapterUnknownOutcomeTests(TestCase):
     """The real adapter-backed provider must report a transport failure during a reverse as UNKNOWN, a plain gateway refusal as
@@ -383,7 +408,7 @@ class DuplicateRefundTests(TestCase):
             idempotency_key="dup-attempt-key")
 
     def call(self, provider, **kw):
-        with mock.patch.object(dups.registry, "get_provider", return_value=provider):
+        with patched_dups(provider):
             return dups.refund_duplicate("subscription", self.attempt.pk, actor=None, reason="duplicate", **kw)
 
     def test_success_records_refunded_once(self):
@@ -419,7 +444,7 @@ class DuplicateRefundTests(TestCase):
     def test_stale_requesting_intent_becomes_unknown_without_calling_the_provider(self):
         provider = FakeProvider(ok)
         with mock.patch.object(dups, "_store_resolution", wraps=dups._store_resolution):
-            with mock.patch.object(dups.registry, "get_provider", return_value=provider):
+            with patched_dups(provider):
                 # simulate a crash right after the intent: write the intent only
                 dups._store_resolution(self.attempt, outcome=dups.REQUESTING, reason="r", by=None, key="k",
                                        at=(timezone.now() - timedelta(hours=1)).isoformat(timespec="seconds"))
@@ -534,7 +559,7 @@ class PostgresConcurrentRefundTests(TransactionTestCase):
         def go(_i):
             return dups.refund_duplicate("subscription", attempt.pk, actor=None, reason="duplicate")[1]
 
-        with mock.patch.object(dups.registry, "get_provider", return_value=provider):
+        with patched_dups(provider):
             out = Counter(self.run_parallel(6, go))
         self.assertEqual(len(provider.calls), 1, out)
         self.assertEqual(provider.in_transaction_flags, [False])

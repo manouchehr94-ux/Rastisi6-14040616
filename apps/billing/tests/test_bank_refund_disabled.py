@@ -1,7 +1,7 @@
 """Pasargad / Saman / Mellat: AUTOMATIC bank reversals are disabled by default (fail-closed) because no verified idempotency contract
 exists. Disabled means: no adapter/credentials/network call, the refund is recorded as manual processing (amount stays reserved), nothing is
 marked refunded, the subscription entitlement does not change, repeats and concurrent requests cannot pay twice, and finance completes it
-with a bank reference. The enabled path (explicit setting) classifies every doubtful answer as UNKNOWN and never retries.
+with a bank reference. The dormant enabled path (needs the code constant AND the per-gateway setting) classifies every doubtful answer as UNKNOWN and never retries.
 Synthetic adapters only: no real bank, no network."""
 
 import threading
@@ -80,10 +80,14 @@ class DisabledByDefaultTests(BankFixture, TestCase):
                 self.assertEqual(policy.enabled_gateways(), frozenset(), value)
         with override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS=" Saman , mellat "):
             self.assertEqual(policy.enabled_gateways(), frozenset({"saman", "mellat"}))
-        for code in ("manual", "zibal", "snappay", "torobpay", "zarinpal", "platform_card"):
-            self.assertTrue(policy.automatic_refund_allowed(code), code)               # other providers are not governed by this switch
-        for code in GATEWAYS:
-            self.assertFalse(policy.automatic_refund_allowed(code), code)
+        self.assertIs(policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED, False)             # owner decision: a code constant, not configuration
+        for code in ("manual", "zibal", "snappay", "torobpay", "zarinpal", "platform_card", "", None) + GATEWAYS:
+            self.assertFalse(policy.automatic_refund_allowed(code), code)               # NO provider is exempt
+        with override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="pasargad,saman,mellat"):
+            for code in GATEWAYS:
+                self.assertFalse(policy.automatic_refund_allowed(code), code)           # the environment alone can never enable a call
+            with mock.patch.object(policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", "yes"):
+                self.assertFalse(policy.automatic_refund_allowed("saman"))              # only the boolean True counts
 
     def test_a_refund_is_recorded_as_manual_with_no_bank_call_no_success_and_no_entitlement_change(self):
         for gateway in GATEWAYS:
@@ -162,6 +166,12 @@ class DisabledByDefaultTests(BankFixture, TestCase):
         with self.assertRaises(refund_service.RefundError):
             refund_service.complete_refund_manually(refund, actor=None, reference="abc")
         self.assertEqual(StoreSubscription.objects.get(pk=sub.pk).status, sub.status)
+        with self.assertRaises(refund_service.RefundError):                                # not approved yet: cannot be completed
+            refund_service.complete_refund_manually(refund, actor=None, reference="PEP-PANEL-REF-77")
+        self.assertEqual(StoreSubscription.objects.get(pk=sub.pk).status, sub.status)
+        refund_service.approve_refund_for_manual_processing(refund, actor=None)
+        self.assertEqual(self.bank_calls(), 0)                                             # approval never calls the bank
+        self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.PAID)
         done = refund_service.complete_refund_manually(refund, actor=None, reference="PEP-PANEL-REF-77")
         self.assertEqual(done.status, R.SUCCEEDED)
         self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.REFUNDED)
@@ -191,14 +201,16 @@ class DisabledByDefaultTests(BankFixture, TestCase):
         self.assertEqual(self.bank_calls(), 0)
         self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.PAID)
 
-    def test_providers_outside_the_switch_still_refund_normally(self):
+    def test_no_provider_is_exempt_a_non_bank_provider_is_also_never_called(self):
         store, invoice = _paid_invoice("bd-normal")                                       # provider «manual»
         fake = FakeProvider(ok)
         with mock.patch("apps.billing.services.refund_service.registry.get_provider", return_value=fake):
             refund = refund_service.request_refund(invoice, amount=AMOUNT, idempotency_key="normal")
-        self.assertEqual((refund.status, len(fake.calls)), (R.SUCCEEDED, 1))
+        self.assertEqual((refund.status, refund.failure_code, len(fake.calls)), (R.PENDING, policy.AUTOMATIC_REFUND_DISABLED, 0))
+        self.assertEqual(SubscriptionInvoice.objects.get(pk=invoice.pk).status, SubscriptionInvoice.Status.PAID)
 
 
+@mock.patch.object(policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)      # DORMANT path, off by owner decision
 @override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="pasargad,saman,mellat")
 class EnabledPathIsConservativeTests(BankFixture, TestCase):
     """Only reachable by explicitly enabling a gateway. Every doubtful answer is UNKNOWN and is never retried."""
@@ -289,6 +301,7 @@ class PostgresConcurrentBankRefundTests(BankFixture, _Parallel, TransactionTestC
         self.assertEqual(self.bank_calls(), 0)
         self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.PAID)
 
+    @mock.patch.object(policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)
     @override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="saman")
     def test_enabled_8_same_key_call_the_bank_once_and_6_different_keys_never_pay_twice(self):
         self.make("bc-on", "saman")
@@ -299,6 +312,7 @@ class PostgresConcurrentBankRefundTests(BankFixture, _Parallel, TransactionTestC
         self.assertEqual(self.adapter.cancel_payment.call_count, 1)
         self.assertEqual(SubscriptionRefund.objects.filter(invoice=self.invoice).count(), 1)
 
+    @mock.patch.object(policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)
     @override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="mellat")
     def test_enabled_timeout_under_concurrency_leaves_one_unknown_row_and_one_bank_call(self):
         def timeout(**_kw):

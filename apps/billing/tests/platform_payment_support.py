@@ -217,3 +217,12 @@ def portal_buy_and_pay(case, client, store, user, version, *, method=None, host=
         return response
     method = method or pgs.default_code("subscription")
     return pay_on_checkout(case, store, user, "subscription", invoice.pk, method=method)
+
+
+def approve_and_complete(refund, *, actor=None, reference="BANK-REF-TEST-0001"):
+    """The policy path for a platform refund in tests: the administrator APPROVES it for manual processing (no provider call), and a
+    separate step records the completion with a bank reference. Returns the completed refund."""
+    from apps.billing.services import refund_service
+
+    refund_service.approve_refund_for_manual_processing(refund, actor=actor)
+    return refund_service.complete_refund_manually(refund, actor=actor, reference=reference)

@@ -1,23 +1,34 @@
-"""Fail-closed switch for AUTOMATIC bank reversals/refunds through Pasargad, Saman and Mellat.
+"""Fail-closed policy: NO automatic post-payment refund/reversal for platform-owned payments (owner decision, 2026-11-10).
 
-Why it is off by default: for none of the three could an official, current contract be found that proves the reverse/refund call is
-idempotent for a client-supplied key, or that a timed-out call can be queried afterwards (see docs/payments/BANK_REFUND_SAFETY_20261110.md).
-Without that, a retry or an ambiguous outcome can pay the customer twice or record a refund that never happened.
+Product decision: a refund of a platform payment (subscription purchase/renewal, SMS package, any other platform product) is reviewed
+and approved by the platform administrator and is then performed MANUALLY through an authorised banking channel; its verified outcome
+is recorded in RastiSi with a bank reference. Approval never calls a provider and never executes a refund.
 
-Only gateways named in ``settings.RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS`` (comma separated, from the environment) may be called, and only
-after the contract has been verified. While a gateway is not listed, a refund of its payment is recorded as «manual processing»:
-no bank call, the amount stays reserved, nothing is marked refunded, and finance completes it with a bank reference."""
+Enforcement (backend, not UI): ``refund_service._execute_with_provider``, ``duplicate_payment_service.refund_duplicate`` and
+``AdapterBackedBillingProvider.refund_payment`` all stop on ``automatic_refund_allowed() == False`` BEFORE a provider is resolved, a
+credential is read or a network call is made, for EVERY provider code (not only Pasargad/Saman/Mellat).
+
+Why the switch is a code constant and not an environment variable: an environment flag can be flipped in production by a
+configuration change nobody reviews. Re-enabling an automatic path needs a code change, a written bank contract that proves idempotency
+and result inquiry (see docs/payments/BANK_REFUND_SAFETY_20261110.md) and a new owner decision.
+
+This does NOT touch payment cancellation / authorisation reversal of an unsettled payment, verification, settlement reconciliation,
+webhook recovery or fulfilment: only ``refund_payment`` of an already successful platform payment is governed here."""
 
 from django.conf import settings
+
+#: Owner decision: automatic refunds after a successful platform payment are NOT approved. Do not change without a new decision.
+AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED = False
 
 BANK_REVERSAL_GATEWAYS = frozenset({"pasargad", "saman", "mellat"})
 AUTOMATIC_REFUND_DISABLED = "automatic_refund_disabled"
 DISABLED_MESSAGE = (
-    "بازپرداختِ خودکارِ این درگاه غیرفعال است؛ هیچ درخواستی به بانک ارسال نشد. مبلغ رزرو می‌ماند. بازپرداخت را در پنلِ بانک انجام دهید "
-    "و سپس با ارجاعِ بانکی تکمیل ثبت کنید.")
+    "بازپرداختِ خودکارِ پرداختهای پلتفرم غیرفعال است؛ هیچ درخواستی به بانک یا درگاه ارسال نشد. مبلغ رزرو میماند. "
+    "درخواست باید توسط مدیر بررسی و تأیید شود، بازپرداخت بهصورت دستی از مسیرِ بانکیِ مجاز انجام شود و سپس با ارجاعِ بانکی تکمیل ثبت شود.")
 
 
 def enabled_gateways() -> frozenset:
+    """Per-gateway opt-in list (environment). It is only consulted when ``AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED`` is True."""
     raw = getattr(settings, "RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS", "")
     if isinstance(raw, str):
         names = raw.split(",")
@@ -29,6 +40,10 @@ def enabled_gateways() -> frozenset:
 
 
 def automatic_refund_allowed(provider_code: str) -> bool:
-    """False for Pasargad/Saman/Mellat unless explicitly enabled. Other providers are not governed by this switch."""
+    """False for EVERY provider while ``AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED`` is False (the approved state).
+
+    Even if a future decision sets the constant, Pasargad/Saman/Mellat additionally need an explicit environment opt-in per gateway."""
+    if AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED is not True:
+        return False
     code = (provider_code or "").strip().lower()
     return code not in BANK_REVERSAL_GATEWAYS or code in enabled_gateways()

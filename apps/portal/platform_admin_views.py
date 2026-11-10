@@ -1532,8 +1532,14 @@ def payment_invoice_detail(request, invoice_id):
     )
     import secrets
 
+    from apps.billing.services import refund_service
+
+    refund_rows = [
+        {"refund": r, "state": refund_service.review_state(r), "state_label": refund_service.review_state_label(r)}
+        for r in invoice.refunds.all()
+    ]
     return render(request, "portal/platform_admin/payment_invoice_detail.html", {
-        "invoice": invoice, "active_nav": "payments",
+        "invoice": invoice, "active_nav": "payments", "refund_rows": refund_rows,
         "refund_form_key": f"refund-{invoice.pk}-{secrets.token_hex(8)}",    # one per render: a double submit hits the same key
     })
 
@@ -2054,6 +2060,38 @@ def payment_invoice_refund(request, invoice_id):
 
 @require_POST
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_refund_approve(request, refund_id):
+    """Approve a refund request for MANUAL processing. Records the decision only: no provider/bank call, no money movement, no change
+    to the subscription or SMS credits. The refund is completed later, separately, with a bank reference."""
+    from apps.billing.models import SubscriptionRefund
+    from apps.billing.services import refund_service
+
+    refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
+    try:
+        refund_service.approve_refund_for_manual_processing(refund, actor=request.user, note=request.POST.get("note", ""))
+        messages.success(request, "بازپرداخت برای پردازشِ دستی تأیید شد. هنوز انجام نشده است؛ پس از انتقالِ واقعیِ پول با ارجاعِ بانکی تکمیل ثبت کنید.")
+    except refund_service.RefundError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_refund_reject(request, refund_id):
+    from apps.billing.models import SubscriptionRefund
+    from apps.billing.services import refund_service
+
+    refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
+    try:
+        refund_service.reject_refund(refund, actor=request.user, reason=request.POST.get("reason", ""))
+        messages.success(request, "درخواستِ بازپرداخت رد شد؛ مبلغ آزاد شد.")
+    except refund_service.RefundError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def payment_refund_complete(request, refund_id):
     from apps.billing.models import SubscriptionRefund
     from apps.billing.services import refund_service
@@ -2066,7 +2104,7 @@ def payment_refund_complete(request, refund_id):
             messages.success(request, "عدمِ انجامِ بازپرداخت ثبت شد؛ مبلغ آزاد شد.")
         else:
             refund_service.complete_refund_manually(refund, actor=request.user, reference=request.POST.get("reference", ""))
-            messages.success(request, "بازپرداخت پس از پردازشِ دستی تکمیل ثبت شد.")
+            messages.success(request, "بازپرداخت با ارجاعِ بانکیِ ثبتشده تکمیل شد.")
     except refund_service.RefundError as exc:
         messages.error(request, str(exc))
     return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)

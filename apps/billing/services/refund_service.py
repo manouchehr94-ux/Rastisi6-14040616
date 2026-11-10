@@ -32,6 +32,31 @@ logger = logging.getLogger("billing")
 #: UNKNOWN will be: the amount stays reserved, the provider is NEVER called again automatically, and only a person with a bank
 #: reference can resolve it.
 UNKNOWN_OUTCOME = "unknown_outcome"
+#: Interim markers for the manual review workflow (no schema change; they ride on the existing PENDING / CANCELLED statuses):
+#:   PENDING + ``automatic_refund_disabled`` (or legacy PENDING with no code)  = requested, awaiting manual review
+#:   PENDING + ``MANUAL_APPROVED``                                             = approved for MANUAL processing (nothing executed)
+#:   PENDING + ``unknown_outcome``                                             = unknown, needs reconciliation with a bank reference
+#:   SUCCEEDED                                                                 = externally completed and verified (reference recorded)
+#:   CANCELLED + ``MANUAL_REJECTED``                                           = rejected by the administrator (reservation released)
+#: Approval is a record of a decision. It never calls a provider, never moves money and never touches entitlements or credits.
+MANUAL_APPROVED = "manual_refund_approved"
+MANUAL_REJECTED = "manual_rejected"
+STATE_REQUESTED = "requested"
+STATE_AWAITING_REVIEW = "awaiting_review"
+STATE_APPROVED = "approved_for_manual_processing"
+STATE_COMPLETED = "completed_verified"
+STATE_REJECTED = "rejected"
+STATE_UNKNOWN = "unknown_needs_reconciliation"
+STATE_FAILED = "failed"
+STATE_LABELS = {
+    STATE_REQUESTED: "درخواست ثبت شد",
+    STATE_AWAITING_REVIEW: "در انتظار بررسی دستی",
+    STATE_APPROVED: "تأییدشده برای پردازش دستی (هنوز انجام نشده)",
+    STATE_COMPLETED: "انجامشده و تأییدشده (ارجاع ثبت شد)",
+    STATE_REJECTED: "ردشده",
+    STATE_UNKNOWN: "نامشخص / نیازمند تطبیق",
+    STATE_FAILED: "ناموفق",
+}
 STALE_INTENT_AFTER = timedelta(minutes=10)
 _MIN_REFERENCE_LEN = 6
 #: BillingProviderError codes that mean the request definitely never left our side (nothing was sent to a bank).
@@ -40,6 +65,28 @@ NOT_SENT_CODES = frozenset({"ineligible_gateway", "not_configured", "provider_un
 
 class RefundError(Exception):
     """خطای قابل‌نمایش هنگام بازپرداخت."""
+
+
+def review_state(refund) -> str:
+    """The administrator-facing state, derived from the existing status + marker (no schema change)."""
+    S = SubscriptionRefund.Status
+    if refund.status == S.SUCCEEDED:
+        return STATE_COMPLETED
+    if refund.status == S.CANCELLED:
+        return STATE_REJECTED
+    if refund.status == S.FAILED:
+        return STATE_FAILED
+    if refund.status == S.REQUESTED:
+        return STATE_REQUESTED
+    if refund.failure_code == UNKNOWN_OUTCOME:
+        return STATE_UNKNOWN
+    if refund.failure_code == MANUAL_APPROVED:
+        return STATE_APPROVED
+    return STATE_AWAITING_REVIEW
+
+
+def review_state_label(refund) -> str:
+    return STATE_LABELS[review_state(refund)]
 
 
 def refunded_total(invoice) -> Decimal:
@@ -305,34 +352,97 @@ def recover_stale_intents(*, now=None, older_than=STALE_INTENT_AFTER) -> int:
 
 
 def _require_reference(refund, reference):
+    """Evidence of the external return of funds is mandatory for EVERY completion (policy: a refund is completed only after a
+    verified external outcome is recorded)."""
     reference = (reference or "").strip()
-    if refund.failure_code in (UNKNOWN_OUTCOME, bank_refund_policy.AUTOMATIC_REFUND_DISABLED) and len(reference) < _MIN_REFERENCE_LEN:
-        raise RefundError("برای بازپرداختِ با نتیجهٔ نامشخص یا بازپرداختِ دستیِ درگاهِ بانکی، ارجاعِ مستندِ بانکی (حداقل ۶ نویسه) الزامی است.")
+    if len(reference) < _MIN_REFERENCE_LEN:
+        raise RefundError("برای تکمیلِ بازپرداخت، ارجاعِ مستندِ بانکی (حداقل ۶ نویسه) الزامی است.")
     return reference
 
 
 @transaction.atomic
+def approve_refund_for_manual_processing(refund, *, actor, note="", now=None):
+    """Administrator decision: this refund may be paid out MANUALLY through an authorised banking channel.
+
+    Records the decision only. NO provider is resolved or called, no money moves, the invoice status, the subscription entitlement and
+    SMS credits are untouched, and the refund stays open and reserved until ``complete_refund_manually`` records verified evidence.
+    Idempotent (a repeat returns the same row, writes nothing). An unknown-outcome refund cannot be approved: it must be reconciled
+    with the bank first (``complete_refund_manually`` with a reference, or ``fail_refund_manually`` with proof)."""
+    now = now or timezone.now()
+    locked = SubscriptionRefund.objects.select_for_update().get(pk=refund.pk)
+    if locked.status == SubscriptionRefund.Status.PENDING and locked.failure_code == MANUAL_APPROVED:
+        return locked
+    if locked.status != SubscriptionRefund.Status.PENDING:
+        raise RefundError("فقط بازپرداختِ در انتظارِ بررسی را میتوان برای پردازش دستی تأیید کرد.")
+    if locked.failure_code == UNKNOWN_OUTCOME:
+        raise RefundError("نتیجهٔ این بازپرداخت نامشخص است؛ ابتدا با بانک تطبیق دهید و با ارجاعِ مستند تعیین تکلیف کنید.")
+    locked.failure_code = MANUAL_APPROVED
+    locked.failure_message = "تأییدِ مدیر برای پردازشِ دستی؛ هنوز انجام نشده است. پس از انتقالِ واقعیِ پول با ارجاعِ بانکی تکمیل ثبت شود."[:300]
+    locked.save(update_fields=["failure_code", "failure_message", "updated_at"])
+    record_audit_event(
+        store=locked.store, actor=actor, action_code="billing.refund_approved_for_manual",
+        object_type="SubscriptionRefund", object_id=locked.pk, object_label=str(locked.amount),
+        after={"invoice": locked.invoice.number, "amount": str(locked.amount), "status": locked.status, "state": STATE_APPROVED},
+        metadata={"note": (note or "")[:200], "provider_called": False},
+    )
+    return locked
+
+
+@transaction.atomic
+def reject_refund(refund, *, actor, reason, now=None):
+    """Administrator rejects a refund request that has not been paid out. Releases the reserved amount; nothing is sent anywhere.
+    Not allowed for an unknown outcome (money may already have left: reconcile it with a bank reference instead). Idempotent."""
+    now = now or timezone.now()
+    reason = (reason or "").strip()
+    if len(reason) < 4:
+        raise RefundError("دلیلِ ردِ بازپرداخت الزامی است.")
+    locked = SubscriptionRefund.objects.select_for_update().get(pk=refund.pk)
+    if locked.status == SubscriptionRefund.Status.CANCELLED and locked.failure_code == MANUAL_REJECTED:
+        return locked
+    if locked.status != SubscriptionRefund.Status.PENDING:
+        raise RefundError("این بازپرداخت در وضعیتِ قابلِ ردکردن نیست.")
+    if locked.failure_code == UNKNOWN_OUTCOME:
+        raise RefundError("نتیجهٔ این بازپرداخت نامشخص است؛ ردِ آن مجاز نیست. با بانک تطبیق دهید و با ارجاعِ مستند تعیین تکلیف کنید.")
+    locked.status = SubscriptionRefund.Status.CANCELLED
+    locked.failure_code = MANUAL_REJECTED
+    locked.failure_message = f"ردشده توسط مدیر: {reason}"[:300]
+    locked.completed_at = now
+    locked.save(update_fields=["status", "failure_code", "failure_message", "completed_at", "updated_at"])
+    record_audit_event(
+        store=locked.store, actor=actor, action_code="billing.refund_rejected",
+        object_type="SubscriptionRefund", object_id=locked.pk, object_label=str(locked.amount),
+        after={"invoice": locked.invoice.number, "amount": str(locked.amount), "state": STATE_REJECTED},
+        metadata={"reason": reason[:200], "provider_called": False},
+    )
+    return locked
+
+
+@transaction.atomic
 def complete_refund_manually(refund, *, actor=None, now=None, reference=""):
-    """Mark an open refund as really paid out (after the manual bank transfer / confirmed provider outcome) and sync the invoice.
-    For an ambiguous-outcome refund a documented bank reference is mandatory."""
+    """Mark an open refund as really paid out and sync the invoice. Allowed ONLY for a refund the administrator approved for manual
+    processing (or an unknown-outcome one being reconciled) and ONLY with a documented bank reference (≥ 6 characters): the
+    entitlement/coupon effects happen here and nowhere else. Idempotent: a second completion returns the first one and changes nothing."""
     now = now or timezone.now()
     locked = SubscriptionRefund.objects.select_for_update().get(pk=refund.pk)
     if locked.status == SubscriptionRefund.Status.SUCCEEDED:
         return locked
     if locked.status not in SubscriptionRefund.OPEN_STATUSES:
         raise RefundError("این بازپرداخت در وضعیتِ قابلِ‌تکمیل نیست.")
+    if locked.failure_code not in (MANUAL_APPROVED, UNKNOWN_OUTCOME):
+        # Approval and completion are separate events: a request that nobody has approved cannot be marked as paid out.
+        # (An unknown-outcome refund is reconciled directly, because money may already have left.)
+        raise RefundError("ابتدا بازپرداخت باید توسط مدیر برای پردازش دستی تأیید شود.")
     reference = _require_reference(locked, reference)
     locked.status = SubscriptionRefund.Status.SUCCEEDED
     locked.completed_at = now
-    if reference:
-        locked.failure_message = f"تکمیلِ دستی با ارجاع: {reference}"[:300]
+    locked.failure_message = f"تکمیلِ دستی با ارجاع: {reference}"[:300]
     locked.save(update_fields=["status", "completed_at", "failure_message", "updated_at"])
     invoice = SubscriptionInvoice.objects.select_for_update().get(pk=locked.invoice_id)
     _sync_invoice_refund_status(invoice, now=now, refund=locked)
     record_audit_event(
         store=locked.store, actor=actor, action_code="billing.refund_completed",
         object_type="SubscriptionRefund", object_id=locked.pk, object_label=str(locked.amount),
-        metadata={"reference": reference} if reference else None,
+        after={"state": STATE_COMPLETED}, metadata={"reference": reference, "provider_called": False},
     )
     return locked
 

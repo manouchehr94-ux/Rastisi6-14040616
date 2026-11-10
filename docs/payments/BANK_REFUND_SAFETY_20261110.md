@@ -1,5 +1,9 @@
 # Bank refund safety: Pasargad, Saman, Mellat (2026-11-10)
 
+> **Superseded in scope by `FINAL_REFUND_POLICY_20261110.md`:** the owner has since decided that NO platform payment is refunded automatically through
+> any provider. `RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS` is now only read if the code constant
+> `AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED` is changed to `True`, which is not approved. Completion now also needs a prior approval and a bank reference.
+
 **Decision: automatic bank reversal/refund is DISABLED by default for all three gateways.** No official, current contract was found that
 proves the reverse call is idempotent or that a timed-out call can be queried afterwards. Nothing was tested against a bank (no sandbox
 or live call was allowed or made).

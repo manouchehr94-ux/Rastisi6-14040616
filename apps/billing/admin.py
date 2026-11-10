@@ -133,11 +133,16 @@ class SubscriptionRefundAdmin(SuperuserOnlyBillingAdmin):
     list_display = ("invoice", "store", "status", "amount", "currency", "provider", "created_at")
     list_filter = ("status", "provider", "currency")
     search_fields = ("invoice__number", "store__slug", "provider_refund_id", "idempotency_key")
+    # Read-only on purpose: a refund changes state ONLY through refund_service (approve / reject / complete with a bank reference),
+    # which also syncs the invoice, the coupon and the subscription entitlement exactly once. Editing status here would bypass that.
     readonly_fields = (
         "store", "invoice", "payment_attempt", "credit_note", "provider", "provider_refund_id",
-        "amount", "currency", "requested_by", "requested_at", "completed_at", "idempotency_key",
-        "created_at", "updated_at",
+        "status", "amount", "currency", "reason", "failure_code", "failure_message",
+        "requested_by", "requested_at", "completed_at", "idempotency_key", "created_at", "updated_at",
     )
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SubscriptionDunningState)

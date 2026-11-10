@@ -13,6 +13,7 @@ from django.db import connection
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
+from apps.billing.tests.platform_payment_support import approve_and_complete
 from apps.billing.models import (
     PlatformCoupon,
     PlatformCouponAuditEvent,
@@ -425,7 +426,7 @@ class RefundPolicyTests(Base):
     def test_full_refund_within_window_reverses_and_frees_quota(self):
         inv = self.paid()
         refund_service.request_refund(inv, amount=inv.amount_paid, idempotency_key="rf-1")
-        refund_service.complete_refund_manually(inv.refunds.get())
+        approve_and_complete(inv.refunds.get())
         inv.refresh_from_db()
         self.assertEqual(inv.status, "refunded")
         self.assertEqual(Redemption.objects.get(invoice=inv).status, Redemption.Status.REVERSED)
@@ -434,11 +435,11 @@ class RefundPolicyTests(Base):
     def test_partial_refund_and_late_full_refund_keep_it_consumed(self):
         inv = self.paid("RF2")
         refund_service.request_refund(inv, amount=Decimal("1000"), idempotency_key="rf-p")
-        refund_service.complete_refund_manually(inv.refunds.get())
+        approve_and_complete(inv.refunds.get())
         self.assertEqual(Redemption.objects.get(invoice=inv).status, Redemption.Status.REDEEMED)
         SubscriptionInvoice.objects.filter(pk=inv.pk).update(paid_at=timezone.now() - timedelta(days=3))
         refund_service.request_refund(inv, amount=inv.amount_paid - Decimal("1000"), idempotency_key="rf-q")
-        refund_service.complete_refund_manually(inv.refunds.get(idempotency_key="rf-q"))
+        approve_and_complete(inv.refunds.get(idempotency_key="rf-q"))
         self.assertEqual(Redemption.objects.get(invoice=inv).status, Redemption.Status.REDEEMED)
         self.assertTrue(PlatformCouponAuditEvent.objects.filter(action="refund_kept_consumed").exists())
 

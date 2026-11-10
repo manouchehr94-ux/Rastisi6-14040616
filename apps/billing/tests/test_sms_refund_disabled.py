@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.db import connection
+from apps.billing.providers import bank_refund_policy
 from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
@@ -152,7 +153,8 @@ class DirectHttpRequestTests(SmsRefundDisabledBase):
 
     def test_the_refund_form_returns_only_when_the_flag_is_explicitly_enabled(self):
         purchase, _attempt = self.completed()
-        with override_settings(RASTISI_SMS_REFUND_ENABLED=True):
+        with override_settings(RASTISI_SMS_REFUND_ENABLED=True), \
+                mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True):
             response = self.platform.get("/payments/sms-purchases/")
         self.assertContains(response, self.url(purchase))
 

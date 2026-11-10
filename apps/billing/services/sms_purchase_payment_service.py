@@ -220,8 +220,13 @@ SMS_REFUND_DISABLED_MESSAGE = (
 
 
 def sms_refunds_enabled() -> bool:
-    """Fail-closed: only an explicit ``RASTISI_SMS_REFUND_ENABLED = True`` enables SMS refunds; a missing/any other value disables them."""
-    return getattr(settings, "RASTISI_SMS_REFUND_ENABLED", False) is True
+    """Fail-closed: SMS refunds need BOTH an explicit ``RASTISI_SMS_REFUND_ENABLED = True`` AND the owner's approval of automatic
+    post-payment refunds (``bank_refund_policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED``, a code constant, False by decision of
+    2026-11-10). So a configuration change alone can never reverse credits or call a provider. Missing/any other value disables."""
+    from apps.billing.providers import bank_refund_policy
+
+    return (getattr(settings, "RASTISI_SMS_REFUND_ENABLED", False) is True
+            and bank_refund_policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED is True)
 
 
 def ensure_refunds_enabled() -> None:
