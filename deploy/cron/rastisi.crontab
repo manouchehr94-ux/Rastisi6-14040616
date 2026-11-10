@@ -1,11 +1,21 @@
 # RastiSi background jobs — install with:  crontab -u <app-user> deploy/cron/rastisi.crontab   (review paths first)
 # Existing cron architecture (ADR-49). No Celery/Redis/other scheduler. Not installed by the repository; not verified on any real server.
+#
+# OPERATOR MUST SUPPLY (the wrapper refuses to run a job while any of these is a placeholder or wrong; it never falls back to defaults):
+#   MAILTO              where cron itself mails wrapper problems (configuration errors, "ALERT DELIVERY FAILED"). Use a mailbox that is monitored.
+#   RASTISI_ALERT_TO    the real recipient of job-failure alerts. May instead be set in RASTISI_ENV_FILE (the file wins).
+#   RASTISI_APP_DIR / RASTISI_ENV_FILE / RASTISI_VENV / JOB   real paths. The env file must define DATABASE_URL (postgres://),
+#                       DJANGO_SECRET_KEY and DJANGO_DEBUG=False; the venv must be a real virtualenv with "bin/python".
+#   RASTISI_ALERT_CMD   mail-compatible command run as:  <command words> "<subject>" "<RASTISI_ALERT_TO>"  (body on stdin). Default "mail -s".
+# Check before installing:  RASTISI_ALERT_TO=… deploy/cron/run_job.sh --check-config   then   --test-alert
 CRON_TZ=Asia/Tehran
-MAILTO=ops@example.com
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=CHANGE_ME_CRON_MAILTO
 RASTISI_APP_DIR=/srv/rastisi
 RASTISI_ENV_FILE=/etc/rastisi/env
 RASTISI_VENV=/srv/rastisi/venv
 RASTISI_LOG_DIR=/var/log/rastisi
+RASTISI_ALERT_TO=CHANGE_ME_ALERT_RECIPIENT
 RASTISI_ALERT_CMD="mail -s"
 JOB=/srv/rastisi/deploy/cron/run_job.sh
 

@@ -6,6 +6,9 @@ here="$(cd "$(dirname "$0")" && pwd)"
 fail=0
 step() { echo "--- $*"; }
 run() { name="$1"; shift; "$here/run_job.sh" "validate-$name" "$@"; rc=$?; echo "rc=$rc"; [ $rc -le "${ALLOW:-0}" ] || fail=1; }
+step "0. wrapper configuration and alert path (paths, env file, virtualenv, PostgreSQL DATABASE_URL, alert recipient)"
+"$here/run_job.sh" --check-config; rc=$?; echo "rc=$rc"; [ $rc -eq 0 ] || { echo "VALIDATION FAILED (wrapper configuration)"; exit 1; }
+"$here/run_job.sh" --test-alert;  rc=$?; echo "rc=$rc"; [ $rc -eq 0 ] || fail=1     # a test e-mail is sent to RASTISI_ALERT_TO
 step "1. DB connection / config";               run check check
 step "2. delivery readiness (reports real backends)";  ALLOW=1 run delivery verify_delivery_channels
 step "3. expiry stays a no-op (TTL 0)";        run expiry expire_unpaid_orders --dry-run

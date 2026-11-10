@@ -35,8 +35,8 @@ Without them:
 | `verify_billing_consistency --strict` | daily 04:00 | Read-only. |
 | `verify_subscription_consistency --strict` | daily 04:15 | Read-only. |
 
-All run through `deploy/cron/run_job.sh`, which logs to `/var/log/rastisi/<name>.log` and runs `$RASTISI_ALERT_CMD` on a non-zero
-exit. The six state-changing jobs also take a PostgreSQL advisory lock (`apps.core.job_lock.exclusive`): an overlapping run prints
+All run through `deploy/cron/run_job.sh`, which logs to `/var/log/rastisi/<name>.log`, preserves the command's exit code and sends an
+alert (see 3.1) on a non-zero exit. The six state-changing jobs also take a PostgreSQL advisory lock (`apps.core.job_lock.exclusive`): an overlapping run prints
 `skipped: another <job> is still running` and exits 0. The jobs are idempotent and row-lock safe in any case.
 
 **Failure behaviour.** One failing record never stops the others. After the whole batch the command exits non-zero and prints the
@@ -60,9 +60,38 @@ admins). New billing checks:
 | `billing_refund_unknown_outcome` | unknown > 1 h | > 24 h | Reconcile with the bank, then complete or fail the refund with a bank reference. Do not retry. |
 | `billing_card_claims_waiting` | pending review > 3 days | | |
 
+## 3.1 Wrapper safety and alerts (`deploy/cron/run_job.sh`)
+
+The wrapper fails closed: the job is **not started** (and never runs on system python, SQLite or default settings) when something is wrong.
+
+| Exit | Meaning |
+|---|---|
+| job's own code | The management command's exit code, unchanged. |
+| 97 | Application directory missing or has no `manage.py`. |
+| 98 | Environment file missing, unreadable or has a shell syntax error. |
+| 99 | `$RASTISI_VENV/bin/python` missing, not executable or not a virtualenv interpreter. |
+| 96 | Invalid configuration. Only the variable **names** are printed, never values: `DJANGO_SECRET_KEY`, `DATABASE_URL` (must come from the env file and be `postgres://`), `DJANGO_DEBUG` (explicitly false), `PAYMENTS_SIMULATION_ENABLED` (off), alert recipient/command, log directory. |
+| 95 | `--test-alert` could not be delivered. |
+
+Load order: wrapper paths from the cron environment, then path checks, then the env file (its values override cron's; any inherited
+`DATABASE_URL` is dropped so the env file is the only source), then configuration checks, then the command via the venv's absolute python path.
+
+**Operator must supply:** `RASTISI_APP_DIR`, `RASTISI_ENV_FILE`, `RASTISI_VENV`, `JOB` (real paths); `RASTISI_ALERT_TO` (real recipient,
+crontab or env file); `MAILTO` (monitored mailbox for wrapper problems); an installed mail-compatible command (default `mail -s`, override with
+`RASTISI_ALERT_CMD`, run without a shell as `<words> "<subject>" "<recipient>"`, last 20 log lines on stdin); in the env file
+`DATABASE_URL`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`. Staging/test only: `RASTISI_JOB_ALLOW_DEBUG=1` skips the debug/simulation checks.
+
+**Alert delivery failures are never silent:** they print `ALERT DELIVERY FAILED` on stderr (cron mails it to `MAILTO`), append a line to the
+job log, write syslog (`logger -t rastisi-cron`) and create `/var/log/rastisi/ALERT_DELIVERY_FAILED` (removed after the next delivered
+alert). Monitor that file or the syslog tag. The job's exit code is still the job's own.
+
+Checks (no job is run): `deploy/cron/run_job.sh --check-config`; `deploy/cron/run_job.sh --test-alert` sends a test message.
+Tests: `apps/billing/tests/test_cron_wrapper.py` (synthetic app, virtualenv and mailer; no real job or provider).
+
 ## 4. Deployment checklist (operator, real server)
 
-1. `crontab -u <app-user> deploy/cron/rastisi.crontab` after reviewing paths, `MAILTO`, `RASTISI_ALERT_CMD`. Confirm `crontab -l`.
+1. Edit the crontab values listed in 3.1, run `run_job.sh --check-config` and `--test-alert` as the app user, then
+   `crontab -u <app-user> deploy/cron/rastisi.crontab`. Confirm `crontab -l`.
 2. Confirm the database is PostgreSQL (the advisory lock is a no-op elsewhere).
 3. On staging run `bash deploy/cron/validate_jobs.sh`. Step 10 runs every billing job in dry-run or read-only mode.
 4. After one hour confirm each `/var/log/rastisi/billing_*.log` has a new `=== ... end <job> rc=0`.
