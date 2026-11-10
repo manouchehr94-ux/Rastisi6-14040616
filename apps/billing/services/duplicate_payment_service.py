@@ -20,12 +20,17 @@ from django.utils import timezone
 from apps.billing.models import SubscriptionPaymentAttempt
 from apps.billing.providers import registry
 from apps.billing.providers.base import BillingProviderError
+from apps.billing.services.refund_service import NOT_SENT_CODES
 from apps.core.services.audit_service import record_audit_event
 from apps.sms.models import SmsPackagePaymentAttempt
 
 RESOLUTION_KEY = "duplicate_resolution"
 PARKED_CODES = frozenset({"fulfilment_blocked", "late_payment_void", "late_payment_uncollectible", "stale_decision"})
-OUTCOMES = ("refunded", "pending_manual", "refunded_external", "credited", "not_an_overpayment")
+REQUESTING = "requesting"          # intent committed, provider call in flight (or the process died): NEVER re-sent automatically
+UNKNOWN = "unknown"                # ambiguous provider outcome: finance resolves it with a bank reference
+OUTCOMES = ("refunded", "pending_manual", "refunded_external", "credited", "not_an_overpayment", REQUESTING, UNKNOWN)
+#: Outcomes that mean "a provider refund was already requested": the refund action is hidden and never re-sent.
+IN_FLIGHT_OUTCOMES = ("pending_manual", REQUESTING, UNKNOWN)
 FINAL_OUTCOMES = ("refunded", "refunded_external", "credited", "not_an_overpayment")
 
 
@@ -80,30 +85,71 @@ def _locked_duplicate(kind, attempt_id):
     return attempt
 
 
-@transaction.atomic
 def refund_duplicate(kind, attempt_id, *, actor, reason, idempotency_key=""):
-    """Request the provider to refund exactly the duplicate attempt's money. Returns ``(attempt, outcome)``."""
+    """Request the provider to refund exactly the duplicate attempt's money. Returns ``(attempt, outcome)``.
+
+    Three steps so an uncertain provider outcome can never duplicate money or be lost (F-06):
+    1. INTENT: commit ``outcome="requesting"`` (idempotent; any existing resolution means "already requested" and the provider
+       is NOT called again);
+    2. CALL: contact the provider once with no transaction and no row lock;
+    3. OUTCOME: record ``refunded`` / ``pending_manual`` / ``unknown`` conditionally on the intent still being ``requesting``.
+    ``unknown`` and a stale ``requesting`` are never retried automatically: finance resolves them with a bank reference through
+    ``mark_resolved``. Do not call from inside an outer ``transaction.atomic()``."""
     reason = (reason or "").strip()
     if len(reason) < 4:
         raise DuplicatePaymentError("دلیلِ بازپرداخت الزامی است.")
-    attempt = _locked_duplicate(kind, attempt_id)
-    done = resolution_of(attempt)
-    if done.get("outcome") in OUTCOMES:
-        return attempt, done["outcome"]                                    # idempotent: a refund was already requested/recorded
-    key = idempotency_key or f"dup-refund-{kind}-{attempt.pk}"
+    key = idempotency_key or f"dup-refund-{kind}-{attempt_id}"
+    with transaction.atomic():
+        attempt = _locked_duplicate(kind, attempt_id)
+        done = resolution_of(attempt)
+        if done.get("outcome") in OUTCOMES:
+            return attempt, done["outcome"]                                # idempotent: already requested/recorded
+        _store_resolution(
+            attempt, outcome=REQUESTING, reason=reason[:300], by=getattr(actor, "pk", None), key=key,
+            at=timezone.now().isoformat(timespec="seconds"),
+        )
+        _audit(kind, attempt, "refund_intent_recorded", actor, reason=reason[:300])
+        provider_code = attempt.provider
+        payment_id = attempt.provider_payment_id or attempt.provider_session_id
+        amount, currency = attempt.amount, attempt.currency
+
+    outcome, refund_id, detail = "unknown", "", ""
     try:
-        result = registry.get_provider(attempt.provider).refund_payment(
-            provider_payment_id=attempt.provider_payment_id or attempt.provider_session_id,
-            amount=attempt.amount, currency=attempt.currency, idempotency_key=key,
+        result = registry.get_provider(provider_code).refund_payment(
+            provider_payment_id=payment_id, amount=amount, currency=currency, idempotency_key=key,
         )
     except BillingProviderError as exc:
-        raise DuplicatePaymentError("درخواستِ بازپرداخت به درگاه انجام نشد؛ هیچ تغییری اعمال نشد.") from exc
-    outcome = "refunded" if result.succeeded else "pending_manual"
-    _store_resolution(
-        attempt, outcome=outcome, reason=reason[:300], by=getattr(actor, "pk", None), at=timezone.now().isoformat(timespec="seconds"),
-        provider_refund_id=str(result.provider_refund_id or "")[:120],
-    )
-    _audit(kind, attempt, "refund_requested", actor, outcome=outcome, reason=reason[:300])
+        if (getattr(exc, "code", "") or "") in NOT_SENT_CODES:
+            outcome, detail = "not_sent", exc.code                         # nothing reached the bank: definite, safe
+        else:
+            outcome, detail = "unknown", getattr(exc, "code", "") or type(exc).__name__
+    except Exception as exc:  # noqa: BLE001 — after contacting a bank any failure is ambiguous
+        detail = type(exc).__name__
+    else:
+        refund_id = str(result.provider_refund_id or "")[:120]
+        summary = result.raw_summary or {}
+        outcome = "refunded" if result.succeeded else ("unknown" if summary.get("unknown") else "pending_manual")
+
+    not_sent = outcome == "not_sent"
+    with transaction.atomic():
+        attempt = _locked_duplicate(kind, attempt_id)
+        current = resolution_of(attempt)
+        if current.get("outcome") != REQUESTING:                           # finance resolved it meanwhile: do not overwrite
+            return attempt, current.get("outcome", "")
+        if not_sent:
+            extra = dict(attempt.provider_extra or {})
+            extra.pop(RESOLUTION_KEY, None)                                # release: the refund can be requested again
+            attempt.provider_extra = extra
+            attempt.save(update_fields=["provider_extra", "updated_at"])
+            _audit(kind, attempt, "refund_not_sent", actor, detail=detail)
+        else:
+            _store_resolution(
+                attempt, outcome=outcome, reason=current.get("reason", ""), by=current.get("by"), key=key,
+                at=timezone.now().isoformat(timespec="seconds"), provider_refund_id=refund_id, detail=detail[:120],
+            )
+            _audit(kind, attempt, "refund_requested", actor, outcome=outcome, reason=current.get("reason", ""))
+    if not_sent:                                                           # raised OUTSIDE the transaction so the release commits
+        raise DuplicatePaymentError("درخواستِ بازپرداخت به درگاه انجام نشد؛ هیچ تغییری اعمال نشد.")
     return attempt, outcome
 
 
@@ -125,3 +171,33 @@ def mark_resolved(kind, attempt_id, *, actor, outcome, reference, note=""):
     )
     _audit(kind, attempt, "resolved", actor, outcome=outcome, reference=reference[:120])
     return attempt
+
+
+def recover_stale_requests(*, now=None, older_than=None) -> int:
+    """A duplicate-payment refund still ``requesting`` long after its intent means the process died around the provider call, so
+    the outcome is ambiguous: mark it ``unknown`` for finance. NEVER calls the provider; idempotent. Returns how many were marked."""
+    from datetime import datetime, timedelta
+
+    now = now or timezone.now()
+    older_than = older_than or timedelta(minutes=10)
+    marked = 0
+    for kind in ("subscription", "sms"):
+        model = attempt_model(kind)
+        for pk in list(model.objects.filter(status=model.Status.REQUIRES_ACTION).values_list("pk", flat=True)):
+            with transaction.atomic():
+                attempt = model.objects.select_for_update().select_related("store").get(pk=pk)
+                current = resolution_of(attempt)
+                if current.get("outcome") != REQUESTING:
+                    continue
+                try:
+                    started = datetime.fromisoformat(current.get("at", ""))
+                except ValueError:
+                    started = None
+                if started is not None and timezone.is_naive(started):
+                    started = timezone.make_aware(started)
+                if started is not None and started > now - older_than:
+                    continue
+                _store_resolution(attempt, **{**current, "outcome": UNKNOWN, "detail": "stale_intent"})
+                _audit(kind, attempt, "refund_outcome_unknown", None, reason="stale_intent")
+                marked += 1
+    return marked

@@ -1486,8 +1486,11 @@ def payment_invoice_detail(request, invoice_id):
         SubscriptionInvoice.objects.select_related("store", "plan_version__plan").prefetch_related("lines", "payment_attempts"),
         pk=invoice_id,
     )
+    import secrets
+
     return render(request, "portal/platform_admin/payment_invoice_detail.html", {
         "invoice": invoice, "active_nav": "payments",
+        "refund_form_key": f"refund-{invoice.pk}-{secrets.token_hex(8)}",    # one per render: a double submit hits the same key
     })
 
 
@@ -1969,6 +1972,7 @@ def manual_claim_receipt(request, claim_id):
 def payment_invoice_refund(request, invoice_id):
     """بازپرداختِ فاکتور از مسیرِ کانونیکِ ``refund_service`` (مبلغِ قابلِ‌بازپرداخت، idempotent، حسابرسی‌شده). Providerهایِ
     بدونِ API بازپرداخت «در انتظارِ پردازشِ دستی» می‌مانند تا مدیر پس از انتقالِ واقعیِ پول آن را تکمیل کند."""
+    import hashlib
     from decimal import Decimal, InvalidOperation
 
     from apps.billing.models import SubscriptionInvoice
@@ -1977,11 +1981,21 @@ def payment_invoice_refund(request, invoice_id):
     invoice = get_object_or_404(SubscriptionInvoice, pk=invoice_id)
     try:
         amount = Decimal((request.POST.get("amount") or "").strip())
+        reason = (request.POST.get("reason") or "").strip()
+        key = (request.POST.get("idempotency_key") or "").strip()[:100]
+        if not key:
+            # No form token (script/old page): derive a key from the request and the number of refunds already on the invoice,
+            # so two simultaneous identical submissions collapse into one refund while a later, deliberate one is still allowed.
+            digest = hashlib.sha256(
+                f"{invoice.pk}|{amount}|{reason}|{request.user.pk}|{invoice.refunds.count()}".encode("utf-8")).hexdigest()[:32]
+            key = f"refund-{invoice.pk}-{digest}"
         refund = refund_service.request_refund(
-            invoice, amount=amount, reason=(request.POST.get("reason") or "").strip(), requested_by=request.user,
-            idempotency_key=(request.POST.get("idempotency_key") or "").strip(),
+            invoice, amount=amount, reason=reason, requested_by=request.user, idempotency_key=key,
         )
-        messages.success(request, f"بازپرداخت ثبت شد ({refund.get_status_display()}).")
+        if refund.failure_code == refund_service.UNKNOWN_OUTCOME:
+            messages.warning(request, "نتیجهٔ بازپرداخت نزد درگاه نامشخص است؛ دوباره درخواست نکنید و با بانک تطبیق دهید.")
+        else:
+            messages.success(request, f"بازپرداخت ثبت شد ({refund.get_status_display()}).")
     except (InvalidOperation, ValueError):
         messages.error(request, "مبلغِ بازپرداخت معتبر نیست.")
     except refund_service.RefundError as exc:
@@ -1997,8 +2011,13 @@ def payment_refund_complete(request, refund_id):
 
     refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
     try:
-        refund_service.complete_refund_manually(refund, actor=request.user)
-        messages.success(request, "بازپرداخت پس از پردازشِ دستی تکمیل ثبت شد.")
+        if request.POST.get("resolution") == "not_executed":
+            refund_service.fail_refund_manually(
+                refund, actor=request.user, reference=request.POST.get("reference", ""), note=request.POST.get("note", ""))
+            messages.success(request, "عدمِ انجامِ بازپرداخت ثبت شد؛ مبلغ آزاد شد.")
+        else:
+            refund_service.complete_refund_manually(refund, actor=request.user, reference=request.POST.get("reference", ""))
+            messages.success(request, "بازپرداخت پس از پردازشِ دستی تکمیل ثبت شد.")
     except refund_service.RefundError as exc:
         messages.error(request, str(exc))
     return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)

@@ -36,11 +36,19 @@
     {% for refund in invoice.refunds.all %}
     <tr><td class="pa-num">{{ refund.amount }}</td><td>{{ refund.get_status_display }}</td><td>{{ refund.provider }}</td><td>{{ refund.reason }}</td>
       <td class="pa-actcol">{% if refund.status == "pending" or refund.status == "requested" %}
-        <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-refund-complete' refund.pk %}" data-confirm="فقط پس از انتقالِ واقعیِ پول به مالک تأیید کنید.">{% csrf_token %}<button class="pa-btn" type="submit">تکمیلِ دستی</button></form>{% endif %}</td></tr>
+        {% if refund.failure_code == "unknown_outcome" %}<p class="pa-help">نتیجه نزد درگاه نامشخص است؛ دوباره درخواست نکنید. پس از تطبیق با بانک، با ارجاعِ مستند تعیین تکلیف کنید.</p>{% endif %}
+        <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-refund-complete' refund.pk %}" data-confirm="فقط پس از انتقالِ واقعیِ پول به مالک تأیید کنید.">{% csrf_token %}
+          <input class="pa-ltr" name="reference" placeholder="ارجاعِ بانکی" {% if refund.failure_code == "unknown_outcome" %}required minlength="6"{% endif %}>
+          <button class="pa-btn" type="submit">تکمیلِ دستی</button></form>
+        <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:payment-refund-complete' refund.pk %}" data-confirm="فقط اگر با مدرک مشخص است که بازپرداخت انجام نشده است.">{% csrf_token %}
+          <input type="hidden" name="resolution" value="not_executed">
+          <input class="pa-ltr" name="reference" placeholder="ارجاعِ مستند" required minlength="6">
+          <button class="pa-btn" type="submit">انجام نشد</button></form>{% endif %}</td></tr>
     {% empty %}<tr><td colspan="5" class="pa-help">بازپرداختی ثبت نشده.</td></tr>{% endfor %}
     </tbody></table></div>
   {% if invoice.amount_paid > 0 %}
   <form method="post" class="pa-cardfoot pa-stack" action="{% url 'portal_platform_admin:payment-invoice-refund' invoice.pk %}">{% csrf_token %}
+    <input type="hidden" name="idempotency_key" value="{{ refund_form_key }}">
     <div class="pa-fields">
       <div class="pa-field"><label for="rf-amount">مبلغ</label><input id="rf-amount" class="pa-ltr" name="amount" required inputmode="numeric"></div>
       <div class="pa-field"><label for="rf-reason">دلیل</label><input id="rf-reason" name="reason" required><span class="pa-help">الزامی.</span></div>
