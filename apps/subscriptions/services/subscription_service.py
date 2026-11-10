@@ -6,6 +6,8 @@
 ساختِ ``SubscriptionEvent`` و رخدادِ Audit Log. هیچ ویو‌ای نباید مستقیماً
 ``subscription.status = ...`` بنویسد."""
 
+import logging
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -14,6 +16,9 @@ from apps.subscriptions.models import Plan, PlanVersion, StoreSubscription, Subs
 
 S = StoreSubscription.Status
 ET = SubscriptionEvent.EventType
+
+
+logger = logging.getLogger("subscriptions")
 
 
 class SubscriptionError(Exception):
@@ -501,7 +506,7 @@ def evaluate_subscription_states(*, now=None, dry_run=False, actor=None) -> dict
     این باید از یک زمان‌بندِ خارجی (cron) اجرا شود — این کدبیس صفِ کارِ
     پس‌زمینه‌ای ندارد (ADR-49)."""
     now = now or timezone.now()
-    results = {"scanned": 0, "cancelled": 0, "grace": 0, "suspended": 0, "expired": 0}
+    results = {"scanned": 0, "cancelled": 0, "grace": 0, "suspended": 0, "expired": 0, "errors": []}
     qs = (
         StoreSubscription.objects.filter(is_current=True)
         .exclude(status__in=StoreSubscription.TERMINAL_STATUSES)
@@ -513,7 +518,13 @@ def evaluate_subscription_states(*, now=None, dry_run=False, actor=None) -> dict
         if action is None:
             continue
         if not dry_run:
-            _apply_due_action(sub, action, actor=actor)
+            try:
+                with transaction.atomic():                       # a failure rolls back only this subscription
+                    _apply_due_action(sub, action, actor=actor)
+            except Exception as exc:  # noqa: BLE001 — one bad row must not stop Trial expiry for everyone else (F-04); reported
+                logger.exception("evaluate_subscription_states: subscription %s failed", sub.pk)
+                results["errors"].append({"subscription": sub.pk, "error": type(exc).__name__})
+                continue
         results[action] += 1
     return results
 

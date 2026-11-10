@@ -11,6 +11,7 @@
 batch-safe، بدونِ تلاشِ تکراری (با ``next_retry_at`` کنترل می‌شود)، و هرگز
 فاکتورِ پرداخت‌شده/باطل را Retry نمی‌کند."""
 
+import logging
 from decimal import Decimal
 
 from django.conf import settings
@@ -24,6 +25,7 @@ from apps.subscriptions.services import entitlement_service as ent
 from apps.subscriptions.services import subscription_service as sub_svc
 from apps.subscriptions.services.subscription_service import IllegalTransitionError
 
+logger = logging.getLogger("billing")
 ZERO = Decimal("0")
 _ESCALATABLE = (
     StoreSubscription.Status.ACTIVE,
@@ -138,11 +140,16 @@ def process_dunning(*, now=None, store=None, dry_run=False) -> dict:
     می‌شمارد."""
     now = now or timezone.now()
     schedule = parse_schedule()
-    result = {"scanned": 0, "advanced": 0, "suspended": 0, "waiting": 0, "resolved": 0}
+    result = {"scanned": 0, "advanced": 0, "suspended": 0, "waiting": 0, "resolved": 0, "errors": []}
     for invoice in _unpaid_past_due_invoices(now, store=store).iterator(chunk_size=200):
         result["scanned"] += 1
         if dry_run:
             continue
-        outcome = _process_invoice(invoice, schedule=schedule, now=now)
+        try:
+            outcome = _process_invoice(invoice, schedule=schedule, now=now)   # its own transaction
+        except Exception as exc:  # noqa: BLE001 — isolate the failing invoice (F-04); reported, never hidden
+            logger.exception("process_dunning: invoice %s failed", invoice.pk)
+            result["errors"].append({"invoice": invoice.pk, "error": type(exc).__name__})
+            continue
         result[outcome] = result.get(outcome, 0) + 1
     return result
