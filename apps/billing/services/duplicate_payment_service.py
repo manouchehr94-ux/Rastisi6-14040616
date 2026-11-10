@@ -24,6 +24,7 @@ from apps.core.services.audit_service import record_audit_event
 from apps.sms.models import SmsPackagePaymentAttempt
 
 RESOLUTION_KEY = "duplicate_resolution"
+PARKED_CODES = frozenset({"fulfilment_blocked", "late_payment_void", "late_payment_uncollectible", "stale_decision"})
 OUTCOMES = ("refunded", "pending_manual", "refunded_external", "credited", "not_an_overpayment")
 FINAL_OUTCOMES = ("refunded", "refunded_external", "credited", "not_an_overpayment")
 
@@ -39,7 +40,8 @@ def attempt_model(kind: str):
 def is_duplicate(attempt) -> bool:
     """A REQUIRES_ACTION attempt whose purchase was already fulfilled by another payment (not an amount mismatch)."""
     return attempt.status == type(attempt).Status.REQUIRES_ACTION and (
-        attempt.failure_code == "duplicate_payment" or attempt.failure_code == "purchase_completed"
+        attempt.failure_code in ("duplicate_payment", "purchase_completed")
+        or attempt.failure_code in PARKED_CODES                        # confirmed money parked by confirm_payment (F-02/F-05)
     )
 
 
