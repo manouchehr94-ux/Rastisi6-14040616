@@ -17,9 +17,6 @@
 <script src="{% static 'core/password_toggle.js' %}?v=20261106-1" defer></script>
 {% ps_theme %}
 {% block extra_head %}{% endblock %}
-{% if turnstile_enabled %}
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
 {% include "portal/public_v2/_sprite.html" %}

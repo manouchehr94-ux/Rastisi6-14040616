@@ -21,7 +21,7 @@
   </div>
   <label class="check">{{ form.remember_me }} مرا در این دستگاه به خاطر بسپار</label>
   {% include "portal/public_v2/_terms_acceptance.html" %}
-  {% include "portal/public_v2/_turnstile.html" with turnstile_action="register" %}
+  {% include "portal/public_v2/_captcha.html" with captcha_action="register" %}
   <button type="submit" class="btn btn-leaf btn-block">دریافت کد تأیید</button>
 </form>
 <p class="auth-alt">قبلاً ثبت‌نام کرده‌اید؟ <a href="{% url 'portal:login' %}" class="lnk">ورود</a></p>

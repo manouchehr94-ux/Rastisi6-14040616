@@ -26,13 +26,13 @@ from shop_core.env_config import (
     env_str,
     resolve_allow_console_otp,
     resolve_allowed_hosts,
+    resolve_captcha_settings,
     resolve_dev_otp_code,
     resolve_qa_payment_simulator,
     resolve_log_level,
     resolve_secret_key,
     resolve_secure_proxy_ssl_header,
     resolve_trusted_proxy_cidrs,
-    resolve_turnstile_settings,
     trusted_proxy_problems,
 )
 
@@ -53,7 +53,7 @@ DEBUG = env_bool("DJANGO_DEBUG", default=True)
 # The *real configured* production flag, captured at import time exactly like
 # PAYMENTS_SIMULATION_ENABLED below: Django's test runner forces
 # ``settings.DEBUG = False`` for the whole run regardless of DJANGO_DEBUG, so
-# production-only enforcement (system checks, Turnstile fail-closed) must key
+# production-only enforcement (system checks, CAPTCHA fail-closed) must key
 # off this, never off ``settings.DEBUG``.
 RASTISI_PRODUCTION_MODE = not DEBUG
 
@@ -184,7 +184,6 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "apps.portal.context_processors.turnstile",
                 "apps.portal.context_processors.platform_enamad_verification",
                 "apps.core.context_processors.shop_settings",
                 "apps.core.context_processors.seo",
@@ -277,17 +276,13 @@ AUTH_SESSION_REMEMBER_ME_EXPIRY_SECONDS = env_int(
     "AUTH_SESSION_REMEMBER_ME_EXPIRY_SECONDS", default=60 * 60 * 24 * 30,
 )
 
-# Cloudflare Turnstile bot protection for public account/contact forms.
-# Fail-closed: ``TURNSTILE_ENABLED`` defaults to ``not DEBUG``; with
-# DJANGO_DEBUG=False it must be enabled with both keys and a non-empty
-# TURNSTILE_EXPECTED_HOSTNAMES, otherwise startup raises ImproperlyConfigured.
-_turnstile = resolve_turnstile_settings(DEBUG)
-TURNSTILE_ENABLED = _turnstile["enabled"]
-TURNSTILE_SITE_KEY = _turnstile["site_key"]
-TURNSTILE_SECRET_KEY = _turnstile["secret_key"]
-TURNSTILE_EXPECTED_HOSTNAMES = _turnstile["expected_hostnames"]
-TURNSTILE_VERIFY_TIMEOUT_SECONDS = _turnstile["timeout_seconds"]
-del _turnstile
+# Server-side math CAPTCHA (apps.portal.services.captcha_service) for the public account/contact forms.
+# No external service and no keys: the challenge lives in the shared rate-limit cache and is bound to the visitor's session.
+# Fail-closed: ``RASTISI_CAPTCHA_ENABLED`` defaults to ``not DEBUG``; a DJANGO_DEBUG=False process that disables it fails at startup.
+_captcha = resolve_captcha_settings(DEBUG)
+RASTISI_CAPTCHA_ENABLED = _captcha["enabled"]
+RASTISI_CAPTCHA_TTL_SECONDS = _captcha["ttl_seconds"]
+del _captcha
 
 
 # Database

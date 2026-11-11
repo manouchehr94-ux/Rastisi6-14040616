@@ -78,7 +78,7 @@ from .services import (
     provisioning_service,
     session_service,
     step_up_service,
-    turnstile_service,
+    captcha_service,
 )
 from .services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitExceeded, RateLimitUnavailable, enforce_rate_limit
 
@@ -114,13 +114,12 @@ _OTP_SESSION_KEYS = (
 )
 
 
-def _turnstile_form_is_valid(request, form, *, action: str) -> bool:
-    result = turnstile_service.verify_request(
-        request, expected_action=action
-    )
+def _captcha_form_is_valid(request, form, *, action: str) -> bool:
+    """Server-side math CAPTCHA (``captcha_service``): consumes the submitted token and adds a form error on any failure."""
+    result = captcha_service.verify_request(request, action=action)
     if result.success:
         return True
-    form.add_error(None, turnstile_service.PUBLIC_ERROR_MESSAGE)
+    form.add_error(None, result.message or captcha_service.PUBLIC_ERROR_MESSAGE)
     return False
 
 
@@ -228,6 +227,7 @@ def platform_sitemap_xml(request):
     return render(request, "seo/sitemap.xml", {"entries": entries}, content_type="application/xml")
 
 
+@never_cache  # the page carries a per-visitor CAPTCHA question: never cacheable
 def contact(request):
     if request.method == "POST":
         form = ContactForm(request.POST)
@@ -241,9 +241,7 @@ def contact(request):
         except RateLimitUnavailable:
             messages.error(request, UNAVAILABLE_MESSAGE)
             return render(request, "portal/public/contact.html", {"form": form})
-        if form.is_valid() and _turnstile_form_is_valid(
-            request, form, action="contact"
-        ):
+        if form.is_valid() and _captcha_form_is_valid(request, form, action="contact"):
             message = ContactMessage.objects.create(**form.cleaned_data)
             from apps.notifications.services import admin_events
 
@@ -338,6 +336,7 @@ def _post_login_redirect(request, user, *, next_url: str, admin_return: str):
     return redirect("portal:app-home")
 
 
+@never_cache  # the page carries a per-visitor CAPTCHA question: never cacheable
 def register(request):
     """Section 3: owner registration is phone + OTP only. There is no public
     email+password registration (``/register-email/`` just redirects here);
@@ -361,9 +360,7 @@ def register(request):
 
     if request.method == "POST":
         form = OwnerRegistrationRequestForm(request.POST)
-        if form.is_valid() and _turnstile_form_is_valid(
-            request, form, action="register"
-        ):
+        if form.is_valid() and _captcha_form_is_valid(request, form, action="register"):
             phone, error = _request_otp_and_go_to_verify(
                 request, phone_raw=form.cleaned_data["phone"],
                 full_name=form.cleaned_data["full_name"], purpose=OwnerOtpChallenge.Purpose.REGISTER,
@@ -387,6 +384,7 @@ def register(request):
     )
 
 
+@never_cache  # the page carries a per-visitor CAPTCHA question: never cacheable
 def login_view(request):
     """Section 4/یکپارچه‌سازیِ احرازِ هویت — صفحه‌ی یکپارچه‌ی ورود: فرمِ
     رمزِ عبور (ایمیل یا موبایل) پیش‌فرض، فرمِ درخواستِ OTP گزینه‌ی ثانویه.
@@ -413,9 +411,7 @@ def login_view(request):
     admin_return = request.GET.get("admin_return") or request.POST.get("admin_return") or ""
     if request.method == "POST":
         otp_form = OwnerPhoneRequestForm(request.POST)
-        if otp_form.is_valid() and _turnstile_form_is_valid(
-            request, otp_form, action="login_otp"
-        ):
+        if otp_form.is_valid() and _captcha_form_is_valid(request, otp_form, action="login_otp"):
             phone, error = _request_otp_and_go_to_verify(
                 request, phone_raw=otp_form.cleaned_data["phone"], full_name="",
                 purpose=OwnerOtpChallenge.Purpose.LOGIN, next_url=next_url, admin_return=admin_return,
@@ -462,6 +458,7 @@ def _login_identifier_throttled(form) -> bool:
     return False
 
 
+@never_cache  # the page carries a per-visitor CAPTCHA question: never cacheable
 @require_http_methods(["GET", "HEAD", "POST"])
 def login_password(request):
     """POSTِ فرمِ رمزِ عبورِ صفحه‌ی یکپارچه‌ی ورود — شناسه (ایمیل یا
@@ -491,10 +488,8 @@ def login_password(request):
         # Fail closed: no password authentication while the shared counter is down.
         form.add_error(None, UNAVAILABLE_MESSAGE)
     else:
-        if form.is_valid() and _turnstile_form_is_valid(
-            request, form, action="login_password"
-        ):
-            # Turnstile first: only a solved challenge may spend (or lock) an
+        if form.is_valid() and _captcha_form_is_valid(request, form, action="login_password"):
+            # CAPTCHA first: only a solved challenge may spend (or lock) an
             # identifier's attempt budget, so an anonymous script cannot lock a victim out.
             try:
                 throttled = _login_identifier_throttled(form)
@@ -879,7 +874,7 @@ def otp_resend(request):
     """ارسالِ دوباره‌ی کد برایِ همان درخواستِ در-جریان. شماره/هدف/نام/next همه
     از نشستِ سرور می‌آید (هیچ فیلدِ پنهانِ کلاینتی خوانده نمی‌شود). سقفِ
     درخواست به‌ازایِ شماره و IP همان سقف‌هایِ ``request_otp`` است؛ شمارشِ
-    معکوسِ صفحه فقط UX است. Turnstile در همان درخواستِ اولِ ثبت‌نام/ورود
+    معکوسِ صفحه فقط UX است. CAPTCHA در همان درخواستِ اولِ ثبت‌نام/ورود
     اعمال شده و هر حلِ آن حداکثر به سقفِ شماره (۳ پیامک/۱۰ دقیقه) می‌رسد."""
     phone = request.session.get(_OTP_SESSION_PHONE_KEY)
     purpose = request.session.get(_OTP_SESSION_PURPOSE_KEY)
@@ -995,12 +990,13 @@ def _send_reset_otp_if_eligible(request, *, phone: str) -> str | None:
     return None
 
 
+@never_cache  # the page carries a per-visitor CAPTCHA question: never cacheable
 def password_reset_request(request):
     """بازیابی/تعیینِ رمز با **موبایل + کدِ پیامکی** (جایگزینِ ایمیلِ عمومی).
 
     جریان: شماره → OTPِ هدفِ «بازیابی رمز» → ``/verify/`` → ``/reset-password/new/`` → ورود.
     هیچ ``User``/``OwnerProfile``/Store ساخته نمی‌شود و پاسخِ عمومی برایِ شمارهٔ ناشناخته،
-    مالکِ فعال و حسابِ بدونِ رمز یکسان است. سقفِ IP همان ``password_reset`` است؛ Turnstile و
+    مالکِ فعال و حسابِ بدونِ رمز یکسان است. سقفِ IP همان ``password_reset`` است؛ CAPTCHA و
     fail-closed بودنِ شمارنده‌ی مشترک حفظ شده‌اند."""
     if request.method == "POST":
         form = PasswordResetRequestForm(request.POST)
@@ -1014,9 +1010,7 @@ def password_reset_request(request):
         except RateLimitUnavailable:
             messages.error(request, UNAVAILABLE_MESSAGE)
             return render(request, "portal/public/password_reset_request.html", {"form": form})
-        if form.is_valid() and _turnstile_form_is_valid(
-            request, form, action="password_reset"
-        ):
+        if form.is_valid() and _captcha_form_is_valid(request, form, action="password_reset"):
             phone = form.cleaned_data["phone"]
             requested_at = int(time.time())  # the cooldown clock starts at acceptance, not after the provider answers
             error = _send_reset_otp_if_eligible(request, phone=phone)

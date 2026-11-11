@@ -42,12 +42,10 @@ def check_rate_limit_cache(app_configs, **kwargs):
 
 
 @register(Tags.security)
-def check_turnstile(app_configs, **kwargs):
-    problems = env_config.turnstile_config_problems(
-        enabled=bool(getattr(settings, "TURNSTILE_ENABLED", False)),
-        site_key=getattr(settings, "TURNSTILE_SITE_KEY", ""),
-        secret_key=getattr(settings, "TURNSTILE_SECRET_KEY", ""),
-        expected_hostnames=tuple(getattr(settings, "TURNSTILE_EXPECTED_HOSTNAMES", ()) or ()),
+def check_captcha(app_configs, **kwargs):
+    problems = env_config.captcha_config_problems(
+        enabled=bool(getattr(settings, "RASTISI_CAPTCHA_ENABLED", False)),
+        ttl_seconds=getattr(settings, "RASTISI_CAPTCHA_TTL_SECONDS", env_config.CAPTCHA_TTL_DEFAULT_SECONDS),
         production=_production(),
     )
     return _errors("rastisi.E002", problems)

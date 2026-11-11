@@ -22,7 +22,7 @@
     </div>
     <div class="in"><label for="id_subject">موضوع</label>{{ form.subject }}{% if form.subject.errors %}<div class="p-error err">{{ form.subject.errors.0 }}</div>{% endif %}</div>
     <div class="in"><label for="id_message">پیام</label>{{ form.message }}{% if form.message.errors %}<div class="p-error err">{{ form.message.errors.0 }}</div>{% endif %}</div>
-    {% include "portal/public_v2/_turnstile.html" with turnstile_action="contact" %}
+    {% include "portal/public_v2/_captcha.html" with captcha_action="contact" %}
     <button class="btn btn-leaf btn-block" type="submit">{% ps 'contact.button' %}</button>
   </form>
 </div></div>

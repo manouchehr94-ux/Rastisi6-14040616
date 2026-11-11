@@ -1,7 +1,7 @@
 # Owner login QA evidence (`audit/owner-login-v1`)
 
 Real Chromium, real Django dev server (SQLite, console e-mail, OTP codes read from a
-local test sink — never logged by the app), Turnstile disabled except where stated.
+local test sink — never logged by the app), CAPTCHA disabled except where stated.
 Viewports: desktop 1440×900, tablet 768×1024, mobile 390×844 (DPR 2, touch).
 
 | File | Viewport | Route / state | What was verified |
@@ -64,9 +64,9 @@ python tools/owner_login_qa/reset_referrer_e2e.py http://rastisi.localhost:8000/
 
 ## Not captured
 
-* Turnstile failure and provider failure states are covered by tests
-  (`test_owner_login_audit.LoginTurnstileTests`, `OtpLoginThroughViewTests`) but were not
-  screenshotted (the Turnstile widget needs Cloudflare network access).
+* CAPTCHA failure and provider failure states are covered by tests
+  (`test_owner_login_audit.LoginCaptchaTests`, `test_math_captcha`, `OtpLoginThroughViewTests`) but were not
+  screenshotted.
 
 ## Known issues (not changed here)
 

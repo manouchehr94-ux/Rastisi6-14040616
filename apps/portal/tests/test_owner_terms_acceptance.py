@@ -3,7 +3,7 @@
 Covers ``/register/`` → OTP → Owner and ``/login/`` → OTP → ``/signup/complete/`` → Owner:
 required checkbox (server-side), the single authoritative terms version, session-bound trust,
 durable ``OwnerTermsAcceptance`` rows (idempotent, only for a really-created Owner), and the
-regressions around existing owners / closed registration / Turnstile / OTP failures.
+regressions around existing owners / closed registration / CAPTCHA / OTP failures.
 """
 
 import re
@@ -137,16 +137,16 @@ class RegisterPageTests(_Base):
             list(OwnerTermsAcceptance.objects.values_list("terms_version", flat=True)), [CURRENT_TERMS_VERSION],
         )
 
-    def test_turnstile_failure_sends_no_otp_even_when_terms_were_checked(self):
-        from apps.portal.services import turnstile_service
+    def test_captcha_failure_sends_no_otp_even_when_terms_were_checked(self):
+        from apps.portal.services import captcha_service
+        from apps.portal.tests import _captcha as C
 
-        denied = turnstile_service.TurnstileValidationResult(success=False, error_code="verification-failed")
-        with override_settings(
-            TURNSTILE_ENABLED=True, TURNSTILE_SITE_KEY="1x00000000000000000000AA",
-            TURNSTILE_SECRET_KEY="1x0000000000000000000000000000000AA", TURNSTILE_EXPECTED_HOSTNAMES=(_HOST,),
-        ), patch("apps.portal.services.turnstile_service.verify_request", return_value=denied):
-            response = self.post_register()
+        C.reset_store()
+        self.addCleanup(C.reset_store)
+        with override_settings(**C.ENABLED):
+            response = self.post_register()          # terms checked, but no CAPTCHA answer at all
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
         self.assertEqual(self.sent, [])
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
         self.assertNothingCreated()

@@ -527,7 +527,13 @@ input[type=range]{width:100%;accent-color:var(--leaf)}
 .check-wrap{margin-bottom:18px}
 .check-wrap .hint{padding-inline-start:30px}
 .btn[disabled]{opacity:.6;cursor:not-allowed}
-.turnstile-wrap{margin:4px 0 18px}
+/* Math CAPTCHA (apps.portal.services.captcha_service) */
+.captcha{margin:4px 0 18px}
+.captcha-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px}
+.captcha-question{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 16px;border:1.5px dashed var(--rule);border-radius:12px;background:var(--paper-2);color:var(--ink);font-size:20px;font-weight:800;letter-spacing:.04em;white-space:nowrap;direction:ltr;unicode-bidi:isolate;user-select:none}
+.captcha .captcha-input{flex:1 1 120px;min-width:0;width:auto;font-size:18px;font-weight:800;text-align:center;letter-spacing:.12em;direction:ltr}
+.captcha-unavailable{margin:4px 0 18px}
+@media (max-width:420px){.captcha-question{flex:1 1 100%}.captcha .captcha-input{flex:1 1 100%}}
 
 /* password field with the show/hide toggle added by auth-forms.js */
 .r-password-field{position:relative}

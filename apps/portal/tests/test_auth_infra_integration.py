@@ -2,7 +2,7 @@
 
 * client-IP bucketing through the REAL public auth views behind/without a trusted proxy;
 * rate-limit backend outage => controlled fail-closed on every anonymous endpoint;
-* Turnstile provider outage / misconfiguration => no password auth, no SMS, no mail.
+* CAPTCHA shared-store outage / misconfiguration => no password auth, no SMS, no mail.
 
 LocMem stands in for the shared store here; real Redis behaviour is covered by
 ``apps.core.tests.test_rate_limit_redis``.
@@ -10,7 +10,6 @@ LocMem stands in for the shared store here; real Redis behaviour is covered by
 
 from unittest.mock import patch
 
-import requests
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
@@ -21,7 +20,8 @@ from apps.content.models import NewsletterSubscriber
 from apps.core.services import rate_limit
 from apps.core.services.rate_limit import UNAVAILABLE_MESSAGE, RateLimitUnavailable
 from apps.portal.models import ContactMessage, OwnerOtpChallenge, OwnerProfile
-from apps.portal.services import owner_auth_service, owner_otp_service, turnstile_service
+from apps.portal.services import captcha_service, owner_auth_service, owner_otp_service
+from apps.portal.tests import _captcha as C
 from apps.sms.services import otp_service as store_otp_service
 from apps.sms.services.backends import SmsSendResult
 
@@ -171,24 +171,24 @@ class OtherEndpointsUseTheResolverTests(_Base):
             )
         self.assertEqual(request_otp.call_args.kwargs["ip_address"], "203.0.113.88")
 
-    def test_turnstile_remoteip_comes_from_the_resolver_not_raw_headers(self):
+    def test_captcha_budget_is_charged_to_the_resolver_ip_not_raw_headers(self):
         request = RequestFactory().post(
-            "/", {"cf-turnstile-response": "tok"},
+            "/", {"captcha_token": "tok"},
             REMOTE_ADDR=_PROXY, HTTP_X_FORWARDED_FOR="1.2.3.4, 203.0.113.44", HTTP_CF_CONNECTING_IP="6.6.6.6",
         )
-        with patch.object(turnstile_service, "verify_token") as verify:
-            turnstile_service.verify_request(request, expected_action="login_password")
-        self.assertEqual(verify.call_args.kwargs["remote_ip"], "203.0.113.44")
+        with override_settings(**C.ENABLED), patch.object(captcha_service, "enforce_rate_limit") as budget:
+            captcha_service.verify_request(request, action="login_password")
+        self.assertEqual(budget.call_args.args[:2], ("captcha_verify", "203.0.113.44"))
 
     @override_settings(RASTISI_TRUSTED_PROXY_CIDRS=())
-    def test_turnstile_remoteip_ignores_forwarded_headers_from_a_direct_peer(self):
+    def test_captcha_budget_ignores_forwarded_headers_from_a_direct_peer(self):
         request = RequestFactory().post(
-            "/", {"cf-turnstile-response": "tok"},
+            "/", {"captcha_token": "tok"},
             REMOTE_ADDR="203.0.113.10", HTTP_X_FORWARDED_FOR="1.2.3.4", HTTP_CF_CONNECTING_IP="6.6.6.6",
         )
-        with patch.object(turnstile_service, "verify_token") as verify:
-            turnstile_service.verify_request(request, expected_action="login_password")
-        self.assertEqual(verify.call_args.kwargs["remote_ip"], "203.0.113.10")
+        with override_settings(**C.ENABLED), patch.object(captcha_service, "enforce_rate_limit") as budget:
+            captcha_service.verify_request(request, action="login_password")
+        self.assertEqual(budget.call_args.args[:2], ("captcha_verify", "203.0.113.10"))
 
 
 # ---------------------------------------------------------------------------
@@ -332,165 +332,149 @@ class RateLimitOutageFailsClosedTests(_Base):
 
 
 # ---------------------------------------------------------------------------
-# Turnstile outage / misconfiguration => nothing protected happens
+# CAPTCHA shared-store outage / misconfiguration => nothing protected happens
 # ---------------------------------------------------------------------------
 
-_TS = dict(
-    TURNSTILE_ENABLED=True,
-    TURNSTILE_SITE_KEY="1x00000000000000000000AA",
-    TURNSTILE_SECRET_KEY="1x0000000000000000000000000000AA",
-    TURNSTILE_EXPECTED_HOSTNAMES=(_HOST,),
-    TURNSTILE_VERIFY_TIMEOUT_SECONDS=5,
-    ALLOWED_HOSTS=_HOSTS,
-)
+
+class _DownStore:
+    """The CAPTCHA store with every operation failing the way the named outage does (no secret in the message)."""
+
+    def __init__(self, exc):
+        self.exc = exc
+
+    def __getattr__(self, name):
+        def fail(*a, **k):
+            raise self.exc
+        return fail
 
 
-class _Response:
-    def __init__(self, payload):
-        self.payload = payload
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        if isinstance(self.payload, Exception):
-            raise self.payload
-        return self.payload
-
-
-def _siteverify(**kwargs):
-    return patch("apps.portal.services.turnstile_service.requests.post", **kwargs)
-
-
-@override_settings(**_TS)
-class TurnstileOutageFailsClosedTests(_Base):
+@override_settings(ALLOWED_HOSTS=_HOSTS, **C.ENABLED)
+class CaptchaOutageFailsClosedTests(_Base):
     OUTAGES = (
-        ("timeout", {"side_effect": requests.Timeout("t")}),
-        ("connection", {"side_effect": requests.ConnectionError("c")}),
-        ("unexpected exception", {"side_effect": RuntimeError("boom")}),
-        ("invalid json", {"return_value": _Response(ValueError("not json"))}),
-        ("non-dict json", {"return_value": _Response(["success"])}),
-        ("odd error-codes", {"return_value": _Response({"success": False, "error-codes": {"x": 1}})}),
+        ("connection", ConnectionError("redis://:topsecret@10.0.0.9:6379/0 unreachable")),
+        ("timeout", TimeoutError("timed out")),
+        ("unexpected exception", RuntimeError("boom")),
     )
 
     def setUp(self):
         super().setUp()
+        C.reset_store()
+        self.addCleanup(C.reset_store)
         owner_auth_service.register_owner(full_name="TS", email="ts@example.com", password=_PASSWORD)
 
+    def _down(self, exc):
+        return patch.object(captcha_service, "_store", return_value=_DownStore(exc))
+
+    def _solved(self, path, action):
+        return C.solve(self.client, path, action, _HOST)
+
     def test_password_login_never_authenticates(self):
-        for label, kwargs in self.OUTAGES:
-            with self.subTest(label), _siteverify(**kwargs), \
+        for label, exc in self.OUTAGES:
+            fields = self._solved("/login/", "login_password")
+            with self.subTest(label), self._down(exc), \
                     patch.object(owner_auth_service, "authenticate_owner_by_identifier") as authenticate:
                 response = self.client.post(
-                    "/login/password/",
-                    {"identifier": "ts@example.com", "password": _PASSWORD, "cf-turnstile-response": "tok"},
-                    HTTP_HOST=_HOST,
+                    "/login/password/", {"identifier": "ts@example.com", "password": _PASSWORD, **fields}, HTTP_HOST=_HOST,
                 )
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+                self.assertContains(response, UNAVAILABLE_MESSAGE)
+                self.assertNotContains(response, "topsecret")
                 authenticate.assert_not_called()
                 self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_otp_request_never_reaches_the_sms_provider(self):
-        for path, data in (("/login/", {"phone": "09121234567"}),
-                           ("/register/", {"full_name": "Test User", "phone": "09121234567", "accept_terms": "1"})):
-            for label, kwargs in self.OUTAGES:
-                with self.subTest(path=path, label=label), _siteverify(**kwargs), \
+        for path, action, data in (("/login/", "login_otp", {"phone": "09121234567"}),
+                                   ("/register/", "register", {"full_name": "Test User", "phone": "09121234567", "accept_terms": "1"})):
+            for label, exc in self.OUTAGES:
+                fields = self._solved(path, action)
+                with self.subTest(path=path, label=label), self._down(exc), \
                         patch.object(owner_otp_service, "send_platform_otp") as send:
-                    response = self.client.post(path, {**data, "cf-turnstile-response": "tok"}, HTTP_HOST=_HOST)
-                    self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+                    response = self.client.post(path, {**data, **fields}, HTTP_HOST=_HOST)
+                    self.assertContains(response, UNAVAILABLE_MESSAGE)
                     send.assert_not_called()
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
 
     def test_password_reset_never_sends_sms_or_mail(self):
         OwnerProfile.objects.filter(user__email="ts@example.com").update(phone="09121230002")
-        for label, kwargs in self.OUTAGES:
-            cache.clear()  # six outages would otherwise exhaust the per-IP reset budget (5)
-            with self.subTest(label), _siteverify(**kwargs), patch.object(owner_otp_service, "send_platform_otp") as send:
-                response = self.client.post(
-                    "/reset-password/", {"phone": "09121230002", "cf-turnstile-response": "tok"}, HTTP_HOST=_HOST,
-                )
-                self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        for label, exc in self.OUTAGES:
+            cache.clear()  # the outages would otherwise exhaust the per-IP reset budget (5)
+            fields = self._solved("/reset-password/", "password_reset")
+            with self.subTest(label), self._down(exc), patch.object(owner_otp_service, "send_platform_otp") as send:
+                response = self.client.post("/reset-password/", {"phone": "09121230002", **fields}, HTTP_HOST=_HOST)
+                self.assertContains(response, UNAVAILABLE_MESSAGE)
                 send.assert_not_called()
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
         self.assertEqual(mail.outbox, [])
 
-    def test_missing_token_never_calls_the_provider_or_the_protected_action(self):
-        with _siteverify() as post, patch.object(owner_otp_service, "send_platform_otp") as send:
-            self.client.post("/login/", {"phone": "09121234567"}, HTTP_HOST=_HOST)
-        post.assert_not_called()
-        send.assert_not_called()
-
-    def test_wrong_action_and_hostname_are_rejected(self):
-        for payload in (
-            {"success": True, "hostname": _HOST, "action": "register"},      # wrong action for login
-            {"success": True, "hostname": "evil.example", "action": "login_password"},
-            {"success": True, "hostname": "", "action": "login_password"},
-        ):
-            with self.subTest(payload=payload), _siteverify(return_value=_Response(payload)), \
-                    patch.object(owner_auth_service, "authenticate_owner_by_identifier") as authenticate:
-                response = self.client.post(
-                    "/login/password/",
-                    {"identifier": "ts@example.com", "password": _PASSWORD, "cf-turnstile-response": "tok"},
-                    HTTP_HOST=_HOST,
-                )
-                self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
-                authenticate.assert_not_called()
-
-    def test_valid_challenge_still_logs_in(self):
-        ok = {"success": True, "hostname": _HOST, "action": "login_password"}
-        with _siteverify(return_value=_Response(ok)):
+    def test_contact_form_stores_nothing_during_an_outage(self):
+        fields = self._solved("/contact/", "contact")
+        with self._down(ConnectionError("down")):
             response = self.client.post(
-                "/login/password/",
-                {"identifier": "ts@example.com", "password": _PASSWORD, "cf-turnstile-response": "tok"},
+                "/contact/", {"full_name": "A", "email": "a@example.com", "subject": "s", "message": "m" * 20, **fields},
                 HTTP_HOST=_HOST,
             )
+        self.assertContains(response, UNAVAILABLE_MESSAGE)
+        self.assertEqual(ContactMessage.objects.count(), 0)
+
+    def test_missing_fields_never_reach_the_protected_action(self):
+        with patch.object(owner_otp_service, "send_platform_otp") as send:
+            response = self.client.post("/login/", {"phone": "09121234567"}, HTTP_HOST=_HOST)
+        self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
+        send.assert_not_called()
+
+    def test_a_token_for_another_action_is_rejected(self):
+        fields = self._solved("/login/", "login_otp")
+        with patch.object(owner_auth_service, "authenticate_owner_by_identifier") as authenticate:
+            response = self.client.post(
+                "/login/password/", {"identifier": "ts@example.com", "password": _PASSWORD, **fields}, HTTP_HOST=_HOST,
+            )
+        self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
+        authenticate.assert_not_called()
+
+    def test_valid_challenge_still_logs_in(self):
+        response = self.client.post(
+            "/login/password/",
+            {"identifier": "ts@example.com", "password": _PASSWORD, **self._solved("/login/", "login_password")},
+            HTTP_HOST=_HOST,
+        )
         self.assertEqual(response.status_code, 302)
         self.assertIn("_auth_user_id", self.client.session)
 
-    def test_remoteip_sent_to_the_provider_is_the_trusted_resolver_value(self):
-        ok = {"success": True, "hostname": _HOST, "action": "login_password"}
+    def test_the_budget_charged_by_a_real_login_post_is_the_resolver_ip(self):
+        fields = C.solve(self.client, "/login/", "login_password", _HOST, REMOTE_ADDR=_PROXY, HTTP_X_FORWARDED_FOR="6.6.6.6, 203.0.113.44")
         with override_settings(RASTISI_TRUSTED_PROXY_CIDRS=("10.0.0.0/8",)), \
-                _siteverify(return_value=_Response(ok)) as post:
+                patch.object(captcha_service, "enforce_rate_limit") as budget:
             self.client.post(
-                "/login/password/",
-                {"identifier": "ts@example.com", "password": "x", "cf-turnstile-response": "tok"},
+                "/login/password/", {"identifier": "ts@example.com", "password": "x", **fields},
                 HTTP_HOST=_HOST, REMOTE_ADDR=_PROXY, HTTP_X_FORWARDED_FOR="6.6.6.6, 203.0.113.44",
             )
-        self.assertEqual(post.call_args.kwargs["data"]["remoteip"], "203.0.113.44")
+        charged = {call.args[:2] for call in budget.call_args_list}
+        self.assertEqual(charged, {("captcha_verify", "203.0.113.44"), ("captcha_issue", "203.0.113.44")})  # verify, then the re-rendered question
 
 
 @override_settings(ALLOWED_HOSTS=_HOSTS)
-class TurnstileProductionRuntimeGuardTests(_Base):
+class CaptchaProductionRuntimeGuardTests(_Base):
     """Defence in depth behind the startup/system-check enforcement."""
 
     def setUp(self):
         super().setUp()
         owner_auth_service.register_owner(full_name="TS", email="ts@example.com", password=_PASSWORD)
 
-    @override_settings(RASTISI_PRODUCTION_MODE=True, TURNSTILE_ENABLED=False)
-    def test_production_with_turnstile_off_can_never_succeed(self):
-        result = turnstile_service.verify_token(token="", expected_action="login_password")
+    @override_settings(RASTISI_PRODUCTION_MODE=True, RASTISI_CAPTCHA_ENABLED=False)
+    def test_production_with_the_captcha_off_can_never_succeed(self):
+        result = captcha_service.verify_request(RequestFactory().post("/"), action="login_password")
         self.assertFalse(result.success)
-        self.assertEqual(result.error_code, "turnstile-misconfigured")
+        self.assertEqual(result.error_code, "captcha-misconfigured")
         with patch.object(owner_auth_service, "authenticate_owner_by_identifier") as authenticate:
             response = self.client.post(
                 "/login/password/", {"identifier": "ts@example.com", "password": _PASSWORD}, HTTP_HOST=_HOST,
             )
-        self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        self.assertContains(response, UNAVAILABLE_MESSAGE)
         authenticate.assert_not_called()
 
-    @override_settings(RASTISI_PRODUCTION_MODE=True, **{**_TS, "TURNSTILE_EXPECTED_HOSTNAMES": ()})
-    def test_production_without_expected_hostnames_fails_closed_even_on_provider_success(self):
-        ok = {"success": True, "hostname": "anything.example", "action": "login_password"}
-        with _siteverify(return_value=_Response(ok)):
-            result = turnstile_service.verify_token(token="tok", expected_action="login_password")
-        self.assertFalse(result.success)
-        self.assertEqual(result.error_code, "hostname-not-configured")
-
-    @override_settings(RASTISI_PRODUCTION_MODE=False, TURNSTILE_ENABLED=False)
-    def test_development_may_intentionally_run_without_turnstile(self):
-        self.assertTrue(turnstile_service.verify_token(token="", expected_action="x").success)
+    @override_settings(RASTISI_PRODUCTION_MODE=False, RASTISI_CAPTCHA_ENABLED=False)
+    def test_development_may_intentionally_run_without_the_captcha(self):
+        self.assertTrue(captcha_service.verify_request(RequestFactory().post("/"), action="contact").success)
         response = self.client.post(
             "/login/password/", {"identifier": "ts@example.com", "password": _PASSWORD}, HTTP_HOST=_HOST,
         )

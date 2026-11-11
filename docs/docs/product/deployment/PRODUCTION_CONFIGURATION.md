@@ -31,10 +31,8 @@ list with placeholder values. Summary:
 | `DJANGO_CSRF_COOKIE_SECURE` | Must be true | `True` when `DJANGO_DEBUG=False`, else `False` | same |
 | `RASTISI_RATE_LIMIT_CACHE_URL` | **Yes** — startup fails without it | unset (local LocMem; dev only) | `redis://` / `rediss://` URL of a Redis shared by all workers — §6.1 |
 | `DJANGO_TRUSTED_PROXY_CIDRS` | Yes behind any proxy/CDN | empty (forwarded headers ignored) | Comma-separated IPv4/IPv6 CIDRs (+ optional `unix`) of your reverse proxies — §6.2 |
-| `TURNSTILE_ENABLED` | **Yes** — must be true | `True` when `DJANGO_DEBUG=False`, else `False` | `false` with `DJANGO_DEBUG=False` is a startup error |
-| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | **Yes** | empty | Required in production |
-| `TURNSTILE_EXPECTED_HOSTNAMES` | **Yes** | empty | Bare hostnames the widget runs on; verified against Siteverify |
-| `TURNSTILE_VERIFY_TIMEOUT_SECONDS` | Optional | `5` | |
+| `RASTISI_CAPTCHA_ENABLED` | **Yes** — must be true | `True` when `DJANGO_DEBUG=False`, else `False` | `false` with `DJANGO_DEBUG=False` is a startup error (`rastisi.E002`). Server-side math CAPTCHA; needs no keys or hostnames. The former `TURNSTILE_*` variables are ignored. |
+| `RASTISI_CAPTCHA_TTL_SECONDS` | Optional | `300` | Lifetime of a question, 30..900 |
 | `RASTISI_DEV_OTP_CODE` | **Must be unset/empty** | empty (off) | **DEVELOPMENT ONLY** local-QA OTP; non-empty with `DJANGO_DEBUG=False` is a startup error and `rastisi.E006` — see §6.3 |
 | `DJANGO_SECURE_HSTS_SECONDS` | Staged — see §7 | `0` | |
 | `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | Staged | `False` | |
@@ -414,7 +412,7 @@ error log.
 **Pre-deploy / post-deploy verification**
 
 ```
-python manage.py check                      # fails on missing/non-Redis cache, Turnstile, proxy, cookie errors
+python manage.py check                      # fails on missing/non-Redis cache, disabled CAPTCHA, proxy, cookie errors
 python manage.py check --deploy
 python manage.py verify_rate_limit_cache    # LIVE probe of the atomic counter: create+TTL, incr, no TTL extension, expiry, delete (no secrets printed)
 ```
@@ -443,7 +441,7 @@ directly):
 4. Only `X-Forwarded-For` is ever parsed. `Forwarded` and CDN headers are not.
 
 Because a fallback bucket is shared, make sure the proxy always sets a clean
-`X-Forwarded-For`. The same client-IP is sent to Turnstile as `remoteip`.
+`X-Forwarded-For`. The same client-IP is the bucket for the CAPTCHA budgets.
 
 **A. Direct Django (no proxy).** Leave `DJANGO_TRUSTED_PROXY_CIDRS` empty and do not
 set `DJANGO_SECURE_PROXY_SSL_HEADER` (TLS terminates on a server that sets
@@ -483,13 +481,17 @@ client, and a listed-but-uncontrolled network lets its users spoof their IP. The
 repository does not hardcode any CDN range because no maintenance process for
 them exists here.
 
-**Turnstile (production).** With `DJANGO_DEBUG=False`, `TURNSTILE_ENABLED`,
-`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES`
-are mandatory (startup fails otherwise; `rastisi.E002`). Verification is
-server-side and authoritative: token, `action` and `hostname` must all match. Any
-Siteverify timeout/network/parse error fails closed with the generic public error
-before password authentication, SMS or mail happens. Runtime guards also refuse to
-treat "Turnstile off" or empty hostnames as success while `DJANGO_DEBUG=False`.
+**Math CAPTCHA (production).** With `DJANGO_DEBUG=False`, `RASTISI_CAPTCHA_ENABLED` must be true (startup fails otherwise;
+`rastisi.E002`). The five public forms (`login_password`, `login_otp`, `register`, `password_reset`, `contact`) show a question such as
+«۳۵ + ۱۴ = ؟». The question is created on the server and stored in the shared rate-limit cache (the same Redis as the rate limits), as an
+HMAC of `token:answer` keyed with `SECRET_KEY`; the page carries only the two operands and a random token, never the sum. Each question is
+bound to the visitor's session and to its form, expires after `RASTISI_CAPTCHA_TTL_SECONDS`, and is consumed by the first submission,
+right or wrong (`cache.delete()` is atomic, so two simultaneous submissions cannot both pass). Persian, Arabic-Indic and ASCII digits are
+accepted. Verification attempts and question issuing are budgeted per client IP as a backstop (120 and 600 per 10 minutes; the strict per-endpoint limits still apply). If Redis is down, questions
+cannot be issued or verified: the form is refused with the standard "temporarily unavailable" message before password authentication, SMS or
+mail happens (fail closed). A runtime guard also refuses to treat "CAPTCHA off" as success while `DJANGO_DEBUG=False`.
+This check stops naive scripts; the per-IP, per-phone and per-identifier limits that run after it remain the main defence against abuse.
+No request is made to Cloudflare or any third party by this feature.
 
 ### 6.3 Owner password recovery (mobile + SMS OTP) and the local-QA OTP
 
@@ -499,7 +501,7 @@ number, sends an OTP of purpose `reset` through the same hardened owner-OTP serv
 `/verify/` -> `/reset-password/new/` lets the verified person choose a password
 (an OTP-created owner with no password sets their first one here). It never logs anyone in,
 never creates a User/OwnerProfile/Store, answers identically for known and unknown numbers
-(the per-IP counters are charged for both), keeps Turnstile on the first request, and fails
+(the per-IP counters are charged for both), keeps the CAPTCHA on the first request, and fails
 closed when the shared rate-limit store is down. The 10-minute, single-use authorisation lives
 only in the server-side session and is bound to the verified user. The legacy
 `/reset-password/<uidb64>/<token>/` route (already-issued email links) still works;

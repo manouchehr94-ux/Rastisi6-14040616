@@ -12,7 +12,7 @@ Until the platform owner switches on **Platform Admin → public site → "مت�
 | Manual card-to-card payment keeps reference, transfer time, **last 4 digits** of the payer card, receipt image | `apps/billing/models.py` `PlatformManualPaymentClaim` (`payer_card_last4`, `receipt`, `receipt_sha256`) |
 | Browser-notification subscription: hashed endpoint, device label, truncated user agent (120), timestamps | `apps/notifications/models.py` `WebPushSubscription` |
 | Audit records deliberately keep **no IP / user agent** | docstring of the audit event model in `apps/core/models.py` (ADR-36: no approved retention policy exists for IP/UA) |
-| Cloudflare Turnstile on public account/contact forms | `shop_core/settings.py` (`TURNSTILE_*`), `templates` load `challenges.cloudflare.com` |
+| Server-side math CAPTCHA on public account/contact forms (replaced Cloudflare Turnstile on 2026-11-11): the question is stored in the platform's own rate-limit cache bound to the session; no data goes to a third party | `apps/portal/services/captcha_service.py`, `RASTISI_CAPTCHA_*` |
 | SMS providers Melipayamak, Kavenegar; SMTP email | `apps/sms`, `apps/notifications`, `shop_core/settings.py` (provider names only — *which are live is unknown*) |
 | Payment gateways are redirects; card data is entered at the gateway | `apps/billing/providers`, `apps/orders/gateways` (redirect adapters) |
 | Gateway credentials stored encrypted | `apps/orders/tests/test_payment_security.py` (credentials stored encrypted, never plaintext) |
@@ -33,7 +33,7 @@ Test `PrivacyTextContractTests.test_every_numeric_retention_fact_is_one_that_exi
 4. **Hosting, processing location, cross-border transfer**, backup location and backup encryption.
 5. **Which third parties are actually live**: payment gateways (the code supports more than are likely enabled — Zibal, Zarinpal, Pasargad, Saman, Mellat, SnappPay, TorobPay, Parsian, Sadad, Tejarat), SMS providers, the email provider.
 6. **Server/access logs**: what is logged (IP?) and for how long. (The audit model avoids IP/UA by design; web-server and gateway logs are outside the code.)
-7. **Cookies in production**, including any cookies Turnstile sets.
+7. **Cookies in production** (the session cookie also carries the CAPTCHA binding; no third-party widget cookie remains).
 8. **Production cookie flags** (`DJANGO_SESSION_COOKIE_SECURE`, `DJANGO_CSRF_COOKIE_SECURE` default on only when `DEBUG` is off).
 9. **Roles**: whether RastiSi is a "controller" or "processor" of store-customer data, and what merchants must tell their own customers.
 10. **Children**: the policy position and age limit.

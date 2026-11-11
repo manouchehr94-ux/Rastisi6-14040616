@@ -33,7 +33,7 @@ _MANAGE = str(Path(__file__).resolve().parents[3] / "manage.py")
 def _worker_env(url):
     env = os.environ.copy()
     for key in list(env):
-        if key.startswith(("DJANGO_", "RASTISI_", "TURNSTILE_")):
+        if key.startswith(("DJANGO_", "RASTISI_")):
             env.pop(key)
     env["RASTISI_RATE_LIMIT_CACHE_URL"] = url
     return env
@@ -399,8 +399,6 @@ class RealRedisRateLimitTests(SimpleTestCase):
         env.update({
             "DJANGO_DEBUG": "False", "DJANGO_SECRET_KEY": "tmp-" + uuid.uuid4().hex,
             "DJANGO_ALLOWED_HOSTS": "rastisi.example.com", "DJANGO_CSRF_TRUSTED_ORIGINS": "https://rastisi.example.com",
-            "TURNSTILE_SITE_KEY": "1x00000000000000000000AA", "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000AA",
-            "TURNSTILE_EXPECTED_HOSTNAMES": "rastisi.example.com",
             "DJANGO_TRUSTED_PROXY_CIDRS": "10.0.0.0/8", "DJANGO_SECURE_PROXY_SSL_HEADER": "X-Forwarded-Proto:https",
         })
         for args in (["check"], ["verify_rate_limit_cache"]):

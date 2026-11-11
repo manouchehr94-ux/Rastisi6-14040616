@@ -522,8 +522,13 @@ input::placeholder,textarea::placeholder{color:var(--rs-muted);opacity:1}
 .r-otp-hint{display:block;margin-top:6px;color:var(--rs-muted);font-size:11px}
 .r-auth-form-stack{display:grid;gap:12px}
 .r-state-mark{width:22px;height:22px;margin:0 auto 16px;border-radius:50%;background:var(--rs-soft);border:6px solid var(--rs-brand)}
-.p-turnstile-wrap{margin:12px 0 16px;display:flex;justify-content:center}
-.p-turnstile-noscript{margin:12px 0}
+/* Math CAPTCHA (apps.portal.services.captcha_service) */
+.p-captcha{margin:12px 0 16px}
+.p-captcha-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px}
+.p-captcha-question{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 16px;border:1px dashed var(--rs-line);border-radius:6px;background:var(--rs-soft);color:var(--rs-ink);font-size:20px;font-weight:800;letter-spacing:.04em;white-space:nowrap;direction:ltr;unicode-bidi:isolate;user-select:none}
+.p-captcha .p-captcha-input{flex:1 1 120px;min-width:0;width:auto;min-height:46px;font-size:18px!important;font-weight:800;text-align:center;letter-spacing:.12em;direction:ltr}
+.p-captcha-unavailable{margin:12px 0}
+@media (max-width:420px){.p-captcha-question{flex:1 1 100%}.p-captcha .p-captcha-input{flex:1 1 100%}}
 
 
 /* ===== Public motion + richer marketing modules (v3) ===== */

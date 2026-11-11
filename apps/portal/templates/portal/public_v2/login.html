@@ -25,7 +25,7 @@
     <div class="in"><label for="id_identifier">شماره موبایل، نام کاربری یا ایمیل</label>{{ password_form.identifier }}{% if password_form.identifier.errors %}<div class="p-error err" id="id_identifier_error">{{ password_form.identifier.errors.0 }}</div>{% endif %}</div>
     <div class="in"><label for="id_password">رمز عبور</label><div class="r-password-field" data-password-field>{{ password_form.password }}</div>{% if password_form.password.errors %}<div class="p-error err" id="id_password_error">{{ password_form.password.errors.0 }}</div>{% endif %}</div>
     <label class="check">{{ password_form.remember_me }} مرا به خاطر بسپار</label>
-    {% include "portal/public_v2/_turnstile.html" with turnstile_action="login_password" %}
+    {% include "portal/public_v2/_captcha.html" with captcha_action="login_password" %}
     <button type="submit" class="btn btn-leaf btn-block">ورود</button>
     <p class="auth-alt"><a class="lnk" href="{% url 'portal:password-reset-request' %}">فراموشی رمز عبور؟ تعیین رمز با کد پیامکی</a></p>
   </form>
@@ -47,7 +47,7 @@
     {% else %}
     <p class="hint auth-note">ساخت حساب جدید فعلاً در دسترس نیست؛ فقط مالکانی که قبلاً حساب ساخته‌اند می‌توانند با کد پیامکی وارد شوند.</p>
     {% endif %}
-    {% include "portal/public_v2/_turnstile.html" with turnstile_action="login_otp" %}
+    {% include "portal/public_v2/_captcha.html" with captcha_action="login_otp" %}
     <button type="submit" class="btn btn-leaf btn-block">دریافت کد پیامکی</button>
   </form>
 

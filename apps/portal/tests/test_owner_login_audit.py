@@ -7,7 +7,7 @@ Regression tests for the findings of the login audit:
 * a plain Customer (or any non-Owner) account must never pass the Owner password gate,
   whichever identifier it is addressed by;
 * per-identifier throttling that cannot be bypassed by rotating IPs, and that a
-  script without a solved Turnstile cannot use to lock somebody out;
+  script without a solved CAPTCHA cannot use to lock somebody out;
 * password reset: only active Owner-eligible accounts get mail, per-email limit,
   link/session behaviour, Persian policy messages, Referrer-Policy;
 * session behaviour (fixation, logout, remember-me) and signed ``admin_return``;
@@ -31,7 +31,8 @@ from apps.portal import views as portal_views
 from apps.portal.tests._owner_signup import age_otp_cooldown, complete_account
 from apps.portal.forms import OwnerIdentifierLoginForm
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile
-from apps.portal.services import owner_auth_service, owner_otp_service, turnstile_service
+from apps.portal.services import captcha_service, owner_auth_service, owner_otp_service
+from apps.portal.tests import _captcha as C
 from apps.portal.services.handoff_service import build_admin_return_token
 from apps.sms.services.backends import SmsSendResult
 from apps.stores.models import Store, StoreMembership
@@ -352,12 +353,12 @@ class LoginThrottleTests(_Base, TestCase):
             self._attempt("ghost@example.com", "bad", f"10.1.0.{index}")
         self.assertContains(self._attempt("ghost@example.com", "bad", "10.1.9.9"), portal_views._LOGIN_THROTTLED_MESSAGE)
 
-    def test_a_failed_turnstile_does_not_spend_the_identifier_budget(self):
-        denied = turnstile_service.TurnstileValidationResult(False, "missing-token")
-        with patch.object(portal_views.turnstile_service, "verify_request", return_value=denied):
+    def test_a_failed_captcha_does_not_spend_the_identifier_budget(self):
+        denied = captcha_service.CaptchaResult(False, "wrong-answer", captcha_service.PUBLIC_ERROR_MESSAGE)
+        with patch.object(portal_views.captcha_service, "verify_request", return_value=denied):
             for index in range(portal_views.LOGIN_IDENTIFIER_MAX_ATTEMPTS + 3):
                 response = self._attempt("throttle@example.com", _PASSWORD, f"10.2.0.{index}")
-                self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+                self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
         self.assertEqual(self._attempt("throttle@example.com", _PASSWORD, "10.2.9.9").status_code, 302)
 
     def test_per_ip_budget_still_applies(self):
@@ -374,64 +375,64 @@ class LoginThrottleTests(_Base, TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Turnstile on the login surface (end-to-end through the real service)
+# CAPTCHA on the login surface (end-to-end through the real service)
 # ---------------------------------------------------------------------------
 
 
-@override_settings(
-    ALLOWED_HOSTS=[_HOST, "testserver"], TURNSTILE_ENABLED=True, TURNSTILE_SITE_KEY="1x00000000000000000000AA",
-    TURNSTILE_SECRET_KEY="1x0000000000000000000000000000000AA", TURNSTILE_EXPECTED_HOSTNAMES=(_HOST,),
-)
-class LoginTurnstileTests(_Base, TestCase):
+@override_settings(ALLOWED_HOSTS=[_HOST, "testserver"], **C.ENABLED)
+class LoginCaptchaTests(_Base, TestCase):
     def setUp(self):
         super().setUp()
+        C.reset_store()
+        self.addCleanup(C.reset_store)
         owner_auth_service.register_owner(full_name="TS", email="ts@example.com", password=_PASSWORD)
 
-    def _siteverify(self, **result):
-        class _Response:
-            def raise_for_status(self):
-                pass
+    def _fields(self, path, action, **kw):
+        return C.solve(self.client, path, action, _HOST, **kw)
 
-            def json(self_inner):
-                return result
-
-        return patch.object(turnstile_service.requests, "post", return_value=_Response())
-
-    def test_missing_token_means_no_authentication_attempt_at_all(self):
+    def test_missing_answer_means_no_authentication_attempt_at_all(self):
         with patch.object(owner_auth_service, "authenticate_owner_by_identifier") as auth:
             response = _post_login(self.client, "ts@example.com")
         auth.assert_not_called()
-        self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
 
-    def test_wrong_action_or_hostname_is_rejected_by_the_backend(self):
-        for result in (
-            {"success": True, "action": "register", "hostname": _HOST},
-            {"success": True, "action": "login_password", "hostname": "evil.example"},
-            {"success": False, "error-codes": ["invalid-input-response"]},
-        ):
-            with self.subTest(result=result), self._siteverify(**result):
+    def test_wrong_answer_or_wrong_action_is_rejected_by_the_backend(self):
+        cases = (
+            ("wrong answer", lambda: self._fields("/login/", "login_password", answer_delta=1)),
+            ("other form's token", lambda: self._fields("/login/", "login_otp")),
+        )
+        for label, make in cases:
+            with self.subTest(label=label):
                 cache.clear()
-                response = _post_login(self.client, "ts@example.com", **{"cf-turnstile-response": "tok"})
-                self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+                fields = make()
+                with patch.object(owner_auth_service, "authenticate_owner_by_identifier") as auth:
+                    response = _post_login(self.client, "ts@example.com", **fields)
+                self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
+                auth.assert_not_called()
                 self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_valid_token_for_the_right_action_logs_in(self):
-        with self._siteverify(success=True, action="login_password", hostname=_HOST):
-            response = _post_login(self.client, "ts@example.com", **{"cf-turnstile-response": "tok"})
+    def test_valid_answer_for_the_right_action_logs_in(self):
+        response = _post_login(self.client, "ts@example.com", **self._fields("/login/", "login_password"))
         self.assertEqual(response.status_code, 302)
 
-    def test_otp_request_sends_no_sms_until_turnstile_passes(self):
+    def test_a_wrong_password_with_a_valid_answer_is_a_normal_login_failure_and_gets_a_new_question(self):
+        response = _post_login(self.client, "ts@example.com", "wrong-password-1", **self._fields("/login/", "login_password"))
+        self.assertContains(response, owner_auth_service.GENERIC_LOGIN_ERROR)
+        self.assertNotContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
+        self.assertIn('name="captcha_token"', response.content.decode())
+
+    def test_otp_request_sends_no_sms_until_the_captcha_passes(self):
         with patch.object(owner_otp_service, "send_platform_otp") as send:
             denied = self.client.post("/login/", {"phone": "09125550123"}, HTTP_HOST=_HOST)
-            self.assertContains(denied, turnstile_service.PUBLIC_ERROR_MESSAGE)
+            self.assertContains(denied, captcha_service.PUBLIC_ERROR_MESSAGE)
             send.assert_not_called()
             self.assertFalse(OwnerOtpChallenge.objects.exists())
-            self.assertContains(denied, 'data-action="login_otp"')
+            self.assertIn("captcha-answer-login_otp", denied.content.decode())
 
-    def test_reset_request_sends_no_sms_until_turnstile_passes(self):
+    def test_reset_request_sends_no_sms_until_the_captcha_passes(self):
         with patch.object(owner_otp_service, "send_platform_otp") as send:
             denied = self.client.post("/reset-password/", {"phone": "09125550123"}, HTTP_HOST=_HOST)
-        self.assertContains(denied, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        self.assertContains(denied, captcha_service.PUBLIC_ERROR_MESSAGE)
         send.assert_not_called()
         self.assertFalse(OwnerOtpChallenge.objects.exists())
         self.assertEqual(mail.outbox, [])

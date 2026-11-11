@@ -84,7 +84,7 @@ crontab or env file); `MAILTO` (monitored mailbox for wrapper problems); an inst
 **The env file must be the full production environment, not just those three variables.** Every job starts `manage.py`, which loads the
 production settings. Checked on 2026-11-11: with only `DATABASE_URL`, `DJANGO_SECRET_KEY` and `DJANGO_DEBUG=False`, `manage.py check` stops with
 `ImproperlyConfigured`. The additional variables that stop startup when missing are `DJANGO_ALLOWED_HOSTS`, `RASTISI_RATE_LIMIT_CACHE_URL`
-(`redis://` or `rediss://`), `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES`. `PAYMENT_CREDENTIAL_KEY` does not stop
+(`redis://` or `rediss://`). (Until the math-CAPTCHA change, `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES` were also required; they are no longer read.) `PAYMENT_CREDENTIAL_KEY` does not stop
 startup, but without it stored gateway credentials cannot be decrypted, so payment reconciliation cannot verify anything. The simplest correct
 setup is to point `RASTISI_ENV_FILE` at the same file the web application uses. `run_job.sh --check-config` does not start Django, so it
 cannot detect these: also run `$RASTISI_VENV/bin/python manage.py check` with that environment (step 1 of the checklist below).

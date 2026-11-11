@@ -4,7 +4,7 @@ The public marketing website (`rastisi.ir`: `/`, `/features/`, `/design/`, `/pla
 `/about/`, `/contact/`, `/login/`, `/register/`, OTP/reset pages, `/terms/`, `/privacy/`,
 `/supported-industries/`, 404) has a new visual design ("shop sign": Lalezar + Vazirmatn, green
 sign / saffron price tags) that replaces the previous one **without changing any behaviour**:
-the same views, forms, rate limits, Turnstile, OTP flows, plans-from-database and URLs.
+the same views, forms, rate limits, CAPTCHA, OTP flows, plans-from-database and URLs.
 
 ## What changed (and what did not)
 

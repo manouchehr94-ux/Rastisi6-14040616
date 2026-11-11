@@ -44,7 +44,7 @@
           <div class="p-field"><label for="id_password">رمز عبور</label><div class="r-password-field" data-password-field>{{ password_form.password }}</div>{% if password_form.password.errors %}<div class="p-error" id="id_password_error">{{ password_form.password.errors.0 }}</div>{% endif %}</div>
           <label class="p-remember-me">{{ password_form.remember_me }} مرا به خاطر بسپار</label>
 
-          {% include "portal/public/_turnstile.html" with turnstile_action="login_password" %}
+          {% include "portal/public/_captcha.html" with captcha_action="login_password" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">ورود</button>
           <div class="r-form-links"><a href="{% url 'portal:password-reset-request' %}">فراموشی رمز عبور؟ تعیین رمز با کد پیامکی</a></div>
         </form>
@@ -68,7 +68,7 @@
           <p class="r-field-hint r-otp-account-note">ساخت حساب جدید فعلاً در دسترس نیست؛ فقط مالکانی که قبلاً حساب ساخته‌اند می‌توانند با کد پیامکی وارد شوند.</p>
           {% endif %}
 
-          {% include "portal/public/_turnstile.html" with turnstile_action="login_otp" %}
+          {% include "portal/public/_captcha.html" with captcha_action="login_otp" %}
           <button type="submit" class="rs-btn rs-btn-primary r-form-submit">دریافت کد پیامکی</button>
         </form>
 

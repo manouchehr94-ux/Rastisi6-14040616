@@ -37,8 +37,9 @@ from apps.portal.services import (
     owner_otp_service,
     platform_config_service,
     provisioning_service,
-    turnstile_service,
+    captcha_service,
 )
+from apps.portal.tests import _captcha as C
 from apps.portal.tests._owner_signup import GOOD_PASSWORD, complete_account, email_for, finish_signup_if_needed
 from apps.sms.models import SmsLog
 from apps.sms.services.backends import SmsSendResult
@@ -558,13 +559,13 @@ class RegistrationPolicyTests(_OtpTestMixin, TestCase):
         self.assertNotContains(page, 'name="phone"')
         self.assertContains(page, 'href="/login/"')
 
-    def test_closed_register_post_issues_no_otp_and_never_reaches_turnstile_or_sms(self):
+    def test_closed_register_post_issues_no_otp_and_never_reaches_captcha_or_sms(self):
         self.set_registration(False)
-        with patch.object(turnstile_service, "verify_request") as turnstile:
+        with patch.object(captcha_service, "verify_request") as captcha:
             response = self.register()
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ساخت فروشگاه تازه موقتاً در دسترس نیست")
-        turnstile.assert_not_called()
+        captcha.assert_not_called()
         self.assertEqual(self.sent, [])
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
         self.assertNotIn("portal_otp_phone", self.client.session)
@@ -1575,32 +1576,29 @@ class OtpVerificationTests(_OtpTestMixin, TestCase):
             self.client.post("/verify/resend/", HTTP_HOST=_HOST)
         self.assertEqual(self.verify(code=first_code).status_code, 302)
 
-    @override_settings(
-        TURNSTILE_ENABLED=True, TURNSTILE_SITE_KEY="1x00000000000000000000AA",
-        TURNSTILE_SECRET_KEY="1x0000000000000000000000000000000AA",
-    )
-    def test_turnstile_failure_blocks_registration_before_any_sms(self):
-        failure = turnstile_service.TurnstileValidationResult(False, "missing-token")
-        with patch.object(turnstile_service, "verify_request", return_value=failure):
-            response = self.register()
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
-        self.assertEqual(self.sent, [])
-        self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
+    @override_settings(**C.ENABLED)
+    def test_captcha_failure_blocks_registration_before_any_sms(self):
+        C.reset_store()
+        self.addCleanup(C.reset_store)
+        for label, fields in (("no answer", {}), ("wrong answer", C.solve(self.client, "/register/", "register", _HOST, answer_delta=1))):
+            with self.subTest(label=label):
+                response = self.register(**fields)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
+                self.assertEqual(self.sent, [])
+                self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
 
-    @override_settings(
-        TURNSTILE_ENABLED=True, TURNSTILE_SITE_KEY="1x00000000000000000000AA",
-        TURNSTILE_SECRET_KEY="1x0000000000000000000000000000000AA",
-    )
-    def test_resend_works_with_turnstile_enabled_and_is_bound_to_the_session(self):
-        """Regression: the resend form used to POST to /register/ without a
-        Turnstile token, so with Turnstile enabled resend always failed."""
-        ok = turnstile_service.TurnstileValidationResult(True)
-        with patch.object(turnstile_service, "verify_request", return_value=ok) as verify_request:
-            self.register()
+    @override_settings(**C.ENABLED)
+    def test_resend_works_with_the_captcha_enabled_and_is_bound_to_the_session(self):
+        """Regression: the resend form POSTs to /verify/resend/ without a CAPTCHA, so with the CAPTCHA enabled resend must still work:
+        it is not a new gate, it is bound to the session that already passed /register/."""
+        C.reset_store()
+        self.addCleanup(C.reset_store)
+        with patch.object(captcha_service, "verify_request", wraps=captcha_service.verify_request) as verify_request:
+            self.register(**C.solve(self.client, "/register/", "register", _HOST))
             self.assertEqual(verify_request.call_count, 1)
             response = self.client.post("/verify/resend/", HTTP_HOST=_HOST)
-            self.assertEqual(verify_request.call_count, 1)  # resend is not a new Turnstile gate
+            self.assertEqual(verify_request.call_count, 1)  # resend is not a new CAPTCHA gate
         self.assertRedirects(response, "/verify/", fetch_redirect_response=False)
         self.assertEqual(len(self.sent), 2)
         page = self.client.get("/verify/", HTTP_HOST=_HOST)

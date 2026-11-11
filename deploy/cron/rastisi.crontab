@@ -7,7 +7,7 @@
 #   RASTISI_APP_DIR / RASTISI_ENV_FILE / RASTISI_VENV / JOB   real paths. The env file must define DATABASE_URL (postgres://),
 #                       DJANGO_SECRET_KEY and DJANGO_DEBUG=False; the venv must be a real virtualenv with "bin/python". The env file must
 #                       be the FULL production environment (the web app's file): without DJANGO_ALLOWED_HOSTS, RASTISI_RATE_LIMIT_CACHE_URL
-#                       and TURNSTILE_* every job fails at startup. See docs/payments/PLATFORM_BILLING_JOBS_RUNBOOK_20261110.md section 3.1.
+#                       every job fails at startup. See docs/payments/PLATFORM_BILLING_JOBS_RUNBOOK_20261110.md section 3.1.
 #   RASTISI_ALERT_CMD   mail-compatible command run as:  <command words> "<subject>" "<RASTISI_ALERT_TO>"  (body on stdin). Default "mail -s".
 # Check before installing:  RASTISI_ALERT_TO=… deploy/cron/run_job.sh --check-config   then   --test-alert
 CRON_TZ=Asia/Tehran

@@ -70,7 +70,7 @@
           {% if form.message.errors %}<div class="p-error">{{ form.message.errors.0 }}</div>{% endif %}
         </div>
 
-        {% include "portal/public/_turnstile.html" with turnstile_action="contact" %}
+        {% include "portal/public/_captcha.html" with captcha_action="contact" %}
         <button type="submit" class="rs-btn rs-btn-primary">ارسال پیام</button>
       </form>
     </div>

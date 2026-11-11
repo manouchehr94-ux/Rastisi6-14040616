@@ -1,5 +1,5 @@
 """Authoritative client-IP resolution for security code (rate limits,
-Turnstile ``remoteip``, OTP IP budgets).
+CAPTCHA/OTP IP budgets).
 
 **The one rule:** forwarded headers are evidence only when the *direct* TCP
 peer (``REMOTE_ADDR``) is a proxy the operator explicitly configured in

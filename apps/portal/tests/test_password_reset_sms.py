@@ -22,7 +22,8 @@ from apps.core.services.rate_limit import UNAVAILABLE_MESSAGE
 from apps.customers.models import Customer
 from apps.portal import views as portal_views
 from apps.portal.models import OwnerOtpChallenge, OwnerProfile
-from apps.portal.services import owner_auth_service, owner_otp_service, owner_sms_service, turnstile_service
+from apps.portal.services import captcha_service, owner_auth_service, owner_otp_service, owner_sms_service
+from apps.portal.tests import _captcha as C
 from apps.sms.models import SmsLog
 from apps.sms.services.backends import SmsSendResult
 from apps.stores.models import Store
@@ -446,7 +447,7 @@ class ResetResendTests(_Base):
 
 
 # ---------------------------------------------------------------------------
-# Failure policy: provider, shared store, SMS not configured, Turnstile, IP budget
+# Failure policy: provider, shared store, SMS not configured, CAPTCHA, IP budget
 # ---------------------------------------------------------------------------
 
 
@@ -527,24 +528,35 @@ class ResetFailurePolicyTests(_Base):
         self.assertEqual(self.sent, [])
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
 
-    def test_turnstile_failure_sends_no_sms(self):
+    def test_captcha_failure_sends_no_sms(self):
         self.owner()
-        ts = dict(
-            TURNSTILE_ENABLED=True, TURNSTILE_SITE_KEY="1x00000000000000000000AA",
-            TURNSTILE_SECRET_KEY="1x0000000000000000000000000000AA", TURNSTILE_EXPECTED_HOSTNAMES=(_HOST,),
-        )
-        denied = turnstile_service.TurnstileValidationResult(success=False, error_code="verification-failed")
-        with override_settings(**ts), patch.object(turnstile_service, "verify_request", return_value=denied):
-            response = self.request_reset()
-        self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        C.reset_store()
+        self.addCleanup(C.reset_store)
+        with override_settings(**C.ENABLED):
+            for label, fields in (("no answer", {}), ("wrong answer", C.solve(self.client, "/reset-password/", "password_reset", _HOST, answer_delta=2))):
+                with self.subTest(label=label):
+                    response = self.client.post("/reset-password/", {"phone": _PHONE, **fields}, HTTP_HOST=_HOST)
+                    self.assertContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
         self.assertEqual(self.sent, [])
         self.assertEqual(OwnerOtpChallenge.objects.count(), 0)
 
-    def test_turnstile_is_still_required_in_production_mode(self):
+    def test_a_solved_captcha_sends_the_reset_code(self):
         self.owner()
-        with override_settings(RASTISI_PRODUCTION_MODE=True, TURNSTILE_ENABLED=False):
+        C.reset_store()
+        self.addCleanup(C.reset_store)
+        with override_settings(**C.ENABLED):
+            response = self.client.post(
+                "/reset-password/", {"phone": _PHONE, **C.solve(self.client, "/reset-password/", "password_reset", _HOST)},
+                HTTP_HOST=_HOST,
+            )
+        self.assertRedirects(response, "/verify/", fetch_redirect_response=False)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_the_captcha_is_still_required_in_production_mode(self):
+        self.owner()
+        with override_settings(RASTISI_PRODUCTION_MODE=True, RASTISI_CAPTCHA_ENABLED=False):
             response = self.request_reset()
-        self.assertContains(response, turnstile_service.PUBLIC_ERROR_MESSAGE)
+        self.assertContains(response, UNAVAILABLE_MESSAGE)
         self.assertEqual(self.sent, [])
 
 

@@ -7,7 +7,7 @@ with `RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP=true` — never set this in production
 ## Flow (as implemented)
 
 ```
-/register/ (name + phone, Turnstile)
+/register/ (name + phone, CAPTCHA)
   → OwnerRegistrationRequestForm: normalized name (required), canonical phone
   → owner_otp_service.request_otp (IP + phone limits, hashed code, SMS)
   → server session: phone, purpose=register, full_name, remember_me
@@ -38,7 +38,7 @@ with `RASTISI_OWNER_SMS_ALLOW_CONSOLE_OTP=true` — never set this in production
 | `before-register-*` | Original page (form below the story on mobile, ≤11px text) |
 | `01`–`03` | Clean register: 1440 / 390 / 768 |
 | `04`, `18` | Validation errors (mobile / desktop) |
-| `05` | Turnstile failure |
+| `05` | CAPTCHA failure |
 | `06` | OTP delivery failure |
 | `07` | OTP rate limit |
 | `08`, `09` | Verify page (registration), mobile / desktop |

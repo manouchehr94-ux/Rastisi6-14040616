@@ -59,9 +59,6 @@ _PROD_ENV = {
     "DJANGO_ALLOWED_HOSTS": "example.com,www.example.com",
     "DJANGO_CSRF_TRUSTED_ORIGINS": "https://example.com",
     "RASTISI_RATE_LIMIT_CACHE_URL": "rediss://:placeholder-pw@cache.example.internal:6380/0",
-    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
-    "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000AA",
-    "TURNSTILE_EXPECTED_HOSTNAMES": "example.com,www.example.com",
 }
 
 
@@ -134,11 +131,14 @@ class ProductionAuthInfrastructureEnforcedEndToEndTests(SimpleTestCase):
                 self.assertIn("RASTISI_RATE_LIMIT_CACHE_URL", stderr)
                 self.assertNotIn("LEAKME", stderr)
 
-    def test_turnstile_disabled_or_incomplete_fails(self):
-        self.assertIn("TURNSTILE_ENABLED must be true", self._fails(TURNSTILE_ENABLED="false"))
-        self.assertIn("TURNSTILE_SITE_KEY is required", self._fails(drop=["TURNSTILE_SITE_KEY"]))
-        self.assertIn("TURNSTILE_SECRET_KEY is required", self._fails(drop=["TURNSTILE_SECRET_KEY"]))
-        self.assertIn("TURNSTILE_EXPECTED_HOSTNAMES is required", self._fails(drop=["TURNSTILE_EXPECTED_HOSTNAMES"]))
+    def test_captcha_disabled_or_badly_configured_fails(self):
+        self.assertIn("RASTISI_CAPTCHA_ENABLED must be true", self._fails(RASTISI_CAPTCHA_ENABLED="false"))
+        self.assertIn("RASTISI_CAPTCHA_TTL_SECONDS must be an integer", self._fails(RASTISI_CAPTCHA_TTL_SECONDS="5"))
+
+    def test_production_starts_without_any_turnstile_or_cloudflare_variable(self):
+        result = _run_check(dict(_PROD_ENV))
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn("TURNSTILE", result.stderr)
 
     def test_malformed_trusted_proxy_cidr_fails(self):
         self.assertIn("DJANGO_TRUSTED_PROXY_CIDRS", self._fails(DJANGO_TRUSTED_PROXY_CIDRS="10.0.0.0/99"))

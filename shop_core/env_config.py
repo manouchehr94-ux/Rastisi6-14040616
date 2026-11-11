@@ -179,7 +179,7 @@ def resolve_log_level(*, environ=None):
 
 # ---------------------------------------------------------------------------
 # Production authentication infrastructure (shared rate-limit cache, trusted
-# proxies, Turnstile). See docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md §6.
+# proxies, CAPTCHA). See docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md §6.
 #
 # Every function below is pure (explicit ``environ``), never touches the
 # network, and never echoes a URL/secret back in an error message — a cache
@@ -357,11 +357,13 @@ def trusted_proxy_problems(*, trusted_cidrs, secure_proxy_ssl_header, use_x_forw
     return problems
 
 
-_HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
+CAPTCHA_TTL_MIN_SECONDS = 30
+CAPTCHA_TTL_MAX_SECONDS = 900
+CAPTCHA_TTL_DEFAULT_SECONDS = 300
 
 
-def turnstile_config_problems(*, enabled, site_key, secret_key, expected_hostnames, production):
-    """Problems with the effective Turnstile configuration (empty list = fine).
+def captcha_config_problems(*, enabled, ttl_seconds, production):
+    """Problems with the effective math-CAPTCHA configuration (empty list = fine).
 
     ``production`` is the *real configured* ``DEBUG=False`` state — never
     Django's test-runner-forced ``settings.DEBUG``.
@@ -369,26 +371,15 @@ def turnstile_config_problems(*, enabled, site_key, secret_key, expected_hostnam
     problems = []
     if production and not enabled:
         problems.append(
-            "TURNSTILE_ENABLED must be true when DJANGO_DEBUG=False (bot protection is "
+            "RASTISI_CAPTCHA_ENABLED must be true when DJANGO_DEBUG=False (bot protection is "
             "never silently disabled in production)."
         )
-    if enabled or production:
-        if not site_key:
-            problems.append("TURNSTILE_SITE_KEY is required.")
-        if not secret_key:
-            problems.append("TURNSTILE_SECRET_KEY is required.")
-        if production and not expected_hostnames:
-            problems.append(
-                "TURNSTILE_EXPECTED_HOSTNAMES is required (comma-separated bare hostnames, "
-                "e.g. rastisi.ir,www.rastisi.ir)."
-            )
-        for hostname in expected_hostnames:
-            if not _HOSTNAME_RE.match(hostname):
-                problems.append(
-                    "TURNSTILE_EXPECTED_HOSTNAMES entries must be bare hostnames "
-                    "(no scheme, port, path or wildcard)."
-                )
-                break
+    if not isinstance(ttl_seconds, int) or isinstance(ttl_seconds, bool) or not (
+        CAPTCHA_TTL_MIN_SECONDS <= ttl_seconds <= CAPTCHA_TTL_MAX_SECONDS
+    ):
+        problems.append(
+            f"RASTISI_CAPTCHA_TTL_SECONDS must be an integer between {CAPTCHA_TTL_MIN_SECONDS} and {CAPTCHA_TTL_MAX_SECONDS}."
+        )
     return problems
 
 
@@ -413,32 +404,19 @@ def cookie_security_problems(*, session_secure, csrf_secure, session_httponly, s
     return problems
 
 
-def resolve_turnstile_settings(debug, *, environ=None):
-    """Parse the ``TURNSTILE_*`` variables and enforce production fail-closed.
+def resolve_captcha_settings(debug, *, environ=None):
+    """Parse the ``RASTISI_CAPTCHA_*`` variables and enforce production fail-closed.
 
-    ``TURNSTILE_ENABLED`` defaults to ``not debug``: local development may run
+    ``RASTISI_CAPTCHA_ENABLED`` defaults to ``not debug``: local development may run
     without it, a ``DEBUG=False`` process may not. Raises ``ImproperlyConfigured``
-    listing every problem (never a secret value).
+    listing every problem. The math CAPTCHA has no external service and no keys.
     """
-    enabled = env_bool("TURNSTILE_ENABLED", default=not debug, environ=environ)
-    site_key = env_str("TURNSTILE_SITE_KEY", "", environ=environ)
-    secret_key = env_str("TURNSTILE_SECRET_KEY", "", environ=environ)
-    hostnames = tuple(
-        value.strip().lower().rstrip(".")
-        for value in env_list("TURNSTILE_EXPECTED_HOSTNAMES", default=(), environ=environ)
-        if value.strip()
-    )
-    problems = turnstile_config_problems(
-        enabled=enabled, site_key=site_key, secret_key=secret_key,
-        expected_hostnames=hostnames, production=not debug,
-    )
+    enabled = env_bool("RASTISI_CAPTCHA_ENABLED", default=not debug, environ=environ)
+    ttl = env_int("RASTISI_CAPTCHA_TTL_SECONDS", default=CAPTCHA_TTL_DEFAULT_SECONDS, environ=environ)
+    problems = captcha_config_problems(enabled=enabled, ttl_seconds=ttl, production=not debug)
     if problems:
-        raise ImproperlyConfigured("Invalid Turnstile configuration: " + " ".join(problems))
-    timeout = env_int("TURNSTILE_VERIFY_TIMEOUT_SECONDS", default=5, environ=environ)
-    return {
-        "enabled": enabled, "site_key": site_key, "secret_key": secret_key,
-        "expected_hostnames": hostnames, "timeout_seconds": timeout,
-    }
+        raise ImproperlyConfigured("Invalid CAPTCHA configuration: " + " ".join(problems))
+    return {"enabled": enabled, "ttl_seconds": ttl}
 
 
 # ---------------------------------------------------------------------------

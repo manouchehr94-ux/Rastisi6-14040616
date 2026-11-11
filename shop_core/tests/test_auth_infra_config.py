@@ -1,5 +1,5 @@
 """Unit tests for the production auth-infrastructure configuration helpers and
-system checks (shared rate-limit cache, trusted proxies, Turnstile, cookies)."""
+system checks (shared rate-limit cache, trusted proxies, math CAPTCHA, cookies)."""
 
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, override_settings
@@ -10,10 +10,10 @@ from shop_core.env_config import (
     RATE_LIMIT_CACHE_ALIAS,
     REDIS_CACHE_BACKEND,
     build_cache_config,
+    resolve_captcha_settings,
     cookie_security_problems,
     rate_limit_cache_problems,
     resolve_trusted_proxy_cidrs,
-    resolve_turnstile_settings,
     trusted_proxy_problems,
     validate_redis_cache_url,
 )
@@ -152,75 +152,44 @@ class TrustedProxyConfigTests(SimpleTestCase):
             self.assertIn("rastisi.E003", [e.id for e in checks.check_trusted_proxy(None)])
 
 
-_TS_OK = {
-    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
-    "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000AA",
-    "TURNSTILE_EXPECTED_HOSTNAMES": "rastisi.ir, WWW.rastisi.ir.",
-}
-
-
-class TurnstileConfigTests(SimpleTestCase):
-    def test_development_may_run_with_turnstile_off(self):
-        result = resolve_turnstile_settings(True, environ={})
+class CaptchaConfigTests(SimpleTestCase):
+    def test_development_may_run_with_the_captcha_off(self):
+        result = resolve_captcha_settings(True, environ={})
         self.assertFalse(result["enabled"])
+        self.assertEqual(result["ttl_seconds"], 300)
 
     def test_development_may_explicitly_enable_it(self):
-        result = resolve_turnstile_settings(True, environ={"TURNSTILE_ENABLED": "true", **_TS_OK})
-        self.assertTrue(result["enabled"])
+        self.assertTrue(resolve_captcha_settings(True, environ={"RASTISI_CAPTCHA_ENABLED": "true"})["enabled"])
 
-    def test_production_correct_configuration_passes_and_defaults_to_enabled(self):
-        result = resolve_turnstile_settings(False, environ=dict(_TS_OK))
+    def test_production_needs_no_keys_and_defaults_to_enabled(self):
+        result = resolve_captcha_settings(False, environ={})
         self.assertTrue(result["enabled"])
-        self.assertEqual(result["expected_hostnames"], ("rastisi.ir", "www.rastisi.ir"))
+        self.assertEqual(set(result), {"enabled", "ttl_seconds"})           # nothing from any external service
 
     def test_production_disabled_is_refused_even_if_explicit(self):
         for value in ("false", "0", "off", "no"):
             with self.subTest(value=value), self.assertRaises(ImproperlyConfigured):
-                resolve_turnstile_settings(False, environ={"TURNSTILE_ENABLED": value, **_TS_OK})
+                resolve_captcha_settings(False, environ={"RASTISI_CAPTCHA_ENABLED": value})
 
-    def test_production_with_nothing_set_is_refused(self):
-        with self.assertRaises(ImproperlyConfigured):
-            resolve_turnstile_settings(False, environ={})
+    def test_old_turnstile_variables_are_ignored_and_never_required(self):
+        env = {"TURNSTILE_ENABLED": "false", "TURNSTILE_SITE_KEY": "", "TURNSTILE_SECRET_KEY": "LEFTOVER"}
+        self.assertTrue(resolve_captcha_settings(False, environ=env)["enabled"])
 
-    def test_production_missing_each_required_value_is_refused(self):
-        for missing in _TS_OK:
-            with self.subTest(missing=missing), self.assertRaises(ImproperlyConfigured):
-                resolve_turnstile_settings(False, environ={k: v for k, v in _TS_OK.items() if k != missing})
-        with self.assertRaises(ImproperlyConfigured):
-            resolve_turnstile_settings(False, environ={**_TS_OK, "TURNSTILE_EXPECTED_HOSTNAMES": " , "})
-
-    def test_malformed_hostnames_are_refused(self):
-        for bad in ("https://rastisi.ir", "rastisi.ir:443", "rastisi.ir/login", "*.rastisi.ir", "ras tisi.ir"):
+    def test_lifetime_is_validated(self):
+        self.assertEqual(resolve_captcha_settings(False, environ={"RASTISI_CAPTCHA_TTL_SECONDS": "120"})["ttl_seconds"], 120)
+        for bad in ("5", "29", "901", "100000", "0", "-1"):
             with self.subTest(bad=bad), self.assertRaises(ImproperlyConfigured):
-                resolve_turnstile_settings(False, environ={**_TS_OK, "TURNSTILE_EXPECTED_HOSTNAMES": bad})
-
-    def test_enabled_in_development_still_requires_keys(self):
-        with self.assertRaises(ImproperlyConfigured):
-            resolve_turnstile_settings(True, environ={"TURNSTILE_ENABLED": "true"})
-
-    def test_errors_never_contain_secret_values(self):
-        try:
-            resolve_turnstile_settings(False, environ={
-                "TURNSTILE_ENABLED": "false", "TURNSTILE_SECRET_KEY": "SUPERSECRETVALUE",
-            })
-        except ImproperlyConfigured as exc:
-            self.assertNotIn("SUPERSECRETVALUE", str(exc))
+                resolve_captcha_settings(False, environ={"RASTISI_CAPTCHA_TTL_SECONDS": bad})
 
     def test_system_check_mirrors_the_startup_rules(self):
-        base = dict(
-            RASTISI_PRODUCTION_MODE=True, TURNSTILE_ENABLED=True, TURNSTILE_SITE_KEY="k",
-            TURNSTILE_SECRET_KEY="s", TURNSTILE_EXPECTED_HOSTNAMES=("rastisi.ir",),
-        )
+        base = dict(RASTISI_PRODUCTION_MODE=True, RASTISI_CAPTCHA_ENABLED=True, RASTISI_CAPTCHA_TTL_SECONDS=300)
         with override_settings(**base):
-            self.assertEqual(checks.check_turnstile(None), [])
-        for override in (
-            {"TURNSTILE_ENABLED": False}, {"TURNSTILE_SITE_KEY": ""}, {"TURNSTILE_SECRET_KEY": ""},
-            {"TURNSTILE_EXPECTED_HOSTNAMES": ()},
-        ):
+            self.assertEqual(checks.check_captcha(None), [])
+        for override in ({"RASTISI_CAPTCHA_ENABLED": False}, {"RASTISI_CAPTCHA_TTL_SECONDS": 5}, {"RASTISI_CAPTCHA_TTL_SECONDS": 5000}):
             with self.subTest(override=override), override_settings(**{**base, **override}):
-                self.assertTrue(checks.check_turnstile(None))
-        with override_settings(**{**base, "RASTISI_PRODUCTION_MODE": False, "TURNSTILE_ENABLED": False}):
-            self.assertEqual(checks.check_turnstile(None), [])
+                self.assertEqual([e.id for e in checks.check_captcha(None)], ["rastisi.E002"])
+        with override_settings(**{**base, "RASTISI_PRODUCTION_MODE": False, "RASTISI_CAPTCHA_ENABLED": False}):
+            self.assertEqual(checks.check_captcha(None), [])
 
 
 class CookieSecurityTests(SimpleTestCase):
