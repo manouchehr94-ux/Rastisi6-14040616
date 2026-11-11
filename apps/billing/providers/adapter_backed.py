@@ -34,10 +34,12 @@ from apps.orders.gateways.base import (
     GatewayConnectionError,
     GatewayCredentialError,
     GatewayError,
+    GatewayResponseError,
     GatewayUnsupportedOperationError,
     GatewayVerificationError,
     PaymentOperation,
 )
+from apps.billing.providers import bank_refund_policy
 from apps.orders.gateways.registry import get_adapter
 
 logger = logging.getLogger("billing")
@@ -315,6 +317,13 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
             provider_refund_id=f"{self.code}-manual-refund-{idempotency_key}", succeeded=False,
             raw_summary={"manual": True, "reason": "بازپرداختِ این درگاه نیازمندِ پردازشِ دستی در پنلِ درگاه است."},
         )
+        if not bank_refund_policy.automatic_refund_allowed(self.code):
+            # Fail closed (hard stop for EVERY caller): no adapter, no credentials, no network. See bank_refund_policy.
+            logger.warning("%s automatic refund is disabled; recorded as manual processing", self.code)
+            return RefundResult(
+                provider_refund_id=f"{self.code}-manual-refund-{idempotency_key}", succeeded=False,
+                raw_summary={"manual": True, bank_refund_policy.AUTOMATIC_REFUND_DISABLED: True,
+                             "reason": bank_refund_policy.DISABLED_MESSAGE})
         try:
             adapter = self._adapter()
         except BillingProviderError:
@@ -331,19 +340,34 @@ class AdapterBackedBillingProvider(BillingPaymentProvider):
             return manual
         try:
             adapter, creds, sandbox = self._credentials(adapter)
+        except (GatewayError, BillingProviderError) as exc:       # nothing was sent: a definite "not executed"
+            logger.warning("%s reverse not attempted: %s", self.code, getattr(exc, "code", type(exc).__name__))
+            return manual
+        try:
             result = adapter.cancel_payment(
                 track_id=attempt.provider_session_id,
                 credentials={**creds, "_urlId": str(extra.get("urlId", "")), "_refNum": reference, "_saleReferenceId": reference},
                 sandbox=sandbox,
             )
-        except (GatewayError, BillingProviderError) as exc:
+        except (GatewayConnectionError, GatewayResponseError) as exc:
+            # The request may have reached the bank and been executed (timeout, dropped connection, unreadable reply). The
+            # outcome is UNKNOWN: report it as such so the caller never retries blindly and finance reconciles with the bank.
+            logger.warning("%s reverse outcome unknown: %s", self.code, getattr(exc, "code", type(exc).__name__))
+            return RefundResult(
+                provider_refund_id=f"{self.code}-unknown-refund-{idempotency_key}", succeeded=False,
+                raw_summary={"manual": True, "unknown": True,
+                             "reason": "نتیجهٔ reverse نزد درگاه نامشخص است؛ با بانک تطبیق دهید و دوباره درخواست نکنید."},
+            )
+        except GatewayError as exc:                              # the gateway explicitly refused
             logger.warning("%s reverse not accepted: %s", self.code, getattr(exc, "code", type(exc).__name__))
             return manual
-        if not result.success:
+        if not result.success or str(result.status_code) != "0":
+            # No bank-documented refusal/«already reversed» code list is verified, so a non-OK answer (and any success code other
+            # than a plain 0, e.g. an «already done» code) is NOT proof that nothing was reversed: UNKNOWN, never a retry.
             return RefundResult(
-                provider_refund_id=f"{self.code}-manual-refund-{idempotency_key}", succeeded=False,
-                raw_summary={"manual": True, "reason": "درگاه reverse را نپذیرفت (احتمالاً مهلت گذشته)؛ پردازشِ دستی.",
-                             "status_code": result.status_code},
+                provider_refund_id=f"{self.code}-unknown-refund-{idempotency_key}", succeeded=False,
+                raw_summary={"manual": True, "unknown": True, "status_code": result.status_code,
+                             "reason": "پاسخِ بانک به reverse قطعی نیست؛ با بانک تطبیق دهید و دوباره درخواست نکنید."},
             )
         return RefundResult(
             provider_refund_id=f"{self.code}-reverse-{idempotency_key}", succeeded=True,

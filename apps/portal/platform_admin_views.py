@@ -38,6 +38,12 @@ def _is_platform_staff(user):
     return user.is_authenticated and user.is_staff and user.is_superuser
 
 
+def sub_svc_is_financially_suspended(subscription) -> bool:
+    from apps.subscriptions.services.subscription_service import is_financially_suspended
+
+    return is_financially_suspended(subscription)
+
+
 def _is_notification_team(user) -> bool:
     """Platform team member with at least one granular notification permission (NOT a superuser): may sign in to
     the platform host, but every non-notification page still requires ``_is_platform_staff``."""
@@ -639,6 +645,7 @@ def store_detail(request, store_public_id):
         "target_versions": target_versions,
         "store": store, "domains": domains, "memberships": memberships, "owner_membership": owner_membership,
         "current_subscription": current_subscription, "subscription_history": subscription_history,
+        "financially_suspended": bool(current_subscription) and sub_svc_is_financially_suspended(current_subscription),
         "invoices": invoices, "audit_entries": audit_entries, "notes": notes, "sms_balance": sms_balance,
         "industry_installation": industry_installation, "product_count": product_count, "order_count": order_count,
         "tab": tab, "active_nav": "stores",
@@ -841,6 +848,10 @@ def store_extend_subscription(request, store_public_id):
         messages.error(request, "این فروشگاه اشتراکِ جاری ندارد.")
         return redirect("portal_platform_admin:store-detail", store_public_id)
 
+    if sub_svc_is_financially_suspended(subscription):
+        messages.error(request, "این اشتراک در تعلیقِ مالی است؛ ابتدا با «رفعِ تعلیقِ مالی» (و ثبتِ دلیل) آن را رفع کنید.")
+        return redirect("portal_platform_admin:store-detail", store_public_id)
+
     raw_days = (request.POST.get("days") or "").strip()
     days = int(raw_days) if raw_days.isdigit() and int(raw_days) > 0 else None
     if days is None:
@@ -851,6 +862,36 @@ def store_extend_subscription(request, store_public_id):
     period_end = (subscription.current_period_end or timezone.now()) + timedelta(days=days)
     renew_subscription(subscription, period_start=period_start, period_end=period_end, actor=request.user)
     messages.success(request, f"اشتراکِ «{store.name}» به‌مدتِ {days} روز تمدید شد.")
+    return redirect("portal_platform_admin:store-detail", store_public_id)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def store_reinstate_financial_suspension(request, store_public_id):
+    """F-08: lift a FINANCIAL suspension (caused by a full refund of the period in force). Platform superusers only (enforced
+    again in the service), reason mandatory, audited on the store and on the platform log."""
+    from django.utils import timezone
+
+    from apps.billing.services import financial_suspension_service as fss
+
+    store = get_object_or_404(Store, public_id=store_public_id)
+    subscription = store.subscriptions.filter(is_current=True).first()
+    if subscription is None:
+        messages.error(request, "این فروشگاه اشتراکِ جاری ندارد.")
+        return redirect("portal_platform_admin:store-detail", store_public_id)
+    try:
+        updated = fss.reinstate(subscription, actor=request.user, reason=request.POST.get("reason", ""))
+    except fss.FinancialSuspensionError as exc:
+        messages.error(request, str(exc))
+        return redirect("portal_platform_admin:store-detail", store_public_id)
+    record_platform_audit_event(
+        actor=request.user, action_code="platform_admin.financial_suspension_reinstated", object_type="StoreSubscription",
+        object_id=str(subscription.pk), object_label=store.name, metadata={"reason": (request.POST.get("reason") or "")[:300]},
+    )
+    if updated.current_period_end is not None and updated.current_period_end <= timezone.now():
+        messages.warning(request, "تعلیق رفع شد؛ امّا پایانِ دورهٔ جاری گذشته است و اشتراک در بررسیِ بعدی وارد مهلتِ ارفاقی می‌شود. در صورتِ نیاز دورهٔ اشتراک را تمدید کنید.")
+    else:
+        messages.success(request, "تعلیقِ مالی رفع شد.")
     return redirect("portal_platform_admin:store-detail", store_public_id)
 
 
@@ -1447,6 +1488,9 @@ def subscription_resume(request, subscription_id):
     from apps.subscriptions.services.subscription_service import resume_subscription
 
     subscription = get_object_or_404(StoreSubscription, pk=subscription_id)
+    if sub_svc_is_financially_suspended(subscription):
+        messages.error(request, "این اشتراک در تعلیقِ مالی است؛ فقط با «رفعِ تعلیقِ مالی» در صفحهٔ فروشگاه (با ثبتِ دلیل) رفع می‌شود.")
+        return redirect("portal_platform_admin:subscriptions")
     try:
         resume_subscription(subscription, actor=request.user)
         messages.success(request, f"اشتراکِ «{subscription.store.name}» از سر گرفته شد.")
@@ -1486,8 +1530,17 @@ def payment_invoice_detail(request, invoice_id):
         SubscriptionInvoice.objects.select_related("store", "plan_version__plan").prefetch_related("lines", "payment_attempts"),
         pk=invoice_id,
     )
+    import secrets
+
+    from apps.billing.services import refund_service
+
+    refund_rows = [
+        {"refund": r, "state": refund_service.review_state(r), "state_label": refund_service.review_state_label(r)}
+        for r in invoice.refunds.all()
+    ]
     return render(request, "portal/platform_admin/payment_invoice_detail.html", {
-        "invoice": invoice, "active_nav": "payments",
+        "invoice": invoice, "active_nav": "payments", "refund_rows": refund_rows,
+        "refund_form_key": f"refund-{invoice.pk}-{secrets.token_hex(8)}",    # one per render: a double submit hits the same key
     })
 
 
@@ -1753,7 +1806,12 @@ def reconciliation_snapshot():
             SmsPackagePurchase.objects.filter(status=SmsPackagePurchase.Status.COMPLETED, payment_attempts__status=sms_s.SUCCEEDED)
             .exclude(ledger_entries__kind=SmsCreditLedger.Kind.PURCHASE).select_related("store", "package").distinct()[:100]
         ),
-        "failed_webhooks": list(BillingWebhookEvent.objects.filter(processing_status=BillingWebhookEvent.ProcessingStatus.FAILED)[:50]),
+        # FAILED events, plus RECEIVED events that have been stuck for more than 15 minutes (a crashed worker leaves them
+        # `received`; they used to be invisible to staff) (F-16).
+        "failed_webhooks": list(BillingWebhookEvent.objects.filter(
+            Q(processing_status=BillingWebhookEvent.ProcessingStatus.FAILED)
+            | Q(processing_status=BillingWebhookEvent.ProcessingStatus.RECEIVED, created_at__lt=now - timedelta(minutes=15))
+        ).order_by("created_at")[:50]),
         "open_refunds": list(SubscriptionRefund.objects.filter(status__in=SubscriptionRefund.OPEN_STATUSES).select_related("store", "invoice")[:50]),
     }
 
@@ -1837,6 +1895,7 @@ def payment_duplicate_action(request, kind, attempt_id, action):
 @user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
 def sms_purchases(request):
     """خریدهای بستهٔ پیامک با اقدام‌های مالیِ ایمن: تکمیلِ دستی، لغو، بازپرداخت (با دفترِ اعتبار)."""
+    from apps.billing.services import sms_purchase_payment_service
     from apps.sms.models import SmsPackagePurchase
 
     status = (request.GET.get("status") or "").strip()
@@ -1846,6 +1905,7 @@ def sms_purchases(request):
     page = Paginator(qs.order_by("-created_at"), 25).get_page(request.GET.get("page"))
     return render(request, "portal/platform_admin/sms_purchases.html", {
         "page": page, "status": status, "status_choices": SmsPackagePurchase.Status.choices, "active_nav": "sms-purchases",
+        "sms_refund_enabled": sms_purchase_payment_service.sms_refunds_enabled(),
     })
 
 
@@ -1865,6 +1925,7 @@ def sms_purchase_action(request, purchase_id, action):
             balance_service.cancel_purchase(purchase=purchase)
             messages.success(request, "خرید لغو شد.")
         elif action == "refund":
+            svc.ensure_refunds_enabled()                 # disabled -> controlled error; refund_purchase re-checks (defence in depth)
             svc.refund_purchase(purchase, actor=request.user, reason=(request.POST.get("reason") or "").strip())
             messages.success(request, "بازپرداخت ثبت شد؛ اعتبار برگردانده شد (بازپرداختِ پول طبقِ وضعیتِ درگاه).")
         else:
@@ -1964,6 +2025,7 @@ def manual_claim_receipt(request, claim_id):
 def payment_invoice_refund(request, invoice_id):
     """بازپرداختِ فاکتور از مسیرِ کانونیکِ ``refund_service`` (مبلغِ قابلِ‌بازپرداخت، idempotent، حسابرسی‌شده). Providerهایِ
     بدونِ API بازپرداخت «در انتظارِ پردازشِ دستی» می‌مانند تا مدیر پس از انتقالِ واقعیِ پول آن را تکمیل کند."""
+    import hashlib
     from decimal import Decimal, InvalidOperation
 
     from apps.billing.models import SubscriptionInvoice
@@ -1972,16 +2034,60 @@ def payment_invoice_refund(request, invoice_id):
     invoice = get_object_or_404(SubscriptionInvoice, pk=invoice_id)
     try:
         amount = Decimal((request.POST.get("amount") or "").strip())
+        reason = (request.POST.get("reason") or "").strip()
+        key = (request.POST.get("idempotency_key") or "").strip()[:100]
+        if not key:
+            # No form token (script/old page): derive a key from the request and the number of refunds already on the invoice,
+            # so two simultaneous identical submissions collapse into one refund while a later, deliberate one is still allowed.
+            digest = hashlib.sha256(
+                f"{invoice.pk}|{amount}|{reason}|{request.user.pk}|{invoice.refunds.count()}".encode("utf-8")).hexdigest()[:32]
+            key = f"refund-{invoice.pk}-{digest}"
         refund = refund_service.request_refund(
-            invoice, amount=amount, reason=(request.POST.get("reason") or "").strip(), requested_by=request.user,
-            idempotency_key=(request.POST.get("idempotency_key") or "").strip(),
+            invoice, amount=amount, reason=reason, requested_by=request.user, idempotency_key=key,
         )
-        messages.success(request, f"بازپرداخت ثبت شد ({refund.get_status_display()}).")
+        if refund.failure_code == refund_service.UNKNOWN_OUTCOME:
+            messages.warning(request, "نتیجهٔ بازپرداخت نزد درگاه نامشخص است؛ دوباره درخواست نکنید و با بانک تطبیق دهید.")
+        elif refund.failure_code == refund_service.bank_refund_policy.AUTOMATIC_REFUND_DISABLED:
+            messages.warning(request, refund_service.bank_refund_policy.DISABLED_MESSAGE)
+        else:
+            messages.success(request, f"بازپرداخت ثبت شد ({refund.get_status_display()}).")
     except (InvalidOperation, ValueError):
         messages.error(request, "مبلغِ بازپرداخت معتبر نیست.")
     except refund_service.RefundError as exc:
         messages.error(request, str(exc))
     return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=invoice.pk)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_refund_approve(request, refund_id):
+    """Approve a refund request for MANUAL processing. Records the decision only: no provider/bank call, no money movement, no change
+    to the subscription or SMS credits. The refund is completed later, separately, with a bank reference."""
+    from apps.billing.models import SubscriptionRefund
+    from apps.billing.services import refund_service
+
+    refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
+    try:
+        refund_service.approve_refund_for_manual_processing(refund, actor=request.user, note=request.POST.get("note", ""))
+        messages.success(request, "بازپرداخت برای پردازشِ دستی تأیید شد. هنوز انجام نشده است؛ پس از انتقالِ واقعیِ پول با ارجاعِ بانکی تکمیل ثبت کنید.")
+    except refund_service.RefundError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)
+
+
+@require_POST
+@user_passes_test(_is_platform_staff, login_url="portal_platform_admin:login")
+def payment_refund_reject(request, refund_id):
+    from apps.billing.models import SubscriptionRefund
+    from apps.billing.services import refund_service
+
+    refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
+    try:
+        refund_service.reject_refund(refund, actor=request.user, reason=request.POST.get("reason", ""))
+        messages.success(request, "درخواستِ بازپرداخت رد شد؛ مبلغ آزاد شد.")
+    except refund_service.RefundError as exc:
+        messages.error(request, str(exc))
+    return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)
 
 
 @require_POST
@@ -1992,8 +2098,13 @@ def payment_refund_complete(request, refund_id):
 
     refund = get_object_or_404(SubscriptionRefund, pk=refund_id)
     try:
-        refund_service.complete_refund_manually(refund, actor=request.user)
-        messages.success(request, "بازپرداخت پس از پردازشِ دستی تکمیل ثبت شد.")
+        if request.POST.get("resolution") == "not_executed":
+            refund_service.fail_refund_manually(
+                refund, actor=request.user, reference=request.POST.get("reference", ""), note=request.POST.get("note", ""))
+            messages.success(request, "عدمِ انجامِ بازپرداخت ثبت شد؛ مبلغ آزاد شد.")
+        else:
+            refund_service.complete_refund_manually(refund, actor=request.user, reference=request.POST.get("reference", ""))
+            messages.success(request, "بازپرداخت با ارجاعِ بانکیِ ثبتشده تکمیل شد.")
     except refund_service.RefundError as exc:
         messages.error(request, str(exc))
     return redirect("portal_platform_admin:payment-invoice-detail", invoice_id=refund.invoice_id)

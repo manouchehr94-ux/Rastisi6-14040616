@@ -28,8 +28,12 @@
           <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:sms-purchase-action' purchase.pk 'complete' %}" data-confirm="اعتبار بدونِ پرداختِ آنلاین افزوده می‌شود. مطمئنید؟">{% csrf_token %}<button class="pa-btn" type="submit">تکمیلِ دستی</button></form>
           <form method="post" class="pa-form-inline" action="{% url 'portal_platform_admin:sms-purchase-action' purchase.pk 'cancel' %}" data-confirm="این خرید لغو شود؟">{% csrf_token %}<button class="pa-btn pa-danger" type="submit">لغو</button></form>
         {% elif purchase.status == "completed" %}
+          {% if sms_refund_enabled %}
           <form method="post" class="pa-inline-form" action="{% url 'portal_platform_admin:sms-purchase-action' purchase.pk 'refund' %}" data-confirm="بازپرداختِ این خرید ثبت شود؟">{% csrf_token %}
             <label class="pa-sr" for="rf-{{ purchase.pk }}">دلیلِ بازپرداخت</label><input id="rf-{{ purchase.pk }}" class="pa-w-sm" name="reason" required placeholder="دلیلِ بازپرداخت"><button class="pa-btn" type="submit">بازپرداخت</button></form>
+          {% else %}
+          <span class="pa-muted" title="بازپرداختِ بستهٔ پیامک موقتاً غیرفعال است">بازپرداخت موقتاً غیرفعال</span>
+          {% endif %}
         {% endif %}
         </div>
       </td>

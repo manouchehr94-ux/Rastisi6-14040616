@@ -6,9 +6,12 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from unittest import mock
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
+from apps.billing.providers import bank_refund_policy
+from apps.billing.tests.platform_payment_support import approve_and_complete
 from apps.billing.models import SubscriptionInvoice, SubscriptionPaymentAttempt
 from apps.billing.services import payment_flow_service, refund_service, sms_purchase_payment_service as sms_svc
 from apps.billing.tests.platform_payment_support import (
@@ -378,6 +381,18 @@ class PasargadPlatformFlowTests(TestCase):
         self.assertEqual(SmsCreditLedger.objects.filter(purchase=purchase).count(), 1)
         self.assertEqual(len(self.fake.calls_to("verify-transactions")), 1)
 
+    def test_by_default_a_refund_never_reaches_the_pasargad_reverse_endpoint(self):
+        _r, attempt = self.start()
+        self.pay(attempt)
+        self.callback(attempt, "status=success")
+        invoice = self.invoice(attempt)
+        refund = refund_service.request_refund(invoice, amount=invoice.amount_paid, reason="درخواست مشتری", idempotency_key="rf-0")
+        self.assertEqual((refund.status, refund.failure_code), ("pending", "automatic_refund_disabled"))
+        self.assertEqual(self.fake.calls_to("reverse-transactions"), [])
+        self.assertEqual(self.invoice(attempt).status, SubscriptionInvoice.Status.PAID)
+
+    @override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="pasargad")
+    @mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)      # DORMANT path: off by owner decision
     def test_refund_uses_the_documented_reverse_endpoint_within_the_deadline(self):
         _r, attempt = self.start()
         self.pay(attempt)
@@ -392,6 +407,8 @@ class PasargadPlatformFlowTests(TestCase):
         self.assertEqual(len(self.fake.calls_to("reverse-transactions")), 1)                     # idempotent
         self.assertTrue(AuditLogEntry.objects.filter(action_code="billing.refund_requested").exists())
 
+    @override_settings(RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS="pasargad")
+    @mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)      # DORMANT path: off by owner decision
     def test_refund_falls_back_to_manual_when_the_provider_refuses_or_amount_is_partial(self):
         _r, attempt = self.start()
         self.pay(attempt)
@@ -403,7 +420,8 @@ class PasargadPlatformFlowTests(TestCase):
         self.fake.reverse_result = {"resultCode": 13033 + 1}                                     # provider refuses (deadline passed)
         full = refund_service.request_refund(invoice, amount=invoice.amount_paid - Decimal("1000"), reason="کامل", idempotency_key="rf-f")
         self.assertEqual(full.status, "pending")                                                 # honest manual lifecycle
-        manual = refund_service.complete_refund_manually(full, actor=self.owner)
+        with mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", False):
+            manual = approve_and_complete(full, actor=self.owner)
         self.assertEqual(manual.status, "succeeded")
 
 

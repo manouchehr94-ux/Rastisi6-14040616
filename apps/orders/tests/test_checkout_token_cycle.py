@@ -20,6 +20,7 @@ from apps.core.models import ShopSettings
 from apps.customers.models import Customer
 from apps.orders.models import Order, PaymentGateway, ShippingMethod
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 PAYLOAD = {
@@ -222,7 +223,7 @@ from unittest import skipUnless
 
 
 @skipUnless(connection.vendor == "postgresql", "real row locks need PostgreSQL (run with DATABASE_URL=postgres://…)")
-class ConcurrentCheckoutTests(TransactionTestCase):
+class ConcurrentCheckoutTests(SerializedRollbackSafeMixin, TransactionTestCase):
     """Real threads, real HTTP views, real ``SELECT … FOR UPDATE``. Invariants: never a duplicate order/payment/stock deduction."""
 
     serialized_rollback = True

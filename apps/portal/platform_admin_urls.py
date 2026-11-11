@@ -28,6 +28,7 @@ urlpatterns = [
     path("stores/<uuid:store_public_id>/end-trial-now/", views.store_end_trial_now, name="store-end-trial-now"),
     path("stores/<uuid:store_public_id>/change-plan/", views.store_change_plan, name="store-change-plan"),
     path("stores/<uuid:store_public_id>/extend-subscription/", views.store_extend_subscription, name="store-extend-subscription"),
+    path("stores/<uuid:store_public_id>/reinstate-financial-suspension/", views.store_reinstate_financial_suspension, name="store-reinstate-financial-suspension"),
     path("stores/<uuid:store_public_id>/add-note/", views.store_add_note, name="store-add-note"),
 
     # --- کاربران ---
@@ -83,6 +84,8 @@ urlpatterns = [
     path("payments/card-claims/<int:claim_id>/receipt/", views.manual_claim_receipt, name="manual-claim-receipt"),
     path("payments/card-claims/<int:claim_id>/<str:action>/", views.manual_claim_action, name="manual-claim-action"),
     path("payments/invoice/<int:invoice_id>/refund/", views.payment_invoice_refund, name="payment-invoice-refund"),
+    path("payments/refund/<int:refund_id>/approve/", views.payment_refund_approve, name="payment-refund-approve"),
+    path("payments/refund/<int:refund_id>/reject/", views.payment_refund_reject, name="payment-refund-reject"),
     path("payments/refund/<int:refund_id>/complete/", views.payment_refund_complete, name="payment-refund-complete"),
     path("payments/sms-purchases/", views.sms_purchases, name="sms-purchases"),
     path("payments/sms-purchases/<int:purchase_id>/<str:action>/", views.sms_purchase_action, name="sms-purchase-action"),

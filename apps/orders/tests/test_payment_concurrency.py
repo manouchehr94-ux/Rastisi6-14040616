@@ -23,12 +23,13 @@ from apps.orders.models import (
 from apps.orders.services.gateway_payment_service import PaymentVerificationFailed, process_callback_and_verify
 from apps.orders.services.order_service import change_order_status, create_order_from_cart
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
-class PaymentRaceTests(TransactionTestCase):
+class PaymentRaceTests(SerializedRollbackSafeMixin, TransactionTestCase):
     serialized_rollback = True
 
     def setUp(self):

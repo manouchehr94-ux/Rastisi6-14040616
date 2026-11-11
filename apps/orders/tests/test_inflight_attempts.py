@@ -21,6 +21,7 @@ from apps.orders.services.gateway_payment_service import (
 )
 from apps.orders.tests.test_idempotency_tenant import SERVICE, IdempotencyTenantBase, mock_online_adapter
 from apps.orders.tests.test_lifecycle import LifecycleBase
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 S = PaymentAttempt.Status
 
@@ -204,7 +205,7 @@ class InFlightViewTests(LifecycleBase):
 
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
-class InFlightThreadRaceTests(TransactionTestCase):
+class InFlightThreadRaceTests(SerializedRollbackSafeMixin, TransactionTestCase):
     """Real OS threads; only meaningful with PostgreSQL row locks.
 
     TransactionTestCase (no wrapping transaction) so worker threads, which use

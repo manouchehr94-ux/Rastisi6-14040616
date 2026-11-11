@@ -10,6 +10,9 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
+from unittest import mock
+from apps.billing.tests.platform_payment_support import approve_and_complete
+from apps.billing.providers import bank_refund_policy
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -479,6 +482,8 @@ class SmsCardToCardTests(CardToCardBase):
         self.assertEqual(SmsCreditLedger.objects.count(), 1)
         self.assertEqual(SmsPackagePaymentAttempt.objects.get(pk=claim.sms_attempt_id).failure_code, "purchase_completed")
 
+    @mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)   # legacy path: also needs the owner-approval constant
+    @override_settings(RASTISI_SMS_REFUND_ENABLED=True)          # legacy path, disabled by default (test_sms_refund_disabled.py)
     def test_authorised_refund_reverses_the_credits_once_and_the_money_refund_stays_a_manual_step(self):
         claim = self.sms_claim()
         self.approve(claim)
@@ -501,7 +506,7 @@ class SubscriptionRefundTests(CardToCardBase):
         self.assertEqual(refund.status, "pending")                                          # honest: money goes back by manual transfer
         self.assertEqual(refund.provider, "platform_card")
         self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.PAID)
-        done = refund_service.complete_refund_manually(refund, actor=self.finance)
+        done = approve_and_complete(refund, actor=self.finance)
         self.assertEqual(done.status, "succeeded")
         self.assertEqual(SubscriptionInvoice.objects.get(pk=self.invoice.pk).status, SubscriptionInvoice.Status.REFUNDED)
         self.assertEqual(refund_service.request_refund(invoice, amount=invoice.amount_paid, reason="درخواست مالک", requested_by=self.finance, idempotency_key="c2c-rf-1").pk, refund.pk)

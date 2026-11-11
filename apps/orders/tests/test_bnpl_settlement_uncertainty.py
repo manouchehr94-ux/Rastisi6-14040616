@@ -20,6 +20,7 @@ from apps.orders.services.gateway_payment_service import (
     PaymentSettlementUnresolved, PaymentVerificationFailed, initiate_payment, process_callback_and_verify, resolve_unknown_payment,
 )
 from apps.orders.tests.test_payment_integration_extra import SNAPPAY_CREDS, IntegrationExtraBase, settle_fail, verify_ok
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 SNAPP = "apps.orders.gateways.snappay.SnappPayAdapter"
 VERIFY, SETTLE, INQUIRE = f"{SNAPP}.verify_payment", f"{SNAPP}.settle_payment", f"{SNAPP}.inquire_payment"
@@ -258,7 +259,7 @@ class RecoveryTests(UncertaintyBase):
         self.assertTrue(PaymentReconciliation.objects.filter(attempt=self.attempt).exists())
 
 
-class ConcurrentRecoveryTests(TransactionTestCase):
+class ConcurrentRecoveryTests(SerializedRollbackSafeMixin, TransactionTestCase):
     """Competing recovery workers on a real database: the order is paid once (row locks => PostgreSQL)."""
 
     serialized_rollback = True

@@ -19,6 +19,7 @@ from apps.orders.models import CardTransferSubmission, Order, PaymentAttempt, Pa
 from apps.orders.services import card_transfer_service as svc
 from apps.orders.services.gateway_payment_service import initiate_payment
 from apps.orders.tests.test_card_transfer import VALID_CARD, CardTransferBase
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 
 class UnifiedSequenceTests(CardTransferBase):
@@ -146,7 +147,7 @@ class SingleFinancialAuthorityTests(TestCase):
         self.assertEqual(offenders, [])
 
 
-class ConcurrentMerchantApprovalTests(TransactionTestCase, ):
+class ConcurrentMerchantApprovalTests(SerializedRollbackSafeMixin, TransactionTestCase, ):
     """Two merchants approving the SAME submission at the same instant: one wins, one Transaction (real row locks => PostgreSQL)."""
 
     serialized_rollback = True

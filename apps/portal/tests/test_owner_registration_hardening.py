@@ -44,6 +44,7 @@ from apps.sms.models import SmsLog
 from apps.sms.services.backends import SmsSendResult
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.subscriptions.models import StoreSubscription
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 _HOST = "rastisi.localhost"
@@ -1800,7 +1801,7 @@ def _run_concurrently(count, target):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL row locking")
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
-class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+class ConcurrencyTests(SerializedRollbackSafeMixin, _OtpTestMixin, TransactionTestCase):
     serialized_rollback = True
 
     def test_parallel_verification_of_one_challenge_succeeds_exactly_once(self):
@@ -1974,7 +1975,7 @@ def _issue(phone, purpose, index):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL advisory locks")
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
-class PhoneRequestBudgetConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+class PhoneRequestBudgetConcurrencyTests(SerializedRollbackSafeMixin, _OtpTestMixin, TransactionTestCase):
     serialized_rollback = True
     LIMIT = owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW
 
@@ -2192,7 +2193,7 @@ class _IssueThread(threading.Thread):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL advisory locks")
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
-class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+class InFlightDeliveryConcurrencyTests(SerializedRollbackSafeMixin, _OtpTestMixin, TransactionTestCase):
     serialized_rollback = True
     PURPOSE = "login"
 
@@ -2293,8 +2294,16 @@ class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
             self.gated.release(new_code, success=False)
             resend.join(60)
         self.assertEqual(resend.result, "delivery")
-        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 1)   # reservation gone
-        self.assertEqual(self._state(old_code), "active")
+        # Policy since f8c9c3d8: a failed delivery does NOT delete the accepted request's row. It stays as a never-verifiable marker
+        # (PENDING_EXPIRES_AT) so the 120 s cooldown and the per-phone budget cannot be reset by provider failures.
+        self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 2)   # the old code + the failed request's marker
+        self.assertEqual((self._state(old_code), self._state(new_code)), ("active", "pending"))
+        self.assertEqual(self._row(new_code).attempt_count, 0)
+        self.assertEqual(owner_otp_service._recent_request_count(_PHONE, self.PURPOSE), 2)   # the failed request still spends budget
+        with patch.object(owner_otp_service, "RESEND_COOLDOWN_SECONDS", 120):   # setUp neutralises it to 0 for these tests
+            self.assertGreater(owner_otp_service.resend_cooldown_remaining(_PHONE, self.PURPOSE), 0)   # and still holds the cooldown
+        # The undelivered code can never be accepted, even with the correct value; the previous code keeps working.
+        self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=new_code))
         self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=old_code))
 
     # 5
@@ -2377,8 +2386,10 @@ class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
                     (older, newer), (t1, t2) = self._two_in_flight()
                     if newer_finishes_first:
                         self.gated.release(newer, success=False)
-                        # The failed reservation disappears; the older one is still in flight.
-                        _wait_until(lambda: OwnerOtpChallenge.objects.filter(phone=_PHONE).count() == 1)
+                        # The failed request finishes first and leaves only its never-verifiable marker (it is not deleted since
+                        # f8c9c3d8); the older request is still in flight and must be unaffected.
+                        _wait_until(lambda: "delivery" in (t1.result, t2.result))
+                        self.assertEqual((self._state(older), self._state(newer)), ("pending", "pending"))
                         self.gated.release(older)
                     else:
                         self.gated.release(older)
@@ -2387,7 +2398,12 @@ class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
                     t1.join(60), t2.join(60)
                 results = sorted(r for r in (t1.result, t2.result))
                 self.assertEqual(results, ["delivery", "ok"])
-                self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 1)
+                # The older, delivered code + the newer failed request's marker. The marker is never usable and never takes the
+                # older successful code away; it only keeps the cooldown/budget.
+                self.assertEqual(OwnerOtpChallenge.objects.filter(phone=_PHONE).count(), 2)
+                self.assertEqual((self._state(older), self._state(newer)), ("active", "pending"))
+                self.assertEqual(self._row(newer).attempt_count, 0)
+                self.assertFalse(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=newer))
                 self.assertTrue(owner_otp_service.verify_otp(phone=_PHONE, purpose=self.PURPOSE, code=older))
 
     # 8 — the burst budget is unchanged by the activation step

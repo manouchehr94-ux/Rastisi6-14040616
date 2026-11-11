@@ -22,6 +22,13 @@ from apps.billing.services import attempt_service, webhook_service
 from apps.billing.services.confirmation_service import ConfirmationError, confirm_payment
 
 
+#: A REQUIRES_ACTION attempt with one of these codes is a confirmed payment already recorded for finance reconciliation; it is
+#: never re-verified or re-audited by callbacks (resolution is a finance action: refund or documented allocation).
+_TERMINAL_RECONCILIATION_CODES = frozenset({
+    "duplicate_payment", "purchase_completed", "fulfilment_blocked", "late_payment_void", "late_payment_uncollectible", "stale_decision",
+})
+
+
 class PaymentFlowError(Exception):
     """خطای قابل‌نمایش هنگام شروعِ پرداخت."""
 
@@ -50,14 +57,29 @@ def callback_url_for(callback_base_url: str, attempt) -> str:
     return f"{callback_base_url.rstrip('/')}/billing/return/{attempt.public_token}/"
 
 
-def safe_return_to(value: str) -> str:
-    """مقصدِ بازگشتِ کاربر پس از verify: مسیرِ نسبیِ هم‌میزبان، یا URLِ مطلقِ http(s) که میزبانش در
-    ``ALLOWED_HOSTS`` باشد (داشبوردِ هر فروشگاه روی میزبانِ خودش است و callback روی میزبانِ پلتفرم).
-    هر چیزِ دیگر (میزبانِ بیگانه، ``//``، backslash، کاراکترِ کنترلی، userinfo) رد می‌شود ⇒ open-redirect ممنوع."""
+def _allowed_return_hosts(store=None) -> set:
+    """Exact hosts a payment may send the browser back to: the platform host(s) and, when a store is given, THAT store's own admin
+    host. Never ``ALLOWED_HOSTS`` (which can contain ``*`` or every tenant's suffix)."""
+    from django.conf import settings
+
+    hosts = {str(settings.RASTISI_PLATFORM_PRIMARY_HOST or "").lower()}
+    hosts.update(str(h).lower() for h in (getattr(settings, "RASTISI_PLATFORM_ADMIN_HOSTS", None) or ()))
+    if store is not None and getattr(store, "admin_subdomain", ""):
+        hosts.add(f"{store.admin_subdomain}.{settings.RASTISI_ADMIN_DOMAIN_SUFFIX}".lower())
+    if not getattr(settings, "RASTISI_PRODUCTION_MODE", False):
+        # development / QA / tests only: also the EXACT hosts listed in ALLOWED_HOSTS (never "*", never a ".suffix" wildcard)
+        hosts.update(str(h).lower() for h in settings.ALLOWED_HOSTS if h and h != "*" and not str(h).startswith("."))
+    hosts.discard("")
+    return hosts
+
+
+def safe_return_to(value: str, *, store=None) -> str:
+    """مقصدِ بازگشتِ کاربر پس از verify: مسیرِ نسبیِ هممیزبان، یا URLِ مطلقِ **دقیقاً** روی میزبانِ پلتفرم یا میزبانِ ادمینِ همان
+    فروشگاه (``store``). در production فقط https و بدونِ پورت. هر چیزِ دیگر (میزبانِ بیگانه یا فروشگاهِ دیگر، ``//``، backslash،
+    کاراکترِ کنترلی، userinfo، پورتِ دلخواه) رد میشود ⇒ open-redirect ممنوع (F-18)."""
     from urllib.parse import urlsplit
 
     from django.conf import settings
-    from django.http.request import validate_host
 
     value = (value or "").strip()
     if not value or len(value) > 500 or "\\" in value or any(ord(c) < 32 for c in value):
@@ -66,12 +88,15 @@ def safe_return_to(value: str) -> str:
         return "" if value.startswith("//") else value
     try:
         parts = urlsplit(value)
-        host = parts.hostname or ""
+        host = (parts.hostname or "").lower()
+        port = parts.port
     except ValueError:
         return ""
     if parts.scheme not in ("http", "https") or not host or parts.username is not None or parts.password is not None:
         return ""
-    return value if validate_host(host, settings.ALLOWED_HOSTS) else ""
+    if getattr(settings, "RASTISI_PRODUCTION_MODE", False) and (parts.scheme != "https" or port is not None):
+        return ""
+    return value if host in _allowed_return_hosts(store) else ""
 
 
 def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now=None,
@@ -118,10 +143,17 @@ def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now
         except platform_coupon_service.CouponError as exc:
             raise PaymentFlowError(exc.message) from exc
 
-        attempt = attempt_service.create_attempt(
-            locked, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now,
-        )
-        attempt.return_to = safe_return_to(return_to)
+        try:
+            attempt, created = attempt_service.get_or_create_attempt(
+                locked, provider=provider, idempotency_key=idempotency_key, actor=actor, now=now,
+            )
+        except attempt_service.PaymentAttemptError as exc:
+            raise PaymentFlowError(str(exc)) from exc
+        if not created:
+            # A repeat of an earlier request (same key, same invoice): hand back that attempt and open NO second provider session.
+            # A final attempt is never reopened here; a payment that must be re-checked goes through verification (F-14).
+            return attempt, None
+        attempt.return_to = safe_return_to(return_to, store=locked.store)
         callback = callback_url_for(callback_base_url, attempt) if callback_base_url else return_url
         try:
             provider_obj = registry.get_provider(attempt.provider)
@@ -150,6 +182,20 @@ def start_payment(invoice, *, return_url="", actor=None, idempotency_key="", now
     return attempt, session
 
 
+def needs_verification(attempt) -> bool:
+    """Should the public return / status button / reconciler ask the gateway about this attempt?
+
+    A non-final attempt: yes. A ``FAILED`` attempt whose only evidence of failure is a browser-supplied hint
+    (``gateway_declined``, set by ``verify_and_confirm`` when the gateway did not confirm AND the callback claimed failure): yes
+    too. The hint is unauthenticated (anyone holding the callback URL can send ``success=0``), and a bank may redirect back
+    before the transaction is final, so such an attempt must stay verifiable or a payment that later settles is stranded (F-01).
+    Provider-decided failures (``provider_terminal_failure``) and every other final status stay final."""
+    S = type(attempt).Status
+    if not attempt.is_final:
+        return True
+    return attempt.status == S.FAILED and attempt.failure_code == "gateway_declined"
+
+
 def flag_requires_action(attempt, *, code, now):
     """پولی که درگاه تأیید کرده امّا با رکوردِ ما نمی‌خواند (مبلغ/سفارش/پرداختِ تکراری): تلاش به
     «نیازمندِ اقدام» می‌رود تا در فهرستِ تطبیقِ مدیر دیده شود؛ هیچ اعمالِ مالی انجام نمی‌شود."""
@@ -173,7 +219,7 @@ def verify_and_confirm(attempt, *, confirm, confirmation_error, actor=None, now=
     S = model.Status
     if attempt.status == S.SUCCEEDED:
         return attempt
-    if attempt.status == S.REQUIRES_ACTION and attempt.failure_code in ("duplicate_payment", "purchase_completed"):
+    if attempt.status == S.REQUIRES_ACTION and attempt.failure_code in _TERMINAL_RECONCILIATION_CODES:
         return attempt                                 # پرداختِ تکراریِ شناسایی‌شده؛ دوباره verify/حسابرسی نمی‌شود (تسویه با اقدامِ مدیرِ مالی)
 
     provider = registry.get_provider(attempt.provider)
@@ -223,6 +269,7 @@ def process_webhook_event(event, *, actor=None, now=None):
     """یک رخدادِ Webhookِ ذخیره‌شده (امضا-تأییدشده) را پردازش می‌کند. idempotent:
     رخدادِ از قبل پردازش‌شده دوباره اعمال نمی‌شود."""
     now = now or timezone.now()
+    event.refresh_from_db()                               # never trust a stale in-memory snapshot of the status (F-17)
     if event.processing_status == BillingWebhookEvent.ProcessingStatus.PROCESSED:
         return event
 

@@ -10,10 +10,11 @@ from django.urls import reverse
 from apps.core.models import ShopSettings
 from apps.sms.models import SmsOutboxItem
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 
 @skipUnless(connection.vendor == "postgresql", "needs PostgreSQL row locks")
-class ParallelPollTests(TransactionTestCase):
+class ParallelPollTests(SerializedRollbackSafeMixin, TransactionTestCase):
     serialized_rollback = True
 
     def setUp(self):

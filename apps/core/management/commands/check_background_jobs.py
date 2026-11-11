@@ -87,6 +87,105 @@ def collect(now=None) -> list[dict]:
     old_rec = open_rec.filter(created_at__lt=now - timedelta(hours=24)).count()
     add("payment_reconciliation_open", CRIT if old_rec else WARN if open_rec.exists() else OK,
         f"open={open_rec.count()} older_than_24h={old_rec}")
+    checks.extend(collect_billing(now))
+    return checks
+
+
+def collect_billing(now) -> list[dict]:
+    """Platform billing jobs (F-03). Like the rest of this module the checks are SYMPTOMS in the data the jobs maintain, so «the
+    cron entry is missing / not running / failing» is visible without a heartbeat table. Read-only."""
+    from django.db.models import Q
+
+    from apps.billing.models import (
+        BillingWebhookEvent, PlatformManualPaymentClaim, SubscriptionInvoice, SubscriptionPaymentAttempt, SubscriptionRefund,
+    )
+    from apps.billing.providers.registry import MANUAL_PROVIDER_CODES
+    from apps.billing.services import financial_suspension_service as fss
+    from apps.billing.services import refund_service
+    from apps.sms.models import SmsPackagePaymentAttempt
+    from apps.subscriptions.models import StoreSubscription
+    from apps.subscriptions.services import subscription_service as sub_svc
+
+    checks = []
+
+    def add(name, level, detail):
+        checks.append({"check": name, "level": level, "detail": detail})
+
+    def graded(name, count, oldest, warn_after, crit_after, hint):
+        age = (now - oldest) if oldest else timedelta(0)
+        level = OK if not count else CRIT if age > crit_after else WARN if age > warn_after else OK
+        add(name, level, f"count={count} oldest_age_min={int(age.total_seconds() // 60)} ({hint})")
+
+    # online attempts waiting for the bank's answer -> reconcile_platform_payments (every 10 min)
+    stale_total, stale_oldest = 0, None
+    for model in (SubscriptionPaymentAttempt, SmsPackagePaymentAttempt):
+        S = model.Status
+        qs = model.objects.filter(status__in=(S.CREATED, S.PENDING), created_at__lt=now - timedelta(minutes=30)).exclude(
+            provider_session_id="").exclude(provider__in=list(MANUAL_PROVIDER_CODES))
+        stale_total += qs.count()
+        first = qs.order_by("created_at").values_list("created_at", flat=True).first()
+        if first and (stale_oldest is None or first < stale_oldest):
+            stale_oldest = first
+    graded("billing_stale_attempts", stale_total, stale_oldest, timedelta(minutes=30), timedelta(hours=3),
+           "is `reconcile_platform_payments` scheduled?")
+
+    # money received but not applied: parked for finance (requires_action)
+    parked, parked_oldest = 0, None
+    for model in (SubscriptionPaymentAttempt, SmsPackagePaymentAttempt):
+        qs = model.objects.filter(status=model.Status.REQUIRES_ACTION)
+        parked += qs.count()
+        first = qs.order_by("updated_at").values_list("updated_at", flat=True).first()
+        if first and (parked_oldest is None or first < parked_oldest):
+            parked_oldest = first
+    graded("billing_requires_action", parked, parked_oldest, timedelta(hours=24), timedelta(hours=72),
+           "confirmed payments awaiting finance: refund / allocate")
+
+    stuck_inv = SubscriptionInvoice.objects.filter(
+        status=SubscriptionInvoice.Status.PAYMENT_PENDING, updated_at__lt=now - timedelta(hours=24))
+    graded("billing_payment_pending_invoices", stuck_inv.count(), stuck_inv.order_by("updated_at").values_list("updated_at", flat=True).first(),
+           timedelta(hours=24), timedelta(hours=72), "invoice payment_pending > 24h")
+
+    # webhooks -> reprocess_billing_webhooks (every 5 min)
+    P = BillingWebhookEvent.ProcessingStatus
+    wh = BillingWebhookEvent.objects.filter(signature_valid=True).filter(
+        Q(processing_status=P.RECEIVED, created_at__lt=now - timedelta(minutes=15)) | Q(processing_status=P.FAILED, retry_count__lt=5))
+    graded("billing_webhooks_stuck", wh.count(), wh.order_by("created_at").values_list("created_at", flat=True).first(),
+           timedelta(minutes=15), timedelta(hours=2), "is `reprocess_billing_webhooks` scheduled?")
+    dead = BillingWebhookEvent.objects.filter(signature_valid=True, processing_status=P.FAILED, retry_count__gte=5).count()
+    add("billing_webhooks_exhausted", CRIT if dead else OK, f"failed_after_max_retries={dead} (needs a person)")
+
+    # subscription state machine -> evaluate_subscription_states (hourly)
+    S = StoreSubscription.Status
+    lag = timedelta(hours=2)
+    overdue = StoreSubscription.objects.filter(is_current=True).filter(
+        Q(status=S.TRIALING, trial_end_at__lt=now - lag) | Q(status=S.GRACE_PERIOD, grace_period_end__lt=now - lag)
+        | Q(status__in=(S.ACTIVE, S.PAST_DUE), current_period_end__lt=now - lag))
+    due_dates = []
+    for trial_end, grace_end, period_end in overdue.values_list("trial_end_at", "grace_period_end", "current_period_end"):
+        due_dates.append(min(d for d in (trial_end, grace_end, period_end) if d))
+    oldest_due = min(due_dates, default=None)
+    graded("subscription_transitions_overdue", overdue.count(), oldest_due, lag, timedelta(hours=24),
+           "is `evaluate_subscription_states` scheduled?")
+
+    # financial suspension that should already have been lifted (a paid period began) -> same evaluator
+    unrestored = sum(
+        1 for sub in StoreSubscription.objects.filter(is_current=True, status=S.SUSPENDED)
+        if sub_svc.financial_suspension_event(sub) is not None and fss.covering_invoice(sub, now)[0] is not None)
+    add("billing_financial_suspension_unrestored", CRIT if unrestored else OK,
+        f"suspended_but_funded={unrestored} (evaluate_subscription_states restores these)")
+
+    # refunds with an uncertain outcome -> recover_stale_refunds + finance
+    R = SubscriptionRefund.Status
+    requested = SubscriptionRefund.objects.filter(status=R.REQUESTED, created_at__lt=now - timedelta(minutes=30)).count()
+    add("billing_refund_intent_stale", WARN if requested else OK, f"requested_older_than_30min={requested} (is `recover_stale_refunds` scheduled?)")
+    unknown = SubscriptionRefund.objects.filter(status=R.PENDING, failure_code=refund_service.UNKNOWN_OUTCOME)
+    graded("billing_refund_unknown_outcome", unknown.count(), unknown.order_by("updated_at").values_list("updated_at", flat=True).first(),
+           timedelta(hours=1), timedelta(hours=24), "provider outcome unknown: reconcile with the bank, do not retry")
+
+    # manual card claims past their review window
+    claims = PlatformManualPaymentClaim.objects.filter(
+        status=PlatformManualPaymentClaim.Status.PENDING_REVIEW, created_at__lt=now - timedelta(days=3)).count()
+    add("billing_card_claims_waiting", WARN if claims else OK, f"pending_review_older_than_3d={claims}")
     return checks
 
 

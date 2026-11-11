@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.billing.tests.platform_payment_support import approve_and_complete
 from apps.billing.models import (
     SubscriptionCreditNote,
     SubscriptionInvoice,
@@ -93,13 +94,13 @@ class RefundTests(TestCase):
 
     def test_manual_completion_updates_invoice(self):
         refund = refund_service.request_refund(self.invoice, amount=Decimal("400000"))
-        refund_service.complete_refund_manually(refund)
+        approve_and_complete(refund)
         self.invoice.refresh_from_db()
         self.assertEqual(self.invoice.status, SubscriptionInvoice.Status.REFUNDED)
 
     def test_partial_refund_marks_partially_refunded(self):
         refund = refund_service.request_refund(self.invoice, amount=Decimal("100000"))
-        refund_service.complete_refund_manually(refund)
+        approve_and_complete(refund)
         self.invoice.refresh_from_db()
         self.assertEqual(self.invoice.status, SubscriptionInvoice.Status.PARTIALLY_REFUNDED)
 

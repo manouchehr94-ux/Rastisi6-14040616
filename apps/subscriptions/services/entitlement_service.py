@@ -224,6 +224,12 @@ def get_subscription_access_state(store) -> AccessStateResult:
         warning = ("دوره‌ی آزمایشیِ شما به پایان رسیده است؛ برایِ ساختِ کالا و سفارشِ تازه و ادامه‌ی کار، یک اشتراکِ پولی بخرید. "
                    "داده‌هایِ شما نگهداری می‌شود.") if sub.status == StoreSubscription.Status.SUSPENDED else (
             "دوره‌ی آزمایشیِ شما به پایان رسیده و در مهلتِ ارفاقی هستید؛ لطفاً اشتراکِ پولی بخرید.")
+    if sub.status == StoreSubscription.Status.SUSPENDED:
+        from apps.subscriptions.services import subscription_service as _sub_svc
+
+        if _sub_svc.is_financially_suspended(sub):
+            warning = ("اشتراکِ شما به‌دلیلِ بازپرداختِ کاملِ پرداختِ دورهٔ جاری معلق شده است؛ ساختِ رکوردِ تازه تا رفعِ تعلیق مسدود است. "
+                       "برای رفعِ تعلیق با پشتیبانی تماس بگیرید. دادهٔ شما نگهداری می‌شود.")
     return AccessStateResult(
         state=state, subscription_status=sub.status,
         message=warning or "", allows_growth=allows_growth, warning=warning,

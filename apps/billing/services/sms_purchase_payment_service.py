@@ -13,6 +13,7 @@ import secrets
 from dataclasses import dataclass
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -96,7 +97,7 @@ def start_payment(purchase, *, callback_base_url, return_to="", actor=None, prov
     failure = None
     session = None
     with transaction.atomic():
-        attempt.return_to = safe_return_to(return_to)
+        attempt.return_to = safe_return_to(return_to, store=attempt.store)
         callback = callback_url_for(callback_base_url, attempt)
         try:
             provider_obj = registry.get_provider(attempt.provider)
@@ -209,12 +210,45 @@ class SmsRefundError(Exception):
     """بازپرداختِ خریدِ پیامک ممکن نیست."""
 
 
+class SmsRefundDisabledError(SmsRefundError):
+    """بازپرداختِ بستهٔ پیامک موقتاً غیرفعال است (fail-closed)."""
+
+
+SMS_REFUND_DISABLED_MESSAGE = (
+    "بازپرداختِ خریدِ بستهٔ پیامک موقتاً غیرفعال است. هیچ اعتباری برنگردانده و هیچ درخواستی به درگاه ارسال نشد؛ "
+    "بازپرداخت را به‌صورتِ دستی و خارج از سامانه پیگیری کنید.")
+
+
+def sms_refunds_enabled() -> bool:
+    """Fail-closed: SMS refunds need BOTH an explicit ``RASTISI_SMS_REFUND_ENABLED = True`` AND the owner's approval of automatic
+    post-payment refunds (``bank_refund_policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED``, a code constant, False by decision of
+    2026-11-10). So a configuration change alone can never reverse credits or call a provider. Missing/any other value disables."""
+    from apps.billing.providers import bank_refund_policy
+
+    return (getattr(settings, "RASTISI_SMS_REFUND_ENABLED", False) is True
+            and bank_refund_policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED is True)
+
+
+def ensure_refunds_enabled() -> None:
+    if not sms_refunds_enabled():
+        raise SmsRefundDisabledError(SMS_REFUND_DISABLED_MESSAGE)
+
+
 @transaction.atomic
 def refund_purchase(purchase, *, actor=None, reason="", idempotency_key=""):
     """بازپرداختِ یک خریدِ پیامکِ **پرداخت‌شده‌یِ آنلاین**: اعتبارِ مصرف‌نشده از موجودی برگردانده می‌شود
     (ردیفِ دفترِ ``purchase_reversal``، دقیقاً یک‌بار) و بازپرداختِ پول از Providerِ همان پرداخت
     درخواست می‌شود. Providerی که بازپرداختِ خودکار ندارد «در انتظارِ پردازشِ دستی» می‌ماند (ثبت در
-    حسابرسی). اگر اعتبار مصرف شده باشد خطا می‌دهد — سیاستِ بازپرداختِ جزئی نیازمندِ تأییدِ مالک است."""
+    حسابرسی). اگر اعتبار مصرف شده باشد خطا می‌دهد — سیاستِ بازپرداختِ جزئی نیازمندِ تأییدِ مالک است.
+
+    DISABLED BY DEFAULT (``RASTISI_SMS_REFUND_ENABLED``, fail-closed): raises ``SmsRefundDisabledError`` before any side effect.
+
+    NOT PRODUCTION-READY for providers with an automatic reversal (Pasargad, Saman, Mellat) (Phase 2 / F-06, BLOCKED): the credits
+    are reversed BEFORE the provider is called, inside one transaction. A definite provider error rolls the reversal back, but an
+    ambiguous outcome (timeout) or a database failure after a successful provider call leaves credits and money out of step. The
+    approved design (freeze credits, call the provider, reverse only after confirmed success) needs a schema change that is not
+    approved yet: see docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md. Manual providers ("pending manual") are not exposed."""
+    ensure_refunds_enabled()                    # FIRST statement: nothing is read, reversed, recorded or sent while disabled
     reason = (reason or "").strip()
     if not reason:
         raise SmsRefundError("دلیلِ بازپرداخت الزامی است.")

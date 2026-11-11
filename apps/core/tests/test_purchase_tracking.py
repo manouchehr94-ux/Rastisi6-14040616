@@ -21,6 +21,7 @@ from apps.core.tests.test_tracking_checkout_cycle import CycleFixture, HOST_A, b
 from apps.orders.models import Order, Transaction
 from apps.orders.services.lifecycle import apply_payment_success
 from apps.stores.models import StoreIntegrationConnection
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 
 def consent_cookie(a=1, m=0, v=1):
@@ -178,7 +179,7 @@ class EligibilityAndClaimTests(PurchaseBase):
             TrackingEmission.objects.create(store=order.store, order=order, event_name="purchase", event_id="x", channel="browser")
 
 
-class ConcurrentRenderTests(TransactionTestCase):
+class ConcurrentRenderTests(SerializedRollbackSafeMixin, TransactionTestCase):
     """Two simultaneous renders of the result page (two tabs): exactly ONE prints the Purchase (unique constraint on a real database)."""
 
     serialized_rollback = True

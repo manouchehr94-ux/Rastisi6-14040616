@@ -4,6 +4,8 @@ added exactly once with a ledger trail; cancel / refund / duplicate / mismatch /
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from unittest import mock
+from apps.billing.providers import bank_refund_policy
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -257,7 +259,9 @@ class SmsFulfilmentTests(SmsPaymentBase):
         self.assertEqual((entry.balance_before, entry.balance_after), (99, 99 + self.CREDITS))
 
 
-@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir")
+# These exercise the LEGACY refund implementation, which is disabled by default (see test_sms_refund_disabled.py); enabled explicitly here.
+@mock.patch.object(bank_refund_policy, "AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED", True)   # legacy path: also needs the owner-approval constant
+@override_settings(RASTISI_PLATFORM_PRIMARY_HOST="rastisi.ir", RASTISI_SMS_REFUND_ENABLED=True)
 class SmsRefundAndCancelTests(SmsPaymentBase):
     def completed(self):
         _r, purchase, attempt = self.purchase_and_attempt()

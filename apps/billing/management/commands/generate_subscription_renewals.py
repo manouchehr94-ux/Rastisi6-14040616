@@ -3,7 +3,8 @@
 idempotent و batch-safe؛ باید از یک زمان‌بندِ خارجی (cron) اجرا شود چون این
 کدبیس صفِ کارِ پس‌زمینه‌ای ندارد (ADR-49)."""
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from apps.core.job_lock import exclusive
 
 from apps.billing.services.renewal_service import generate_renewals
 from apps.stores.models import Store
@@ -17,6 +18,7 @@ class Command(BaseCommand):
         parser.add_argument("--store", default=None, help="فقط این اسلاگِ فروشگاه.")
         parser.add_argument("--lead-days", type=int, default=None, help="چند روز پیش از پایانِ دوره.")
 
+    @exclusive("generate_subscription_renewals")
     def handle(self, *args, **options):
         store = None
         if options["store"]:
@@ -30,3 +32,8 @@ class Command(BaseCommand):
             f"{prefix}بررسی‌شده={result['scanned']}, "
             f"ساخته‌شده={result['created']}, موجود={result['skipped_existing']}."
         ))
+
+        if result.get("errors"):
+            # The remaining rows WERE processed. A non-zero exit makes cron/run_job.sh alert, so a failing row is never silent.
+            raise CommandError(f"{len(result['errors'])} item(s) failed (renewals): " + ", ".join(
+                f"{list(e.values())[0]}:{e['error']}" for e in result["errors"][:10]))

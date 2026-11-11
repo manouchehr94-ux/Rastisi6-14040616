@@ -68,7 +68,8 @@ class SubscriptionInvoiceAdmin(SuperuserOnlyBillingAdmin):
     search_fields = ("number", "store__slug", "idempotency_key")
     date_hierarchy = "created_at"
     inlines = [SubscriptionInvoiceLineInline]
-    actions = ["action_mark_paid"]
+    # F-07: the bulk «mark paid» action was removed. Marking an invoice paid moves money-equivalent state, so it must carry an
+    # amount, a bank/receipt reference and a reason: use Platform Admin > Payments > manual payment (audited, one invoice at a time).
     # فیلدهایِ مالی همیشه read-only در Admin — تغییرِ مالی فقط از سرویس.
     readonly_fields = (
         "store", "subscription", "plan_version", "number", "kind", "status", "currency",
@@ -78,22 +79,6 @@ class SubscriptionInvoiceAdmin(SuperuserOnlyBillingAdmin):
         "amount_paid", "amount_due", "provider_reference", "idempotency_key",
         "created_at", "updated_at",
     )
-
-    @admin.action(description="علامت‌گذاریِ دستیِ «پرداخت‌شده» (با ثبتِ Audit)")
-    def action_mark_paid(self, request, queryset):
-        from apps.billing.services.confirmation_service import ConfirmationError, mark_invoice_paid_manually
-
-        done, skipped = 0, 0
-        for invoice in queryset:
-            try:
-                mark_invoice_paid_manually(invoice, actor=request.user, note="Django Admin mark-paid")
-                done += 1
-            except ConfirmationError:
-                skipped += 1
-        self.message_user(
-            request, f"{done} فاکتور دستی پرداخت‌شده شد؛ {skipped} رد شد.",
-            level=messages.SUCCESS if done else messages.WARNING,
-        )
 
 
 @admin.register(SubscriptionPaymentAttempt)
@@ -148,11 +133,16 @@ class SubscriptionRefundAdmin(SuperuserOnlyBillingAdmin):
     list_display = ("invoice", "store", "status", "amount", "currency", "provider", "created_at")
     list_filter = ("status", "provider", "currency")
     search_fields = ("invoice__number", "store__slug", "provider_refund_id", "idempotency_key")
+    # Read-only on purpose: a refund changes state ONLY through refund_service (approve / reject / complete with a bank reference),
+    # which also syncs the invoice, the coupon and the subscription entitlement exactly once. Editing status here would bypass that.
     readonly_fields = (
         "store", "invoice", "payment_attempt", "credit_note", "provider", "provider_refund_id",
-        "amount", "currency", "requested_by", "requested_at", "completed_at", "idempotency_key",
-        "created_at", "updated_at",
+        "status", "amount", "currency", "reason", "failure_code", "failure_message",
+        "requested_by", "requested_at", "completed_at", "idempotency_key", "created_at", "updated_at",
     )
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SubscriptionDunningState)

@@ -27,6 +27,7 @@ from apps.notifications.services.dispatcher import dispatch_event, safe_dispatch
 from apps.notifications.services.notification_service import _claim_batch, deliver_pending
 from apps.notifications.tests.helpers import give_active_sender
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 S = NotificationOutbox.Status
@@ -534,7 +535,7 @@ class DeliveryReliabilityTests(TestCase):
         self.assertEqual((row.status, row.skip_reason), (S.SKIPPED, "no_promotional_consent"))
 
 
-class ConcurrentSchedulingTests(TransactionTestCase):
+class ConcurrentSchedulingTests(SerializedRollbackSafeMixin, TransactionTestCase):
     serialized_rollback = True  # restore migration-seeded rows (e.g. the akhlaghi Store) for any later test class
 
     """Real threads scheduling the same business event: exactly one outbox row (DB unique constraint)."""

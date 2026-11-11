@@ -5,6 +5,8 @@
 safe، با احترام به «لغو در پایانِ دوره» و رد کردنِ اشتراک‌هایِ نهایی‌شده. مبلغ
 و ارز رویِ فاکتور از نسخه‌ی پلنِ جاری *فریز* می‌شوند."""
 
+import logging
+
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -20,6 +22,8 @@ RENEWABLE_STATUSES = (
     StoreSubscription.Status.GRACE_PERIOD,
     StoreSubscription.Status.PAST_DUE,
 )
+
+logger = logging.getLogger("billing")
 
 
 def _lead_days(lead_days=None) -> int:
@@ -116,7 +120,7 @@ def generate_renewals(*, now=None, store=None, lead_days=None, dry_run=False) ->
     فقط می‌شمارد."""
     now = now or timezone.now()
     lead = _lead_days(lead_days)
-    result = {"scanned": 0, "created": 0, "skipped_existing": 0}
+    result = {"scanned": 0, "created": 0, "skipped_existing": 0, "errors": []}
     for subscription in _due_subscriptions(now, lead, store=store).iterator(chunk_size=200):
         result["scanned"] += 1
         if dry_run:
@@ -129,6 +133,11 @@ def generate_renewals(*, now=None, store=None, lead_days=None, dry_run=False) ->
             else:
                 result["created"] += 1
             continue
-        _invoice, created = _generate_one(subscription, now=now)
+        try:
+            _invoice, created = _generate_one(subscription, now=now)   # its own transaction: a failure rolls back only this row
+        except Exception as exc:  # noqa: BLE001 — one bad subscription must not stop every later renewal (F-04); reported, never hidden
+            logger.exception("generate_renewals: subscription %s failed", subscription.pk)
+            result["errors"].append({"subscription": subscription.pk, "error": type(exc).__name__})
+            continue
         result["created" if created else "skipped_existing"] += 1
     return result

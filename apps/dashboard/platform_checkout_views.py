@@ -258,7 +258,7 @@ def platform_checkout_status(request, kind, pk):
     target = resolve_target(request, kind, pk)
     state = pcs.state(target)
     attempt = state.attempt
-    if attempt is not None and not attempt.is_final:
+    if attempt is not None and payment_flow_service.needs_verification(attempt):
         if cache.add(f"billing:verify:{attempt.public_token}", 1, 8):
             try:
                 if target.kind == pcs.KIND_SMS:

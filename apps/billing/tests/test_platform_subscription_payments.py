@@ -168,6 +168,25 @@ class PlatformSubscriptionPaymentTests(TestCase):
         self.assertEqual(self.invoice(attempt).amount_paid, self.PRICE)
 
     # -- callback: not proof of payment ------------------------------------------------------------------------------
+    def test_a_refund_after_a_verified_payment_makes_no_gateway_call_and_keeps_the_service_until_a_verified_manual_completion(self):
+        from apps.billing.services import refund_service
+
+        _r, attempt = self.start()
+        self.fake.paid(amount_rial=self.PRICE * 10, order_id=attempt.public_token)
+        self.callback(attempt)
+        self.assertEqual(self.reload_sub().status, StoreSubscription.Status.ACTIVE)            # normal flow unchanged
+        invoice = self.invoice(attempt)
+        calls = list(self.fake.calls)
+        refund = refund_service.request_refund(invoice, amount=invoice.amount_paid, reason="درخواست مشتری", idempotency_key="e2e-rf")
+        self.assertEqual(refund_service.review_state(refund), refund_service.STATE_AWAITING_REVIEW)
+        refund_service.approve_refund_for_manual_processing(refund, actor=None)
+        self.assertEqual(refund_service.review_state(refund_service.SubscriptionRefund.objects.get(pk=refund.pk)), refund_service.STATE_APPROVED)
+        self.assertEqual((self.invoice(attempt).status, self.reload_sub().status), (SubscriptionInvoice.Status.PAID, StoreSubscription.Status.ACTIVE))
+        refund_service.complete_refund_manually(refund, actor=None, reference="BANK-REF-E2E-1")
+        self.assertEqual(self.fake.calls, calls)                                                # the gateway was never contacted
+        self.assertEqual(self.invoice(attempt).status, SubscriptionInvoice.Status.REFUNDED)
+        self.assertNotEqual(self.reload_sub().status, StoreSubscription.Status.ACTIVE)          # revoked only after verified completion
+
     def test_a_forged_success_callback_without_a_gateway_verified_payment_changes_nothing(self):
         _r, attempt = self.start()                       # fake.verify says "not paid" (result 202)
         response = self.callback(attempt, "success=1&status=2&trackId=777")

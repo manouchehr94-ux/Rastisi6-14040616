@@ -34,13 +34,13 @@ CSS = ROOT / "static" / "portal" / "css" / "platform-admin-panel.css"
 # Routes that are deliberately NOT sidebar destinations: auth, POST-only actions, or contextual sub-pages reached from a listed page.
 POST_ONLY = {
     "logout", "store-suspend", "store-activate", "store-support-login", "store-extend-trial", "store-set-trial-end",
-    "store-end-trial-now", "store-change-plan", "store-extend-subscription", "store-add-note", "user-activate", "user-suspend",
+    "store-end-trial-now", "store-change-plan", "store-extend-subscription", "store-reinstate-financial-suspension", "store-add-note", "user-activate", "user-suspend",
     "user-add-note", "public-photo-reset", "public-site-switch", "public-site-reset", "plan-archive", "plan-version-publish",
     "subscription-cancel", "subscription-suspend", "subscription-resume", "sms-package-archive", "sms-credit-adjust",
     "domain-check", "domain-set-primary", "notification-sender-toggle", "notification-platform-template-preview",
     "notification-platform-template-test",
     # PR #40 finance actions
-    "coupon-duplicate", "coupon-status", "payment-verify-now", "payment-duplicate-action", "manual-claim-action", "payment-invoice-refund", "payment-refund-complete", "sms-purchase-action",
+    "coupon-duplicate", "coupon-status", "payment-verify-now", "payment-duplicate-action", "manual-claim-action", "payment-invoice-refund", "payment-refund-approve", "payment-refund-reject", "payment-refund-complete", "sms-purchase-action",
 }
 FILE_DOWNLOADS = {"manual-claim-receipt"}          # streams a private receipt file; not an HTML page
 NOT_IN_SIDEBAR = POST_ONLY | FILE_DOWNLOADS | {"login"}
@@ -215,7 +215,7 @@ class FinanceTemplateContractTests(SimpleTestCase):
 
     def test_money_moving_actions_confirm_before_submitting(self):
         confirms = {
-            "payment_invoice_detail": ["payment-refund-complete"],
+            "payment_invoice_detail": ["payment-refund-complete", "payment-refund-approve", "payment-refund-reject"],
             "sms_purchases": ["'complete'", "'cancel'", "'refund'"],
             "manual_claim_detail": ["'approve'", "'reject'"],
             "payment_gateways": ["revoke_gate"],

@@ -50,8 +50,13 @@ def billing_webhook(request, provider_code):
     # برمی‌گردانیم تا Provider بی‌مورد Retry نکند.
     try:
         payment_flow_service.process_webhook_event(event)
-    except Exception:  # noqa: BLE001 — خطا رویِ رخداد ثبت می‌شود، پاسخ ۲۰۰ می‌ماند
+    except Exception as exc:  # noqa: BLE001
+        # An UNEXPECTED error (database blip, bug): record it durably on the event so staff can see it and the reprocess job
+        # retries it, and answer 503 so a provider that redelivers does so. Business outcomes (mismatch, unknown attempt) are
+        # recorded by process_webhook_event itself and still answer 200: retrying those cannot help (F-16).
         logger.exception("webhook processing failed for event %s", event.pk)
+        webhook_service.record_unexpected_failure(event, exc)
+        return HttpResponse("retry", status=503)
     return HttpResponse("ok", status=200)
 
 
@@ -82,6 +87,16 @@ def _callback_data(request) -> dict:
     return data
 
 
+def _throttle_allows(key: str) -> bool:
+    """Per-attempt verify throttle. A cache fault must never turn the post-payment return page into a 500 (F-10): if the
+    cache is unavailable we allow the verify (it is idempotent and bounded by the per-token lookup)."""
+    try:
+        return bool(cache.add(key, 1, _VERIFY_MIN_INTERVAL))
+    except Exception:  # noqa: BLE001
+        logger.warning("billing verify throttle cache unavailable; allowing verify")
+        return True
+
+
 _STATE_BY_STATUS = {"succeeded": "ok", "failed": "failed", "cancelled": "failed", "expired": "failed",
                     "requires_action": "action"}
 
@@ -97,9 +112,9 @@ def payment_return(request, token):
     if attempt is None:
         raise Http404
 
-    if not attempt.is_final:
+    if payment_flow_service.needs_verification(attempt):
         throttle_key = f"billing:verify:{token}"
-        if cache.add(throttle_key, 1, _VERIFY_MIN_INTERVAL):
+        if _throttle_allows(throttle_key):
             data = _callback_data(request)
             try:
                 if kind == "sms":
@@ -114,7 +129,7 @@ def payment_return(request, token):
                 attempt = type(attempt).objects.get(pk=attempt.pk)
 
     state = _STATE_BY_STATUS.get(attempt.status, "pending")
-    return_to = payment_flow_service.safe_return_to(attempt.return_to)
+    return_to = payment_flow_service.safe_return_to(attempt.return_to, store=attempt.store)
     if return_to:
         sep = "&" if "?" in return_to else "?"
         return HttpResponseRedirect(f"{return_to}{sep}payment={state}")

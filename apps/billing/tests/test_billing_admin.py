@@ -100,14 +100,14 @@ class BillingAdminActionTests(TestCase):
         setattr(req, "_messages", FallbackStorage(req))
         return req
 
-    def test_mark_paid_action(self):
+    def test_bulk_mark_paid_action_was_removed_and_nothing_is_marked_paid_from_django_admin(self):
+        # F-07: marking an invoice paid needs an amount, a reference and a reason, which a bulk admin action cannot carry.
         store, sub, invoice = _open_invoice("act-1")
         admin = SubscriptionInvoiceAdmin(SubscriptionInvoice, self.site)
-        admin.action_mark_paid(self._req(), SubscriptionInvoice.objects.filter(pk=invoice.pk))
+        self.assertFalse(hasattr(admin, "action_mark_paid"))
+        self.assertNotIn("action_mark_paid", admin.actions or [])
         invoice.refresh_from_db()
-        sub.refresh_from_db()
-        self.assertEqual(invoice.status, SubscriptionInvoice.Status.PAID)
-        self.assertEqual(sub.status, StoreSubscription.Status.ACTIVE)
+        self.assertNotEqual(invoice.status, SubscriptionInvoice.Status.PAID)
 
     def test_webhook_retry_action_is_idempotent(self):
         from apps.billing.models import BillingWebhookEvent

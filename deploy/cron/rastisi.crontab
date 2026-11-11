@@ -1,11 +1,23 @@
 # RastiSi background jobs — install with:  crontab -u <app-user> deploy/cron/rastisi.crontab   (review paths first)
 # Existing cron architecture (ADR-49). No Celery/Redis/other scheduler. Not installed by the repository; not verified on any real server.
+#
+# OPERATOR MUST SUPPLY (the wrapper refuses to run a job while any of these is a placeholder or wrong; it never falls back to defaults):
+#   MAILTO              where cron itself mails wrapper problems (configuration errors, "ALERT DELIVERY FAILED"). Use a mailbox that is monitored.
+#   RASTISI_ALERT_TO    the real recipient of job-failure alerts. May instead be set in RASTISI_ENV_FILE (the file wins).
+#   RASTISI_APP_DIR / RASTISI_ENV_FILE / RASTISI_VENV / JOB   real paths. The env file must define DATABASE_URL (postgres://),
+#                       DJANGO_SECRET_KEY and DJANGO_DEBUG=False; the venv must be a real virtualenv with "bin/python". The env file must
+#                       be the FULL production environment (the web app's file): without DJANGO_ALLOWED_HOSTS, RASTISI_RATE_LIMIT_CACHE_URL
+#                       and TURNSTILE_* every job fails at startup. See docs/payments/PLATFORM_BILLING_JOBS_RUNBOOK_20261110.md section 3.1.
+#   RASTISI_ALERT_CMD   mail-compatible command run as:  <command words> "<subject>" "<RASTISI_ALERT_TO>"  (body on stdin). Default "mail -s".
+# Check before installing:  RASTISI_ALERT_TO=… deploy/cron/run_job.sh --check-config   then   --test-alert
 CRON_TZ=Asia/Tehran
-MAILTO=ops@example.com
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=CHANGE_ME_CRON_MAILTO
 RASTISI_APP_DIR=/srv/rastisi
 RASTISI_ENV_FILE=/etc/rastisi/env
 RASTISI_VENV=/srv/rastisi/venv
 RASTISI_LOG_DIR=/var/log/rastisi
+RASTISI_ALERT_TO=CHANGE_ME_ALERT_RECIPIENT
 RASTISI_ALERT_CMD="mail -s"
 JOB=/srv/rastisi/deploy/cron/run_job.sh
 
@@ -33,3 +45,32 @@ JOB=/srv/rastisi/deploy/cron/run_job.sh
 # BNPL payments whose provider settlement outcome is UNKNOWN (verified, settlement unproven): ask the provider's authoritative status. Never settles again,
 # never fabricates a result; attempts the provider cannot decide stay UNKNOWN for the administrative reconciliation page. Safe to overlap. Not installed by the repository.
 */10 * * * *  $JOB payments_recon reconcile_unknown_payments --min-age-minutes 2 --limit 100
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# PLATFORM BILLING (subscriptions, SMS packages, refunds). These jobs are REQUIRED for correct money handling: without them a
+# payment whose browser never returned stays unapplied, renewals are never invoiced, expired subscriptions never move on, a refunded
+# subscription is never restored when its paid period begins, and stuck webhooks/refunds are never picked up.
+# Every job is idempotent and row-lock safe; the wrappers below also take a PostgreSQL advisory lock so overlapping runs skip.
+# A failing item never stops the others, but the run exits NON-ZERO so $RASTISI_ALERT_CMD fires. See
+# docs/payments/PLATFORM_BILLING_JOBS_RUNBOOK_20261110.md for the deployment checklist. Not installed by the repository; not verified
+# on any real server.
+# ---------------------------------------------------------------------------------------------------------------------------------
+# verify stale online payments server-to-server (also re-checks a browser-declined attempt for 24 h) — every 10 minutes
+*/10 * * * *  $JOB billing_recon     reconcile_platform_payments --min-age-minutes 5
+# webhooks received/failed but not processed (backoff 2^n minutes, max 5 retries) — every 5 minutes
+*/5  * * * *  $JOB billing_webhooks  reprocess_billing_webhooks
+# refunds left without an outcome -> mark as unknown for finance (never calls a provider; exits 1 while any unknown waits) — every 10 minutes
+*/10 * * * *  $JOB billing_refunds   recover_stale_refunds
+# expired manual card claims / platform coupon reservations (no financial effect) — every 10 minutes
+*/10 * * * *  $JOB billing_claims    expire_platform_card_claims
+*/10 * * * *  $JOB billing_coupons   release_expired_platform_coupon_reservations
+# subscription state machine (trial -> grace -> suspended/expired, cancel at period end) AND automatic restoration of a financially
+# suspended subscription when its paid period begins — hourly
+10   * * * *  $JOB billing_states    evaluate_subscription_states
+# renewal invoices for subscriptions near the end of their period — daily
+30   2 * * *  $JOB billing_renewals  generate_subscription_renewals
+# dunning for overdue renewal invoices — daily
+0    3 * * *  $JOB billing_dunning   process_subscription_dunning
+# read-only consistency verification (exit 1 on any finding -> alert) — nightly
+0    4 * * *  $JOB billing_verify    verify_billing_consistency --strict
+15   4 * * *  $JOB subs_verify       verify_subscription_consistency --strict

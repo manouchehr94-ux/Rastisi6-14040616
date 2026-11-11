@@ -18,12 +18,13 @@ from apps.customers.models import Address, Customer
 from apps.orders.models import CouponRedemption, Order, PaymentGateway, ShippingMethod
 from apps.orders.services.order_service import create_order_from_cart
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
-class ConcurrentRedemptionTests(TransactionTestCase):
+class ConcurrentRedemptionTests(SerializedRollbackSafeMixin, TransactionTestCase):
     serialized_rollback = True
 
     def setUp(self):
@@ -140,7 +141,7 @@ class ConcurrentRedemptionTests(TransactionTestCase):
 
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
-class ConcurrentCampaignExecutionTests(TransactionTestCase):
+class ConcurrentCampaignExecutionTests(SerializedRollbackSafeMixin, TransactionTestCase):
     """دو job هم‌زمانِ یک کمپین (هم‌پوشانیِ cron) هرگز پاداش/اعلانِ تکراری نمی‌سازند."""
 
     serialized_rollback = True

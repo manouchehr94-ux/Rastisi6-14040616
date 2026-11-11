@@ -559,6 +559,14 @@ RASTISI_DEFAULT_PLAN_START_TRIAL = env_str("RASTISI_DEFAULT_PLAN_START_TRIAL", "
 # a production payment; wire a real gateway behind the same interface later).
 # Secrets come only from the environment, never the database or code.
 RASTISI_BILLING_PROVIDER = env_str("RASTISI_BILLING_PROVIDER", "manual")
+# SMS package refunds are DISABLED (fail-closed): this flag AND the owner-approval constant AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED (see below) must both be True, which is not approved. Needs the credit-freeze design (a migration) first:
+# see docs/payments/PHASE2_MIGRATION_PROPOSAL_20261110.md. Do NOT set this in production.
+RASTISI_SMS_REFUND_ENABLED = env_bool("RASTISI_SMS_REFUND_ENABLED", default=False)
+# POLICY (owner decision 2026-11-10): NO automatic post-payment refund for platform payments. The master switch is the code constant
+# apps.billing.providers.bank_refund_policy.AUTOMATIC_POST_PAYMENT_REFUNDS_APPROVED (False). This variable is only consulted AFTER that
+# constant is True (a future, separately approved decision) and then names the bank gateways allowed one by one. Do NOT set it in
+# production: docs/payments/BANK_REFUND_SAFETY_20261110.md and docs/payments/FINAL_REFUND_POLICY_20261110.md
+RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS = env_str("RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS", "")
 RASTISI_BILLING_WEBHOOK_SECRET = env_str("RASTISI_BILLING_WEBHOOK_SECRET", "")
 # Max webhook body accepted before rejection (bytes) and signature timestamp
 # tolerance (seconds) â€” see ADR-76.

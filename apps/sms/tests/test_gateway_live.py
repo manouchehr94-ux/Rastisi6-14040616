@@ -11,6 +11,7 @@ from apps.sms.models import SmsLog, SmsOutboxItem, SmsTemplate
 from apps.sms.services.delivery_status_service import get_sms_delivery_status
 from apps.sms.services.sms_service import send_raw_sms
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 SPEC = importlib.util.spec_from_file_location("smsrasti_simulator", pathlib.Path(__file__).resolve().parents[3] / "tools" / "smsrasti_simulator.py")
 sim = importlib.util.module_from_spec(SPEC)
@@ -18,7 +19,7 @@ SPEC.loader.exec_module(sim)
 TOKEN = "live-device-token-1"
 
 
-class LiveProtocolTests(LiveServerTestCase):
+class LiveProtocolTests(SerializedRollbackSafeMixin, LiveServerTestCase):
     serialized_rollback = True
     def setUp(self):
         SmsTemplate.ensure_defaults()

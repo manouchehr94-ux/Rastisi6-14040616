@@ -1,6 +1,6 @@
 {% if a.is_duplicate %}
 <details class="pa-details"><summary class="pa-btn">رسیدگی</summary>
-  {% if a.resolution.outcome != "pending_manual" %}
+  {% if a.resolution.outcome != "pending_manual" and a.resolution.outcome != "requesting" and a.resolution.outcome != "unknown" %}
   <form method="post" class="pa-form" action="{% url 'portal_platform_admin:payment-duplicate-action' kind a.pk 'refund' %}" data-confirm="درخواستِ بازپرداختِ همین پرداختِ تکراری از درگاه؟ خریدِ اصلی تغییر نمی‌کند.">{% csrf_token %}
     <div class="pa-field"><label for="dr-{{ kind }}-{{ a.pk }}">دلیل</label><input id="dr-{{ kind }}-{{ a.pk }}" name="reason" required minlength="4"></div>
     <button class="pa-btn pa-primary" type="submit">درخواستِ بازپرداخت از درگاه</button>
