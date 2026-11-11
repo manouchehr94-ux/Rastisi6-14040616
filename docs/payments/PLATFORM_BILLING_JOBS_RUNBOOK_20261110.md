@@ -81,6 +81,14 @@ crontab or env file); `MAILTO` (monitored mailbox for wrapper problems); an inst
 `RASTISI_ALERT_CMD`, run without a shell as `<words> "<subject>" "<recipient>"`, last 20 log lines on stdin); in the env file
 `DATABASE_URL`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`. Staging/test only: `RASTISI_JOB_ALLOW_DEBUG=1` skips the debug/simulation checks.
 
+**The env file must be the full production environment, not just those three variables.** Every job starts `manage.py`, which loads the
+production settings. Checked on 2026-11-11: with only `DATABASE_URL`, `DJANGO_SECRET_KEY` and `DJANGO_DEBUG=False`, `manage.py check` stops with
+`ImproperlyConfigured`. The additional variables that stop startup when missing are `DJANGO_ALLOWED_HOSTS`, `RASTISI_RATE_LIMIT_CACHE_URL`
+(`redis://` or `rediss://`), `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` and `TURNSTILE_EXPECTED_HOSTNAMES`. `PAYMENT_CREDENTIAL_KEY` does not stop
+startup, but without it stored gateway credentials cannot be decrypted, so payment reconciliation cannot verify anything. The simplest correct
+setup is to point `RASTISI_ENV_FILE` at the same file the web application uses. `run_job.sh --check-config` does not start Django, so it
+cannot detect these: also run `$RASTISI_VENV/bin/python manage.py check` with that environment (step 1 of the checklist below).
+
 **Alert delivery failures are never silent:** they print `ALERT DELIVERY FAILED` on stderr (cron mails it to `MAILTO`), append a line to the
 job log, write syslog (`logger -t rastisi-cron`) and create `/var/log/rastisi/ALERT_DELIVERY_FAILED` (removed after the next delivered
 alert). Monitor that file or the syslog tag. The job's exit code is still the job's own.
@@ -91,7 +99,8 @@ Tests: `apps/billing/tests/test_cron_wrapper.py` (synthetic app, virtualenv and 
 ## 4. Deployment checklist (operator, real server)
 
 1. Edit the crontab values listed in 3.1, run `run_job.sh --check-config` and `--test-alert` as the app user, then
-   `crontab -u <app-user> deploy/cron/rastisi.crontab`. Confirm `crontab -l`.
+   `crontab -u <app-user> deploy/cron/rastisi.crontab`. Confirm `crontab -l`. Before that, load the env file in a subshell
+   (`set -a; . "$RASTISI_ENV_FILE"; set +a; "$RASTISI_VENV/bin/python" manage.py check --deploy`) and confirm it reports no errors.
 2. Confirm the database is PostgreSQL (the advisory lock is a no-op elsewhere).
 3. On staging run `bash deploy/cron/validate_jobs.sh`. Step 10 runs every billing job in dry-run or read-only mode.
 4. After one hour confirm each `/var/log/rastisi/billing_*.log` has a new `=== ... end <job> rc=0`.

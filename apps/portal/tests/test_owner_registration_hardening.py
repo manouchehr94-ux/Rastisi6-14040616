@@ -44,6 +44,7 @@ from apps.sms.models import SmsLog
 from apps.sms.services.backends import SmsSendResult
 from apps.stores.models import Store, StoreDomain, StoreMembership
 from apps.subscriptions.models import StoreSubscription
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 _HOST = "rastisi.localhost"
@@ -1800,7 +1801,7 @@ def _run_concurrently(count, target):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL row locking")
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
-class ConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+class ConcurrencyTests(SerializedRollbackSafeMixin, _OtpTestMixin, TransactionTestCase):
     serialized_rollback = True
 
     def test_parallel_verification_of_one_challenge_succeeds_exactly_once(self):
@@ -1974,7 +1975,7 @@ def _issue(phone, purpose, index):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL advisory locks")
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
-class PhoneRequestBudgetConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+class PhoneRequestBudgetConcurrencyTests(SerializedRollbackSafeMixin, _OtpTestMixin, TransactionTestCase):
     serialized_rollback = True
     LIMIT = owner_otp_service.MAX_REQUESTS_PER_PHONE_WINDOW
 
@@ -2192,7 +2193,7 @@ class _IssueThread(threading.Thread):
 
 @unittest.skipUnless(connection.vendor == "postgresql", "real-thread race tests need PostgreSQL advisory locks")
 @override_settings(ALLOWED_HOSTS=[_HOST, "testserver"])
-class InFlightDeliveryConcurrencyTests(_OtpTestMixin, TransactionTestCase):
+class InFlightDeliveryConcurrencyTests(SerializedRollbackSafeMixin, _OtpTestMixin, TransactionTestCase):
     serialized_rollback = True
     PURPOSE = "login"
 

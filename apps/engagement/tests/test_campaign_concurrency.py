@@ -14,12 +14,13 @@ from apps.engagement.models import Campaign, CampaignIssuance
 from apps.engagement.services import campaign_service as cs
 from apps.notifications.models import NotificationOutbox
 from apps.stores.models import Store
+from apps.core.tests.serialized_rollback import SerializedRollbackSafeMixin
 
 User = get_user_model()
 
 
 @skipUnless(connection.vendor == "postgresql", "نیازمندِ PostgreSQL")
-class ParallelCampaignRunTests(TransactionTestCase):
+class ParallelCampaignRunTests(SerializedRollbackSafeMixin, TransactionTestCase):
     serialized_rollback = True
 
     def setUp(self):
