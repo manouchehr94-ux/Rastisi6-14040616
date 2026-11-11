@@ -96,9 +96,11 @@ baseline in `docs/qa/FINAL_VALIDATION_20261106.md`):
   exactly-once assertions (6 issuances, 6 coupons) pass; only the count of `coupon.issued` e-mail outbox rows is 0 instead of 6. The test predates
   the promotional-consent gate (customers in the test have no consent). Merchant campaign module, outside the platform-payment policy. Needs the test updated or the expectation
   confirmed by the owner. Not changed here.
-* **B2** `apps.portal.tests.test_owner_registration_hardening.InFlightDeliveryConcurrencyTests` (3 failures, PostgreSQL only): owner-OTP resend
-  while a delivery is in flight. Fails identically at the unmodified pushed baseline `8ad4b687` per the repository's own reports and with this PR's test change stashed. Security-relevant
-  (registration OTP), so triage before a **production** release; it does not affect payments.
+* **B2 (RESOLVED in the follow-up commit)** `apps.portal.tests.test_owner_registration_hardening.InFlightDeliveryConcurrencyTests` (3 failures, PostgreSQL only).
+  Cause: stale test expectations, not an application defect. Commit `f8c9c3d8` (2026-10-09) deliberately changed the policy: a failed OTP delivery no longer deletes the
+  accepted request's row; it stays as a never-verifiable marker (`PENDING_EXPIRES_AT`) so provider failures cannot reset the 120 s cooldown or the per-phone budget.
+  That commit updated the sibling tests but not these three, which are skipped on SQLite. The three tests were rewritten to the current policy with stronger assertions
+  (details in `docs/payments/OTP_CONCURRENCY_RESOLUTION_20261111.md`).
 
 Confirmed documentation defect, fixed in this commit: the runbook and crontab said the cron env file needs only `DATABASE_URL`, `DJANGO_SECRET_KEY`
 and `DJANGO_DEBUG=False`. With only those, every job fails at startup (`DJANGO_ALLOWED_HOSTS`, then `RASTISI_RATE_LIMIT_CACHE_URL`, then
@@ -120,7 +122,7 @@ and `DJANGO_DEBUG=False`. With only those, every job fails at startup (`DJANGO_A
 * `.env.example` does not list `RASTISI_SMS_REFUND_ENABLED`, `RASTISI_BANK_AUTOMATIC_REFUND_GATEWAYS`, `RASTISI_BILLING_*`. They must stay unset; adding them as commented warnings is optional.
 * `.env.example` points to `docs/deployment/PRODUCTION_CONFIGURATION.md`; the file is at `docs/docs/product/deployment/PRODUCTION_CONFIGURATION.md`.
 * SMS package refunds remain disabled until the credit-freeze design (needs a migration, separate approval).
-* Updating the stale expectation in B1 and fixing B2.
+* Updating the stale expectation in B1.
 * A shared parallel-run guard for plain `TransactionTestCase` classes (a base class that restores state) would remove the whole poisoner class; the mixin is the smallest fix.
 
 ## Operator checklist (staging first; every step is by a human, on the real server)
@@ -176,5 +178,4 @@ Rollback:
 
 ## Conclusion
 
-**GO for staging deployment**, under these conditions: the cron and staging checks above are completed and recorded; B2 (OTP resend) is triaged
-before any production release; the merchant payment gateway runs against the bank's staging environment first. **Production is NOT approved by this report.**
+**GO for staging deployment**, under these conditions: the cron and staging checks above are completed and recorded; the merchant payment gateway runs against the bank's staging environment first. **Production is NOT approved by this report.**
