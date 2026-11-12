@@ -13,6 +13,9 @@ TODAY = datetime.date(2026, 11, 12)
 EXC = {"exceptions": [{"package": "Pillow", "version": "12.3.0", "advisories": ["CVE-1", "CVE-2"], "owner": "o", "reason": "r", "expires": "2026-12-12"}]}
 
 
+for entry in EXC['exceptions']:
+    entry['security_review'] = {'approved': True, 'evidence': 'unit-test fixture only'}
+
 def report(*vulns):
     deps = {}
     for name, version, vid in vulns:
@@ -24,6 +27,15 @@ class JudgeTests(unittest.TestCase):
     def test_listed_advisories_are_tolerated(self):
         problems, tolerated = A.judge(A.findings(report(("pillow", "12.3.0", "CVE-1"), ("pillow", "12.3.0", "CVE-2"))), EXC, TODAY)
         self.assertEqual((problems, len(tolerated)), ([], 2))
+
+    def test_unreviewed_exception_blocks_even_when_id_matches(self):
+        import copy
+        exc = copy.deepcopy(EXC)
+        for item in exc['exceptions']:
+            item.pop('security_review', None)
+        problems, tolerated = A.judge(A.findings(report(('pillow', '12.3.0', 'CVE-1'), ('pillow', '12.3.0', 'CVE-2'))), exc, TODAY)
+        self.assertEqual(tolerated, [])
+        self.assertTrue(all('UNREVIEWED' in p for p in problems))
 
     def test_a_new_advisory_fails(self):
         problems, _ = A.judge(A.findings(report(("pillow", "12.3.0", "CVE-1"), ("pillow", "12.3.0", "CVE-2"), ("pillow", "12.3.0", "CVE-9"))), EXC, TODAY)

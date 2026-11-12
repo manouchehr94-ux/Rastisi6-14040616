@@ -31,6 +31,11 @@ class ReviewRegressions(unittest.TestCase):
         source = 'from django.db import migrations\nclass Migration(migrations.Migration):\n atomic = False\n operations = [migrations.CreateModel(name="X", fields=[])]'
         self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
 
+    def test_custom_field_and_null_database_default_are_not_proven_additive(self):
+        for field in ('CustomField(null=True)', 'models.IntegerField(db_default=None)'):
+            source = 'from django.db import migrations, models\nclass Migration(migrations.Migration):\n operations=[migrations.AddField(model_name="x", name="y", field=%s)]' % field
+            self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
+
     def test_c2_rollback_rejects_interrupted_deploy_even_with_ack(self):
         for ack in ('', R.UNSAFE_ROLLBACK_PHRASE):
             state = MagicMock()
@@ -54,6 +59,22 @@ class ReviewRegressions(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             result = subprocess.run([sys.executable, '-I', str(Path(tmp)/'usr/local/lib/rastisi-backup/rastisi_backup.py'), '--help'], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_selected_python_is_checked_even_when_configured(self):
+        from harness import Sandbox, make_artifact
+        with contextlib.ExitStack() as stack:
+            sbx = Sandbox()
+            stack.callback(sbx.close)
+            art, sha, digest = make_artifact(sbx.root, python='2.7')
+            proc, _ = sbx.stage(art, sha, digest)
+            self.assertEqual(proc.returncode, R.C.EXIT_POLICY, proc.stdout + proc.stderr)
+            self.assertIn('Python mismatch', proc.stderr + proc.stdout)
+
+    def test_architecture_mismatch_is_rejected(self):
+        import runtime_check
+        result = types.SimpleNamespace(stdout=json.dumps({'python':'3.12','system':'Linux','machine':'aarch64'}))
+        with patch.object(runtime_check.subprocess, 'run', return_value=result), self.assertRaisesRegex(ValueError, 'architecture'):
+            runtime_check.check_runtime('/python', {'python':'3.12'})
 
     def test_health_probe_error_json_and_bad_structure_fail_closed(self):
         for rc, data in ((1, {'ok': False, 'error': 'OperationalError'}), (0, {}), (0, {'ok': True, 'failures': 'invalid'}), (1, {'ok': True, 'failures': [], 'checks': {}})):

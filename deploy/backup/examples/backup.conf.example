@@ -1,4 +1,4 @@
-# /etc/rastisi/backup.conf   (mode 0640, owner root, group = the application user). No secrets in this file: only paths to files that hold them.
+# /etc/rastisi/backup.conf   (mode 0640, owner root, group = the application user). Protect this file as secret if drill_admin_url contains credentials. Prefer drill_admin_env_file.
 [backup]
 # the application's environment file: DATABASE_URL is read from it (never printed, never put on a command line)
 env_file = /etc/rastisi/rc-20261111.env
@@ -29,5 +29,6 @@ alert_to = CHANGE_ME_ALERT_RECIPIENT
 # status exits non-zero when the last verified backup is older than this (minutes); 26 h tolerates one missed night
 max_age_minutes = 1560
 # --- restore drill: needs a role that may CREATE DATABASE and nothing more (never a superuser), see docs/deployment/BACKUP_AND_RECOVERY.md
-drill_admin_url = postgresql://rastisi_drill:CHANGE_ME@127.0.0.1:5432/postgres
+# Separate 0600 app-owned file containing PGHOST, PGPORT, PGUSER, PGPASSWORD.
+drill_admin_env_file = /etc/rastisi/backup/drill.env
 critical_tables = stores_store,orders_order,auth_user,subscriptions_storesubscription,billing_subscriptioninvoice

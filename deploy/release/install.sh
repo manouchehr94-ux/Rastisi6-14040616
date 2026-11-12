@@ -51,10 +51,11 @@ chown_safe() { if [ -n "$DESTDIR" ]; then return 0; fi; run chown "$@"; }
 
 echo "== tooling -> $(dest "$LIB")"
 as_root install -d -m 0755 "$(dest "$LIB")" "$(dest "$LIB")/smoke.d"
-for f in rastisi_common.py rastisi_release.py rastisi_app_task.py rastisi_gate.py rastisi_probe.py rastisi_smoke.py migration_guard.py TOOLING_VERSION; do
+for f in rastisi_common.py rastisi_release.py rastisi_app_task.py rastisi_gate.py rastisi_probe.py rastisi_smoke.py rastisi_edge_probe.py migration_guard.py make_dropin.py runtime_check.py TOOLING_VERSION; do
   as_root install -m 0644 "$SRC/$f" "$(dest "$LIB")/$f"
 done
 as_root install -m 0644 "$SRC"/smoke.d/*.py "$(dest "$LIB")/smoke.d/"
+as_root install -m 0755 "$SRC/run_current_job.sh" "$(dest "$LIB")/run_current_job.sh"
 chown_safe -R root:root "$LIB"
 as_root install -d -m 0755 "$(dest /usr/local/lib/rastisi-backup)"
 as_root install -m 0644 "$SRC/../backup/rastisi_backup.py" "$(dest /usr/local/lib/rastisi-backup)/rastisi_backup.py"
@@ -62,7 +63,7 @@ chown_safe -R root:root /usr/local/lib/rastisi-backup
 
 echo "== deploy user $DEPLOY_USER"
 if [ -z "$DESTDIR" ] && ! id "$DEPLOY_USER" >/dev/null 2>&1; then
-  run useradd --system --create-home --home-dir "/home/$DEPLOY_USER" --shell /usr/sbin/nologin --comment "RastiSi release deployer" "$DEPLOY_USER"
+  run useradd --system --create-home --home-dir "/home/$DEPLOY_USER" --shell /bin/sh --comment "RastiSi release deployer" "$DEPLOY_USER"
 fi
 
 echo "== layout under $BASE (owned by $DEPLOY_USER, readable by group $APP_USER)"
@@ -72,6 +73,10 @@ done
 as_root install -d -m 2770 "$(dest "$BASE")/state/static-build"
 chown_safe -R "$DEPLOY_USER:$APP_USER" "$BASE"
 chown_safe "$DEPLOY_USER:$APP_USER" "$BASE/state/static-build"
+if [ ! -e "$(dest "$BASE")/state/deploy.lock" ]; then
+  as_root install -m 0644 /dev/null "$(dest "$BASE")/state/deploy.lock"
+  chown_safe "$DEPLOY_USER:$APP_USER" "$BASE/state/deploy.lock"
+fi
 
 echo "== /etc/rastisi/deploy.conf"
 CONF="$(dest /etc/rastisi/deploy.conf)"
@@ -89,11 +94,15 @@ service = $SERVICE
 env_file = $ENV_FILE
 port = $PORT
 python = $PYTHON3
+# Cron jobs MUST use the release-aware wrapper described in RELEASE_PIPELINE.md.
+jobs_follow_current = false
 app_runner = sudo -n -u $APP_USER $PYTHON3 $LIB/rastisi_app_task.py
 systemctl = sudo -n $SYSTEMCTL
 systemctl_show = $SYSTEMCTL
 # the platform host name the application answers to (must be in DJANGO_ALLOWED_HOSTS); used by the HTTP smoke tests
 smoke_host = CHANGE_ME_PLATFORM_HOST
+edge_probe_enabled = true
+edge_port = 443
 # where the backup job records its last verified backup (rastisi_backup.py state_dir)
 backup_record = /var/lib/rastisi-backup/last_backup.json
 backup_max_age_minutes = 90
@@ -122,7 +131,8 @@ cat <<EOF
 == Done. What remains is deliberately manual (see docs/deployment/RELEASE_PIPELINE.md, section "First activation"):
   1. Put the GitHub Actions public key into /home/$DEPLOY_USER/.ssh/authorized_keys as ONE line:
        restrict,command="$PYTHON3 $LIB/rastisi_gate.py" ssh-ed25519 AAAA... github-actions-deploy
-  2. Edit /etc/rastisi/deploy.conf: smoke_host.
+  2. Install examples/sshd_config.snippet for account-wide ForceCommand, validate with sshd -t, reload ssh.
+  3. Edit /etc/rastisi/deploy.conf: smoke_host.
   3. Review, then apply, the systemd drop-in:  make_dropin.py --unit-file <(systemctl cat $SERVICE) --base $BASE --old-app <current app dir>
   4. Run the one-time cutover (dry run first):  sudo -u $DEPLOY_USER $PYTHON3 $LIB/rastisi_release.py cutover --legacy-app ... --legacy-venv ... --sha <commit running now>
 EOF

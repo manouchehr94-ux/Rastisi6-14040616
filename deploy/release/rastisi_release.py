@@ -232,11 +232,11 @@ def cmd_stage(cfg, args):
             raise Abort(C.EXIT_POLICY, "artifact has no valid release-manifest.json")
         if manifest.get("sha") != args.sha:
             raise Abort(C.EXIT_POLICY, "manifest commit %s does not match the requested commit" % manifest.get("sha"))
-        wanted_python = manifest.get("python")
-        have_python = "%d.%d" % sys.version_info[:2]
-        configured = cfg.get("python")
-        if wanted_python and not configured and wanted_python != have_python:
-            raise Abort(C.EXIT_POLICY, "artifact was built for Python %s, this host's python3 is %s (set python= in the config)" % (wanted_python, have_python))
+        from runtime_check import check_runtime
+        try:
+            check_runtime(cfg.get("python") or sys.executable, manifest)
+        except ValueError as exc:
+            raise Abort(C.EXIT_POLICY, str(exc))
         bad = []
         for rel, digest in sorted(manifest.get("files", {}).items()):
             p = work / rel
@@ -379,6 +379,8 @@ def preflight(cfg, st, runner, rel_id, rel_meta, args):
             usage = shutil.disk_usage(str(path))
             if usage.free < min_free:
                 raise Abort(C.EXIT_POLICY, "less than %d MB free on %s" % (min_free // (1024 * 1024), path))
+    if cfg.get("jobs_follow_current") != "true":
+        raise Abort(C.EXIT_POLICY, "background jobs must use the release-aware wrapper; set jobs_follow_current=true only after configuring all job paths")
     ok, res = runner.tool.app("envcheck", timeout=60)
     if not ok:
         raise Abort(C.EXIT_POLICY, "environment check failed: %s" % res.get("error", res))
@@ -388,11 +390,17 @@ def preflight(cfg, st, runner, rel_id, rel_meta, args):
     ok, res = runner.tool.app("healthcheck", "--release", rel_id, "--pre", timeout=120)
     if not ok:
         raise Abort(C.EXIT_POLICY, "pre-flight health check failed (database/Redis/paths): %s" % res.get("failures", res))
+    if cfg.get('edge_probe_enabled', 'true') == 'true':
+        ok, res = runner.tool.app('edge-health', '--release', rel_id, timeout=120)
+        if not ok:
+            raise Abort(C.EXIT_POLICY, 'existing local Nginx/TLS/static route is unhealthy; do not migrate: %s' % res)
     runner.say("pre-flight OK")
 
 
 def backup_is_fresh(cfg, st):
     info = C.read_json(cfg.get("backup_record") or (st.dir / "last_backup.json"), {})
+    if info.get("verified_newer_failed_at") or info.get("verification_failed_at") or Path(cfg.get("backup_record") or (st.dir / "last_backup.json")).with_name("BACKUP_FAILED").exists():
+        return False, "backup failure requires investigation"
     if not info.get("verified"):
         return False, "no verified backup recorded"
     try:
@@ -401,6 +409,8 @@ def backup_is_fresh(cfg, st):
         return False, "backup record is unreadable"
     age = (time.time() - finished) / 60.0
     limit = cfg.int("backup_max_age_minutes", 90)
+    if age < -5:
+        return False, "backup timestamp is in the future"
     if age > limit:
         return False, "last verified backup is %d min old (limit %d)" % (age, limit)
     return True, "verified backup %d min old" % age
@@ -452,8 +462,16 @@ def verify_release(cfg, runner, rel_id, deadline_seconds):
                     "smoke", "--release", rel_id, "--base-url", cfg.get("smoke_base_url") or "http://127.0.0.1:%s" % cfg.get("port"),
                     "--host", cfg.get("smoke_host") or "", "--expect-release", rel_id, timeout=240)
                 if ok2:
-                    return True, res2
-                last = "smoke: %s" % (res2.get("failures") or res2.get("error") or res2)
+                    if cfg.get('edge_probe_enabled', 'true') == 'true':
+                        edge_ok, edge = runner.tool.app('edge-health', '--release', rel_id, timeout=120)
+                        if not edge_ok:
+                            last = "edge: %s" % edge
+                        else:
+                            return True, res2
+                    else:
+                        return True, res2
+                if not ok2:
+                    last = "smoke: %s" % (res2.get("failures") or res2.get("error") or res2)
             else:
                 last = "healthcheck: %s" % (res.get("failures") or res.get("error") or res)
         else:
@@ -526,6 +544,8 @@ def do_activate(cfg, st, runner, args):
     runner.say("activate %s (commit %s); running now: %s" % (rel_id, rel_meta["sha"][:12], cur_id or "nothing"))
     if args.from_sha and cur_meta.get("sha") != args.from_sha:
         raise Abort(C.EXIT_POLICY, "the plan was made against commit %s but %s is running; re-plan" % (args.from_sha[:12], (cur_meta.get("sha") or "none")[:12]))
+    if st.in_progress_file.exists() and not st.incident():
+        st.raise_incident("interrupted deployment; database state unknown", marker=C.read_json(st.in_progress_file, {}))
     if st.incident() or st.in_progress_file.exists():
         raise Abort(C.EXIT_NEEDS_HUMAN, "unresolved incident or interrupted deployment; verify database before continuing")
     if cur_id == rel_id:
@@ -548,7 +568,7 @@ def do_activate(cfg, st, runner, args):
     applied = []
     if plan:
         runner.say("applying %d migration(s)" % len(plan))
-        ok, res = runner.tool.app("migrate", "--release", rel_id, timeout=cfg.int("migrate_timeout", 1800))
+        ok, res = runner.tool.app("migrate", "--release", rel_id, timeout=cfg.int("migrate_timeout", 1800) + 60)
         if not ok:
             ok2, after = runner.tool.app("migrate-plan", "--release", rel_id, timeout=300)
             remaining = after.get("plan", plan) if ok2 else plan

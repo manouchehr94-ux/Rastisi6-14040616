@@ -1,6 +1,8 @@
 # Optional hardening for the deploy account (append to /etc/ssh/sshd_config.d/rastisi-deploy.conf, then: sshd -t && systemctl reload ssh)
 # Does not change how any other account logs in.
 Match User rastisi-deploy
+    ForceCommand /usr/bin/python3 /usr/local/lib/rastisi/rastisi_gate.py
+    AllowAgentForwarding no
     PasswordAuthentication no
     KbdInteractiveAuthentication no
     AuthenticationMethods publickey

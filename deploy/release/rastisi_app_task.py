@@ -24,7 +24,7 @@ import rastisi_common as C  # noqa: E402
 
 REQUIRED_ENV = ("DJANGO_SECRET_KEY", "DATABASE_URL", "DJANGO_ALLOWED_HOSTS", "RASTISI_RATE_LIMIT_CACHE_URL")
 RECOMMENDED_ENV = ("PAYMENT_CREDENTIAL_KEY", "DJANGO_CSRF_TRUSTED_ORIGINS")
-VERBS = ("envcheck", "check", "migrate-plan", "migrate", "healthcheck", "publish-static", "smoke", "who")
+VERBS = ("envcheck", "check", "migrate-plan", "migrate", "healthcheck", "publish-static", "smoke", "edge-health", "who")
 
 
 def probe_script(ctx):
@@ -143,7 +143,13 @@ def v_migrate_plan(ctx, args):
 
 def v_migrate(ctx, args):
     app, py = ctx.release_paths()
-    rc, out = ctx.run([str(py), "manage.py", "migrate", "--noinput"], app, timeout=ctx.cfg.int("migrate_timeout", 1800))
+    lock_ms = ctx.cfg.int('migration_lock_timeout_ms', 5000)
+    statement_ms = ctx.cfg.int('migration_statement_timeout_ms', 600000)
+    if not 1 <= lock_ms <= statement_ms:
+        return emit(False, error='invalid migration database timeouts')
+    rc, out = ctx.run([str(py), "manage.py", "migrate", "--noinput"], app,
+                      timeout=ctx.cfg.int("migrate_timeout", 1800),
+                      extra_env={'PGOPTIONS': '-c lock_timeout=%d -c statement_timeout=%d' % (lock_ms, statement_ms)})
     return emit(rc == 0, error="" if rc == 0 else "migrate exited %d" % rc)
 
 
@@ -232,8 +238,16 @@ def v_smoke(ctx, args):
     return emit(rc == 0 and data.get("ok", False), failures=data.get("failures", [] if rc == 0 else ["smoke runner failed"]), passed=data.get("passed", []))
 
 
+def v_edge_health(ctx, args):
+    app, py = ctx.release_paths()
+    script = Path(__file__).resolve().parent / 'rastisi_edge_probe.py'
+    rc, out = ctx.run([str(py), str(script), '--host', ctx.cfg.get('smoke_host') or '', '--port', str(ctx.cfg.int('edge_port', 443))], app, timeout=100)
+    data = last_json(out)
+    return emit(rc == 0 and isinstance(data, dict) and data.get('ok') is True, failures=data.get('failures', ['edge probe failed']) if isinstance(data, dict) else ['invalid edge result'])
+
+
 HANDLERS = {"who": v_who, "envcheck": v_envcheck, "check": v_check, "migrate-plan": v_migrate_plan, "migrate": v_migrate,
-            "healthcheck": v_healthcheck, "publish-static": v_publish_static, "smoke": v_smoke}
+            "healthcheck": v_healthcheck, "publish-static": v_publish_static, "smoke": v_smoke, "edge-health": v_edge_health}
 
 
 def main(argv=None):
@@ -252,8 +266,11 @@ def main(argv=None):
         return emit(False, error="configuration error: %s" % exc)
     if args.expect_release and not C.RELEASE_ID_RE.match(args.expect_release):
         return emit(False, error="invalid --expect-release")
-    if args.base_url and not args.base_url.startswith(("http://127.0.0.1", "http://localhost", "https://127.0.0.1", "https://localhost")):
-        return emit(False, error="smoke tests may only target the local host")
+    if args.base_url:
+        from urllib.parse import urlsplit
+        parsed = urlsplit(args.base_url)
+        if parsed.scheme not in ('http', 'https') or parsed.hostname not in ('127.0.0.1', 'localhost', '::1') or parsed.username or parsed.password:
+            return emit(False, error="smoke tests may only target the local host")
     ctx = Ctx(cfg, args.release)
     try:
         return HANDLERS[args.verb](ctx, args)

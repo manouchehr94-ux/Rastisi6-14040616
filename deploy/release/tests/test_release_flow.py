@@ -117,20 +117,16 @@ class FailedDeployTests(SandboxTestCase):
         self.assertEqual(self.sbx.db_state()["applied"], ["core.0001_initial", "core.0002_add_nullable"])
         self.assertIsNone(self.sbx.status()["incident"])
 
-    def test_non_additive_migration_then_failed_verification_is_NOT_rolled_back(self):
+    def test_non_additive_migration_is_refused_before_any_online_change(self):
         self.sbx.record_backup()
-        rid, _ = self.sbx.make_and_stage(broken=True, migrations=["core.0002_data_fix"], level="REVIEW")
-        proc = self.sbx.activate(rid, "--allow-migrations")
-        self.assertEqual(proc.returncode, C.EXIT_NEEDS_HUMAN, proc.stdout + proc.stderr)
-        st = self.sbx.status()
-        self.assertIsNotNone(st["incident"])
-        self.assertEqual(st["current"], rid, "the tool must stop and report, not guess")
-        self.assertIn("NOT safe", proc.stdout + proc.stderr)
-        # and it refuses to do anything else until a human resolves it
-        other, _ = self.sbx.make_and_stage()
-        refused = self.sbx.activate(other)
-        self.assertEqual(refused.returncode, C.EXIT_NEEDS_HUMAN)
-        self.assertEqual(self.sbx.status()["current"], rid)
+        before = self.sbx.data_fingerprint()
+        rid, _ = self.sbx.make_and_stage(broken=True, migrations=['core.0002_data_fix'], level='REVIEW')
+        proc = self.sbx.activate(rid, '--allow-migrations')
+        self.assertEqual(proc.returncode, C.EXIT_POLICY, proc.stdout + proc.stderr)
+        self.assertIn('offline migration', proc.stdout)
+        self.assertTrue(self.current().startswith('legacy-'))
+        self.assertEqual(self.sbx.data_fingerprint(), before)
+        self.assertIsNone(self.sbx.status()['in_progress'])
 
     def test_redis_down_before_the_switch_stops_the_deploy_without_touching_anything(self):
         legacy_id = self.current()
@@ -180,23 +176,24 @@ class FailedDeployTests(SandboxTestCase):
 
 
 class MigrationPolicyTests(SandboxTestCase):
-    def test_migration_failure_leaves_the_old_release_serving_and_the_schema_unchanged(self):
+    def test_migration_failure_keeps_old_code_but_requires_database_investigation(self):
         legacy_id = self.current()
         self.sbx.record_backup()
         self.sbx.set_control({"migrate": "fail_first"})
         rid, _ = self.sbx.make_and_stage(migrations=["core.0002_x"], level="ADDITIVE")
         restarts = self.sbx.restarts()
         proc = self.sbx.activate(rid)
-        self.assertEqual(proc.returncode, C.EXIT_MIGRATION_FAILED, proc.stdout + proc.stderr)
+        self.assertEqual(proc.returncode, C.EXIT_NEEDS_HUMAN, proc.stdout + proc.stderr)
         self.assertServing(legacy_id)
         self.assertEqual(self.sbx.restarts(), restarts, "the service must not be restarted when the migration failed")
         self.assertEqual(self.sbx.db_state()["applied"], ["core.0001_initial"])
-        self.assertIsNone(self.sbx.status()["incident"])
+        self.assertIsNotNone(self.sbx.status()["incident"])
+        self.assertIsNotNone(self.sbx.status()["in_progress"])
 
-    def test_partial_failure_of_a_non_additive_batch_is_an_incident(self):
+    def test_partial_failure_of_an_additive_batch_is_also_an_incident(self):
         self.sbx.record_backup()
         self.sbx.set_control({"migrate": "fail_after_first"})
-        rid, _ = self.sbx.make_and_stage(migrations=["core.0002_a", "core.0003_b"], level="REVIEW")
+        rid, _ = self.sbx.make_and_stage(migrations=["core.0002_a", "core.0003_b"], level="ADDITIVE")
         proc = self.sbx.activate(rid, "--allow-migrations")
         self.assertEqual(proc.returncode, C.EXIT_NEEDS_HUMAN, proc.stdout + proc.stderr)
         self.assertIsNotNone(self.sbx.status()["incident"])
@@ -223,8 +220,9 @@ class MigrationPolicyTests(SandboxTestCase):
         self.assertEqual(self.sbx.activate(rid).returncode, C.EXIT_POLICY)
         self.assertEqual(self.sbx.db_state()["applied"], ["core.0001_initial"])
         proc = self.sbx.activate(rid, "--allow-migrations")
-        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertFalse(self.sbx.status()["active"]["rollback_safe_to_previous"], "a non-additive migration makes auto-rollback unsafe")
+        self.assertEqual(proc.returncode, C.EXIT_POLICY, proc.stdout + proc.stderr)
+        self.assertIn("offline migration", proc.stdout)
+        self.assertEqual(self.sbx.db_state()["applied"], ["core.0001_initial"])
 
     def test_destructive_level_needs_the_exact_phrase(self):
         self.sbx.record_backup()
@@ -233,7 +231,7 @@ class MigrationPolicyTests(SandboxTestCase):
         self.assertEqual(self.sbx.activate(rid, "--allow-migrations", "--destructive-ack", "yes").returncode, C.EXIT_POLICY)
         self.assertEqual(self.sbx.db_state()["applied"], ["core.0001_initial"])
         phrase = "I-ACCEPT-DESTRUCTIVE-MIGRATION-" + sha[:12]
-        self.assertEqual(self.sbx.activate(rid, "--allow-migrations", "--destructive-ack", phrase).returncode, 0)
+        self.assertEqual(self.sbx.activate(rid, "--allow-migrations", "--destructive-ack", phrase).returncode, C.EXIT_POLICY)
 
     def test_migrations_the_report_did_not_announce_are_refused(self):
         """A database that is behind (a skipped release) must not be silently migrated by an unrelated deploy."""
@@ -281,7 +279,13 @@ class RollbackCommandTests(SandboxTestCase):
 
     def test_rollback_after_a_non_additive_migration_needs_the_unsafe_phrase(self):
         self.sbx.record_backup()
-        self.deploy(migrations=["core.0002_data"], level="REVIEW")
+        self.deploy()
+        # Model a manually completed offline schema change: compatibility must
+        # be explicitly invalidated rather than inferred from a typed phrase.
+        path = self.sbx.base / "state/active.json"
+        state = json.loads(path.read_text())
+        state.update(rollback_safe_to_previous=False, migrations_applied=["core.0002_data"])
+        path.write_text(json.dumps(state))
         proc = self.sbx.release("rollback", "--to", "previous")
         self.assertEqual(proc.returncode, C.EXIT_POLICY, proc.stdout + proc.stderr)
         self.assertIn("not known to be database-compatible", proc.stdout + proc.stderr)

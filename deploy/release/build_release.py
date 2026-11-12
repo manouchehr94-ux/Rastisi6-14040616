@@ -131,7 +131,7 @@ def main(argv=None):
             if path.is_file() and not path.is_symlink():
                 files[path.relative_to(root).as_posix()] = sha256_file(path)
         manifest = {
-            "schema": 1, "sha": args.sha, "tree_sha": tree, "from_sha": args.from_sha, "python": args.python_version,
+            "schema": 1, "platform": "linux_x86_64", "sha": args.sha, "tree_sha": tree, "from_sha": args.from_sha, "python": args.python_version,
             "lock_sha256": hashlib.sha256(lock_text.encode("utf-8")).hexdigest(),
             "migration_report": report, "built_by": {"run_id": args.run_id, "actor": args.actor},
             "commit_time": commit_time, "files": files,

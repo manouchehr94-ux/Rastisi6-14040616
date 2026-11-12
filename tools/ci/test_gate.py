@@ -18,6 +18,7 @@ Tiers are defined in tiers.json: Django test labels, the database they need, and
 """
 
 import argparse
+import hashlib
 import datetime
 import json
 import os
@@ -64,13 +65,52 @@ def parse_output(text):
     return ran, failing, summary
 
 
-def judge(failing, registry, tier, today):
+def failure_signatures(text):
+    """Hash each failure's complete diagnostic, not just its test identifier.
+
+    Keep assertion text, source location and exception type. Only checkout/venv
+    prefixes and trailing whitespace are normalised for different runners.
+    Multiple subtest diagnostics must ALL match the reviewed signatures.
+    """
+    blocks, current, body = {}, None, []
+    def finish():
+        if current is not None:
+            diagnostic = '\n'.join(line.rstrip() for line in body).strip()
+            diagnostic = re.sub(r'File "[^"\n]*?/(apps|shop_core)/', r'File "\1/', diagnostic)
+            diagnostic = re.sub(r'File "[^"\n]*/site-packages/', 'File "site-packages/', diagnostic)
+            digest = hashlib.sha256(diagnostic.encode()).hexdigest()
+            blocks.setdefault(current, []).append(digest)
+    for line in text.splitlines():
+        match = FAIL_LINE.match(line)
+        if match:
+            finish()
+            method, dotted = match.group(2), match.group(3)
+            current = dotted if dotted.endswith('.' + method) else dotted + '.' + method
+            body = [line]
+        elif re.match(r'^=+$', line) or RAN_LINE.match(line):
+            finish()
+            current, body = None, []
+        elif current is not None and not re.match(r'^-+$', line):
+            body.append(line)
+    finish()
+    return {key: sorted(set(value)) for key, value in blocks.items()}
+
+
+def judge(failing, registry, tier, today, signatures=None):
     """Pure decision function (unit-tested). Returns (problems, tolerated)."""
     entries = {e["id"]: e for e in registry.get("entries", []) if tier in e.get("tiers", [])}
     problems, tolerated = [], []
     for test in sorted(failing):
         if test in entries:
-            tolerated.append(entries[test])
+            if entries[test].get("release_blocker"):
+                problems.append("RELEASE BLOCKER: %s: %s" % (test, entries[test]["root_cause"]))
+                continue
+            expected = entries[test].get("expected_failure_sha256", [])
+            actual = (signatures or {}).get(test, [])
+            if not expected or not actual or set(actual) != set(expected):
+                problems.append("CHANGED OR UNREVIEWED FAILURE: %s (diagnostic SHA256 %s)" % (test, actual))
+            else:
+                tolerated.append(entries[test])
         else:
             problems.append("UNEXPECTED FAILURE: %s" % test)
     for tid, entry in sorted(entries.items()):
@@ -124,6 +164,7 @@ def main(argv=None):
         return 2
     tier = tiers[args.tier]
     today = datetime.date.fromisoformat(args.today) if args.today else datetime.date.today()
+    process_code = None
     if args.from_file:
         text = Path(args.from_file).read_text(encoding="utf-8")
     else:
@@ -131,6 +172,7 @@ def main(argv=None):
         if args.parallel:
             cmd += ["--parallel", str(args.parallel)]
         proc = subprocess.run(cmd, capture_output=True, text=True, env=dict(os.environ))
+        process_code = proc.returncode
         text = proc.stdout + "\n" + proc.stderr
         if args.output:
             Path(args.output).write_text(text, encoding="utf-8")
@@ -146,8 +188,12 @@ def main(argv=None):
             flaky_passed.append((test_id, entry))
         else:
             still_failing.add(test_id)
-    problems, tolerated = judge(still_failing, load(args.registry), args.tier, today)
+    problems, tolerated = judge(still_failing, load(args.registry), args.tier, today, failure_signatures(text))
     problems = flaky_problems + problems
+    if process_code not in (None, 0, 1):
+        problems.append("test process exited abnormally: %s" % process_code)
+    if process_code == 1 and not failing:
+        problems.append("test process failed without parsed failure diagnostics")
     if ran is None or not summary_seen:
         problems.append("the test run did not finish (no summary line): treat as a failed build")
     elif ran < tier.get("min_tests", 1):

@@ -86,17 +86,24 @@ def spawn_detached(cfg, run_id, argv):
 def supervise(run_id, argv):
     cfg = C.Config()
     rd = run_dir(cfg, run_id)
-    proc = subprocess.run(argv)
+    proc = subprocess.Popen(argv)
+    (rd / "child_pid").write_text("%d\n" % proc.pid, encoding="utf-8")
+    code = proc.wait()
     marker = rd / "exit_code"
     if not marker.exists():
-        marker.write_text("%d\n" % (proc.returncode if proc.returncode >= 0 else 128 - proc.returncode), encoding="utf-8")
+        marker.write_text("%d\n" % (code if code >= 0 else 128 - code), encoding="utf-8")
     return 0
 
 
 def pid_alive(pid):
     try:
+        # kill(pid, 0) considers zombies alive. A dead supervisor must not leave
+        # followers waiting forever for an exit record it cannot write.
+        stat = Path('/proc/%d/stat' % pid).read_text()
+        if stat.rsplit(')', 1)[1].strip().split()[0] == 'Z':
+            return False
         os.kill(pid, 0)
-    except ProcessLookupError:
+    except (ProcessLookupError, FileNotFoundError):
         return False
     except PermissionError:
         return True

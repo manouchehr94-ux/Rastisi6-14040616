@@ -82,8 +82,9 @@ def main(argv=None):
                 problems.append("rows intact")
             step("BASE code still loads against the HEAD schema (N-1 code on N schema)",
                  run([sys.executable, "manage.py", "check"], work / "base", env))
-            step("BASE code can still read the HEAD schema (ORM query)",
-                 run([sys.executable, "manage.py", "shell", "-c", "from django.contrib.auth import get_user_model as g; print(g().objects.count())"], work / "base", env))
+            probe = Path(__file__).resolve().parent / "schema_contract_probe.py"
+            step("BASE code reads every model and validates writes on the HEAD schema",
+                 run([sys.executable, str(probe)], work / "base", env))
     finally:
         for label in ("base", "head"):
             run(["git", "worktree", "remove", "--force", str(work / label)], repo, base_env)

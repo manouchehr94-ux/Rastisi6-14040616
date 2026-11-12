@@ -23,6 +23,8 @@ Ran 2052 tests in 100.0s
 
 FAILED (failures=1, skipped=68)
 """
+REGISTRY['entries'][0]['expected_failure_sha256'] = G.failure_signatures(OUT_KNOWN_ONLY)[KNOWN]
+SIGNATURES = G.failure_signatures(OUT_KNOWN_ONLY)
 
 
 class ParseTests(unittest.TestCase):
@@ -43,24 +45,33 @@ class ParseTests(unittest.TestCase):
 
 class JudgeTests(unittest.TestCase):
     def test_only_the_registered_failure_is_tolerated(self):
-        problems, tolerated = G.judge({KNOWN}, REGISTRY, "fast", TODAY)
+        problems, tolerated = G.judge({KNOWN}, REGISTRY, "fast", TODAY, SIGNATURES)
         self.assertEqual((problems, len(tolerated)), ([], 1))
 
+    def test_same_test_new_failure_is_not_tolerated(self):
+        problems, tolerated = G.judge({KNOWN}, REGISTRY, 'fast', TODAY, {KNOWN: ['new-duplicate-coupon-failure']})
+        self.assertTrue(problems[0].startswith('CHANGED OR UNREVIEWED'))
+        self.assertEqual(tolerated, [])
+
+    def test_unreviewed_identifier_only_exception_cannot_pass(self):
+        registry = {'entries': [dict(REGISTRY['entries'][0], expected_failure_sha256=[])]}
+        self.assertTrue(G.judge({KNOWN}, registry, 'fast', TODAY, SIGNATURES)[0])
+
     def test_an_unregistered_failure_fails_the_gate(self):
-        problems, _ = G.judge({KNOWN, "apps.billing.tests.test_x.T.test_y"}, REGISTRY, "fast", TODAY)
+        problems, _ = G.judge({KNOWN, "apps.billing.tests.test_x.T.test_y"}, REGISTRY, "fast", TODAY, SIGNATURES)
         self.assertEqual(problems, ["UNEXPECTED FAILURE: apps.billing.tests.test_x.T.test_y"])
 
     def test_a_registered_test_that_now_passes_fails_the_gate_so_the_fix_is_locked_in(self):
-        problems, _ = G.judge(set(), REGISTRY, "fast", TODAY)
+        problems, _ = G.judge(set(), REGISTRY, "fast", TODAY, SIGNATURES)
         self.assertTrue(problems[0].startswith("STALE registry entry"))
 
     def test_an_expired_entry_fails_the_gate_even_if_the_test_still_fails(self):
-        problems, _ = G.judge({KNOWN}, REGISTRY, "fast", datetime.date(2026, 12, 16))
+        problems, _ = G.judge({KNOWN}, REGISTRY, "fast", datetime.date(2026, 12, 16), SIGNATURES)
         self.assertTrue(problems[0].startswith("EXPIRED known failure"))
         self.assertIn("owner o", problems[0])
 
     def test_the_last_valid_day_still_passes(self):
-        self.assertEqual(G.judge({KNOWN}, REGISTRY, "fast", datetime.date(2026, 12, 15))[0], [])
+        self.assertEqual(G.judge({KNOWN}, REGISTRY, "fast", datetime.date(2026, 12, 15), SIGNATURES)[0], [])
 
     def test_entries_apply_only_to_their_tier(self):
         problems, tolerated = G.judge({KNOWN}, REGISTRY, "tenant", TODAY)

@@ -63,7 +63,7 @@ class ConcurrencyTests(SandboxTestCase):
         self.sbx.set_control({"smoke_wait_for_file": str(hold)})
         first = subprocess.Popen([PY, str(TOOLS / "rastisi_release.py"), "activate", "--id", a], env=self.sbx.env,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        wait_for(lambda: self.sbx.status()["busy"], timeout=60)
+        wait_for(lambda: (self.sbx.base / "state/in_progress.json").exists(), timeout=60)
         second = self.sbx.activate(b)
         hold.write_text("go")
         self.assertEqual(second.returncode, C.EXIT_BUSY, second.stdout + second.stderr)
@@ -83,7 +83,7 @@ class ConcurrencyTests(SandboxTestCase):
         self.sbx.set_control({"smoke_wait_for_file": str(hold)})
         first = subprocess.Popen([PY, str(TOOLS / "rastisi_release.py"), "activate", "--id", b], env=self.sbx.env,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        wait_for(lambda: self.sbx.status()["busy"], timeout=60)
+        wait_for(lambda: (self.sbx.base / "state/in_progress.json").exists(), timeout=60)
         rollback = self.sbx.release("rollback", "--to", "previous")
         hold.write_text("go")
         self.assertEqual(rollback.returncode, C.EXIT_BUSY)
@@ -134,10 +134,9 @@ class LostConnectionAndKilledProcessTests(SandboxTestCase, GateMixin):
         run_id = self.start_activation(rid, sha)
         wait_for(lambda: (self.sbx.base / "state" / "in_progress.json").exists() and
                  json.loads((self.sbx.base / "state" / "in_progress.json").read_text()).get("phase") == "verify")
-        pids = subprocess.run(["pgrep", "-f", "rastisi_release.py activate --id %s" % rid], capture_output=True, text=True).stdout.split()
-        self.assertTrue(pids, "orchestrator process not found")
-        for pid in pids:
-            os.kill(int(pid), signal.SIGKILL)
+        child_file = self.sbx.base / 'state/runs' / run_id / 'child_pid'
+        wait_for(child_file.exists)
+        os.kill(int(child_file.read_text()), signal.SIGKILL)
         code, log = self.follow_until_done(run_id)
         self.assertNotEqual(code, 0, "a killed run must never look successful")
         st = self.sbx.status()

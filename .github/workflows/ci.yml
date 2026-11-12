@@ -18,6 +18,15 @@ on:
         description: Commit to test
         type: string
         required: true
+      artifact_name:
+        description: Existing release artifact to test (no dependency re-resolution)
+        type: string
+        required: false
+        default: ""
+      artifact_sha256:
+        type: string
+        required: false
+        default: ""
       from_sha:
         description: Commit currently in production (for the migration upgrade test)
         type: string
@@ -39,7 +48,49 @@ env:
   DJANGO_SETTINGS_MODULE: shop_core.settings
 
 jobs:
+  dependencies:
+    name: One production dependency lock for every job
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TEST_REF }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        if: inputs.artifact_name != ''
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: release-input
+      - name: Use the release wheelhouse or resolve once for ordinary CI
+        env:
+          ARTIFACT: ${{ inputs.artifact_name }}
+          EXPECTED: ${{ inputs.artifact_sha256 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ARTIFACT" ]; then
+            [[ "$EXPECTED" =~ ^[0-9a-f]{64}$ ]] || exit 1
+            archive="$(find release-input -maxdepth 1 -name '*.tar.gz' -print)"
+            [ -f "$archive" ] || exit 1
+            [ "$(sha256sum "$archive" | cut -d' ' -f1)" = "$EXPECTED" ] || exit 1
+            mkdir .ci-deps
+            tar -xzf "$archive" -C .ci-deps requirements.lock wheelhouse
+          else
+            python tools/ci/prepare_dependencies.py
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: production-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ci-deps/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
   static:
+    needs: dependencies
     name: Static checks, tooling tests, secret scan, dependency audit
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -53,10 +104,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - name: Install the production dependency set, freeze it, then add the CI-only tools
+      - uses: ./.github/actions/install-production
+      - name: Freeze the tested production set, then add CI-only tools
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip freeze > "$RUNNER_TEMP/production-lock.txt"      # exactly what production installs, before any CI tool is added
           pip install tblib pip-audit pyyaml
       - name: Python files compile
@@ -81,6 +131,7 @@ jobs:
           PY
 
   tests-fast:
+    needs: dependencies
     name: Tests (fast tier, SQLite)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -93,7 +144,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install -r requirements.txt tblib
+      - uses: ./.github/actions/install-production
+      - run: pip install tblib
       - name: Fast tier through the quality gate
         run: python tools/ci/test_gate.py --tier fast --parallel 4 --output fast-tier.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -104,6 +156,7 @@ jobs:
           retention-days: 14
 
   tests-tenant:
+    needs: dependencies
     name: Tests (tenant and storefront tier, SQLite)
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -116,7 +169,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install -r requirements.txt tblib
+      - uses: ./.github/actions/install-production
+      - run: pip install tblib
       - name: Tenant tier through the quality gate
         run: python tools/ci/test_gate.py --tier tenant --parallel 4 --output tenant-tier.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -127,6 +181,7 @@ jobs:
           retention-days: 14
 
   tests-postgres:
+    needs: dependencies
     name: Tests (security + finance tiers, PostgreSQL 16 and Redis)
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -157,7 +212,8 @@ jobs:
           redis-server --port 6390 --bind 127.0.0.1 --requirepass ci-only-redis --save "" --appendonly no --daemonize yes
           for _ in $(seq 1 20); do redis-cli -p 6390 -a ci-only-redis --no-auth-warning ping | grep -q PONG && break; sleep 0.5; done
           if redis-cli -p 6390 -a wrong-password --no-auth-warning ping | grep -q PONG; then echo "::error::Redis accepts a wrong password"; exit 1; fi
-      - run: pip install -r requirements.txt tblib
+      - uses: ./.github/actions/install-production
+      - run: pip install tblib
       - name: Security tier (OTP concurrency, CAPTCHA store, auth on real Redis)
         run: python tools/ci/test_gate.py --tier security_pg --parallel 4 --output security-tier.log
       - name: Finance tier (exactly-once payments, refund policy, subscriptions, orders)
@@ -170,6 +226,7 @@ jobs:
           retention-days: 14
 
   migrations:
+    needs: dependencies
     name: Migrations (classification, upgrade path from production, N-1 code on N schema)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -191,7 +248,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install -r requirements.txt psycopg[binary]
+      - uses: ./.github/actions/install-production
       - name: Decide the base commit
         id: base
         run: |
@@ -219,6 +276,7 @@ jobs:
           retention-days: 30
 
   deploy-rehearsal:
+    needs: dependencies
     name: Release system rehearsal (real app, Gunicorn, PostgreSQL, Redis, restic)
     # Exercises the release TOOLING (not the release), ~6 minutes. Skipped when this workflow is called by the release workflow, and
     # skipped on ordinary pushes/PRs that do not touch the tooling (the 'changed' step); always run nightly and on demand.
@@ -255,11 +313,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+      - uses: ./.github/actions/install-production
+        if: steps.changed.outputs.run == 'true'
       - name: Install tools
         if: steps.changed.outputs.run == 'true'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq redis-server restic
-          pip install -r requirements.txt tblib psycopg[binary]
+          pip install tblib
       - name: Unit-level tooling tests including the real PostgreSQL + restic backup tests
         if: steps.changed.outputs.run == 'true'
         env:
@@ -269,7 +329,10 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-16
           RASTISI_TEST_RESTIC="$(command -v restic)"
           export RASTISI_TEST_RESTIC
-          python -m unittest discover -s deploy/backup/tests -p "test_backup_e2e.py" -v
+          python -m unittest discover -s deploy/backup/tests -p "test_*.py" -v
+      - name: Real installed layout, forced-command SSH, backup and non-atomic failure
+        if: steps.changed.outputs.run == 'true'
+        run: bash deploy/release/selftest/run_isolated.sh .ci-deps
       - name: Real-application rehearsal (production commit -> cutover -> CAPTCHA release -> broken release -> rollback -> migration)
         if: steps.changed.outputs.run == 'true'
         env:

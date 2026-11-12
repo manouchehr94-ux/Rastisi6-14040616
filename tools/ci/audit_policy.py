@@ -50,6 +50,8 @@ def judge(found, exceptions, today):
             problems.append("EXPIRED exception for %s in %s (expired %s, owner %s)" % (key[1], key[0], exc["expires"], exc["owner"]))
         elif exc.get("version") and exc["version"] != info["version"]:
             problems.append("exception for %s was granted for %s %s but %s is installed: re-review" % (key[1], key[0], exc["version"], info["version"]))
+        elif not exc.get("security_review", {}).get("approved") or not exc["security_review"].get("evidence"):
+            problems.append("UNREVIEWED security exception: %s in %s" % (key[1], key[0]))
         else:
             tolerated.append((key, exc))
     for key, exc in sorted(index.items()):

@@ -54,9 +54,11 @@
       "apps.engagement",
       "apps.notifications",
       "apps.dashboard",
-      "apps.content"
+      "apps.content",
+      "apps.blog",
+      "apps.storefront_builder"
     ],
     "min_tests": 5000,
-    "protects": "store scoping, tenant isolation, merchant dashboard, storefront content"
+    "protects": "store scoping, tenant isolation, merchant dashboard, storefront content; blog and full storefront builder tests"
   }
 }

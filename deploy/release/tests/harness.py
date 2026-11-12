@@ -121,7 +121,7 @@ class Sandbox:
         self.env_file.write_text("\n".join(env_lines) + "\n")
         os.chmod(str(self.env_file), 0o600)
         self.conf.write_text("\n".join([
-            "[rastisi]", "base_dir = %s" % self.base, "app_user = tester", "service = rastisi-test.service",
+            "[rastisi]", "jobs_follow_current = true", "edge_probe_enabled = false", "base_dir = %s" % self.base, "app_user = tester", "service = rastisi-test.service",
             "env_file = %s" % self.env_file, "port = 18999", "static_root = %s" % self.static, "python = %s" % PY,
             "app_runner = %s %s" % (PY, TOOLS / "rastisi_app_task.py"),
             "systemctl = %s %s %s" % (PY, STUBS / "fake_systemctl.py", self.fake),

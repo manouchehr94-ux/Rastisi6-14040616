@@ -146,15 +146,17 @@ jobs:
 
   ci:
     name: Tests for exactly this commit
-    needs: plan
+    needs: [plan, build]
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ needs.plan.outputs.sha }}
       from_sha: ${{ needs.plan.outputs.from_sha }}
+      artifact_name: release-${{ needs.plan.outputs.sha }}
+      artifact_sha256: ${{ needs.build.outputs.sha256 }}
 
   build:
     name: Build the artifact
-    needs: [plan, ci]
+    needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -196,7 +198,7 @@ jobs:
 
   deploy:
     name: Deploy (waits for the owner's approval)
-    needs: [plan, build]
+    needs: [plan, build, ci]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The repository setting 'Required reviewers' on this environment IS the owner's approval. Nothing below runs before it is given.
@@ -242,7 +244,7 @@ jobs:
           have = json.loads(sys.argv[1])["tooling"]
           want = open("deploy/release/TOOLING_VERSION").read().strip()
           if have != want:
-              print("::warning::the release tooling on the server is version %s, this repository has %s. Update it with deploy/release/install.sh before relying on new behaviour." % (have, want))
+              raise SystemExit("::error::server tooling %s differs from reviewed tooling %s; update it before deploying" % (have, want))
           PY
       - name: Stage (upload, verify checksum, unpack, build or reuse the virtualenv)
         id: stage

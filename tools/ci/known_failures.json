@@ -12,7 +12,10 @@
       "resolution": "Owner decision: (a) approve the privacy text, then the test passes as is, or (b) change the test to assert 'index, follow' for /terms/ and 'noindex' for /privacy/ while unapproved.",
       "owner": "product owner",
       "since": "2026-11-06",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": [
+        "210fa29a6b527032245f53cd64d21cc87517e6b4dd296733d98373b78c0b8d34"
+      ]
     },
     {
       "id": "apps.portal.tests.test_public_site_theme_contract.PublicSiteThemeContractTests.test_public_css_keeps_literal_colors_inside_root_tokens",
@@ -25,7 +28,10 @@
       "resolution": "Move the colour into a token in :root and reference it with var(). A CSS-only change in a separate branch; not part of the release infrastructure.",
       "owner": "front-end",
       "since": "2026-11-06",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": [
+        "eaf4bdfa7e66f17015e5d79dda8bd9ce7a99c179694f104443df0f4757f9cdd8"
+      ]
     },
     {
       "id": "apps.orders.tests.test_coupon_concurrency.ConcurrentCampaignExecutionTests.test_overlapping_runs_issue_each_customer_once",
@@ -38,51 +44,67 @@
       "resolution": "Update the final assertion: expect event_key 'campaign.offer_percent'; either create the customers with promotional consent and expect 'queued', or assert 'skipped'/'no_promotional_consent'. Keep the exactly-once assertions.",
       "owner": "engagement/notifications",
       "since": "2026-11-04",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": []
     },
     {
       "id": "apps.dashboard.tests.test_settings_views.SettingsPageQueryPerformanceTests.test_general_page_query_count_bounded_and_legacy_appearance_redirect_is_cheap",
-      "tiers": ["tenant"],
+      "tiers": [
+        "tenant"
+      ],
       "kind": "real-defect-performance-budget",
       "root_cause": "The general settings page now issues 28 SQL queries; the test budget is 26. Measured on Python 3.12: the test passes on main (7d311556) and fails on the Phase-1 baseline (abab0041) and on production (6a6897b7), so the two extra queries were added by feature work between main and the baseline, before the financial/security remediation and before this release infrastructure.",
       "risk_if_ignored": "two additional queries on a merchant-dashboard settings page; no correctness or security effect",
       "resolution": "Find the two queries with CaptureQueriesContext (git bisect between 7d311556 and abab0041) and remove or prefetch them, or raise the budget to 28 with the reason recorded in the test.",
       "owner": "dashboard",
       "since": "2026-11-12",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": [
+        "15d40dbed75c46d6381f0748429598f78c5190214bb9829da71707fbd72e0a6d"
+      ]
     },
     {
       "id": "apps.notifications.tests.test_producer_wiring.RefundFailureGuardTests.test_no_production_code_can_currently_produce_a_final_refund_failure",
-      "tiers": ["tenant"],
+      "tiers": [
+        "tenant"
+      ],
       "kind": "tripwire-triggered",
       "root_cause": "This test is a deliberate tripwire: it fails when production code can set SubscriptionRefund.Status.FAILED while the notification 'payment.refund_failed' is still PLANNED (no producer, nothing is sent). It passes on the Phase-1 baseline (abab0041) and fails on production (6a6897b7) because the Phase-2 refund work (commit f2a8f8e5, F-06, 2026-11-10) added two places that set FAILED: apps/billing/services/refund_service.py _record_outcome and fail_refund_manually. That phase's regression runs did not include apps.notifications, so it was not noticed then.",
       "risk_if_ignored": "a refund that ends as FAILED (gateway refused it, or an operator marked it failed manually) produces NO notification to the merchant or the platform owner; the refund state itself is correct and recorded",
       "resolution": "Product/finance decision before the next feature release: either implement the 'payment.refund_failed' producer (then the tripwire is updated, as its message instructs) or accept in writing that a failed refund is only visible in the admin. The tripwire must not be edited to pass without that decision.",
       "owner": "platform owner (finance)",
       "since": "2026-11-12",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": [],
+      "release_blocker": true
     },
     {
       "id": "apps.stores.tests.test_refresh_rasti_mode_demo_visuals_command.RefreshRastiModeDemoVisualsCommandTests.test_refresh_applies_curated_branding_and_all_non_product_media",
-      "tiers": ["tenant"],
+      "tiers": [
+        "tenant"
+      ],
       "kind": "stale-test-expectation-or-seed-drift",
       "root_cause": "Pre-existing and documented since 2026-10-29 (docs/admin-modernization/TEST_RECONCILIATION_20261029.md). Reproduced deterministically in isolation on Python 3.12: after 'refresh_rasti_mode_demo_visuals', 3 categories of the seeded demo store still have no image. The curated manifest names 10 categories, while the demo seeder builds a larger category tree; the 3 not covered are not curated, so the assertion 'no category without image' cannot hold. The curated assets themselves are present and match SHA256SUMS (41 files). Which 3 categories exactly was not enumerated.",
       "risk_if_ignored": "none for customers; this is a demo-store tooling command, not on the checkout, payment or login path",
       "resolution": "Add the missing categories to the curated manifest (and assets) or restrict the assertion to the manifest categories.",
       "owner": "stores / demo content",
       "since": "2026-11-12",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": []
     },
     {
       "id": "apps.stores.tests.test_refresh_rasti_mode_demo_visuals_command.RefreshRastiModeDemoVisualsCommandTests.test_second_run_is_content_idempotent",
-      "tiers": ["tenant"],
+      "tiers": [
+        "tenant"
+      ],
       "kind": "stale-test-expectation-or-seed-drift",
       "root_cause": "Same cause as the preceding entry: the test digests the image of every seeded category and fails with ValueError ('image' attribute has no file) on a category that the curated manifest does not cover. Reproduced in isolation on Python 3.12 (about 90 s).",
       "risk_if_ignored": "none for customers (demo tooling)",
       "resolution": "Same fix as the preceding entry.",
       "owner": "stores / demo content",
       "since": "2026-11-12",
-      "expires": "2026-12-15"
+      "expires": "2026-12-15",
+      "expected_failure_sha256": []
     }
   ]
 }

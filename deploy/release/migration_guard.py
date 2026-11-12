@@ -28,12 +28,12 @@ _DESTRUCTIVE_OPS = {
     "RemoveField", "DeleteModel", "RenameField", "RenameModel", "AlterModelTable", "AlterOrderWithRespectTo",
 }
 _ADDITIVE_OPS = {
-    "CreateModel", "AddIndex", "AlterModelOptions", "AlterModelManagers", "RemoveIndex", "RemoveConstraint",
+    "CreateModel", "AddIndex", "AlterModelOptions", "AlterModelManagers",
     "CreateExtension", "AlterIndexTogether",
 }
 _REVIEW_OPS = {
     "AlterField", "AddConstraint", "AlterUniqueTogether", "RunPython", "RunSQL", "SeparateDatabaseAndState", "AlterModelTableComment",
-    "RenameIndex",
+    "RenameIndex", "RemoveConstraint", "RemoveIndex",
 }
 _SQL_DESTRUCTIVE = re.compile(r"(?i)\b(DROP|TRUNCATE|DELETE\s+FROM|ALTER\s+TABLE\s+\S+\s+DROP|UPDATE\s+\S+\s+SET)\b")
 
@@ -65,7 +65,8 @@ def _field_is_n_minus_1_safe(field_call):
     null = _kw(field_call, "null")
     if isinstance(null, ast.Constant) and null.value is True:
         return True
-    if _kw(field_call, "db_default") is not None:
+    default = _kw(field_call, "db_default")
+    if isinstance(default, ast.Constant) and default.value is not None:
         return True
     return _op_name(field_call) in {"ManyToManyField"}
 
@@ -126,12 +127,21 @@ def analyze_source(source, filename="<migration>"):
                 review(name or '<dynamic>', 'unknown or dynamic operation')
             else:
                 operations.append(operation)
+        for key in assignments:
+            if key not in {'operations', 'dependencies', 'initial', 'atomic', 'replaces', 'run_before'}:
+                review('<class-binding>', 'unexpected Migration class binding')
         for node in cls.body:
             if not isinstance(node, (ast.Assign, ast.Pass)) and not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
                 review('<class-code>', 'dynamic Migration class needs review')
             if isinstance(node, ast.Assign) and any(not isinstance(t, ast.Name) for t in node.targets):
                 review('<assignment>', 'dynamic class assignment')
     for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name != 'Migration':
+            review('<helper-class>', 'executable helper class needs review')
+        if isinstance(node, ast.ImportFrom) and not (node.module or '').startswith('django.'):
+            review('<import>', 'non-Django import needs review')
+        if isinstance(node, ast.Import) and any(not n.name.startswith('django.') and n.name != 'django' for n in node.names):
+            review('<import>', 'non-Django import needs review')
         if not isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef)) and not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
             review('<module-code>', 'executable module code needs review')
     for node in operations:
@@ -140,7 +150,10 @@ def analyze_source(source, filename="<migration>"):
         name = canonical(node.func).rsplit(".", 1)[-1]
         if name == "AddField":
             field = node.args[2] if len(node.args) >= 3 else _kw(node, "field")
-            if _field_is_n_minus_1_safe(field):
+            field_type = canonical(field.func) if isinstance(field, ast.Call) else ''
+            if not field_type.startswith('django.db.models.'):
+                findings.append({'op': name, 'level': 'REVIEW', 'why': 'custom or dynamic field'})
+            elif _field_is_n_minus_1_safe(field):
                 findings.append({"op": name, "level": "ADDITIVE", "why": "new nullable (or db_default) column"})
             else:
                 findings.append({"op": name, "level": "REVIEW", "why": "new NOT NULL column without a database default: the previous release's INSERTs omit it and would fail"})

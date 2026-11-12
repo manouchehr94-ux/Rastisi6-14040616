@@ -103,7 +103,7 @@ class RealApplicationRehearsal(unittest.TestCase):
         cls.manager = [PY, str(HERE / "fake_service_manager.py"), str(cls.svc_state), str(cls.base), str(cls.env_file), str(PORT)]
         cls.conf = cls.root / "deploy.conf"
         cls.conf.write_text("\n".join([
-            "[rastisi]", "base_dir = %s" % cls.base, "app_user = tester", "service = rastisi-selftest.service", "env_file = %s" % cls.env_file,
+            "[rastisi]", "jobs_follow_current = true", "edge_probe_enabled = false", "base_dir = %s" % cls.base, "app_user = tester", "service = rastisi-selftest.service", "env_file = %s" % cls.env_file,
             "port = %d" % PORT, "static_root = %s" % cls.static, "python = %s" % PY,
             "app_runner = %s %s" % (PY, TOOLS / "rastisi_app_task.py"), "systemctl = %s" % " ".join(cls.manager),
             "systemctl_show = %s" % " ".join(cls.manager), "smoke_host = %s" % HOST, "health_timeout = 60", "migrate_timeout = 900",

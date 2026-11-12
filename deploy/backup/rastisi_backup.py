@@ -47,6 +47,10 @@ class BackupError(Exception):
     pass
 
 
+class BackupBusy(BackupError):
+    """A competing invocation is not a failure of the backup already running."""
+
+
 class Conf:
     def __init__(self, path=None):
         path = path or os.environ.get(CONF_ENV) or DEFAULT_CONF
@@ -104,7 +108,10 @@ class Tools:
     def run(self, cmd, env_extra=None, timeout=3600, stdin=None, stdout=None, check=True, what=""):
         env = self.base_env()
         env.update(env_extra or {})
-        proc = subprocess.run(cmd, env=env, capture_output=stdout is None, text=stdout is None, timeout=timeout, stdin=stdin, stdout=stdout)
+        try:
+            proc = subprocess.run(cmd, env=env, capture_output=stdout is None, text=stdout is None, timeout=timeout, stdin=stdin, stdout=stdout)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise BackupError("%s failed (%s)" % (what or Path(cmd[0]).name, exc.__class__.__name__)) from exc
         if check and proc.returncode != 0:
             err = C.redact(((proc.stderr or "") if stdout is None else "")[-800:], self.secrets)
             raise BackupError("%s failed (exit %d): %s" % (what or cmd[0], proc.returncode, err.strip()))
@@ -121,12 +128,14 @@ def lock_file(conf):
     try:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        raise BackupError("another backup/drill is running")
+        raise BackupBusy("another backup/drill is running")
     return fh
 
 
 def write_state(conf, name, data):
-    C.atomic_write_json(conf.state / name, data, mode=0o640)
+    # State contains identifiers/digests only, never credentials. The separate
+    # deploy account needs read access; it must never gain access to app secrets.
+    C.atomic_write_json(conf.state / name, data, mode=0o644)
 
 
 def now_iso():
@@ -251,14 +260,22 @@ def verify_stored_dump(tools, conf, expected_sha):
 
 
 def alert(conf, subject, body, secrets=()):
-    cmd = conf.get("alert_cmd")
-    to = conf.get("alert_to")
-    if not cmd or not to:
-        return
+    cmd, to = conf.get("alert_cmd"), conf.get("alert_to")
+    marker = conf.state / "ALERT_DELIVERY_FAILED"
     try:
-        subprocess.run(cmd.split() + [subject, to], input=C.redact(body, secrets), text=True, timeout=60, capture_output=True)
-    except (OSError, subprocess.TimeoutExpired):
+        if not cmd or not to or "CHANGE_ME" in to:
+            raise BackupError("alert path is not configured")
+        import shlex
+        proc = subprocess.run(shlex.split(cmd) + [subject, to], input=C.redact(body, secrets), text=True, timeout=60, capture_output=True)
+        if proc.returncode != 0:
+            raise BackupError("alert command exited %d" % proc.returncode)
+    except (BackupError, OSError, subprocess.TimeoutExpired):
         sys.stderr.write("ALERT DELIVERY FAILED\n")
+        marker.write_text(now_iso() + " alert delivery failed\n")
+        return False
+    if marker.exists():
+        marker.unlink()
+    return True
 
 
 # =============================================================================================================== verify / drill
@@ -270,10 +287,14 @@ def cmd_verify(conf, args):
         if not info.get("db_sha256"):
             raise BackupError("no verified backup is recorded")
         verify_stored_dump(tools, conf, info["db_sha256"])
-        tools.restic_run("check", "--read-data-subset", conf.get("check_read_data_subset", "5%"), timeout=7200)
+        tools.restic_run("check", "--read-data-subset", "100%", timeout=21600)
         say("stored backup re-verified")
         return 0
     except BackupError as exc:
+        (conf.state / "BACKUP_FAILED").write_text(now_iso() + " verification failed\n")
+        info = C.read_json(conf.state / "last_backup.json", {})
+        info.update(verified=False, verification_failed_at=now_iso())
+        write_state(conf, "last_backup.json", info)
         say("VERIFY FAILED: %s" % exc, tools.secrets)
         alert(conf, "RastiSi backup verification FAILED", str(exc), tools.secrets)
         return 1
@@ -294,6 +315,13 @@ def cmd_restore_drill(conf, args):
     if scratch == tools.db or not DRILL_NAME_RE.match(scratch):
         raise BackupError("refusing: %r is not a valid scratch database name" % scratch)
     admin_env = dict(tools.pg_env)
+    admin_file = conf.get("drill_admin_env_file")
+    if admin_file:
+        values = C.parse_env_file(admin_file)
+        if not all(values.get(k) for k in ("PGHOST", "PGUSER", "PGPASSWORD")):
+            raise BackupError("drill_admin_env_file must configure PGHOST, PGUSER and PGPASSWORD")
+        admin_env.update({k: v for k, v in values.items() if k in ("PGHOST", "PGPORT", "PGUSER", "PGPASSWORD")})
+        tools.secrets |= C.secret_values(values)
     admin_url = conf.get("drill_admin_url")
     if admin_url:
         p = urlparse(admin_url)
@@ -398,8 +426,18 @@ def main(argv=None):
     try:
         conf = Conf()
         return {"run": cmd_run, "verify": cmd_verify, "restore-drill": cmd_restore_drill, "status": cmd_status}[args.cmd](conf, args)
-    except BackupError as exc:
-        sys.stderr.write("backup error: %s\n" % C.redact(str(exc)))
+    except BackupBusy:
+        sys.stderr.write("another backup/drill is running\n")
+        return 75
+    except (BackupError, OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        # Includes setup failures before a subcommand's try/finally. Never print
+        # arbitrary exception text from parsers or credential-bearing commands.
+        message = "backup %s failed (%s)" % (args.cmd, exc.__class__.__name__)
+        sys.stderr.write(message + "\n")
+        if "conf" in locals():
+            conf.state.mkdir(parents=True, exist_ok=True)
+            (conf.state / "BACKUP_FAILED").write_text(now_iso() + " " + message + "\n")
+            alert(conf, "RastiSi backup operation FAILED", message)
         return 2
 
 
