@@ -36,6 +36,11 @@ class ReviewRegressions(unittest.TestCase):
             source = 'from django.db import migrations, models\nclass Migration(migrations.Migration):\n operations=[migrations.AddField(model_name="x", name="y", field=%s)]' % field
             self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
 
+    def test_known_add_field_cannot_hide_unknown_executable_arguments(self):
+        source = 'from django.db import migrations, models\nclass Migration(migrations.Migration):\n operations=[migrations.AddField(model_name="x", name="y", field=models.CharField(null=True, default=unknown_function()))]'
+        __import__('ast').parse(source)
+        self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
+
     def test_c2_rollback_rejects_interrupted_deploy_even_with_ack(self):
         for ack in ('', R.UNSAFE_ROLLBACK_PHRASE):
             state = MagicMock()
@@ -77,7 +82,7 @@ class ReviewRegressions(unittest.TestCase):
             runtime_check.check_runtime('/python', {'python':'3.12'})
 
     def test_health_probe_error_json_and_bad_structure_fail_closed(self):
-        for rc, data in ((1, {'ok': False, 'error': 'OperationalError'}), (0, {}), (0, {'ok': True, 'failures': 'invalid'}), (1, {'ok': True, 'failures': [], 'checks': {}})):
+        for rc, data in ((1, {'ok': False, 'error': 'OperationalError'}), (0, {}), (0, {'ok': True, 'failures': [], 'checks': {}}), (0, {'ok': True, 'failures': [], 'checks': {'database':False}}), (0, {'ok': True, 'failures': 'invalid'}), (1, {'ok': True, 'failures': [], 'checks': {}})):
             ctx = MagicMock()
             ctx.release_paths.return_value = (Path('/fake/app'), Path('/fake/python'))
             ctx.run.return_value = (rc, json.dumps(data))
@@ -90,6 +95,12 @@ from harness import SandboxTestCase
 
 
 class MigrationFailureRegression(SandboxTestCase):
+    def test_non_additive_report_cannot_be_bypassed_by_an_empty_plan(self):
+        rid, _ = self.sbx.make_and_stage(level='DESTRUCTIVE')
+        result = self.sbx.activate(rid, '--allow-migrations')
+        self.assertEqual(result.returncode, R.C.EXIT_POLICY, result.stdout + result.stderr)
+        self.assertIsNone(self.sbx.status()['in_progress'])
+
     def test_c4_failed_unrecorded_migration_preserves_incident_and_marker(self):
         self.sbx.record_backup()
         self.sbx.set_control({'migrate': 'non_atomic_fail'})

@@ -4,6 +4,8 @@
 env_file = /etc/rastisi/rc-20261111.env
 # where the last good backup / last restore drill are recorded; the release tool reads last_backup.json from here. mode 0755, no secrets inside.
 state_dir = /var/lib/rastisi-backup
+# Shared lock prevents schema/code/config changes during a backup.
+deploy_lock_file = /srv/rastisi-releases/state/deploy.lock
 # directory the application stores uploads in (DJANGO_MEDIA_ROOT)
 media_root = /var/www/rastisi-rc-20261111/media
 # restic repository OFF THE SERVER: sftp:user@backup-host:/srv/restic/rastisi  |  s3:https://s3.example/bucket/rastisi  |  rclone:remote:path

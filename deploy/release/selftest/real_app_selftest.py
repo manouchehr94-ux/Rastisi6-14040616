@@ -110,6 +110,8 @@ class RealApplicationRehearsal(unittest.TestCase):
             "backup_record = %s" % (cls.backup_state / "last_backup.json"), "backup_max_age_minutes = 30", "min_free_mb = 50", "keep_releases = 4",
         ]) + "\n")
         cls.env = dict(os.environ, RASTISI_DEPLOY_CONF=str(cls.conf), RASTISI_ALLOW_ROOT_FOR_TESTS="1", PYTHONDONTWRITEBYTECODE="1")
+        cls._cleaned = False
+        cls.addClassCleanup(cls.tearDownClass)
         # scratch clone for synthetic commits (a broken one, one with an additive migration)
         cls.clone = cls.root / "clone"
         sh(["git", "clone", "-q", "--shared", "--no-checkout", str(REPO), str(cls.clone)])
@@ -120,6 +122,9 @@ class RealApplicationRehearsal(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if cls._cleaned:
+            return
+        cls._cleaned = True
         sh(cls.manager + ["stop"], check=False)
         if cls.redis:
             cls.redis.terminate()

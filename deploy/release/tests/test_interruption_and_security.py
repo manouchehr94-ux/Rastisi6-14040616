@@ -118,6 +118,26 @@ class LostConnectionAndKilledProcessTests(SandboxTestCase, GateMixin):
         self.assertEqual(len(activations), 1, "the deployment must run exactly once")
         self.assertIn("DONE", log)
 
+    def test_interruption_during_migration_blocks_activation_and_rollback(self):
+        self.sbx.record_backup()
+        self.sbx.set_control({'migrate_delay': 2})
+        rid, sha = self.sbx.make_and_stage(migrations=['core.0002_interrupted'], level='ADDITIVE')
+        run_id = self.start_activation(rid, sha)
+        marker = self.sbx.base / 'state/in_progress.json'
+        wait_for(lambda: marker.exists() and json.loads(marker.read_text()).get('phase') == 'migrate')
+        child = self.sbx.base / 'state/runs' / run_id / 'child_pid'
+        wait_for(child.exists)
+        os.kill(int(child.read_text()), signal.SIGKILL)
+        code, _ = self.follow_until_done(run_id)
+        self.assertNotEqual(code, 0)
+        # A descendant may still complete after the orchestrator dies. Neither
+        # recorder state is assumed safe; the marker must fence new actions.
+        time.sleep(3)
+        self.assertTrue(marker.exists())
+        self.assertEqual(self.sbx.release('rollback').returncode, C.EXIT_NEEDS_HUMAN)
+        self.assertEqual(self.sbx.activate(rid).returncode, C.EXIT_NEEDS_HUMAN)
+        self.assertIsNotNone(self.sbx.status()['incident'])
+
     def test_follow_is_resumable_at_any_offset(self):
         rid, sha = self.sbx.make_and_stage()
         run_id = self.start_activation(rid, sha)

@@ -70,7 +70,7 @@ def build_wheelhouse(requirements_files, wheelhouse, python_version):
     abi = "cp" + python_version.replace(".", "")
     cmd = [sys.executable, "-m", "pip", "download", "--only-binary=:all:", "--disable-pip-version-check", "-q", "-d", str(wheelhouse),
            "--python-version", python_version, "--implementation", "cp", "--abi", abi]
-    for plat in ("manylinux2014_x86_64", "manylinux_2_17_x86_64", "manylinux_2_28_x86_64", "linux_x86_64"):
+    for plat in ("manylinux2014_x86_64", "manylinux_2_17_x86_64", "manylinux_2_28_x86_64"):
         cmd += ["--platform", plat]
     for req in requirements_files:
         cmd += ["-r", str(req)]

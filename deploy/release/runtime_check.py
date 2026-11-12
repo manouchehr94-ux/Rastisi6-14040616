@@ -4,7 +4,7 @@ import subprocess
 
 
 def check_runtime(python, manifest):
-    query = "import json,platform,sys;print(json.dumps({'python':'%d.%d'%sys.version_info[:2],'machine':platform.machine(),'system':platform.system()}))"
+    query = "import json,platform,sys;print(json.dumps({'python':'%d.%d'%sys.version_info[:2],'machine':platform.machine(),'system':platform.system(),'libc':platform.libc_ver()}))"
     try:
         proc = subprocess.run([python, '-I', '-c', query], capture_output=True, text=True, timeout=30, check=True)
         have = json.loads(proc.stdout)
@@ -18,4 +18,11 @@ def check_runtime(python, manifest):
         raise ValueError('unsupported artifact architecture: Linux x86_64 required')
     if manifest.get('platform', 'linux_x86_64') != 'linux_x86_64':
         raise ValueError('artifact platform does not match this builder')
+    libc, version = have.get('libc', ['', ''])
+    try:
+        compatible = libc == 'glibc' and tuple(map(int, version.split('.')[:2])) >= (2, 28)
+    except ValueError:
+        compatible = False
+    if not compatible:
+        raise ValueError('wheelhouse requires glibc >= 2.28 (selected interpreter runtime: %s %s)' % (libc, version))
     return have

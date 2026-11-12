@@ -24,5 +24,5 @@ if control.get("database_down"):
     failures.append("database: OperationalError")
 if "--post" in sys.argv and pending:
     failures.append("migrations_fully_applied: %d unapplied" % len(pending))
-print(json.dumps({"ok": not failures, "failures": failures, "checks": {}}))
+print(json.dumps({"ok": not failures, "failures": failures, "checks": {"probe_ran": True}}))
 sys.exit(0 if not failures else 1)

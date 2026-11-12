@@ -31,7 +31,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, parse_qs
 
 # Source tree: deploy/release. Installed layout: /usr/local/lib/rastisi.
 _lib = Path(__file__).resolve().parent.parent
@@ -90,9 +90,14 @@ class Tools:
         parsed = urlparse(url)
         if parsed.scheme not in ("postgres", "postgresql") or not parsed.path.strip("/"):
             raise BackupError("DATABASE_URL in the environment file is not a postgres:// URL")
-        self.db = parsed.path.strip("/")
+        self.db = unquote(parsed.path.strip("/"))
         self.pg_env = {"PGHOST": parsed.hostname or "", "PGPORT": str(parsed.port or 5432), "PGUSER": unquote(parsed.username or ""),
                        "PGPASSWORD": unquote(parsed.password or ""), "PGDATABASE": self.db, "PGCONNECT_TIMEOUT": "15"}
+        for key, values in parse_qs(parsed.query, keep_blank_values=True).items():
+            if key not in ('sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'sslcrl', 'sslpassword') or len(values) != 1:
+                raise BackupError('unsupported DATABASE_URL query parameter: %s' % key)
+            self.pg_env['PG' + key.upper()] = values[0]
+            if key == 'sslpassword': self.secrets.add(values[0])
         self.pg_bin = conf.get("pg_bin_dir") or ""
         restic_env = C.parse_env_file(conf.get("restic_env_file")) if conf.get("restic_env_file") else {}
         self.restic_env = dict(restic_env, RESTIC_REPOSITORY=conf.get("restic_repository"), RESTIC_PASSWORD_FILE=conf.get("restic_password_file"))
@@ -128,8 +133,27 @@ def lock_file(conf):
     try:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
+        fh.close()
         raise BackupBusy("another backup/drill is running")
-    return fh
+    deploy = None
+    path = conf.get('deploy_lock_file')
+    if path:
+        try:
+            deploy = open(path, 'r')
+            fcntl.flock(deploy, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            fh.close()
+            if deploy: deploy.close()
+            raise BackupBusy('deployment in progress; backup/drill not started')
+        except OSError:
+            fh.close()
+            if deploy: deploy.close()
+            raise BackupError('deployment lock is missing or unreadable')
+    class HeldLocks:
+        def close(self):
+            if deploy: deploy.close()
+            fh.close()
+    return HeldLocks()
 
 
 def write_state(conf, name, data):

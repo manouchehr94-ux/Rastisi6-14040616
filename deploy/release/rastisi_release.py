@@ -87,7 +87,7 @@ class State:
 
     def raise_incident(self, reason, **details):
         body = {"reason": reason, "at": C.utc_stamp(), "details": details}
-        self.incident_file.write_text(C.redact(json.dumps(body, indent=2, sort_keys=True)) + "\n", encoding="utf-8")
+        C.atomic_write_text(self.incident_file, C.redact(json.dumps(body, indent=2, sort_keys=True)) + "\n")
         self.history(event="incident", reason=reason)
 
     def mark_in_progress(self, run_id, release_id, phase):
@@ -431,19 +431,14 @@ def plan_migrations(cfg, st, runner, rel_id, rel_meta, args):
 
 
 def migration_policy(cfg, st, runner, plan, report, rel_meta, args):
+    level = report.get('level', 'REVIEW')
+    if level not in ('NONE', 'ADDITIVE'):
+        raise Abort(C.EXIT_POLICY, 'online migration level %s is unsafe: a separately reviewed offline migration procedure is required' % level)
     if not plan:
         runner.say("no pending migrations: the database schema is not touched")
         return
     level = report.get("level", "REVIEW")
     runner.say("pending migrations (%d, level %s): %s" % (len(plan), level, ", ".join(plan[:10])))
-    if level not in ("NONE", "ADDITIVE"):
-        raise Abort(C.EXIT_POLICY, "online migration level %s is unsafe: use the documented offline migration procedure with web and background writers stopped" % level)
-    if level in ("REVIEW", "DESTRUCTIVE") and not args.allow_migrations:
-        raise Abort(C.EXIT_POLICY, "migration level %s needs --allow-migrations (explicit owner approval)" % level)
-    if level == "DESTRUCTIVE":
-        phrase = DESTRUCTIVE_PHRASE_PREFIX + rel_meta["sha"][:12]
-        if args.destructive_ack != phrase:
-            raise Abort(C.EXIT_POLICY, "destructive migration needs --destructive-ack %s" % phrase)
     fresh, why = backup_is_fresh(cfg, st)
     if not fresh and not args.skip_backup_check_ack:
         raise Abort(C.EXIT_POLICY, "a verified, recent backup is required before migrating: %s" % why)
@@ -580,7 +575,7 @@ def do_activate(cfg, st, runner, args):
             st.set_status(rel_id, "failed", why="migration failed; operator verification required")
             raise Abort(C.EXIT_NEEDS_HUMAN, "migration failed; in_progress retained. Verify database and terminate surviving migration processes before resolve")
         applied = list(plan)
-    rollback_safe = (not applied) or report.get("level") in ("NONE", "ADDITIVE")
+    rollback_safe = report.get("level") in ("NONE", "ADDITIVE")
 
     st.mark_in_progress(runner.run_id, rel_id, "switch")
     try:

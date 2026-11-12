@@ -167,12 +167,30 @@ def utc_stamp():
     return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
 
-def atomic_write_json(path, data, mode=0o640):
+def fsync_directory(path):
+    fd = os.open(str(path), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def atomic_write_text(path, text, mode=0o640):
     path = Path(path)
     tmp = path.with_name(".%s.tmp-%d" % (path.name, os.getpid()))
-    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, mode)
-    os.replace(tmp, path)
+    with tmp.open('w', encoding='utf-8') as fh:
+        os.fchmod(fh.fileno(), mode)
+        fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(str(tmp), str(path))
+    fsync_directory(path.parent)
+
+
+def atomic_write_json(path, data, mode=0o640):
+    # The migration fence must be durable before any SQL is started, not just
+    # visible to another process. fsync both the file and the renamed directory.
+    atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True) + "\n", mode)
 
 
 def read_json(path, default=None):
@@ -190,6 +208,7 @@ def atomic_symlink(target, link):
         tmp.unlink()
     os.symlink(str(target), str(tmp))
     os.replace(str(tmp), str(link))
+    fsync_directory(link.parent)
 
 
 def safe_extract_tar(archive, dest, max_bytes=2 * 1024 ** 3):

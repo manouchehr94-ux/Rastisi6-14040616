@@ -36,6 +36,21 @@ class BackupSafetyTests(unittest.TestCase):
             self.assertEqual(B.main(), 75)
         self.assertFalse((self.conf.state/'BACKUP_FAILED').exists())
 
+    def test_backup_deploy_lock_is_shared_and_blocks_schema_transitions(self):
+        import fcntl
+        path = self.conf.state/'deploy.lock'
+        path.touch()
+        self.conf.get.side_effect = lambda key, default=None: str(path) if key == 'deploy_lock_file' else default
+        locks = B.lock_file(self.conf)
+        try:
+            with path.open('r') as other:
+                with self.assertRaises(BlockingIOError): fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            locks.close()
+        with path.open('r') as other:
+            fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(B.BackupBusy): B.lock_file(self.conf)
+
     def test_failed_alert_delivery_leaves_a_visible_marker(self):
         self.conf.get.side_effect = lambda key, default=None: {'alert_cmd': 'mail -s', 'alert_to': 'operator@local.test'}.get(key, default)
         with patch.object(B.subprocess, 'run', return_value=types.SimpleNamespace(returncode=1)), contextlib.redirect_stderr(io.StringIO()):

@@ -39,6 +39,7 @@ done
 for v in SERVICE APP_USER BASE ENV_FILE PORT; do [ -n "${!v}" ] || { echo "missing --${v,,}" >&2; usage; }; done
 [[ "$SERVICE" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] || { echo "--service must look like name.service" >&2; exit 2; }
 [[ "$APP_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo "invalid user name" >&2; exit 2; }
+[ "$APP_USER" != "root" ] || { echo "the application user must not be root" >&2; exit 2; }
 [ "$DEPLOY_USER" != "root" ] && [ "$DEPLOY_USER" != "$APP_USER" ] || { echo "the deploy user must be neither root nor the application user" >&2; exit 2; }
 [[ "$BASE" == /* && "$ENV_FILE" == /* ]] || { echo "paths must be absolute" >&2; exit 2; }
 [[ "$PORT" =~ ^[0-9]{2,5}$ ]] || { echo "invalid --port" >&2; exit 2; }
@@ -48,6 +49,14 @@ run() { if [ "$DRY" -eq 1 ]; then printf 'DRY  %q' "$1"; shift; printf ' %q' "$@
 dest() { printf '%s%s' "$DESTDIR" "$1"; }
 as_root() { if [ -n "$DESTDIR" ]; then "$@"; else run "$@"; fi; }
 chown_safe() { if [ -n "$DESTDIR" ]; then return 0; fi; run chown "$@"; }
+
+if [ -z "$DESTDIR" ] && [ "$DRY" -eq 0 ]; then
+  id "$APP_USER" >/dev/null 2>&1 || { echo "application user does not exist" >&2; exit 2; }
+  [ "$(id -u "$APP_USER")" -ne 0 ] || { echo "application uid must not be 0" >&2; exit 2; }
+  if id "$DEPLOY_USER" >/dev/null 2>&1; then
+    [ "$(id -u "$DEPLOY_USER")" -ne 0 ] || { echo "deploy uid must not be 0" >&2; exit 2; }
+  fi
+fi
 
 echo "== tooling -> $(dest "$LIB")"
 as_root install -d -m 0755 "$(dest "$LIB")" "$(dest "$LIB")/smoke.d"
@@ -64,6 +73,11 @@ chown_safe -R root:root /usr/local/lib/rastisi-backup
 echo "== deploy user $DEPLOY_USER"
 if [ -z "$DESTDIR" ] && ! id "$DEPLOY_USER" >/dev/null 2>&1; then
   run useradd --system --create-home --home-dir "/home/$DEPLOY_USER" --shell /bin/sh --comment "RastiSi release deployer" "$DEPLOY_USER"
+elif [ -z "$DESTDIR" ]; then
+  # Tooling v1 created nologin accounts. Forced commands need an executable
+  # shell; account/key ForceCommand restrictions remain mandatory.
+  current_shell="$(getent passwd "$DEPLOY_USER" | cut -d: -f7)"
+  case "$current_shell" in */nologin|*/false) run usermod --shell /bin/sh "$DEPLOY_USER" ;; esac
 fi
 
 echo "== layout under $BASE (owned by $DEPLOY_USER, readable by group $APP_USER)"

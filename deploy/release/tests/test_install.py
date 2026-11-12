@@ -80,7 +80,7 @@ class InstallTests(unittest.TestCase):
 
     def test_unsafe_arguments_are_refused(self):
         for bad in (["--deploy-user", "root"], ["--deploy-user", "rastisi"], ["--service", "x; reboot"], ["--service", "nounit"], ["--port", "80a"],
-                    ["--base", "relative/path"], ["--app-user", "Root User"]):
+                    ["--base", "relative/path"], ["--app-user", "Root User"], ["--app-user", "root"]):
             with self.subTest(bad=bad):
                 proc = run(self.dest, *bad)
                 self.assertNotEqual(proc.returncode, 0, proc.stdout)

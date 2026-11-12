@@ -136,9 +136,10 @@ def v_migrate_plan(ctx, args):
     app, py = ctx.release_paths()
     rc, out = ctx.run([str(py), probe_script(ctx), "plan"], app, timeout=300)
     data = last_json(out)
-    if rc != 0 and not data:
-        return emit(False, error="could not read the migration state")
-    return emit(bool(data.get("ok", False)), plan=data.get("plan", []), error=data.get("error", ""))
+    if (rc != 0 or not isinstance(data, dict) or data.get('ok') is not True
+            or not isinstance(data.get('plan'), list) or not all(isinstance(m, str) for m in data['plan'])):
+        return emit(False, error="could not read a valid migration state")
+    return emit(True, plan=data['plan'], error='')
 
 
 def v_migrate(ctx, args):
@@ -172,7 +173,8 @@ def v_healthcheck(ctx, args):
     rc, out = ctx.run([str(py), probe_script(ctx), "health", mode], app, timeout=120)
     data = last_json(out)
     if (not isinstance(data, dict) or rc != 0 or data.get("ok") is not True
-            or not isinstance(data.get("failures"), list) or not isinstance(data.get("checks"), dict)):
+            or not isinstance(data.get("failures"), list) or not isinstance(data.get("checks"), dict)
+            or not data['checks'] or not all(value is True for value in data['checks'].values())):
         return emit(False, failures=["health probe failed or returned an invalid result"], checks={})
     failures = list(data["failures"])
     if args.expect_release:

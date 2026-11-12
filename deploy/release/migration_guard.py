@@ -144,6 +144,15 @@ def analyze_source(source, filename="<migration>"):
             review('<import>', 'non-Django import needs review')
         if not isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef)) and not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
             review('<module-code>', 'executable module code needs review')
+    # Argument evaluation executes too: a recognised AddField containing an
+    # unknown function call is not proven safe merely because null=True.
+    allowed_calls = {'django.db.migrations.' + name for name in known}
+    allowed_calls.add('django.db.migrations.swappable_dependency')
+    for nested in ast.walk(tree):
+        if isinstance(nested, ast.Call):
+            full = canonical(nested.func)
+            if full not in allowed_calls and not full.startswith('django.db.models.'):
+                review('<argument-call>', 'unknown executable constructor argument or helper')
     for node in operations:
         if not isinstance(node, ast.Call):
             continue

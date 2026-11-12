@@ -1,105 +1,87 @@
-# RastiSi backup and recovery
+# Backup and recovery — tooling v2
 
-Status: implemented (`deploy/backup/rastisi_backup.py`) and tested against a real PostgreSQL 16 and a real restic repository (9 end-to-end tests, plus one run inside the full
-release rehearsal). **Not installed on any server. The off-site repository, its credentials and the timers are owner actions.**
+Review candidate only. Nothing here has been installed on production. All real
+integration tests use synthetic data and a disposable local PostgreSQL/restic
+repository; off-site reachability and retention protection need staging validation.
 
-A deployment never needs a restore: routine releases and rollbacks change code only (`RELEASE_PIPELINE.md`). Backups exist for the cases a release cannot fix:
-a destroyed database, a destroyed disk or server, a deleted shop, a corrupted table.
+## Installation and permissions
 
-## 1. What is protected
+`install.sh` installs the root-owned backup script in `/usr/local/lib/rastisi-backup`
+and shared code in `/usr/local/lib/rastisi`. Both source and installed layouts are
+tested. Run backup as the dedicated non-root app account, never as the deployer.
 
-| Data | How | Frequency (default) | Notes |
-|---|---|---|---|
-| PostgreSQL database of RastiSi | `pg_dump --format=custom` (a consistent snapshot, no downtime), catalogue read back, size and table-count sanity checks | nightly 03:30 (+ before any release that migrates) | the only copy of orders, shops, subscriptions, users; **the most important thing on the server** |
-| Media (`DJANGO_MEDIA_ROOT`, product images, logos) | restic snapshot (deduplicated, so a daily run stores only what changed) | nightly | taken minutes apart from the dump, not atomically; harmless for images |
-| Configuration: `/etc/rastisi/*.env`, `deploy.conf`, `backup.conf`, and the release records `active.json` + `history.jsonl` | included in the **encrypted** repository only | nightly | contains secrets: never stored unencrypted off the machine |
-| Code | not backed up: every release is in GitHub and the last 5 are on the server | | rebuild by running the release workflow for the commit in `state/active.json` |
-| Redis | not backed up | | rate-limit counters and CAPTCHA questions only; losing them is harmless |
-| Private media (`DJANGO_PRIVATE_MEDIA_ROOT`) | **not included** | | generated export/import files that are deliberately not backed up (see `PRODUCTION_CONFIGURATION.md` section 5a); add it to `media_root` handling if the owner wants it |
+Create app-private 0600 restic password/provider credential files outside Git and
+keep independently protected recovery copies. Configure `backup.conf.example`;
+set deploy_lock_file to the SAME state/deploy.lock used by release and cron. The
+job holds a shared deployment lock, preventing code/schema transitions during the
+backup. A competing backup/deploy returns 75 and must be rescheduled. State_dir is
+0755, app-owned. Its JSON state is 0644, contains no credentials and is readable by
+deploy. Do not grant deploy access to app-secret groups.
 
-**Recovery point objective with the defaults: up to 24 hours of data.** Once real customers place orders, run the backup every 6 hours
-(`OnCalendar=*-*-* 00/6:30:00`; the dump is small and restic only uploads changes). Point-in-time recovery (WAL archiving) is *not* implemented: it is the next step if 6 hours of loss is too much.
-**Recovery time objective: unknown until the first drill measures it.** The drill prints its duration.
+Use `drill_admin_env_file`, a separate 0600 app-owned file with PGHOST, PGPORT,
+PGUSER and PGPASSWORD. A legacy drill_admin_url is supported but makes backup.conf
+secret-bearing. The drill role needs CREATEDB, NOSUPERUSER and NOCREATEROLE; it is
+separate from the application role. It creates and drops only validated scratch
+names, never the live name. Confirm pg_dump/client compatibility with the actual
+server major version before installing timers.
 
-## 2. How a backup run works (and why it cannot hurt)
+## Backup guarantees and limits
 
-1. dump the database into a private temporary directory, check size and catalogue (`pg_restore --list`), hash it;
-2. add the dump, the config files and the media tree as restic snapshots (client-side AES-256 encryption; the server only ever holds the repository **password file**, the off-site host sees ciphertext);
-3. **verify before anything is deleted**: read the dump back out of the repository, compare its hash with the original, read its catalogue, and run `restic check --read-data-subset` (5% by default, 100% in the weekly verify);
-4. only then write `last_backup.json` (`verified: true`) and apply retention (`keep-daily 14`, `keep-weekly 8`, `keep-monthly 12`);
-5. if any step fails: write `BACKUP_FAILED`, alert, **delete nothing, prune nothing, leave the previous good record untouched**; temporary plaintext is removed in every case.
+`run` makes a consistent PostgreSQL custom-format dump, verifies size/catalogue,
+hashes it, snapshots DB/config/media to encrypted restic, reads the stored dump
+back and checks its hash/catalogue, then runs a restic integrity subset. Only then
+is last_backup.json marked verified and retention allowed. `verify` always reads
+100% of repository data, regardless of the normal-run subset. Failed verification
+invalidates readiness and writes BACKUP_FAILED.
 
-Tests prove: failed dump keeps the old record and snapshots; a corrupted repository is detected and blocks pruning; an empty database is refused; nothing readable (database rows, media bytes, the env file) is found in the repository; no password reaches any output or state file.
+Timeouts and missing executables enter failure reporting. Failed alert delivery
+leaves ALERT_DELIVERY_FAILED and stderr output. Monitor both operation exit status
+and marker/state age independently; a configured mail command is not proof that
+someone received an alert. A verification or newer-backup failure blocks migrating
+deployments until investigated and a successful backup clears the condition.
 
-The release tool refuses a migrating deployment unless `last_backup.json` says `verified: true` and is at most 90 minutes old.
+`restore-drill` performs a real restore into a scratch DB, compares table presence
+and critical non-empty counts, samples media and drops the scratch DB. It is not
+a row-by-row checksum of all business data and does not measure full server rebuild
+time. Test the drill with the actual least-privilege role and off-site provider.
 
-## 3. Setting it up (owner/administrator)
+DB/media snapshots are not atomic together. Concurrently replaced/deleted uploads
+can require reconciliation. Private generated export/import files are excluded by
+the current policy. Nightly dumps allow up to 24 hours of loss; choose a smaller
+schedule when justified. WAL/PITR, append-only/offline backup credentials and full
+server recovery orchestration are NOT implemented. Use a dedicated repository;
+retention operates on that repository. Protect recovery passwords separately.
 
-1. **Choose an off-site target that is not this server and not the same provider account as the server**: another VPS with SFTP, an S3-compatible bucket, or Backblaze B2. Create credentials limited to that repository.
-2. On the server, as the application user:
-   ```
-   install -d -m 0750 /etc/rastisi/backup
-   openssl rand -base64 32 > /etc/rastisi/backup/restic.password && chmod 0600 /etc/rastisi/backup/restic.password
-   # >>> copy the password into your password manager NOW. Without it every backup is unreadable. <<<
-   restic -r <repository> --password-file /etc/rastisi/backup/restic.password init
-   ```
-3. Copy `deploy/backup/examples/backup.conf.example` to `/etc/rastisi/backup.conf` (mode 0640) and fill it in. Create `/var/lib/rastisi-backup` (mode 0755, owner = application user).
-4. A role for the restore drill that can create databases and nothing else (run once, as the PostgreSQL superuser; never give the application role this):
-   ```sql
-   CREATE ROLE rastisi_drill LOGIN PASSWORD '<random>' CREATEDB NOSUPERUSER NOCREATEROLE;
-   ```
-   The drill creates only databases named `<live>_drill_<timestamp>` and drops only those. It cannot read other databases' data (it has no rights on them).
-5. First run by hand, watch it, then the drill:
-   ```
-   sudo -u <app user> RASTISI_BACKUP_CONF=/etc/rastisi/backup.conf python3 /usr/local/lib/rastisi-backup/rastisi_backup.py run
-   ... restore-drill
-   ... status           # exit 0 = a verified backup younger than max_age_minutes exists
-   ```
-6. Install the timers (`deploy/backup/examples/*.service|*.timer`): nightly backup, weekly full verification (100% read), monthly restore drill. Then `systemctl enable --now rastisi-backup.timer rastisi-backup-verify.timer rastisi-restore-drill.timer`.
-7. Make someone **see** failures: set `alert_cmd`/`alert_to`, and monitor `status` (for example a daily check that alerts on non-zero).
+## Recovery after data loss (administrator maintenance procedure)
 
-## 4. The restore drill (proof that the backups work)
+Never restore over an active database. Restore to a scratch database first and
+verify business records, payment reconciliation needs, credentials/config and
+media. Preserve any surviving newer data before deciding to replace it.
 
-`rastisi_backup.py restore-drill` restores the newest dump into a scratch database, then compares it with the live database:
+1. Stop web writers AND all cron/timer/worker writers and wait for in-flight work.
+   Keep the site in explicit maintenance. Do not announce recovery yet.
+2. Restore the selected dump into an empty replacement database, using
+   pg_restore --no-owner --no-privileges --exit-on-error and the intended app role.
+   Restore media into a scratch tree and compare before copying missing files.
+   Match the code/config/schema to the selected snapshot; preserve secret keys
+   needed to decrypt gateway credentials. On compromise, rotate secrets through
+   a separate reviewed recovery plan.
+3. If the required code is newer than the dump, inspect its migration plan on the
+   RESTORED SCRATCH copy first, verify data preservation and decide whether an
+   upgrade is appropriate. Do not start a newer web/job process on the old schema.
+   An administrator may run the reviewed target's migrate with the trusted app
+   environment while writers remain stopped, then verify schema/data. This is a
+   maintenance action, not the normal release workflow.
+4. Activating the already-current release is verification-only: it does NOT
+   apply pending migrations. Do not use reactivation as a recovery schema-upgrade
+   command. Reconcile current/active metadata, migration state and any incident
+   only after verifying what actually runs and what schema was restored.
+5. Verify ORM/application behavior, local Nginx/TLS/static routes, login, tenant
+   boundaries and a sandbox payment flow. Reconcile orders/payments since backup
+   against authoritative provider records before enabling customer traffic.
+6. Resume jobs using the release-aware wrapper and then reopen. Tell affected
+   users the verified recovery point and any unrecoverable interval.
 
-* every table that exists live exists in the restored copy;
-* row counts of the critical tables (shops, orders, users, subscriptions, invoices) are compared (the restored copy is allowed to be *older*, never *empty* when live has data);
-* a sample of media files is streamed back out of the backup and compared byte by byte with the live files (files uploaded after the backup are expected and not an error);
-* the scratch database is dropped in every case; the result and duration are written to `last_restore_drill.json`.
-
-A backup that has never been restored is an assumption. Run the drill once at set-up, then monthly (timer), and after any change of PostgreSQL major version.
-
-## 5. Recovery procedures
-
-Rule 1: **stop and think before restoring anything over live data.** A restore replaces data with older data.
-Rule 2: restore into a *scratch* database first and look at it. Only then decide.
-
-### A. A table or some rows were damaged or deleted (the server is fine)
-1. Restore the newest dump into a scratch database (what the drill does, but keep it): `restic dump latest --tag db <path-to-rastisi.dump> > /tmp/r.dump; createdb rastisi_scratch; pg_restore --no-owner -d rastisi_scratch /tmp/r.dump`.
-2. Copy the rows you need from the scratch database (`COPY ... TO` / `INSERT ... SELECT` through `dblink` or a dump of the table). Do not replace the whole live database.
-3. Drop the scratch database; delete `/tmp/r.dump`.
-
-### B. The database is lost or unusable (server fine)
-1. Put the site in maintenance (stop the unit: `systemctl stop <unit>`; nginx then answers 502, which is honest).
-2. Create an empty database with the same name/owner, `pg_restore --no-owner --exit-on-error -d <db> dump`.
-3. Start the unit; the release tool's `status` shows which release is current; run `manage.py migrate --plan` as the application user: it must say "nothing to apply" (the dump contains the schema of the release that was running then). If the code is newer than the dump, activate that release again through the workflow.
-4. Tell customers that orders placed after the backup time may be missing, and reconcile with the payment gateway statements (`reconcile_platform_payments`, merchant order reconciliation) before reopening.
-
-### C. The server is lost (disk failure, provider incident, compromise)
-1. New server (same OS family). Install PostgreSQL, Redis, nginx, Python 3 + venv, `restic`. Do **not** restore the old server's disk.
-2. Install the release tooling (`install.sh`) and restore the **config snapshot** (`restic restore latest --tag config --target /tmp/cfg`): this brings back `/etc/rastisi/*.env` (secrets! including `DJANGO_SECRET_KEY` and `PAYMENT_CREDENTIAL_KEY`; without the credential key stored gateway credentials cannot be decrypted).
-   * If the server was **compromised**, treat every secret as burnt: rotate the secret key, credential key (re-enter gateway credentials), database and Redis passwords, SMS/e-mail provider keys and the deploy key.
-3. Restore the database (procedure B) and the media (`restic restore latest --tag media --target /`).
-4. Copy the new server's host key into the `DEPLOY_KNOWN_HOSTS` variable in GitHub; point DNS/nginx at it; run the release workflow for the commit that was active (`active.json` and `history.jsonl` from the old `<base>/state` are in the config snapshot; GitHub's last successful deploy run also shows it).
-5. Run the smoke checks and place a test order against the payment gateway's sandbox before announcing recovery.
-
-### D. Media lost, database fine
-`restic restore latest --tag media --target /` into a scratch directory, compare, then copy the missing files back. Files uploaded after the backup are gone for good (merchants must re-upload).
-
-## 6. Limits to know about
-
-* Without WAL archiving, the data loss on a database failure is "since the last backup".
-* The backup target is only as good as its separation from the server and its own protection (enable object-lock / append-only if the provider offers it, so a compromised server cannot delete its own backups; restic supports `rest-server --append-only`).
-* The restic password and the off-site credentials are single points of failure of the *backups*; keep them in the password manager, not only on the server.
-* Retention is applied by the same job that creates backups; a stolen server key could in theory prune. Append-only access is the mitigation.
-* The first drill will show the real restore time. Write it down; it is the honest RTO.
+A scratch restore drill alone is not an RTO guarantee. Rehearse the entire recovery
+on staging and record measured RPO/RTO. Never run these procedures against
+RastiService.ir or another application's database, directories or service.
