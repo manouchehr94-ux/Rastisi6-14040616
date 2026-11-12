@@ -1,0 +1,14 @@
+[Unit]
+Description=RastiSi backup: re-read and verify the stored backup (full integrity check)
+
+[Service]
+Type=oneshot
+User=rastisi
+Group=rastisi
+Environment=RASTISI_BACKUP_CONF=/etc/rastisi/backup.conf
+ExecStart=/usr/bin/python3 /usr/local/lib/rastisi-backup/rastisi_backup.py verify
+TimeoutStartSec=6h
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
+NoNewPrivileges=true

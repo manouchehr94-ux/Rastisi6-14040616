@@ -1,0 +1,284 @@
+name: CI
+
+# Runs on every pull request and on pushes to main / release branches. The release workflow calls it again (workflow_call) for the
+# exact commit that is about to be released, so a deployment never relies on an earlier, possibly different, run.
+#
+# Nothing here has access to a secret, a server or a production database. No test is skipped or deleted to get green: known failures are
+# listed in tools/ci/known_failures.json with a root cause and an expiry date, and the gate fails on anything else.
+
+on:
+  pull_request:
+  push:
+    branches: [main, "release/**"]
+  schedule:
+    - cron: "17 2 * * *"          # nightly, default branch only: all tiers on a fresh environment
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to test
+        type: string
+        required: true
+      from_sha:
+        description: Commit currently in production (for the migration upgrade test)
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ inputs.ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: ${{ vars.RASTISI_PYTHON_VERSION || '3.11' }}
+  # the commit under test: the release workflow passes it in, otherwise the event's own commit
+  TEST_REF: ${{ inputs.ref || github.sha }}
+  DJANGO_SETTINGS_MODULE: shop_core.settings
+
+jobs:
+  static:
+    name: Static checks, tooling tests, secret scan, dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install the production dependency set, freeze it, then add the CI-only tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip freeze > "$RUNNER_TEMP/production-lock.txt"      # exactly what production installs, before any CI tool is added
+          pip install tblib pip-audit pyyaml
+      - name: Python files compile
+        run: python -m compileall -q apps shop_core tools deploy 2>&1 | tail -20
+      - name: Release tooling and CI gate unit tests (no server needed)
+        run: |
+          if [ -d deploy/release/tests ]; then python -m unittest discover -s deploy/release/tests -p "test_*.py"; fi
+          if [ -d tools/ci ]; then python -m unittest discover -s tools/ci -p "test_*.py"; fi
+      - name: Secret scan of the committed files
+        run: python tools/ci/secret_scan.py --rev HEAD --allow tools/ci/secret_scan_allow.txt
+      - name: Production-like configuration boots, unsafe configurations are refused
+        run: python tools/ci/prod_config_check.py
+      - name: Dependency vulnerabilities (explicit, expiring exceptions only)
+        run: python tools/ci/audit_policy.py --requirements "$RUNNER_TEMP/production-lock.txt"
+      - name: Workflow files are valid
+        run: |
+          python - <<'PY'
+          import glob, yaml
+          for f in sorted(glob.glob(".github/workflows/*.yml")):
+              yaml.safe_load(open(f))
+              print("valid YAML:", f)
+          PY
+
+  tests-fast:
+    name: Tests (fast tier, SQLite)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt tblib
+      - name: Fast tier through the quality gate
+        run: python tools/ci/test_gate.py --tier fast --parallel 4 --output fast-tier.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: log-tests-fast
+          path: fast-tier.log
+          retention-days: 14
+
+  tests-tenant:
+    name: Tests (tenant and storefront tier, SQLite)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt tblib
+      - name: Tenant tier through the quality gate
+        run: python tools/ci/test_gate.py --tier tenant --parallel 4 --output tenant-tier.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: log-tests-tenant
+          path: tenant-tier.log
+          retention-days: 14
+
+  tests-postgres:
+    name: Tests (security + finance tiers, PostgreSQL 16 and Redis)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/rastisi_ci
+      RASTISI_TEST_REDIS_URL: redis://:ci-only-redis@127.0.0.1:6379/0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Password-protected Redis (the Redis tests also check wrong-password behaviour)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq redis-server
+          redis-server --port 6379 --bind 127.0.0.1 --requirepass ci-only-redis --save "" --appendonly no --daemonize yes
+          for _ in $(seq 1 20); do redis-cli -a ci-only-redis --no-auth-warning ping | grep -q PONG && break; sleep 0.5; done
+      - run: pip install -r requirements.txt tblib
+      - name: Security tier (OTP concurrency, CAPTCHA store, auth on real Redis)
+        run: python tools/ci/test_gate.py --tier security_pg --parallel 4 --output security-tier.log
+      - name: Finance tier (exactly-once payments, refund policy, subscriptions, orders)
+        run: python tools/ci/test_gate.py --tier finance_pg --parallel 4 --output finance-tier.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: log-tests-postgres
+          path: "*-tier.log"
+          retention-days: 14
+
+  migrations:
+    name: Migrations (classification, upgrade path from production, N-1 code on N schema)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt psycopg[binary]
+      - name: Decide the base commit
+        id: base
+        run: |
+          BASE="${{ inputs.from_sha || github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then BASE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"; fi
+          echo "sha=$BASE" >> "$GITHUB_OUTPUT"
+          echo "base: $BASE  head: $(git rev-parse HEAD)"
+      - name: Classify the migrations this change would apply
+        run: |
+          python deploy/release/migration_guard.py --repo . --from "${{ steps.base.outputs.sha }}" --to "$(git rev-parse HEAD)" --out migration-report.json \
+            | python -c "import sys,json; d=json.load(sys.stdin); print('migration level:', d['level']); print('new migrations:', d['new_migrations'])"
+          {
+            echo "### Migration report"
+            python -c "import json; d=json.load(open('migration-report.json')); print('level: **%s**, new migrations: %d, automatic rollback safe: %s' % (d['level'], len(d['new_migrations']), d['rollback_safe']))"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upgrade path on PostgreSQL (base schema -> head schema, N-1 code on the new schema)
+        run: |
+          python tools/ci/migration_upgrade_test.py --repo . --base "${{ steps.base.outputs.sha }}" --head "$(git rev-parse HEAD)" \
+            --admin-url postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres --psql psql
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: migration-report
+          path: migration-report.json
+          retention-days: 30
+
+  deploy-rehearsal:
+    name: Release system rehearsal (real app, Gunicorn, PostgreSQL, Redis, restic)
+    # Exercises the release TOOLING (not the release), ~6 minutes. Skipped when this workflow is called by the release workflow, and
+    # skipped on ordinary pushes/PRs that do not touch the tooling (the 'changed' step); always run nightly and on demand.
+    if: inputs.ref == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_REF }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Did the release tooling change?
+        id: changed
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE" HEAD -- deploy tools/ci .github requirements.txt | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.run == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install tools
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq redis-server restic
+          pip install -r requirements.txt tblib psycopg[binary]
+      - name: Unit-level tooling tests including the real PostgreSQL + restic backup tests
+        if: steps.changed.outputs.run == 'true'
+        env:
+          RASTISI_TEST_PG_BIN: /usr/lib/postgresql/16/bin
+          RASTISI_TEST_PG_ADMIN_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres
+        run: |
+          sudo apt-get install -y -qq postgresql-client-16
+          RASTISI_TEST_RESTIC="$(command -v restic)"
+          export RASTISI_TEST_RESTIC
+          python -m unittest discover -s deploy/backup/tests -p "test_backup_e2e.py" -v
+      - name: Real-application rehearsal (production commit -> cutover -> CAPTCHA release -> broken release -> rollback -> migration)
+        if: steps.changed.outputs.run == 'true'
+        env:
+          RASTISI_TEST_PG_BIN: /usr/lib/postgresql/16/bin
+          RASTISI_TEST_PG_ADMIN_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres
+          RASTISI_TEST_REDIS_BIN: /usr/bin/redis-server
+          PROD_SHA: ${{ vars.RASTISI_REHEARSAL_PROD_SHA || '6a6897b7f7b034d6b80d3e693a2aa4e82b1039f4' }}
+          CAPTCHA_SHA: ${{ vars.RASTISI_REHEARSAL_NEXT_SHA || 'fa416ddbf1ff31652dd7accb9576097fbab0405a' }}
+        run: |
+          sudo apt-get install -y -qq postgresql-client-16
+          RASTISI_TEST_RESTIC="$(command -v restic)"
+          export RASTISI_TEST_RESTIC
+          git fetch --no-tags origin "$PROD_SHA" "$CAPTCHA_SHA" || true
+          python deploy/release/selftest/real_app_selftest.py

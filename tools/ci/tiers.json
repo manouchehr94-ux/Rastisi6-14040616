@@ -1,0 +1,62 @@
+{
+  "_doc": "Test tiers for CI. 'labels' are Django test labels. Nothing in a tier is ever skipped to get a green build; PostgreSQL/Redis-only tests are run in the tiers that provide those services. 'optional_labels' are included only when the module exists in the commit being tested (so the same tier definition works on commits before and after a feature landed). 'min_tests' is ~95% of the count measured on 2026-11-12 (fast 2052, security_pg 589, finance_pg 2287, tenant 5302): it catches a tier that silently lost its tests.",
+  "fast": {
+    "database": "sqlite",
+    "labels": [
+      "apps.portal",
+      "apps.core",
+      "shop_core"
+    ],
+    "min_tests": 1950,
+    "protects": "authentication, OTP, registration, CAPTCHA, production settings and system checks, rate limits, public site"
+  },
+  "security_pg": {
+    "database": "postgresql+redis",
+    "labels": [
+      "apps.portal.tests.test_auth_infra_integration",
+      "apps.portal.tests.test_owner_login_audit",
+      "apps.portal.tests.test_dev_otp",
+      "apps.portal.tests.test_owner_otp",
+      "apps.portal.tests.test_owner_otp_resend_cooldown",
+      "apps.portal.tests.test_owner_registration_hardening",
+      "apps.portal.tests.test_owner_signup_credentials",
+      "apps.portal.tests.test_owner_terms_acceptance",
+      "apps.portal.tests.test_password_reset_sms",
+      "apps.portal.tests.test_phase_sms1_real_otp_delivery",
+      "apps.core.tests.test_rate_limit_redis",
+      "shop_core"
+    ],
+    "min_tests": 550,
+    "protects": "OTP concurrency and cooldown on PostgreSQL, CAPTCHA against a real Redis, production boot with real Redis",
+    "optional_labels": [
+      "apps.portal.tests.test_math_captcha"
+    ]
+  },
+  "finance_pg": {
+    "database": "postgresql",
+    "labels": [
+      "apps.billing",
+      "apps.subscriptions",
+      "apps.sms",
+      "apps.orders",
+      "apps.core.tests.test_background_jobs"
+    ],
+    "min_tests": 2150,
+    "protects": "exactly-once payment fulfilment, refund policy, trial and subscription lifecycle, tenant isolation of orders, background jobs"
+  },
+  "tenant": {
+    "database": "sqlite",
+    "labels": [
+      "apps.stores",
+      "apps.customers",
+      "apps.catalog",
+      "apps.cart",
+      "apps.engagement",
+      "apps.notifications",
+      "apps.dashboard",
+      "apps.content"
+    ],
+    "min_tests": 5000,
+    "protects": "store scoping, tenant isolation, merchant dashboard, storefront content"
+  }
+}

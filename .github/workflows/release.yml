@@ -1,0 +1,311 @@
+name: Release to production
+
+# Manual only. One commit, one approval, one deployment at a time.
+#
+#   1. plan      anyone with write access starts it with an exact 40-character commit; the plan job shows what would happen
+#   2. ci        the full test tiers run again for THAT commit (nothing is trusted from an earlier run)
+#   3. build     artifact with hash-pinned dependencies, migration report, checksum
+#   4. approve   the 'production' environment requires the owner's explicit approval (configured in repository settings)
+#   5. deploy    stage -> activate (detached, resumable) -> verify -> keep or roll back, all logged
+#
+# Secrets exist only in the 'production' environment, never in this file, never in a log. This workflow must live on the default branch
+# and the 'production' environment must be restricted to it (see docs/deployment/RELEASE_PIPELINE.md, "Owner actions").
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit to release"
+        required: true
+        type: string
+      from_sha:
+        description: "Full 40-character commit that production runs NOW (the plan is made against it; the server refuses if it differs)"
+        required: true
+        type: string
+      allow_migrations:
+        description: "Allow migrations that the guard classifies REVIEW or DESTRUCTIVE (owner decision)"
+        required: false
+        type: boolean
+        default: false
+      destructive_ack:
+        description: "For DESTRUCTIVE migrations only: type I-ACCEPT-DESTRUCTIVE-MIGRATION-<first 12 chars of the sha>"
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: "Plan on the server (checks, migration plan) but change nothing"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rastisi-production-deploy
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: ${{ vars.RASTISI_PYTHON_VERSION || '3.11' }}
+
+jobs:
+  plan:
+    name: Plan (validate input, show what would change)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.v.outputs.sha }}
+      from_sha: ${{ steps.v.outputs.from_sha }}
+      level: ${{ steps.report.outputs.level }}
+    steps:
+      - name: Validate the input
+        id: v
+        env:
+          SHA: ${{ inputs.sha }}
+          FROM_SHA: ${{ inputs.from_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be 40 lowercase hex characters"; exit 1; }
+          [[ "$FROM_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::from_sha must be 40 lowercase hex characters"; exit 1; }
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "from_sha=$FROM_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.v.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The commit must come from an allowed release branch
+        env:
+          SHA: ${{ steps.v.outputs.sha }}
+          ALLOWED: ${{ vars.RELEASE_BRANCH_REGEX || '^origin/(main|release/.+)$' }}
+        run: |
+          set -euo pipefail
+          branches="$(git branch -r --contains "$SHA" | grep -v ' -> ' | tr -d ' ' || true)"
+          echo "commit is reachable from:"
+          while IFS= read -r b; do echo "  $b"; done <<< "$branches"
+          if ! echo "$branches" | grep -Eq "$ALLOWED"; then
+            echo "::error::commit $SHA is not on a branch matching $ALLOWED. Merge or fast-forward it into main (or a release/* branch) first."
+            exit 1
+          fi
+      - name: The commit being replaced must be an ancestor (no unrelated history)
+        env:
+          SHA: ${{ steps.v.outputs.sha }}
+          FROM_SHA: ${{ steps.v.outputs.from_sha }}
+        run: |
+          git cat-file -e "$FROM_SHA^{commit}" || { echo "::error::from_sha is not in the repository"; exit 1; }
+          if ! git merge-base --is-ancestor "$FROM_SHA" "$SHA"; then
+            echo "::warning::from_sha is not an ancestor of sha: this is not a fast-forward of production (a rollback or a sideways release). Check it is intended."
+          fi
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Migration report
+        id: report
+        env:
+          SHA: ${{ steps.v.outputs.sha }}
+          FROM_SHA: ${{ steps.v.outputs.from_sha }}
+        run: |
+          set -euo pipefail
+          python deploy/release/migration_guard.py --repo . --from "$FROM_SHA" --to "$SHA" --out migration-report.json > /dev/null
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, subprocess
+          sha, frm = os.environ["SHA"], os.environ["FROM_SHA"]
+          r = json.load(open("migration-report.json"))
+          log = subprocess.run(["git", "log", "--oneline", "--no-decorate", "%s..%s" % (frm, sha)], capture_output=True, text=True).stdout.strip().splitlines()
+          stat = subprocess.run(["git", "diff", "--shortstat", frm, sha], capture_output=True, text=True).stdout.strip()
+          print("## Deployment plan")
+          print("| | |\n|---|---|")
+          print("| Release | `%s` |" % sha)
+          print("| Replaces | `%s` |" % frm)
+          print("| Commits | %d |" % len(log))
+          print("| Change | %s |" % stat)
+          print("| Migrations | **%s** (%d new) |" % (r["level"], len(r["new_migrations"])))
+          print("| Automatic rollback safe | %s |" % ("yes" if r["rollback_safe"] else "**NO** (a person decides after a failure)"))
+          print("| Needs `allow_migrations` | %s |" % ("yes" if r["requires_allow_migrations"] else "no"))
+          print("| Needs destructive phrase | %s |" % (("yes: `%s`" % r["destructive_ack_phrase"]) if r["requires_destructive_ack"] else "no"))
+          print("\n### Commits\n```\n" + "\n".join(log[:40]) + ("\n..." if len(log) > 40 else "") + "\n```")
+          if r["new_migrations"]:
+              print("\n### New migrations\n" + "\n".join("- `%s`" % m for m in r["new_migrations"][:60]))
+          print("\nNothing has been deployed. The next jobs run the tests, build the artifact and then WAIT for the owner's approval.")
+          PY
+          python -c "import json; print('level=' + json.load(open('migration-report.json'))['level'])" >> "$GITHUB_OUTPUT"
+      - name: Refuse early when the migration level needs an approval that was not given
+        env:
+          LEVEL: ${{ steps.report.outputs.level }}
+          ALLOW: ${{ inputs.allow_migrations }}
+          ACK: ${{ inputs.destructive_ack }}
+          SHA: ${{ steps.v.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$LEVEL" == "REVIEW" || "$LEVEL" == "DESTRUCTIVE" ]] && [[ "$ALLOW" != "true" ]]; then
+            echo "::error::migrations are classified $LEVEL: re-run with allow_migrations=true after reading the migration report"; exit 1
+          fi
+          if [[ "$LEVEL" == "DESTRUCTIVE" && "$ACK" != "I-ACCEPT-DESTRUCTIVE-MIGRATION-${SHA:0:12}" ]]; then
+            echo "::error::destructive migrations need destructive_ack = I-ACCEPT-DESTRUCTIVE-MIGRATION-${SHA:0:12}"; exit 1
+          fi
+
+  ci:
+    name: Tests for exactly this commit
+    needs: plan
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.plan.outputs.sha }}
+      from_sha: ${{ needs.plan.outputs.from_sha }}
+
+  build:
+    name: Build the artifact
+    needs: [plan, ci]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      sha256: ${{ steps.b.outputs.sha256 }}
+      artifact_name: ${{ steps.b.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the tooling comes from the ref that started the workflow (the default branch); the code to release is exported by commit id below
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build (hash-pinned wheelhouse, manifest, migration report)
+        id: b
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
+          FROM_SHA: ${{ needs.plan.outputs.from_sha }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "$SHA^{commit}"
+          python deploy/release/build_release.py --repo . --sha "$SHA" --from-sha "$FROM_SHA" --out dist --python-version "$PYTHON_VERSION" \
+            --run-id "$GITHUB_RUN_ID" --actor "$GITHUB_ACTOR" | tee build.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d = json.load(open("build.json"))
+          print("sha256=" + d["sha256"])
+          print("name=" + d["artifact"].split("/")[-1])
+          PY
+          cp dist/migration-report.json migration-report.json
+          { echo "### Artifact"; echo "\`$(cat dist/*.sha256)\`"; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ needs.plan.outputs.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy:
+    name: Deploy (waits for the owner's approval)
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # The repository setting 'Required reviewers' on this environment IS the owner's approval. Nothing below runs before it is given.
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-${{ needs.plan.outputs.sha }}
+          path: dist
+      - name: Re-verify the artifact checksum
+        env:
+          EXPECTED: ${{ needs.build.outputs.sha256 }}
+          NAME: ${{ needs.build.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum "dist/$NAME" | cut -d' ' -f1)"
+          [ "$actual" = "$EXPECTED" ] || { echo "::error::artifact changed between build and deploy"; exit 1; }
+      - name: Prepare the SSH connection (key from the environment secret, pinned host key)
+        uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          host: ${{ vars.DEPLOY_HOST }}
+          user: ${{ vars.DEPLOY_USER }}
+          port: ${{ vars.DEPLOY_PORT || '22' }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Server status before
+        run: python deploy/release/remote_client.py status | tee status-before.json
+      - name: Tooling version on the server matches this repository
+        run: |
+          remote="$(python deploy/release/remote_client.py version)"
+          echo "server: $remote   repository: $(cat deploy/release/TOOLING_VERSION)"
+          python - "$remote" <<'PY'
+          import json, sys
+          have = json.loads(sys.argv[1])["tooling"]
+          want = open("deploy/release/TOOLING_VERSION").read().strip()
+          if have != want:
+              print("::warning::the release tooling on the server is version %s, this repository has %s. Update it with deploy/release/install.sh before relying on new behaviour." % (have, want))
+          PY
+      - name: Stage (upload, verify checksum, unpack, build or reuse the virtualenv)
+        id: stage
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+          NAME: ${{ needs.build.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          release="$(python deploy/release/remote_client.py stage --sha "$SHA" --sha256 "$SHA256" --artifact "dist/$NAME" | tail -n 1)"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Staged as $release"
+      - name: Activate and verify (detached on the server, resumable)
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
+          FROM_SHA: ${{ needs.plan.outputs.from_sha }}
+          RELEASE: ${{ steps.stage.outputs.release }}
+          ALLOW: ${{ inputs.allow_migrations }}
+          ACK: ${{ inputs.destructive_ack }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -uo pipefail
+          args=(--release "$RELEASE" --sha "$SHA" --from-sha "$FROM_SHA")
+          [ "$ALLOW" = "true" ] && args+=(--allow-migrations)
+          [ -n "$ACK" ] && args+=(--destructive-ack "$ACK")
+          [ "$DRY" = "true" ] && args+=(--dry-run)
+          python deploy/release/remote_client.py activate "${args[@]}" 2>&1 | tee deploy.log
+          code="${PIPESTATUS[0]}"
+          echo "exit_code=$code" >> "$GITHUB_ENV"
+          exit "$code"
+      - name: Server status after
+        if: always()
+        run: python deploy/release/remote_client.py status | tee status-after.json || true
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deployment result"
+            echo "| | |"; echo "|---|---|"
+            echo "| Commit | \`${{ needs.plan.outputs.sha }}\` |"
+            echo "| Requested by | ${{ github.actor }} |"
+            echo "| Exit code | ${exit_code:-unknown} |"
+            case "${exit_code:-unknown}" in
+              0)  echo "| Outcome | **deployed and verified** |" ;;
+              1)  echo "| Outcome | **rolled back automatically**; the previous release is serving |" ;;
+              2)  echo "| Outcome | **NEEDS A HUMAN**: see the log and the server's INCIDENT file; do not re-run blindly |" ;;
+              3)  echo "| Outcome | **migration failed**; the previous release is still serving |" ;;
+              4)  echo "| Outcome | **refused by policy**; nothing changed |" ;;
+              75) echo "| Outcome | **another deployment was running**; nothing changed |" ;;
+              *)  echo "| Outcome | unknown: check the server before doing anything |" ;;
+            esac
+            echo; echo "Current release on the server:"; echo '```'; python -c "import json; d=json.load(open('status-after.json')); print(d.get('current'), '(commit', d.get('current_sha','')[:12] + ')')" 2>/dev/null || echo "(status unavailable)"; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: deploy-log-${{ github.run_id }}
+          path: |
+            deploy.log
+            status-before.json
+            status-after.json
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Remove the SSH key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts

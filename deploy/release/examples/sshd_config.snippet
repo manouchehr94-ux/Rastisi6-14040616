@@ -1,0 +1,12 @@
+# Optional hardening for the deploy account (append to /etc/ssh/sshd_config.d/rastisi-deploy.conf, then: sshd -t && systemctl reload ssh)
+# Does not change how any other account logs in.
+Match User rastisi-deploy
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthenticationMethods publickey
+    AllowTcpForwarding no
+    X11Forwarding no
+    PermitTTY no
+    MaxSessions 4
+    ClientAliveInterval 30
+    ClientAliveCountMax 6

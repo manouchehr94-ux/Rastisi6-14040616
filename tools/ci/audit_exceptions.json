@@ -1,0 +1,70 @@
+{
+  "_policy": "A known advisory may be tolerated only while listed here, with an owner, a reason and an expiry date (never more than 30 days at a time). A new advisory, an expired exception, an installed version different from the one reviewed, or an exception that no longer matches anything fails the dependency gate. Baseline created 2026-11-12 from pip-audit 2.10.1 on the hash-locked production dependency set of commit 6a6897b7.",
+  "exceptions": [
+    {
+      "package": "cryptography",
+      "version": "49.0.0",
+      "advisories": [
+        "PYSEC-2026-3552"
+      ],
+      "fixed_in": [
+        "50.0.0"
+      ],
+      "owner": "platform owner / back-end",
+      "reason": "The newest cryptography allowed by requirements.txt (cryptography>=43,<50) is 49.0.0; the advisory is fixed only in 50.0.0, which the pin forbids. Used for the Fernet encryption of stored gateway credentials. NOT reviewed for exploitability here. Needs a dependency upgrade in its own branch.",
+      "expires": "2026-12-12"
+    },
+    {
+      "package": "pillow",
+      "version": "12.3.0",
+      "advisories": [
+        "CVE-2026-112390",
+        "CVE-2026-112391",
+        "CVE-2026-112393",
+        "CVE-2026-112395",
+        "CVE-2026-112399",
+        "CVE-2026-112400",
+        "CVE-2026-112401",
+        "CVE-2026-112404",
+        "CVE-2026-112406",
+        "CVE-2026-112891",
+        "CVE-2026-112892",
+        "CVE-2026-112893",
+        "CVE-2026-112894",
+        "CVE-2026-112895",
+        "CVE-2026-112897",
+        "CVE-2026-112899",
+        "CVE-2026-112900",
+        "CVE-2026-96638",
+        "CVE-2026-96640",
+        "CVE-2026-96778",
+        "GHSA-78g4-xqwv-q3g8",
+        "PYSEC-2026-4326",
+        "PYSEC-2026-4327",
+        "PYSEC-2026-4328",
+        "PYSEC-2026-4329",
+        "PYSEC-2026-4330",
+        "PYSEC-2026-4331",
+        "PYSEC-2026-4332",
+        "PYSEC-2026-4333",
+        "PYSEC-2026-4334",
+        "PYSEC-2026-4335",
+        "PYSEC-2026-4336",
+        "PYSEC-2026-4337",
+        "PYSEC-2026-4338",
+        "PYSEC-2026-4339",
+        "PYSEC-2026-4340",
+        "PYSEC-2026-4341",
+        "PYSEC-2026-4342",
+        "PYSEC-2026-4343",
+        "PYSEC-2026-4363"
+      ],
+      "fixed_in": [
+        "13.0.0"
+      ],
+      "owner": "platform owner / back-end",
+      "reason": "The newest Pillow allowed by requirements.txt (Pillow>=12.0,<13) is 12.3.0; every advisory below is fixed only in 13.0.0, which the pin forbids. Pillow processes merchant-uploaded images, so this is a real exposure. NOT reviewed for exploitability here. Needs a dependency upgrade (Pillow 13 + the image-handling tests) in its own branch.",
+      "expires": "2026-12-12"
+    }
+  ]
+}

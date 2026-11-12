@@ -1,0 +1,15 @@
+[Unit]
+Description=RastiSi restore drill (restore the newest dump into a scratch database, compare, drop it)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=rastisi
+Group=rastisi
+Environment=RASTISI_BACKUP_CONF=/etc/rastisi/backup.conf
+ExecStart=/usr/bin/python3 /usr/local/lib/rastisi-backup/rastisi_backup.py restore-drill
+TimeoutStartSec=6h
+Nice=15
+IOSchedulingClass=idle
+PrivateTmp=true
+NoNewPrivileges=true

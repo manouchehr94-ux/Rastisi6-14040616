@@ -1,0 +1,44 @@
+{
+  "_policy": "A test listed here still RUNS in CI and its failure is reported on every build. It is tolerated only until 'expires'. The gate fails when: an unlisted test fails; a listed test PASSES (delete the entry); an entry has expired. No test is skipped, disabled or edited to get a green build. Adding an entry needs the owner's name and a root cause.",
+  "entries": [
+    {
+      "id": "apps.portal.tests.test_seo.PublicPageIndexabilityTests.test_terms_and_privacy_are_indexable",
+      "tiers": [
+        "fast"
+      ],
+      "kind": "stale-test-expectation",
+      "root_cause": "Since commit be579b58 (2026-11-06) the /privacy/ page is deliberately noindex until the platform owner marks the privacy text as approved ('privacy.approved' switch in Platform Admin). The test still expects 'index, follow' for /privacy/. The product behaviour is intended: a legal DRAFT must not be indexed.",
+      "risk_if_ignored": "none for production behaviour; the test cannot detect a regression of /terms/ indexability while it fails",
+      "resolution": "Owner decision: (a) approve the privacy text, then the test passes as is, or (b) change the test to assert 'index, follow' for /terms/ and 'noindex' for /privacy/ while unapproved.",
+      "owner": "product owner",
+      "since": "2026-11-06",
+      "expires": "2026-12-15"
+    },
+    {
+      "id": "apps.portal.tests.test_public_site_theme_contract.PublicSiteThemeContractTests.test_public_css_keeps_literal_colors_inside_root_tokens",
+      "tiers": [
+        "fast"
+      ],
+      "kind": "real-defect-low-severity",
+      "root_cause": "The '.needs-confirm' rule added by be579b58 (2026-11-06) in apps/portal/static/portal/css/public-site-v2.css uses the colour literal #f4b740 outside the :root token block, which the theme contract forbids (the public site theme must be editable from Platform Admin).",
+      "risk_if_ignored": "cosmetic: the 'needs confirmation' highlight ignores a custom theme",
+      "resolution": "Move the colour into a token in :root and reference it with var(). A CSS-only change in a separate branch; not part of the release infrastructure.",
+      "owner": "front-end",
+      "since": "2026-11-06",
+      "expires": "2026-12-15"
+    },
+    {
+      "id": "apps.orders.tests.test_coupon_concurrency.ConcurrentCampaignExecutionTests.test_overlapping_runs_issue_each_customer_once",
+      "tiers": [
+        "finance_pg"
+      ],
+      "kind": "stale-test-expectation",
+      "root_cause": "Verified on PostgreSQL 16 (2026-11-12): the exactly-once assertions of this test (6 issuances, 6 coupons) pass. The final assertion looks for 6 outbox rows with event_key 'coupon.issued' / channel 'email', but the campaign flow now writes 12 rows with event_key 'campaign.offer_percent' (email and sms), all status 'skipped' / skip_reason 'no_promotional_consent', because the test's customers have no promotional consent. The assertion is stale on BOTH the event name and the consent gate.",
+      "risk_if_ignored": "none for production behaviour; it is a merchant-campaign test, outside the platform payment engine",
+      "resolution": "Update the final assertion: expect event_key 'campaign.offer_percent'; either create the customers with promotional consent and expect 'queued', or assert 'skipped'/'no_promotional_consent'. Keep the exactly-once assertions.",
+      "owner": "engagement/notifications",
+      "since": "2026-11-04",
+      "expires": "2026-12-15"
+    }
+  ]
+}
