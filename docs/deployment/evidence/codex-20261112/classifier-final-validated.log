@@ -1,0 +1,21 @@
+test_a_plain_default_is_not_safe_for_the_previous_release (test_migration_guard.ClassificationTests.test_a_plain_default_is_not_safe_for_the_previous_release)
+Django drops the DB default after adding the column: the N-1 code's INSERT would violate NOT NULL. ... ok
+test_additive_operations (test_migration_guard.ClassificationTests.test_additive_operations) ... ok
+test_data_migrations (test_migration_guard.ClassificationTests.test_data_migrations) ... ok
+test_destructive_operations (test_migration_guard.ClassificationTests.test_destructive_operations) ... ok
+test_raw_sql (test_migration_guard.ClassificationTests.test_raw_sql) ... ok
+test_review_operations (test_migration_guard.ClassificationTests.test_review_operations) ... ok
+test_unparseable_migration_is_destructive (test_migration_guard.ClassificationTests.test_unparseable_migration_is_destructive) ... ok
+test_worst_wins (test_migration_guard.ClassificationTests.test_worst_wins) ... ok
+test_a_new_additive_migration_is_listed_by_name (test_migration_guard.GitRangeTests.test_a_new_additive_migration_is_listed_by_name) ... ok
+test_deleting_a_published_migration_is_destructive (test_migration_guard.GitRangeTests.test_deleting_a_published_migration_is_destructive) ... ok
+test_editing_a_published_migration_is_destructive (test_migration_guard.GitRangeTests.test_editing_a_published_migration_is_destructive) ... ok
+test_first_release_counts_every_migration_as_new (test_migration_guard.GitRangeTests.test_first_release_counts_every_migration_as_new) ... ok
+test_no_migration_change_is_NONE_and_rollback_safe (test_migration_guard.GitRangeTests.test_no_migration_change_is_NONE_and_rollback_safe) ... ok
+test_review_level_needs_approval_and_blocks_auto_rollback (test_migration_guard.GitRangeTests.test_review_level_needs_approval_and_blocks_auto_rollback) ... ok
+test_the_captcha_release_has_no_migrations (test_migration_guard.RealHistoryTests.test_the_captcha_release_has_no_migrations) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.262s
+
+OK

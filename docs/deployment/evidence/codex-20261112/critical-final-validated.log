@@ -1,0 +1,17 @@
+test_c4_failed_unrecorded_migration_preserves_incident_and_marker (test_safety_regressions.MigrationFailureRegression.test_c4_failed_unrecorded_migration_preserves_incident_and_marker) ... ok
+test_non_additive_report_cannot_be_bypassed_by_an_empty_plan (test_safety_regressions.MigrationFailureRegression.test_non_additive_report_cannot_be_bypassed_by_an_empty_plan) ... ok
+test_architecture_mismatch_is_rejected (test_safety_regressions.ReviewRegressions.test_architecture_mismatch_is_rejected) ... ok
+test_c1_alias_cannot_hide_a_drop (test_safety_regressions.ReviewRegressions.test_c1_alias_cannot_hide_a_drop) ... ok
+test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) ... ok
+test_c1_non_atomic_requires_review (test_safety_regressions.ReviewRegressions.test_c1_non_atomic_requires_review) ... ok
+test_c2_rollback_rejects_interrupted_deploy_even_with_ack (test_safety_regressions.ReviewRegressions.test_c2_rollback_rejects_interrupted_deploy_even_with_ack) ... ok
+test_c3_backup_imports_from_installed_layout (test_safety_regressions.ReviewRegressions.test_c3_backup_imports_from_installed_layout) ... ok
+test_custom_field_and_null_database_default_are_not_proven_additive (test_safety_regressions.ReviewRegressions.test_custom_field_and_null_database_default_are_not_proven_additive) ... ok
+test_health_probe_error_json_and_bad_structure_fail_closed (test_safety_regressions.ReviewRegressions.test_health_probe_error_json_and_bad_structure_fail_closed) ... ok
+test_known_add_field_cannot_hide_unknown_executable_arguments (test_safety_regressions.ReviewRegressions.test_known_add_field_cannot_hide_unknown_executable_arguments) ... ok
+test_selected_python_is_checked_even_when_configured (test_safety_regressions.ReviewRegressions.test_selected_python_is_checked_even_when_configured) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 4.450s
+
+OK

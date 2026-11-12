@@ -1,0 +1,15 @@
+PASS  create scratch database
+PASS  check out base (cd7b66837bf6)
+PASS  check out head (bf3c799a798c)
+PASS  migrate with BASE code (today's production schema)
+PASS  write rows through BASE code
+PASS  migrate with HEAD code (the upgrade)
+      migrations recorded: 259 -> 259
+PASS  nothing left to migrate (migrate --check)
+PASS  models agree with migrations (makemigrations --check)
+PASS  rows written before the upgrade are intact (3 of 3)
+PASS  BASE code still loads against the HEAD schema (N-1 code on N schema)
+PASS  BASE code reads every model and validates writes on the HEAD schema
+
+migration upgrade test: OK
+

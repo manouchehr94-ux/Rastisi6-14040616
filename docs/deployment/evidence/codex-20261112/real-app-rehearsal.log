@@ -1,0 +1,13 @@
+test_00_production_as_it_is_today_old_style_deployment (__main__.RealApplicationRehearsal.test_00_production_as_it_is_today_old_style_deployment) ... ok
+test_01_cutover_registers_the_running_deployment_without_touching_it (__main__.RealApplicationRehearsal.test_01_cutover_registers_the_running_deployment_without_touching_it) ... ok
+test_02_deploy_the_captcha_release_through_the_gate (__main__.RealApplicationRehearsal.test_02_deploy_the_captcha_release_through_the_gate) ... ok
+test_03_rollback_to_the_legacy_release_and_forward_again (__main__.RealApplicationRehearsal.test_03_rollback_to_the_legacy_release_and_forward_again) ... ok
+test_04_a_broken_release_is_rolled_back_automatically (__main__.RealApplicationRehearsal.test_04_a_broken_release_is_rolled_back_automatically) ... ok
+test_05_redis_outage_stops_the_deploy_before_anything_changes (__main__.RealApplicationRehearsal.test_05_redis_outage_stops_the_deploy_before_anything_changes) ... ok
+test_06_additive_migration_needs_a_real_backup_and_survives_a_code_rollback (__main__.RealApplicationRehearsal.test_06_additive_migration_needs_a_real_backup_and_survives_a_code_rollback) ... ok
+test_07_persistent_data_untouched_and_no_secret_anywhere (__main__.RealApplicationRehearsal.test_07_persistent_data_untouched_and_no_secret_anywhere) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 318.967s
+
+OK

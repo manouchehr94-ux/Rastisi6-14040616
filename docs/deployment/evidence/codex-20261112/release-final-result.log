@@ -1,0 +1,11 @@
+............................../opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=3 encoding='UTF-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/case.py:589: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='UTF-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..................................................................................
+----------------------------------------------------------------------
+Ran 112 tests in 145.192s
+
+OK

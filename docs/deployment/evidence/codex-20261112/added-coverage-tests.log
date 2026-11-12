@@ -1,0 +1,32 @@
+Creating test database for alias 'default'...
+.........F...............................................................................F...............
+======================================================================
+FAIL: test_documented_non_schema_background_aware_sections_have_no_schema (apps.storefront_builder.tests.test_r4_settings_schema.BackgroundCapabilityProjectionTests.test_documented_non_schema_background_aware_sections_have_no_schema)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/apps/storefront_builder/tests/test_r4_settings_schema.py", line 1172, in test_documented_non_schema_background_aware_sections_have_no_schema
+    self.assertIsNone(definition.settings_schema, key)
+AssertionError: SettingsSchema(fields=(SettingsField(key='item_limit', label='تعداد محصولات', field_type='integer', group='basic', default=8, required=False, choices=(), min_value=2, max_value=24, max_length=None, widget_hint=None, repeater_item_fields=(), visible_when=()), SettingsField(key='background', label='پس\u200cزمینه این بخش', field_type='background', group='advanced', default={'mode': 'theme', 'color': '', 'media_asset_id': None, 'pattern_slug': '', 'palette_role': ''}, required=False, choices=(), min_value=None, max_value=None, max_length=None, widget_hint='background_picker', repeater_item_fields=(), visible_when=())), preserve_unmanaged=True) is not None : featured_products
+
+======================================================================
+FAIL: test_every_registered_section_key_matches_its_expected_schema_state (apps.storefront_builder.tests.test_r4_settings_schema.SchemaEnablementRegistryGuardTests.test_every_registered_section_key_matches_its_expected_schema_state)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/apps/storefront_builder/tests/test_r4_settings_schema.py", line 553, in test_every_registered_section_key_matches_its_expected_schema_state
+    self.assertEqual(
+AssertionError: Lists differ: [('hero_stage', False, True), ('featured_products', False, True)] != []
+
+First list contains 2 additional elements.
+First extra element 0:
+('hero_stage', False, True)
+
+- [('hero_stage', False, True), ('featured_products', False, True)]
++ [] : schema-enablement drift (key, expected_enabled, actually_enabled): [('hero_stage', False, True), ('featured_products', False, True)]
+
+----------------------------------------------------------------------
+Ran 105 tests in 0.668s
+
+FAILED (failures=2)
+Destroying test database for alias 'default'...
+Found 105 test(s).
+System check identified no issues (0 silenced).

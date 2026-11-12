@@ -1,0 +1,104 @@
+test_c4_failed_unrecorded_migration_preserves_incident_and_marker (test_safety_regressions.MigrationFailureRegression.test_c4_failed_unrecorded_migration_preserves_incident_and_marker) ... FAIL
+test_c1_alias_cannot_hide_a_drop (test_safety_regressions.ReviewRegressions.test_c1_alias_cannot_hide_a_drop) ... FAIL
+test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) ... 
+  test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) (operations='[CustomOperation()]') ... FAIL
+  test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) (operations='make_operations()') ... FAIL
+  test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) (operations='[*other_operations]') ... FAIL
+test_c1_non_atomic_requires_review (test_safety_regressions.ReviewRegressions.test_c1_non_atomic_requires_review) ... FAIL
+test_c2_rollback_rejects_interrupted_deploy_even_with_ack (test_safety_regressions.ReviewRegressions.test_c2_rollback_rejects_interrupted_deploy_even_with_ack) ... FAIL
+test_c3_backup_imports_from_installed_layout (test_safety_regressions.ReviewRegressions.test_c3_backup_imports_from_installed_layout) ... FAIL
+test_health_probe_error_json_and_bad_structure_fail_closed (test_safety_regressions.ReviewRegressions.test_health_probe_error_json_and_bad_structure_fail_closed) ... FAIL
+
+======================================================================
+FAIL: test_c4_failed_unrecorded_migration_preserves_incident_and_marker (test_safety_regressions.MigrationFailureRegression.test_c4_failed_unrecorded_migration_preserves_incident_and_marker)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 77, in test_c4_failed_unrecorded_migration_preserves_incident_and_marker
+    self.assertEqual(proc.returncode, R.C.EXIT_NEEDS_HUMAN, proc.stdout + proc.stderr)
+AssertionError: 3 != 2 : 2026-11-12T08:37:35Z activate 20261112T083735Z-d3b21e2fa72d (commit d3b21e2fa72d); running now: legacy-9b33046ed39d
+2026-11-12T08:37:36Z pre-flight OK
+2026-11-12T08:37:36Z pending migrations (1, level ADDITIVE): core.0002_partial
+2026-11-12T08:37:36Z backup gate: verified backup 5 min old
+2026-11-12T08:37:36Z applying 1 migration(s)
+2026-11-12T08:37:36Z     | non-atomic SQL applied, then failed before migration recorder
+2026-11-12T08:37:36Z     | 
+2026-11-12T08:37:36Z migration FAILED: migrate exited 1
+{"ok": false, "message": "migration failed; release not activated"}
+
+
+======================================================================
+FAIL: test_c1_alias_cannot_hide_a_drop (test_safety_regressions.ReviewRegressions.test_c1_alias_cannot_hide_a_drop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 22, in test_c1_alias_cannot_hide_a_drop
+    self.assertEqual(G.worst([f['level'] for f in G.analyze_source(source)]), 'DESTRUCTIVE')
+AssertionError: 'NONE' != 'DESTRUCTIVE'
+- NONE
++ DESTRUCTIVE
+
+
+======================================================================
+FAIL: test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) (operations='[CustomOperation()]')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 28, in test_c1_custom_operation_and_dynamic_operations_require_review
+    self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
+AssertionError: 'NONE' unexpectedly found in ('NONE', 'ADDITIVE')
+
+======================================================================
+FAIL: test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) (operations='make_operations()')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 28, in test_c1_custom_operation_and_dynamic_operations_require_review
+    self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
+AssertionError: 'NONE' unexpectedly found in ('NONE', 'ADDITIVE')
+
+======================================================================
+FAIL: test_c1_custom_operation_and_dynamic_operations_require_review (test_safety_regressions.ReviewRegressions.test_c1_custom_operation_and_dynamic_operations_require_review) (operations='[*other_operations]')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 28, in test_c1_custom_operation_and_dynamic_operations_require_review
+    self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
+AssertionError: 'NONE' unexpectedly found in ('NONE', 'ADDITIVE')
+
+======================================================================
+FAIL: test_c1_non_atomic_requires_review (test_safety_regressions.ReviewRegressions.test_c1_non_atomic_requires_review)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 32, in test_c1_non_atomic_requires_review
+    self.assertNotIn(G.worst([f['level'] for f in G.analyze_source(source)]), ('NONE', 'ADDITIVE'))
+AssertionError: 'ADDITIVE' unexpectedly found in ('NONE', 'ADDITIVE')
+
+======================================================================
+FAIL: test_c2_rollback_rejects_interrupted_deploy_even_with_ack (test_safety_regressions.ReviewRegressions.test_c2_rollback_rejects_interrupted_deploy_even_with_ack)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 46, in test_c2_rollback_rejects_interrupted_deploy_even_with_ack
+    self.assertEqual(code, R.C.EXIT_NEEDS_HUMAN)
+AssertionError: 0 != 2
+
+======================================================================
+FAIL: test_c3_backup_imports_from_installed_layout (test_safety_regressions.ReviewRegressions.test_c3_backup_imports_from_installed_layout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 56, in test_c3_backup_imports_from_installed_layout
+    self.assertEqual(result.returncode, 0, result.stderr)
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "/tmp/tmpgxg8gf3i/usr/local/lib/rastisi-backup/rastisi_backup.py", line 37, in <module>
+    import rastisi_common as C  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'rastisi_common'
+
+
+======================================================================
+FAIL: test_health_probe_error_json_and_bad_structure_fail_closed (test_safety_regressions.ReviewRegressions.test_health_probe_error_json_and_bad_structure_fail_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/work/rastisi/deploy/release/tests/test_safety_regressions.py", line 65, in test_health_probe_error_json_and_bad_structure_fail_closed
+    self.assertNotEqual(code, 0, (rc, data))
+AssertionError: 0 == 0 : (1, {'ok': False, 'error': 'OperationalError'})
+
+----------------------------------------------------------------------
+Ran 7 tests in 2.936s
+
+FAILED (failures=9)
