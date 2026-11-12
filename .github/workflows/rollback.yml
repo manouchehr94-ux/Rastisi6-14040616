@@ -1,0 +1,98 @@
+name: Roll back production
+
+# Manual only, and it waits for the same owner approval as a release (environment 'production').
+# Switches the CODE back to the previous release (or a named one). It never touches the database: data written since the release stays.
+# The tool refuses a rollback it cannot prove safe for the database unless the exact acknowledgement phrase is typed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Release id to return to, or 'previous'"
+        required: false
+        type: string
+        default: previous
+      unsafe_ack:
+        description: "Only when the last release applied non-additive migrations: I-UNDERSTAND-THE-DATABASE-MAY-NOT-MATCH-THE-OLD-CODE"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rastisi-production-deploy
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: ${{ vars.RASTISI_PYTHON_VERSION || '3.12' }}
+
+jobs:
+  rollback:
+    name: Roll back (waits for the owner's approval)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Validate the input
+        env:
+          TO: ${{ inputs.to }}
+          ACK: ${{ inputs.unsafe_ack }}
+        run: |
+          set -euo pipefail
+          [[ "$TO" == "previous" || "$TO" =~ ^([0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}|legacy-[0-9a-f]{12})$ ]] || { echo "::error::'to' must be 'previous' or a release id"; exit 1; }
+          [[ -z "$ACK" || "$ACK" == "I-UNDERSTAND-THE-DATABASE-MAY-NOT-MATCH-THE-OLD-CODE" ]] || { echo "::error::unsafe_ack is not the exact phrase"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          host: ${{ vars.DEPLOY_HOST }}
+          user: ${{ vars.DEPLOY_USER }}
+          port: ${{ vars.DEPLOY_PORT || '22' }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Server status before
+        run: python deploy/release/remote_client.py status | tee status-before.json
+      - name: Roll back and verify
+        env:
+          TO: ${{ inputs.to }}
+          ACK: ${{ inputs.unsafe_ack }}
+        run: |
+          set -uo pipefail
+          args=(--to "$TO")
+          [ -n "$ACK" ] && args+=(--unsafe-ack "$ACK")
+          python deploy/release/remote_client.py rollback "${args[@]}" 2>&1 | tee rollback.log
+          code="${PIPESTATUS[0]}"
+          echo "exit_code=$code" >> "$GITHUB_ENV"
+          exit "$code"
+      - name: Server status after
+        if: always()
+        run: python deploy/release/remote_client.py status | tee status-after.json || true
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Rollback result"
+            echo "Requested by ${{ github.actor }}; exit code ${exit_code:-unknown}."
+            echo '```'; python -c "import json; d=json.load(open('status-after.json')); print('now serving', d.get('current'), '(commit', d.get('current_sha','')[:12] + ')')" 2>/dev/null || echo "(status unavailable)"; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rollback-log-${{ github.run_id }}
+          path: |
+            rollback.log
+            status-before.json
+            status-after.json
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Remove the SSH key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts

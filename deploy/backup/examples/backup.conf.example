@@ -1,0 +1,33 @@
+# /etc/rastisi/backup.conf   (mode 0640, owner root, group = the application user). No secrets in this file: only paths to files that hold them.
+[backup]
+# the application's environment file: DATABASE_URL is read from it (never printed, never put on a command line)
+env_file = /etc/rastisi/rc-20261111.env
+# where the last good backup / last restore drill are recorded; the release tool reads last_backup.json from here. mode 0755, no secrets inside.
+state_dir = /var/lib/rastisi-backup
+# directory the application stores uploads in (DJANGO_MEDIA_ROOT)
+media_root = /var/www/rastisi-rc-20261111/media
+# restic repository OFF THE SERVER: sftp:user@backup-host:/srv/restic/rastisi  |  s3:https://s3.example/bucket/rastisi  |  rclone:remote:path
+restic_repository = sftp:rastisi-backup@backup.example.net:/srv/restic/rastisi
+# 0600 file, owner = application user. Losing it makes every backup unreadable: keep a copy of it in the password manager, NOT on this server only.
+restic_password_file = /etc/rastisi/backup/restic.password
+# optional KEY=VALUE file (0600) with the off-site credentials, e.g. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+restic_env_file = /etc/rastisi/backup/restic.env
+# files copied into the (encrypted) config snapshot, comma separated
+config_files = /etc/rastisi/rc-20261111.env, /etc/rastisi/deploy.conf, /etc/rastisi/backup.conf, /srv/rastisi-releases/state/active.json, /srv/rastisi-releases/state/history.jsonl
+host_label = rastisi-prod
+# only if pg_dump is not on PATH
+# pg_bin_dir = /usr/lib/postgresql/16/bin
+# fraction of the repository re-read on every run (the full check is done by the weekly verify with 100%)
+check_read_data_subset = 5%
+# retention; applied ONLY after the new backup passed verification
+keep_daily = 14
+keep_weekly = 8
+keep_monthly = 12
+# alerting (same convention as the cron wrapper: <command words> "<subject>" "<recipient>", body on stdin)
+alert_cmd = mail -s
+alert_to = CHANGE_ME_ALERT_RECIPIENT
+# status exits non-zero when the last verified backup is older than this (minutes); 26 h tolerates one missed night
+max_age_minutes = 1560
+# --- restore drill: needs a role that may CREATE DATABASE and nothing more (never a superuser), see docs/deployment/BACKUP_AND_RECOVERY.md
+drill_admin_url = postgresql://rastisi_drill:CHANGE_ME@127.0.0.1:5432/postgres
+critical_tables = stores_store,orders_order,auth_user,subscriptions_storesubscription,billing_subscriptioninvoice

@@ -1,0 +1,45 @@
+name: Prepare the SSH connection to the production server
+description: >
+  Writes the deploy key and the pinned host key from the 'production' environment and exports RASTISI_SSH for deploy/release/remote_client.py.
+  Refuses to continue if anything is missing or if the deploy user is root. Call remove-key (post step in the workflow) afterwards.
+inputs:
+  key:
+    description: Private key (environment secret DEPLOY_SSH_KEY)
+    required: true
+  known_hosts:
+    description: Pinned host key line(s) (environment variable DEPLOY_KNOWN_HOSTS)
+    required: true
+  host:
+    description: Server name or address (environment variable DEPLOY_HOST)
+    required: true
+  user:
+    description: Deploy user (environment variable DEPLOY_USER, never root)
+    required: true
+  port:
+    description: SSH port
+    required: false
+    default: "22"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        DEPLOY_SSH_KEY: ${{ inputs.key }}
+        DEPLOY_KNOWN_HOSTS: ${{ inputs.known_hosts }}
+        DEPLOY_HOST: ${{ inputs.host }}
+        DEPLOY_USER: ${{ inputs.user }}
+        DEPLOY_PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+        for v in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_HOST DEPLOY_USER; do
+          [ -n "${!v}" ] || { echo "::error::$v is not configured in the production environment"; exit 1; }
+        done
+        [ "$DEPLOY_USER" != "root" ] || { echo "::error::deployment as root is not allowed"; exit 1; }
+        [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "::error::invalid SSH port"; exit 1; }
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+        echo "::add-mask::$DEPLOY_HOST"
+        echo "RASTISI_SSH=ssh -i $HOME/.ssh/deploy_key -p $DEPLOY_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ConnectTimeout=20 $DEPLOY_USER@$DEPLOY_HOST" >> "$GITHUB_ENV"

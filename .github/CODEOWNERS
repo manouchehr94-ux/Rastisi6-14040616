@@ -1,0 +1,5 @@
+# Changes to how the site is built, tested, released and backed up need the owner's review.
+/.github/            @manouchehr94-ux
+/deploy/             @manouchehr94-ux
+/tools/ci/           @manouchehr94-ux
+/docs/deployment/    @manouchehr94-ux

@@ -1,0 +1,19 @@
+[Unit]
+Description=RastiSi backup (database dump + media + config, encrypted, off-site, verified)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rastisi
+Group=rastisi
+Environment=RASTISI_BACKUP_CONF=/etc/rastisi/backup.conf
+ExecStart=/usr/bin/python3 /usr/local/lib/rastisi-backup/rastisi_backup.py run
+TimeoutStartSec=4h
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/rastisi-backup
+ReadOnlyPaths=/var/www/rastisi-rc-20261111/media

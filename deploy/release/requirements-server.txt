@@ -1,0 +1,2 @@
+# Packages the SERVER needs that the application itself does not declare. Pinned and installed from the same hashed wheelhouse.
+gunicorn>=26,<28
