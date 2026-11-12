@@ -33,7 +33,9 @@ import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "release"))
+# Source tree: deploy/release. Installed layout: /usr/local/lib/rastisi.
+_lib = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_lib / ("rastisi" if (_lib / "rastisi" / "rastisi_common.py").is_file() else "release")))
 import rastisi_common as C  # noqa: E402
 
 DEFAULT_CONF = "/etc/rastisi/backup.conf"

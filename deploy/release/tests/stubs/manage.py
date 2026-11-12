@@ -28,6 +28,11 @@ if cmd == "migrate":
     pending = [m for m in declared if m not in db["applied"]]
     mode = control.get("migrate", "ok")
     time.sleep(float(control.get("migrate_delay", 0)))
+    if mode == "non_atomic_fail":
+        db["rows"].append("partial-write")
+        json.dump(db, open(db_path, "w"))
+        sys.stderr.write("non-atomic SQL applied, then failed before migration recorder\n")
+        sys.exit(1)
     for i, name in enumerate(pending):
         if mode == "fail_first" or (mode == "fail_after_first" and i >= 1):
             sys.stderr.write("django.db.utils.OperationalError: could not apply %s (simulated) DATABASE_URL=%s\n" % (name, os.environ.get("DATABASE_URL", "")))

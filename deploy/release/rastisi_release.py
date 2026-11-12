@@ -426,6 +426,8 @@ def migration_policy(cfg, st, runner, plan, report, rel_meta, args):
         return
     level = report.get("level", "REVIEW")
     runner.say("pending migrations (%d, level %s): %s" % (len(plan), level, ", ".join(plan[:10])))
+    if level not in ("NONE", "ADDITIVE"):
+        raise Abort(C.EXIT_POLICY, "online migration level %s is unsafe: use the documented offline migration procedure with web and background writers stopped" % level)
     if level in ("REVIEW", "DESTRUCTIVE") and not args.allow_migrations:
         raise Abort(C.EXIT_POLICY, "migration level %s needs --allow-migrations (explicit owner approval)" % level)
     if level == "DESTRUCTIVE":
@@ -524,6 +526,8 @@ def do_activate(cfg, st, runner, args):
     runner.say("activate %s (commit %s); running now: %s" % (rel_id, rel_meta["sha"][:12], cur_id or "nothing"))
     if args.from_sha and cur_meta.get("sha") != args.from_sha:
         raise Abort(C.EXIT_POLICY, "the plan was made against commit %s but %s is running; re-plan" % (args.from_sha[:12], (cur_meta.get("sha") or "none")[:12]))
+    if st.incident() or st.in_progress_file.exists():
+        raise Abort(C.EXIT_NEEDS_HUMAN, "unresolved incident or interrupted deployment; verify database before continuing")
     if cur_id == rel_id:
         runner.say("this release is already active; verifying only")
         ok, why = verify_release(cfg, runner, rel_id, cfg.int("health_timeout", 90))
@@ -550,14 +554,11 @@ def do_activate(cfg, st, runner, args):
             remaining = after.get("plan", plan) if ok2 else plan
             applied = [m for m in plan if m not in remaining]
             runner.say("migration FAILED: %s" % res.get("error", res))
-            if applied and report.get("level") not in ("NONE", "ADDITIVE"):
-                st.raise_incident("migration failed after applying part of a non-additive batch", applied=applied, release=rel_id)
-                st.clear_in_progress()
-                raise Abort(C.EXIT_NEEDS_HUMAN, "migration failed after applying %s; the previous release is still serving but the schema changed" % applied)
-            st.clear_in_progress()
-            st.set_status(rel_id, "failed", why="migration failed")
-            print(json.dumps({"ok": False, "message": "migration failed; release not activated"}))
-            return runner.finish(C.EXIT_MIGRATION_FAILED, "migration-failed", release=rel_id, applied=applied, error=C.redact(str(res.get("error", ""))))
+            # A recorder row is not evidence of transaction rollback: non-atomic
+            # SQL and a timed-out descendant can have changed data already.
+            st.raise_incident("migration failed; database state is unknown", applied=applied, release=rel_id)
+            st.set_status(rel_id, "failed", why="migration failed; operator verification required")
+            raise Abort(C.EXIT_NEEDS_HUMAN, "migration failed; in_progress retained. Verify database and terminate surviving migration processes before resolve")
         applied = list(plan)
     rollback_safe = (not applied) or report.get("level") in ("NONE", "ADDITIVE")
 
@@ -625,7 +626,15 @@ def cmd_rollback(cfg, args):
         return C.EXIT_BUSY
     runner = Runner(cfg, st, run_id, "rollback")
     try:
+        if st.in_progress_file.exists():
+            st.raise_incident("rollback refused: interrupted deployment; database state unknown",
+                              marker=C.read_json(st.in_progress_file, {}))
+            raise Abort(C.EXIT_NEEDS_HUMAN, "in_progress exists: verify database and running processes, then resolve before rollback")
         cur_id = current_release_id(cfg)
+        active = st.active()
+        if active.get("current") != cur_id:
+            st.raise_incident("rollback refused: current link and active record disagree")
+            raise Abort(C.EXIT_NEEDS_HUMAN, "database compatibility is unknown: current link and active record disagree")
         target = args.to if args.to and args.to != "previous" else (st.active().get("previous") or previous_release_id(cfg))
         if not target:
             raise Abort(C.EXIT_POLICY, "there is no previous release to roll back to")

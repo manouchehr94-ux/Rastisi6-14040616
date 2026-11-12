@@ -85,10 +85,59 @@ def analyze_source(source, filename="<migration>"):
     except SyntaxError as exc:
         return [{"op": "<syntax>", "level": "DESTRUCTIVE", "why": "migration does not parse: %s" % exc.msg}]
     findings = []
-    for node in ast.walk(tree):
+    # Resolve imports without executing migration code. Only recognised Django
+    # operations in a literal list can establish N-1 compatibility.
+    aliases = {}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module:
+            for item in node.names:
+                aliases[item.asname or item.name] = node.module + "." + item.name
+        elif isinstance(node, ast.Import):
+            for item in node.names:
+                aliases[item.asname or item.name.split('.')[0]] = item.name if item.asname else item.name.split('.')[0]
+
+    def canonical(node):
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            return canonical(node.value) + '.' + node.attr
+        return ''
+
+    known = _DESTRUCTIVE_OPS | _ADDITIVE_OPS | _REVIEW_OPS | {'AddField'}
+    classes = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Migration']
+    operations = []
+    def review(op, why):
+        findings.append({'op': op, 'level': 'REVIEW', 'why': why})
+    if len(classes) != 1 or not any(canonical(b) == 'django.db.migrations.Migration' for b in classes[0].bases):
+        review('<structure>', 'unrecognised Migration class')
+    for cls in classes:
+        assignments = {t.id: n.value for n in cls.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)}
+        atomic = assignments.get('atomic')
+        if atomic is not None and not (isinstance(atomic, ast.Constant) and atomic.value is True):
+            review('<atomic>', 'non-atomic or dynamic transaction policy')
+        ops = assignments.get('operations')
+        if not isinstance(ops, (ast.List, ast.Tuple)):
+            review('<operations>', 'operations must be a literal list')
+            continue
+        for operation in ops.elts:
+            full = canonical(operation.func) if isinstance(operation, ast.Call) else ''
+            name = full.rsplit('.', 1)[-1]
+            if name not in known or not full.startswith('django.db.migrations.'):
+                review(name or '<dynamic>', 'unknown or dynamic operation')
+            else:
+                operations.append(operation)
+        for node in cls.body:
+            if not isinstance(node, (ast.Assign, ast.Pass)) and not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
+                review('<class-code>', 'dynamic Migration class needs review')
+            if isinstance(node, ast.Assign) and any(not isinstance(t, ast.Name) for t in node.targets):
+                review('<assignment>', 'dynamic class assignment')
+    for node in tree.body:
+        if not isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef)) and not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
+            review('<module-code>', 'executable module code needs review')
+    for node in operations:
         if not isinstance(node, ast.Call):
             continue
-        name = _op_name(node)
+        name = canonical(node.func).rsplit(".", 1)[-1]
         if name == "AddField":
             field = node.args[2] if len(node.args) >= 3 else _kw(node, "field")
             if _field_is_n_minus_1_safe(field):
@@ -153,7 +202,7 @@ def analyze_range(repo, from_sha, to_sha):
         if status == "A":
             show = _git(repo, "show", "%s:%s" % (to_sha, path))
             entry["findings"] = analyze_source(show.stdout, path)
-            entry["level"] = worst([f["level"] for f in entry["findings"]]) if entry["findings"] else "ADDITIVE"
+            entry["level"] = worst([f["level"] for f in entry["findings"]]) if entry["findings"] else "REVIEW"
         elif status == "M":
             entry["level"] = "DESTRUCTIVE"
             entry["findings"] = [{"op": "<edited>", "level": "DESTRUCTIVE",

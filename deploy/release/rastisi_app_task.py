@@ -165,7 +165,10 @@ def v_healthcheck(ctx, args):
     mode = "--post" if args.post else "--pre"
     rc, out = ctx.run([str(py), probe_script(ctx), "health", mode], app, timeout=120)
     data = last_json(out)
-    failures = list(data.get("failures", []))
+    if (not isinstance(data, dict) or rc != 0 or data.get("ok") is not True
+            or not isinstance(data.get("failures"), list) or not isinstance(data.get("checks"), dict)):
+        return emit(False, failures=["health probe failed or returned an invalid result"], checks={})
+    failures = list(data["failures"])
     if args.expect_release:
         cwd, why = _main_pid_cwd(ctx)
         want = os.path.realpath(str(ctx.cfg.releases / args.expect_release / "app"))
