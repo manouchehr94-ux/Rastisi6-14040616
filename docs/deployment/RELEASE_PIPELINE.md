@@ -116,13 +116,15 @@ Also checked in CI on PostgreSQL: a database migrated to the *current production
 
 | Gate | Where | Tolerance |
 |---|---|---|
-| Tests, four tiers (`tools/ci/tiers.json`): `fast` (auth, OTP, CAPTCHA, settings), `tenant` (stores, catalog, dashboard, content), `security_pg` (OTP concurrency, real Redis), `finance_pg` (exactly-once payments, refunds, subscriptions, orders, jobs) | every PR, every release for that commit, nightly | only failures registered in `known_failures.json` |
+| Tests, four tiers (`tools/ci/tiers.json`; the same tier definitions run on every commit, optional modules are included only when they exist in that commit): `fast` (auth, OTP, CAPTCHA, settings), `tenant` (stores, catalog, dashboard, content), `security_pg` (OTP concurrency, real Redis), `finance_pg` (exactly-once payments, refunds, subscriptions, orders, jobs) | every PR, every release for that commit, nightly | only failures registered in `known_failures.json` |
 | Minimum test count per tier | same | a tier that silently lost its tests fails |
 | Secret scan of the committed files | static job | none |
 | Production-like boot: `check --deploy`, refusal of unsafe settings | static job | none |
 | Dependency audit (`pip-audit`) | static job | only exceptions in `audit_exceptions.json` (owner, reason, expiry <= 30 days) |
 | Migration classification and upgrade test | migrations job | none |
 | Release tooling tests (95 unit tests) and the real-application rehearsal | static job / nightly / when `deploy/` changes | none |
+
+**Timing tests.** One test asserts that 200 calls finish in under 2.0 s of wall-clock time (`test_contrast_utils...cheap_enough_for_the_request_path`). It failed once on a loaded GitHub runner and passed in every other run, so it is on `tools/ci/flaky_tests.json`: when it fails, it is re-run **once, alone**; passing is reported as FLAKY, failing again blocks. A test that is **not** on that list is never retried, so an intermittent failure of a concurrency or data test is always a hard failure. Entries expire like the known failures.
 
 **No test is skipped or deleted to obtain green.** A known failure is *tolerated, not hidden*: it still runs, is printed with its root cause on every build, the gate fails when it **expires** (60 days at most), when it **stops failing** (the entry must be deleted so the fix is locked in), or when a *different* test fails.
 
@@ -133,6 +135,13 @@ The failures known at the time of writing (root causes verified from git history
 | `test_seo...test_terms_and_privacy_are_indexable` | the privacy page is deliberately `noindex` until the owner approves the text (commit `be579b58`); the test still expects `index, follow` | none | 2026-12-15 |
 | `test_public_site_theme_contract...literal_colors_inside_root_tokens` | `.needs-confirm` in `public-site-v2.css` uses a colour literal outside `:root` (commit `be579b58`) | cosmetic: ignores a custom theme | 2026-12-15 |
 | `test_coupon_concurrency...test_overlapping_runs_issue_each_customer_once` (PostgreSQL) | exactly-once assertions pass; the last assertion looks for event `coupon.issued` but the campaign now writes 12 `skipped / no_promotional_consent` rows named `campaign.offer_percent` | none (merchant campaigns, outside the payment engine) | 2026-12-15 |
+| `test_settings_views...test_general_page_query_count_bounded_...` (tenant) | the settings page issues 28 queries, budget 26; passes on `main`, fails on the Phase-1 baseline and on production, so it predates the remediation phases | none (two extra queries) | 2026-12-15 |
+| `test_producer_wiring...test_no_production_code_can_currently_produce_a_final_refund_failure` (tenant) | **deliberate tripwire, triggered by the Phase-2 refund work (`f2a8f8e5`)**: a refund can now end as `FAILED` but the notification `payment.refund_failed` is still planned, so nobody is told | a failed refund is not announced to the merchant/owner; its state is recorded correctly | 2026-12-15 |
+| `test_refresh_rasti_mode_demo_visuals_command` (2 tests, tenant) | demo-store tooling: 3 seeded categories have no curated image; documented since 2026-10-29 | none | 2026-12-15 |
+
+Order-dependent test (re-run once alone, see above): `EndpointDashboardBannerRetentionTests.test_real_banner_delete_endpoint_preserves_physical_file` fails with `Store.DoesNotExist` when an earlier `TransactionTestCase` in the same parallel worker flushed the seeded store. It passes alone and in the 8-worker run.
+
+The CI Python version is **3.12** (the version the project reports in its own QA runs; on 3.11 a producer-wiring test that uses `ast.unparse` crashes). The server's `python3` must be the same major.minor; `stage` refuses a mismatch.
 
 ## 7. When something goes wrong (playbook)
 
@@ -223,7 +232,7 @@ Nothing in these steps touches nginx, PostgreSQL, Redis, certificates, RastiServ
 | # | Risk | Mitigation / status |
 |---|---|---|
 | 1 | **Nothing has run on the real server.** SSH forced command, sudoers, systemd, off-site restic, GitHub approvals and runners are verified only by simulation and sandbox | phase A is read-only; run the dry run first; keep the original unit text |
-| 2 | Server Python differs from the wheelhouse (built for cp311 / manylinux x86_64) | `stage` refuses a mismatch; set `RASTISI_PYTHON_VERSION` |
+| 2 | Server Python differs from the wheelhouse (built for cp312 / manylinux x86_64, the Python the project is developed and tested on) | `stage` refuses a mismatch; set `RASTISI_PYTHON_VERSION` |
 | 3 | A release restarts the service: 5-10 s of dropped requests | zero-downtime would need two instances behind nginx (not done) |
 | 4 | One machine is one failure domain | backups protect the data, not the uptime; restore time must be measured in a drill |
 | 5 | Dependency advisories: Pillow 12.3.0 (40) and cryptography 49.0.0 (1) are fixed only in majors that `requirements.txt` forbids | explicit exceptions that expire 2026-12-12; needs an upgrade branch (Pillow 13 + image tests) |

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the deployable artifact of ONE commit (runs in CI, never on the server). Standard library + pip.
 
-    build_release.py --repo . --sha <40hex> --from-sha <40hex|''> --out dist/ [--python-version 3.11]
+    build_release.py --repo . --sha <40hex> --from-sha <40hex|''> --out dist/ [--python-version 3.12]
 
 Output (in --out):
     rastisi-<sha12>.tar.gz     app/ (git archive of exactly that commit, minus docs), requirements.lock (hashes), wheelhouse/,
@@ -95,7 +95,7 @@ def main(argv=None):
     ap.add_argument("--sha", required=True)
     ap.add_argument("--from-sha", default="")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--python-version", default="3.11")
+    ap.add_argument("--python-version", default="3.12")
     ap.add_argument("--extra-requirements", default=str(Path(__file__).resolve().parent / "requirements-server.txt"))
     ap.add_argument("--run-id", default="")
     ap.add_argument("--actor", default="")

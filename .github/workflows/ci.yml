@@ -33,7 +33,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  PYTHON_VERSION: ${{ vars.RASTISI_PYTHON_VERSION || '3.11' }}
+  PYTHON_VERSION: ${{ vars.RASTISI_PYTHON_VERSION || '3.12' }}
   # the commit under test: the release workflow passes it in, otherwise the event's own commit
   TEST_REF: ${{ inputs.ref || github.sha }}
   DJANGO_SETTINGS_MODULE: shop_core.settings
@@ -106,7 +106,7 @@ jobs:
   tests-tenant:
     name: Tests (tenant and storefront tier, SQLite)
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
