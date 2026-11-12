@@ -1,0 +1,14 @@
+{
+  "_policy": "A test listed here is known to depend on wall-clock timing. When it fails inside a tier run it is re-run ONCE, alone and serially: if it passes it is reported as FLAKY and does not block; if it fails again the gate fails. Tests that are not listed are never retried, so an intermittent failure of a concurrency or data test is always a hard failure. Entries expire (60 days at most) and need an owner and a reason.",
+  "entries": [
+    {
+      "id": "apps.core.tests.test_contrast_utils.DerivationTests.test_ensure_contrast_is_cheap_enough_for_the_request_path",
+      "tiers": ["fast"],
+      "reason": "Asserts that 200 calls of ensure_contrast() finish in under 2.0 s of wall-clock time. Observed failing once on a GitHub-hosted 2-core runner running 4 parallel test workers (run 43165890401) and passing in every other run, including 6/6 local runs, three of them with all CPUs saturated. The threshold is a property of the test, not of the product.",
+      "resolution": "Measure CPU time (time.process_time) instead of wall-clock time, or raise the threshold. A test-only change in its own branch.",
+      "owner": "back-end",
+      "since": "2026-11-12",
+      "expires": "2026-12-15"
+    }
+  ]
+}

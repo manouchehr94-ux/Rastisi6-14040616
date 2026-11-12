@@ -104,6 +104,64 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
 
+FLAKY_ID = "apps.core.tests.test_contrast_utils.DerivationTests.test_ensure_contrast_is_cheap_enough_for_the_request_path"
+FLAKY = {"entries": [{"id": FLAKY_ID, "tiers": ["fast"], "owner": "o", "reason": "timing", "expires": "2026-12-15"}]}
+
+
+class FlakyTests(unittest.TestCase):
+    def test_only_listed_tests_are_retry_candidates(self):
+        rest, cands, problems = G.split_flaky({FLAKY_ID, "apps.billing.tests.test_x.T.test_race"}, FLAKY, "fast", TODAY)
+        self.assertEqual(rest, {"apps.billing.tests.test_x.T.test_race"}, "an unlisted (possibly concurrency) test is never retried")
+        self.assertEqual(list(cands), [FLAKY_ID])
+        self.assertEqual(problems, [])
+
+    def test_the_allow_list_applies_to_its_tier_only(self):
+        rest, cands, _ = G.split_flaky({FLAKY_ID}, FLAKY, "finance_pg", TODAY)
+        self.assertEqual((rest, cands), ({FLAKY_ID}, {}))
+
+    def test_an_expired_entry_is_not_honoured(self):
+        rest, cands, problems = G.split_flaky({FLAKY_ID}, FLAKY, "fast", datetime.date(2026, 12, 16))
+        self.assertEqual((rest, cands), ({FLAKY_ID}, {}))
+        self.assertTrue(problems[0].startswith("EXPIRED flaky-test entry"))
+
+    def run_gate(self, rerun, extra_failures=""):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(d)]))
+        out = ("FAIL: test_ensure_contrast_is_cheap_enough_for_the_request_path (%s)\n%s\nRan 2052 tests in 1s\n\nFAILED (failures=%d)\n"
+               % (FLAKY_ID, extra_failures, 1 + extra_failures.count("FAIL:")))
+        (d / "out.txt").write_text(out)
+        (d / "tiers.json").write_text(json.dumps({"fast": {"labels": ["x"], "min_tests": 1000}}))
+        (d / "reg.json").write_text(json.dumps({"entries": []}))
+        (d / "flaky.json").write_text(json.dumps(FLAKY))
+        proc = subprocess.run([sys.executable, str(Path(G.__file__)), "--tier", "fast", "--tiers", str(d / "tiers.json"), "--registry", str(d / "reg.json"),
+                               "--flaky", str(d / "flaky.json"), "--from-file", str(d / "out.txt"), "--today", "2026-11-12", "--rerun-result", rerun],
+                              capture_output=True, text=True)
+        return proc.returncode, proc.stdout
+
+    def test_a_flaky_test_that_passes_alone_is_reported_and_does_not_block(self):
+        code, out = self.run_gate("pass")
+        self.assertEqual(code, 0, out)
+        self.assertIn("FLAKY until 2026-12-15", out)
+        self.assertIn("1 flaky", out)
+
+    def test_a_flaky_test_that_fails_again_blocks(self):
+        code, out = self.run_gate("fail")
+        self.assertEqual(code, 1, out)
+        self.assertIn("UNEXPECTED FAILURE: " + FLAKY_ID, out)
+
+    def test_a_real_failure_next_to_a_flaky_one_still_blocks(self):
+        code, out = self.run_gate("pass", "FAIL: test_race (apps.billing.tests.test_x.T.test_race)\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("UNEXPECTED FAILURE: apps.billing.tests.test_x.T.test_race", out)
+
+    def test_the_shipped_flaky_list_is_well_formed_and_short_lived(self):
+        reg = json.loads((Path(G.__file__).parent / "flaky_tests.json").read_text(encoding="utf-8"))
+        for e in reg["entries"]:
+            for key in ("id", "tiers", "reason", "resolution", "owner", "since", "expires"):
+                self.assertTrue(e.get(key), key)
+            self.assertLessEqual((datetime.date.fromisoformat(e["expires"]) - datetime.date.fromisoformat(e["since"])).days, 60)
+
+
 class RegistryHygieneTests(unittest.TestCase):
     def test_the_shipped_registry_is_well_formed(self):
         reg = json.loads((Path(G.__file__).parent / "known_failures.json").read_text(encoding="utf-8"))
