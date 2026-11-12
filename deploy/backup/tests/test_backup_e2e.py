@@ -160,6 +160,7 @@ class BackupEndToEndTests(unittest.TestCase):
         self.script("run", check=0)
         for p in (self.repo / "data").rglob("*"):
             if p.is_file():
+                os.chmod(str(p), 0o600)                      # restic writes repository files read-only (root in a sandbox hides that)
                 blob = bytearray(p.read_bytes())
                 blob[len(blob) // 2] ^= 0xFF
                 p.write_bytes(bytes(blob))

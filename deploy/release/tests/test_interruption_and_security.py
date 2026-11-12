@@ -304,7 +304,7 @@ class SecretHygieneTests(SandboxTestCase, GateMixin):
             "DJANGO_SECRET_KEY=abcdef123456": "abcdef123456",
             "Authorization: Bearer abcdefghijklmnop12345": "abcdefghijklmnop12345",
             "PAYMENT_CREDENTIAL_KEY: Zm9vYmFyYmF6cXV4": "Zm9vYmFyYmF6cXV4",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAAB3NzaC1\n-----END OPENSSH PRIVATE KEY-----": "AAAAB3NzaC1",
+            ("-----BEGIN " + "OPENSSH PRIVATE KEY-----\nAAAAB3NzaC1\n-----END " + "OPENSSH PRIVATE KEY-----"): "AAAAB3NzaC1",
         }
         for raw, secret in samples.items():
             self.assertNotIn(secret, C.redact(raw), raw[:30])

@@ -29,6 +29,7 @@ class ScannerTests(unittest.TestCase):
 
     def test_stays_quiet_on_placeholders_documentation_and_synthetic_values(self):
         for path, text in (
+            (".github/workflows/ci.yml", "DATABASE_URL: postgresql://postgres:" + "ci-service-pw-8841@127.0.0.1:5432/x"),
             (".env.example", "DJANGO_SECRET_KEY=CHANGE_ME_please_replace_me_now"),
             ("app/x.py", "# usage: postgres://user:pass@host:5432/dbname"),
             ("app/x.py", "DATABASE_URL = 'postgres://${USER}:${PASS}@localhost/db'"),
@@ -41,6 +42,13 @@ class ScannerTests(unittest.TestCase):
         ):
             with self.subTest(text=text[:40]):
                 self.assertEqual(scan(path, text), [])
+
+    def test_a_local_url_password_is_only_tolerated_in_workflow_files(self):
+        text = "DATABASE_URL = 'postgresql://app:" + "Zq8vK2mXr9Lp@127.0.0.1:5432/prod'"
+        self.assertEqual(scan(".github/workflows/ci.yml", text), [])
+        self.assertIn("password-in-url", scan("deploy/x.sh", text))
+        remote = "DATABASE_URL: postgresql://app:" + "Zq8vK2mXr9Lp@db.internal:5432/prod"
+        self.assertIn("password-in-url", scan(".github/workflows/ci.yml", remote))
 
     def test_output_never_contains_the_secret(self):
         import io

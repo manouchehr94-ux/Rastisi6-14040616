@@ -140,7 +140,7 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       DATABASE_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/rastisi_ci
-      RASTISI_TEST_REDIS_URL: redis://:ci-only-redis@127.0.0.1:6379/0
+      RASTISI_TEST_REDIS_URL: redis://:ci-only-redis@127.0.0.1:6390/0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -153,8 +153,10 @@ jobs:
       - name: Password-protected Redis (the Redis tests also check wrong-password behaviour)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq redis-server
-          redis-server --port 6379 --bind 127.0.0.1 --requirepass ci-only-redis --save "" --appendonly no --daemonize yes
-          for _ in $(seq 1 20); do redis-cli -a ci-only-redis --no-auth-warning ping | grep -q PONG && break; sleep 0.5; done
+          # the Debian package starts its own PASSWORDLESS instance on the default port (it accepts any password): use a separate one
+          redis-server --port 6390 --bind 127.0.0.1 --requirepass ci-only-redis --save "" --appendonly no --daemonize yes
+          for _ in $(seq 1 20); do redis-cli -p 6390 -a ci-only-redis --no-auth-warning ping | grep -q PONG && break; sleep 0.5; done
+          if redis-cli -p 6390 -a wrong-password --no-auth-warning ping | grep -q PONG; then echo "::error::Redis accepts a wrong password"; exit 1; fi
       - run: pip install -r requirements.txt tblib
       - name: Security tier (OTP concurrency, CAPTCHA store, auth on real Redis)
         run: python tools/ci/test_gate.py --tier security_pg --parallel 4 --output security-tier.log

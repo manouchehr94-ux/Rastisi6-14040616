@@ -23,7 +23,8 @@ STRICT = [
     ("stripe-live-key", re.compile(r"\b[sr]k_live_[0-9A-Za-z]{20,}\b")),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
 ]
-URL_PASSWORD = re.compile(r"\b(?:postgres(?:ql)?|mysql|redis|rediss|amqp|mongodb)://[^/\s:@'\"]*:([^@\s'\"/]{4,})@")
+URL_PASSWORD = re.compile(r"\b(?:postgres(?:ql)?|mysql|redis|rediss|amqp|mongodb)://[^/\s:@'\"]*:([^@\s'\"/]{4,})@([^/\s:'\"]*)")
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 ASSIGNMENT = re.compile(r"""(?ix)\b([A-Z0-9_]*(?:SECRET|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN)[A-Z0-9_]*)\s*[:=]\s*["']([^"'\s]{16,})["']""")
 PLACEHOLDER = re.compile(r"(?i)change_?me|example|placeholder|dummy|your[-_ ]|<.*>|\$\{|\{\{|xxxx|0000|1111|test|sample|fake|insecure|secret-key-for|todo|redacted|\*\*\*|\.\.\.")
 TEXT_SKIP_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".pdf", ".zip", ".gz", ".xlsx", ".mp4", ".svg", ".min.js", ".map")
@@ -47,7 +48,8 @@ def scan_text(path, text):
             if m0 and not (rule == "aws-access-key" and (m0.group(0).endswith("EXAMPLE") or len(set(m0.group(0)[4:])) <= 2)):  # documented / synthetic keys
                 findings.append((path, number, rule))
         m = URL_PASSWORD.search(line)
-        if m and not PLACEHOLDER.search(m.group(1)) and m.group(1).lower() not in WORD_PASSWORDS and not fixture:
+        throwaway_service = bool(m) and m.group(2) in LOCAL_HOSTS and path.startswith(".github/workflows/")   # CI service containers on the runner itself
+        if m and not PLACEHOLDER.search(m.group(1)) and m.group(1).lower() not in WORD_PASSWORDS and not fixture and not throwaway_service:
             findings.append((path, number, "password-in-url"))
         m = ASSIGNMENT.search(line)
         if m and not fixture and not PLACEHOLDER.search(m.group(2)) and not re.match(r"^[A-Za-z_.]+$", m.group(2)):
