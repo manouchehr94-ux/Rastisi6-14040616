@@ -15,6 +15,11 @@ ap.add_argument("--expect-release", default="")
 args = ap.parse_args()
 control = json.load(open(os.environ["STUB_CONTROL"])) if os.path.exists(os.environ.get("STUB_CONTROL", "")) else {}
 time.sleep(float(control.get("smoke_delay", 0)))
+hold = control.get("smoke_wait_for_file")          # deterministic "deployment in progress": block until the test creates this file
+if hold:
+    deadline = time.time() + 120
+    while not os.path.exists(hold) and time.time() < deadline:
+        time.sleep(0.05)
 if os.path.exists(os.path.join(args.release_dir, "BROKEN")):
     print(json.dumps({"ok": False, "failures": ["login page 200: status 500"], "passed": []}))
     sys.exit(1)

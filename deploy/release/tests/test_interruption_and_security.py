@@ -59,11 +59,13 @@ class ConcurrencyTests(SandboxTestCase):
     def test_two_simultaneous_deploys_never_overlap(self):
         a, _ = self.sbx.make_and_stage(static_version="1")
         b, _ = self.sbx.make_and_stage(static_version="2")
-        self.sbx.set_control({"smoke_delay": 3})            # the first deploy holds the lock for a few seconds
+        hold = self.sbx.root / "hold-smoke"                 # the first deploy holds the lock until this file exists
+        self.sbx.set_control({"smoke_wait_for_file": str(hold)})
         first = subprocess.Popen([PY, str(TOOLS / "rastisi_release.py"), "activate", "--id", a], env=self.sbx.env,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        wait_for(lambda: self.sbx.status()["busy"])
+        wait_for(lambda: self.sbx.status()["busy"], timeout=60)
         second = self.sbx.activate(b)
+        hold.write_text("go")
         self.assertEqual(second.returncode, C.EXIT_BUSY, second.stdout + second.stderr)
         out, err = first.communicate(timeout=60)
         self.assertEqual(first.returncode, 0, out + err)
@@ -77,11 +79,14 @@ class ConcurrencyTests(SandboxTestCase):
         a, _ = self.sbx.make_and_stage()
         self.assertEqual(self.sbx.activate(a).returncode, 0)
         b, _ = self.sbx.make_and_stage()
-        self.sbx.set_control({"smoke_delay": 3})
+        hold = self.sbx.root / "hold-smoke"
+        self.sbx.set_control({"smoke_wait_for_file": str(hold)})
         first = subprocess.Popen([PY, str(TOOLS / "rastisi_release.py"), "activate", "--id", b], env=self.sbx.env,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        wait_for(lambda: self.sbx.status()["busy"])
-        self.assertEqual(self.sbx.release("rollback", "--to", "previous").returncode, C.EXIT_BUSY)
+        wait_for(lambda: self.sbx.status()["busy"], timeout=60)
+        rollback = self.sbx.release("rollback", "--to", "previous")
+        hold.write_text("go")
+        self.assertEqual(rollback.returncode, C.EXIT_BUSY)
         first.communicate(timeout=60)
         self.assertEqual(first.returncode, 0)
 
