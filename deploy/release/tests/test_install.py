@@ -85,6 +85,20 @@ class InstallTests(unittest.TestCase):
                 proc = run(self.dest, *bad)
                 self.assertNotEqual(proc.returncode, 0, proc.stdout)
 
+    def test_system_roots_and_unregistered_application_directories_are_refused(self):
+        for base in ('/', '/srv', '/var/www'):
+            result = run(self.dest, '--base', base)
+            self.assertNotEqual(result.returncode, 0)
+        foreign = self.dest/'srv/other-site'
+        foreign.mkdir(parents=True)
+        canary = foreign/'customer-data'
+        canary.write_text('must remain unchanged')
+        before = canary.stat()
+        result = run(self.dest, '--base', '/srv/other-site')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(canary.read_text(), 'must remain unchanged')
+        self.assertEqual((canary.stat().st_uid,canary.stat().st_gid,canary.stat().st_mode), (before.st_uid,before.st_gid,before.st_mode))
+
     def test_the_installed_tooling_cannot_be_replaced_by_a_release(self):
         """The release layout never contains the tooling directory: a release is unpacked under <base>/releases only."""
         run(self.dest)

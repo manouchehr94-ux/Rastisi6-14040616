@@ -42,6 +42,11 @@ for v in SERVICE APP_USER BASE ENV_FILE PORT; do [ -n "${!v}" ] || { echo "missi
 [ "$APP_USER" != "root" ] || { echo "the application user must not be root" >&2; exit 2; }
 [ "$DEPLOY_USER" != "root" ] && [ "$DEPLOY_USER" != "$APP_USER" ] || { echo "the deploy user must be neither root nor the application user" >&2; exit 2; }
 [[ "$BASE" == /* && "$ENV_FILE" == /* ]] || { echo "paths must be absolute" >&2; exit 2; }
+BASE="${BASE%/}"
+case "$BASE" in ""|/|/srv|/opt|/var|/var/www|/var/lib|/usr|/usr/local|/etc|/home|/root|/tmp|/run)
+  echo "refusing a shared/system base directory" >&2; exit 2 ;;
+esac
+[[ "$BASE" != */../* && "$BASE" != */.. && "$BASE" != */./* ]] || { echo "base must be a dedicated canonical directory" >&2; exit 2; }
 [[ "$PORT" =~ ^[0-9]{2,5}$ ]] || { echo "invalid --port" >&2; exit 2; }
 if [ -z "$DESTDIR" ] && [ "$(id -u)" -ne 0 ] && [ "$DRY" -eq 0 ]; then echo "run as root (or use --dry-run)" >&2; exit 2; fi
 
@@ -81,16 +86,41 @@ elif [ -z "$DESTDIR" ]; then
 fi
 
 echo "== layout under $BASE (owned by $DEPLOY_USER, readable by group $APP_USER)"
-for d in "" releases venvs staging state; do
-  as_root install -d -m 2750 "$(dest "$BASE")/$d"
-done
-as_root install -d -m 2770 "$(dest "$BASE")/state/static-build"
-chown_safe -R "$DEPLOY_USER:$APP_USER" "$BASE"
-chown_safe "$DEPLOY_USER:$APP_USER" "$BASE/state/static-build"
-if [ ! -e "$(dest "$BASE")/state/deploy.lock" ]; then
-  as_root install -m 0644 /dev/null "$(dest "$BASE")/state/deploy.lock"
-  chown_safe "$DEPLOY_USER:$APP_USER" "$BASE/state/deploy.lock"
+LAYOUT="$(dest "$BASE")"
+# Never recursively chown an existing tree: a wrong --base must not change
+# another application's uploads, credentials or ownership (including RastiService).
+if [ -L "$LAYOUT" ]; then echo "base must not be a symlink" >&2; exit 2; fi
+if [ -d "$LAYOUT" ] && [ -n "$(find "$LAYOUT" -mindepth 1 -maxdepth 1 -print -quit)" ] && [ ! -f "$LAYOUT/.rastisi-release-layout" ]; then
+  # v1 upgrades require the existing root-owned config to identify this exact
+  # layout; a general application directory is never adopted automatically.
+  EXISTING_CONF="$(dest /etc/rastisi/deploy.conf)"
+  if [ ! -f "$EXISTING_CONF" ] || ! grep -Fxq "base_dir = $BASE" "$EXISTING_CONF" || [ ! -d "$LAYOUT/releases" ] || [ ! -d "$LAYOUT/state" ]; then
+    echo "refusing a nonempty directory not registered as a release layout" >&2; exit 2
+  fi
 fi
+if [ ! -d "$LAYOUT" ]; then
+  # Root only creates/chowns the NEW base; its parent must not be writable by
+  # unprivileged accounts or redirected through a symlink.
+  if [ -z "$DESTDIR" ] && [ "$DRY" -eq 0 ]; then
+    PARENT="$(dirname "$BASE")"
+    [ -d "$PARENT" ] && [ "$(realpath "$PARENT")" = "$PARENT" ] && [ "$(stat -c %u "$PARENT")" = 0 ] && [ "$(find "$PARENT" -maxdepth 0 -perm /022 -print)" = "" ] || { echo "new base requires a root-owned non-writable canonical parent" >&2; exit 2; }
+  fi
+  as_root install -d -m 2750 "$LAYOUT"
+  chown_safe "$DEPLOY_USER:$APP_USER" "$BASE"
+fi
+layout_run() {
+  if [ -n "$DESTDIR" ]; then "$@"; else run runuser -u "$DEPLOY_USER" -- "$@"; fi
+}
+# Every operation INSIDE the deploy-owned tree runs as deploy, never as root.
+# Symlinks planted during an upgrade cannot redirect privileged chmod/chown.
+for d in releases venvs staging state; do
+  layout_run mkdir -p -m 2750 "$LAYOUT/$d"
+done
+layout_run mkdir -p -m 2770 "$LAYOUT/state/static-build"
+if [ ! -e "$LAYOUT/state/deploy.lock" ]; then
+  layout_run install -m 0644 /dev/null "$LAYOUT/state/deploy.lock"
+fi
+layout_run touch "$LAYOUT/.rastisi-release-layout"
 
 echo "== /etc/rastisi/deploy.conf"
 CONF="$(dest /etc/rastisi/deploy.conf)"

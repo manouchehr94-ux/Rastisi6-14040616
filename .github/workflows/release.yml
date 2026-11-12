@@ -3,8 +3,8 @@ name: Release to production
 # Manual only. One commit, one approval, one deployment at a time.
 #
 #   1. plan      anyone with write access starts it with an exact 40-character commit; the plan job shows what would happen
-#   2. ci        the full test tiers run again for THAT commit (nothing is trusted from an earlier run)
-#   3. build     artifact with hash-pinned dependencies, migration report, checksum
+#   2. build     artifact with hash-pinned dependencies, migration report, checksum
+#   3. ci        test THAT artifact's wheelhouse and exact commit (no dependency re-resolution)
 #   4. approve   the 'production' environment requires the owner's explicit approval (configured in repository settings)
 #   5. deploy    stage -> activate (detached, resumable) -> verify -> keep or roll back, all logged
 #
@@ -22,16 +22,6 @@ on:
         description: "Full 40-character commit that production runs NOW (the plan is made against it; the server refuses if it differs)"
         required: true
         type: string
-      allow_migrations:
-        description: "Allow migrations that the guard classifies REVIEW or DESTRUCTIVE (owner decision)"
-        required: false
-        type: boolean
-        default: false
-      destructive_ack:
-        description: "For DESTRUCTIVE migrations only: type I-ACCEPT-DESTRUCTIVE-MIGRATION-<first 12 chars of the sha>"
-        required: false
-        type: string
-        default: ""
       dry_run:
         description: "Plan on the server (checks, migration plan) but change nothing"
         required: false
@@ -129,20 +119,15 @@ jobs:
           print("\nNothing has been deployed. The next jobs run the tests, build the artifact and then WAIT for the owner's approval.")
           PY
           python -c "import json; print('level=' + json.load(open('migration-report.json'))['level'])" >> "$GITHUB_OUTPUT"
-      - name: Refuse early when the migration level needs an approval that was not given
+      - name: Refuse online releases requiring an offline migration plan
         env:
           LEVEL: ${{ steps.report.outputs.level }}
-          ALLOW: ${{ inputs.allow_migrations }}
-          ACK: ${{ inputs.destructive_ack }}
-          SHA: ${{ steps.v.outputs.sha }}
         run: |
           set -euo pipefail
-          if [[ "$LEVEL" == "REVIEW" || "$LEVEL" == "DESTRUCTIVE" ]] && [[ "$ALLOW" != "true" ]]; then
-            echo "::error::migrations are classified $LEVEL: re-run with allow_migrations=true after reading the migration report"; exit 1
-          fi
-          if [[ "$LEVEL" == "DESTRUCTIVE" && "$ACK" != "I-ACCEPT-DESTRUCTIVE-MIGRATION-${SHA:0:12}" ]]; then
-            echo "::error::destructive migrations need destructive_ack = I-ACCEPT-DESTRUCTIVE-MIGRATION-${SHA:0:12}"; exit 1
-          fi
+          case "$LEVEL" in
+            NONE|ADDITIVE) ;;
+            *) echo "::error::migration level $LEVEL requires a separately reviewed offline maintenance procedure; online release is blocked"; exit 1 ;;
+          esac
 
   ci:
     name: Tests for exactly this commit
@@ -262,14 +247,10 @@ jobs:
           SHA: ${{ needs.plan.outputs.sha }}
           FROM_SHA: ${{ needs.plan.outputs.from_sha }}
           RELEASE: ${{ steps.stage.outputs.release }}
-          ALLOW: ${{ inputs.allow_migrations }}
-          ACK: ${{ inputs.destructive_ack }}
           DRY: ${{ inputs.dry_run }}
         run: |
           set -uo pipefail
           args=(--release "$RELEASE" --sha "$SHA" --from-sha "$FROM_SHA")
-          [ "$ALLOW" = "true" ] && args+=(--allow-migrations)
-          [ -n "$ACK" ] && args+=(--destructive-ack "$ACK")
           [ "$DRY" = "true" ] && args+=(--dry-run)
           python deploy/release/remote_client.py activate "${args[@]}" 2>&1 | tee deploy.log
           code="${PIPESTATUS[0]}"

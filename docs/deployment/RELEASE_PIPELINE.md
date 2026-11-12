@@ -65,6 +65,9 @@ Use a dedicated non-root application account and a dedicated deployment account;
 neither may be shared with RastiService.ir. Use a dedicated base directory,
 PostgreSQL role/database, Redis namespace, static/media roots and ONE service.
 Inspect existing unit/drop-ins and all cron/timers before changing paths.
+The installer refuses system roots and an unregistered nonempty application
+directory. It never recursively changes existing ownership; operations inside a
+deploy-owned layout execute as deploy, not root.
 These examples are instructions for a later approved staging session, not commands
 that have been executed on production.
 
@@ -121,7 +124,8 @@ naming an environment in YAML creates reviewer protection.
 
 Known-failure IDs alone are insufficient: the full normalised diagnostic SHA256
 must equal the explicitly reviewed signature set. A new exception, earlier
-assertion failure, extra subtest diagnostic or missing signature blocks CI.
+assertion failure, extra subtest diagnostic or missing signature blocks CI. Flaky
+retries also require the exact reviewed diagnostic; ID-only retry entries block.
 Only checkout/venv path prefixes and whitespace are normalised. Changes to output
 can conservatively require re-review; do not broaden normalisation to hide them.
 Expiry/stale-entry checks remain. The refund-failure notification tripwire is a

@@ -1,0 +1,14 @@
+test_config_is_written_once_and_never_overwritten (test_install.InstallTests.test_config_is_written_once_and_never_overwritten) ... ok
+test_dry_run_changes_nothing (test_install.InstallTests.test_dry_run_changes_nothing) ... ok
+test_installs_the_tooling_with_safe_modes (test_install.InstallTests.test_installs_the_tooling_with_safe_modes) ... ok
+test_layout_and_permissions (test_install.InstallTests.test_layout_and_permissions) ... ok
+test_sudoers_has_exactly_the_two_rules (test_install.InstallTests.test_sudoers_has_exactly_the_two_rules) ... ok
+test_system_roots_and_unregistered_application_directories_are_refused (test_install.InstallTests.test_system_roots_and_unregistered_application_directories_are_refused) ... ok
+test_the_installed_tooling_cannot_be_replaced_by_a_release (test_install.InstallTests.test_the_installed_tooling_cannot_be_replaced_by_a_release)
+The release layout never contains the tooling directory: a release is unpacked under <base>/releases only. ... ok
+test_unsafe_arguments_are_refused (test_install.InstallTests.test_unsafe_arguments_are_refused) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.514s
+
+OK

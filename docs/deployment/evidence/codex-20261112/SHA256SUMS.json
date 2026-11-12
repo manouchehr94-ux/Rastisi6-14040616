@@ -1,13 +1,16 @@
 {
+  "added-coverage-tests.log": "5d64f00b0be65cebefaa88ad6f02b6011b2bb73b56bda911ade897f6a9566626",
+  "backup-unit-validated.log": "b9c6436014c7b0fdec15235311cddb9eabee09256f961061d70c53232b40b81b",
+  "ci-final-result.log": "6ae2f027f67021f9ae0711702e12383a656604cd92875422e777edebc0640b36",
+  "classifier-final-validated.log": "e9ca7401fc6363b3819d680cc9fb1df881439cb7e5fb71ad702399dbfd4d7276",
   "critical-before.log": "75d2c7bec602acdb03602ef05a4bdbe7114953b5df6bbb5f99dd55fd1d6a3203",
   "critical-final-validated.log": "3619abd5e65897320db32a64fc8581197975ed53a7c58764751525d8b53c1e04",
-  "classifier-final-validated.log": "e9ca7401fc6363b3819d680cc9fb1df881439cb7e5fb71ad702399dbfd4d7276",
-  "release-final-result.log": "8578fa57bee2a2d4f83a8837b018042bea4462fb5777d444b039c279df2df1f3",
-  "ci-final-result.log": "2dafbe335e35476d453196d77f3ea9d9e3222a96a49a2be106581bad417395ff",
-  "backup-unit-validated.log": "b9c6436014c7b0fdec15235311cddb9eabee09256f961061d70c53232b40b81b",
-  "installed-final-validated.log": "4e84b3c8392334b9d47b6af27797c4438670d193766baf6d0e1bb786bc90f926",
+  "dependency-audit.log": "69c0173a696db8f901782cba7631d4f175d47b4b974691eb32e6c0eed3cc0a27",
+  "install-guard-tests.log": "26c51d17fc3ecf0c5c7cfb5856226dc4d980cdc5126e35c7c64ca81cd4aaa11e",
+  "installed-final-validated.log": "e8a88a5c5b057e9312f073f3a65c40e1d88d754b8e471daf3009a9bb827993c8",
   "real-app-rehearsal.log": "9b25a25809ac4194af7fdcc3a1e0c7a302bf3fcff2e799020169c7d1a3f6611d",
+  "release-final-result.log": "afbbae5f11caf6610205da44b3f9feff6f62ac27b9fad15f911b2138d955e8f1",
+  "requirements.lock": "eef85940cedfb7fd09094e28ad42ad2722d3407c051f6962c6e74d50fd5d4dd2",
   "schema-upgrade.log": "9f2f313308b4e5ecc991f3a6f31fb8e0a355c22d0ae13537859b427360d0f5b3",
-  "added-coverage-tests.log": "5d64f00b0be65cebefaa88ad6f02b6011b2bb73b56bda911ade897f6a9566626",
-  "dependency-audit.log": "69c0173a696db8f901782cba7631d4f175d47b4b974691eb32e6c0eed3cc0a27"
+  "workflow-validation.txt": "453a05928d96260841cd00b57ba5c32097aab13621560d8d789aa59d44175f97"
 }

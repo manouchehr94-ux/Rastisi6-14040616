@@ -1,5 +1,5 @@
 {
-  "_policy": "A known advisory may be tolerated only while listed here, with an owner, a reason and an expiry date (never more than 30 days at a time). A new advisory, an expired exception, an installed version different from the one reviewed, or an exception that no longer matches anything fails the dependency gate. Baseline created 2026-11-12 from pip-audit 2.10.1 on the hash-locked production dependency set of commit 6a6897b7.",
+  "_policy": "A known advisory may be tolerated only while listed here, with an owner, a reason and an expiry date (never more than 30 days at a time). A new advisory, an expired exception, an installed version different from the one reviewed, or an exception that no longer matches anything fails the dependency gate. Baseline created 2026-11-12 from pip-audit 2.10.1 on the hash-locked production dependency set of commit 6a6897b7. A security_review approval with evidence is also mandatory; current inherited exceptions remain unapproved.",
   "exceptions": [
     {
       "package": "cryptography",
@@ -12,7 +12,11 @@
       ],
       "owner": "platform owner / back-end",
       "reason": "The newest cryptography allowed by requirements.txt (cryptography>=43,<50) is 49.0.0; the advisory is fixed only in 50.0.0, which the pin forbids. Used for the Fernet encryption of stored gateway credentials. NOT reviewed for exploitability here. Needs a dependency upgrade in its own branch.",
-      "expires": "2026-12-12"
+      "expires": "2026-12-12",
+      "security_review": {
+        "approved": false,
+        "evidence": "docs/deployment/DEPENDENCY_SECURITY_REVIEW.md"
+      }
     },
     {
       "package": "pillow",
@@ -64,7 +68,11 @@
       ],
       "owner": "platform owner / back-end",
       "reason": "The newest Pillow allowed by requirements.txt (Pillow>=12.0,<13) is 12.3.0; every advisory below is fixed only in 13.0.0, which the pin forbids. Pillow processes merchant-uploaded images, so this is a real exposure. NOT reviewed for exploitability here. Needs a dependency upgrade (Pillow 13 + the image-handling tests) in its own branch.",
-      "expires": "2026-12-12"
+      "expires": "2026-12-12",
+      "security_review": {
+        "approved": false,
+        "evidence": "docs/deployment/DEPENDENCY_SECURITY_REVIEW.md"
+      }
     }
   ]
 }

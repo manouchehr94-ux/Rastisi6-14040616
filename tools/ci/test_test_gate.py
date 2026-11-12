@@ -116,15 +116,21 @@ class EndToEndTests(unittest.TestCase):
 
 
 FLAKY_ID = "apps.core.tests.test_contrast_utils.DerivationTests.test_ensure_contrast_is_cheap_enough_for_the_request_path"
-FLAKY = {"entries": [{"id": FLAKY_ID, "tiers": ["fast"], "owner": "o", "reason": "timing", "expires": "2026-12-15"}]}
+FLAKY = {"entries": [{"expected_failure_sha256": ['reviewed-flaky-fixture'], "id": FLAKY_ID, "tiers": ["fast"], "owner": "o", "reason": "timing", "expires": "2026-12-15"}]}
 
 
 class FlakyTests(unittest.TestCase):
     def test_only_listed_tests_are_retry_candidates(self):
-        rest, cands, problems = G.split_flaky({FLAKY_ID, "apps.billing.tests.test_x.T.test_race"}, FLAKY, "fast", TODAY)
+        rest, cands, problems = G.split_flaky({FLAKY_ID, "apps.billing.tests.test_x.T.test_race"}, FLAKY, "fast", TODAY, {FLAKY_ID:["reviewed-flaky-fixture"]})
         self.assertEqual(rest, {"apps.billing.tests.test_x.T.test_race"}, "an unlisted (possibly concurrency) test is never retried")
         self.assertEqual(list(cands), [FLAKY_ID])
         self.assertEqual(problems, [])
+
+    def test_new_failure_in_same_flaky_test_is_not_retried(self):
+        rest, candidates, problems = G.split_flaky({FLAKY_ID}, FLAKY, 'fast', TODAY, {FLAKY_ID:['new-data-loss-error']})
+        self.assertEqual(rest, {FLAKY_ID})
+        self.assertEqual(candidates, {})
+        self.assertTrue(problems[0].startswith('CHANGED OR UNREVIEWED FLAKY'))
 
     def test_the_allow_list_applies_to_its_tier_only(self):
         rest, cands, _ = G.split_flaky({FLAKY_ID}, FLAKY, "finance_pg", TODAY)
@@ -143,7 +149,9 @@ class FlakyTests(unittest.TestCase):
         (d / "out.txt").write_text(out)
         (d / "tiers.json").write_text(json.dumps({"fast": {"labels": ["x"], "min_tests": 1000}}))
         (d / "reg.json").write_text(json.dumps({"entries": []}))
-        (d / "flaky.json").write_text(json.dumps(FLAKY))
+        reviewed_flaky = json.loads(json.dumps(FLAKY))
+        reviewed_flaky['entries'][0]['expected_failure_sha256'] = G.failure_signatures(out)[FLAKY_ID]
+        (d / "flaky.json").write_text(json.dumps(reviewed_flaky))
         proc = subprocess.run([sys.executable, str(Path(G.__file__)), "--tier", "fast", "--tiers", str(d / "tiers.json"), "--registry", str(d / "reg.json"),
                                "--flaky", str(d / "flaky.json"), "--from-file", str(d / "out.txt"), "--today", "2026-11-12", "--rerun-result", rerun],
                               capture_output=True, text=True)

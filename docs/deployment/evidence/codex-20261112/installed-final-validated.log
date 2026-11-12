@@ -5,7 +5,7 @@
 #1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/ubuntu:24.04
-#2 DONE 0.3s
+#2 DONE 0.5s
 
 #3 [internal] load .dockerignore
 #3 transferring context: 2B done
@@ -86,7 +86,7 @@ test_timeouts_and_missing_executables_are_reportable_backup_errors (test_backup_
 test_weekly_verification_reads_all_data (test_backup_safety.BackupSafetyTests.test_weekly_verification_reads_all_data) ... ok
 
 ----------------------------------------------------------------------
-Ran 16 tests in 100.410s
+Ran 16 tests in 106.085s
 
 OK
 

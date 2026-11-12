@@ -11,7 +11,7 @@ Policy (see known_failures.json):
   * a tier that ran zero tests, or crashed before finishing (no 'Ran N tests' line), fails the gate;
   * a failing test that is on the FLAKY allow-list (flaky_tests.json: wall-clock timing tests, with owner, reason and expiry) is re-run once,
     alone and serially; if it passes it is reported as FLAKY and does not block, if it fails again it blocks. A test that is not on the
-    list is never retried: an intermittent failure of a concurrency or data test is a hard failure;
+    list or without an exact reviewed diagnostic signature is never retried: an intermittent failure of a concurrency or data test is a hard failure;
   * tolerated and flaky tests are printed on every run, with their cause.
 
 Tiers are defined in tiers.json: Django test labels, the database they need, and what they protect.
@@ -122,7 +122,7 @@ def judge(failing, registry, tier, today, signatures=None):
     return problems, tolerated
 
 
-def split_flaky(failing, flaky_registry, tier, today):
+def split_flaky(failing, flaky_registry, tier, today, signatures=None):
     """Pure (unit-tested): returns (still_failing, flaky_candidates, problems). Expired flaky entries are not honoured and are reported."""
     entries = {e["id"]: e for e in flaky_registry.get("entries", []) if tier in e.get("tiers", [])}
     problems, candidates, rest = [], {}, set()
@@ -132,6 +132,9 @@ def split_flaky(failing, flaky_registry, tier, today):
             rest.add(test)
         elif datetime.date.fromisoformat(entry["expires"]) < today:
             problems.append("EXPIRED flaky-test entry (owner %s): %s" % (entry["owner"], test))
+            rest.add(test)
+        elif not entry.get('expected_failure_sha256') or set((signatures or {}).get(test, [])) != set(entry['expected_failure_sha256']):
+            problems.append('CHANGED OR UNREVIEWED FLAKY FAILURE: %s' % test)
             rest.add(test)
         else:
             candidates[test] = entry
@@ -177,7 +180,7 @@ def main(argv=None):
         if args.output:
             Path(args.output).write_text(text, encoding="utf-8")
     ran, failing, summary_seen = parse_output(text)
-    still_failing, flaky_candidates, flaky_problems = split_flaky(failing, load(args.flaky) if Path(args.flaky).exists() else {}, args.tier, today)
+    still_failing, flaky_candidates, flaky_problems = split_flaky(failing, load(args.flaky) if Path(args.flaky).exists() else {}, args.tier, today, failure_signatures(text))
     flaky_passed = []
     for test_id, entry in sorted(flaky_candidates.items()):
         if args.rerun_result:

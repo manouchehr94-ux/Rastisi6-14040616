@@ -1,5 +1,5 @@
 {
-  "_policy": "A test listed here still RUNS in CI and its failure is reported on every build. It is tolerated only until 'expires'. The gate fails when: an unlisted test fails; a listed test PASSES (delete the entry); an entry has expired. No test is skipped, disabled or edited to get a green build. Adding an entry needs the owner's name and a root cause.",
+  "_policy": "A test listed here still RUNS in CI and its failure is reported on every build. It is tolerated only until 'expires'. The gate fails when: an unlisted test fails; a listed test PASSES (delete the entry); an entry has expired. No test is skipped, disabled or edited to get a green build. Adding an entry needs the owner's name and a root cause. Exact reviewed expected_failure_sha256 signatures are mandatory; an unreviewed or changed diagnostic blocks, including before any flaky retry.",
   "entries": [
     {
       "id": "apps.portal.tests.test_seo.PublicPageIndexabilityTests.test_terms_and_privacy_are_indexable",
