@@ -363,7 +363,7 @@ CAPTCHA_TTL_DEFAULT_SECONDS = 300
 
 
 def captcha_config_problems(*, enabled, ttl_seconds, production):
-    """Problems with the effective math-CAPTCHA configuration (empty list = fine).
+    """Problems with the effective local-CAPTCHA configuration (empty list = fine).
 
     ``production`` is the *real configured* ``DEBUG=False`` state — never
     Django's test-runner-forced ``settings.DEBUG``.
@@ -409,7 +409,7 @@ def resolve_captcha_settings(debug, *, environ=None):
 
     ``RASTISI_CAPTCHA_ENABLED`` defaults to ``not debug``: local development may run
     without it, a ``DEBUG=False`` process may not. Raises ``ImproperlyConfigured``
-    listing every problem. The math CAPTCHA has no external service and no keys.
+    listing every problem. Local ALTCHA requires no external service or separate keys.
     """
     enabled = env_bool("RASTISI_CAPTCHA_ENABLED", default=not debug, environ=environ)
     ttl = env_int("RASTISI_CAPTCHA_TTL_SECONDS", default=CAPTCHA_TTL_DEFAULT_SECONDS, environ=environ)
@@ -483,3 +483,22 @@ def dev_otp_problems(*, dev_otp_code, allow_console_otp, production, running_tes
             "(it would report fake OTP delivery)."
         )
     return problems
+
+
+# Bound the work issued by the local ALTCHA endpoint (never client controlled).
+def altcha_work_problems(*, cost, max_number):
+    problems = []
+    for name, value, lo, hi in (("RASTISI_ALTCHA_COST", cost, 500, 10000),
+                                ("RASTISI_ALTCHA_MAX_NUMBER", max_number, 64, 4096)):
+        if type(value) is not int or not lo <= value <= hi:
+            problems.append(f"{name} must be an integer between {lo} and {hi}.")
+    return problems
+
+
+def resolve_altcha_work_settings(*, environ=None):
+    cost = env_int("RASTISI_ALTCHA_COST", default=1000, environ=environ)
+    maximum = env_int("RASTISI_ALTCHA_MAX_NUMBER", default=128, environ=environ)
+    problems = altcha_work_problems(cost=cost, max_number=maximum)
+    if problems:
+        raise ImproperlyConfigured("Invalid ALTCHA work configuration: " + " ".join(problems))
+    return {"cost": cost, "max_number": maximum}

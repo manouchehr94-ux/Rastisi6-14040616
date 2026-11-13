@@ -419,7 +419,7 @@ class LoginCaptchaTests(_Base, TestCase):
         response = _post_login(self.client, "ts@example.com", "wrong-password-1", **self._fields("/login/", "login_password"))
         self.assertContains(response, owner_auth_service.GENERIC_LOGIN_ERROR)
         self.assertNotContains(response, captcha_service.PUBLIC_ERROR_MESSAGE)
-        self.assertIn('name="captcha_token"', response.content.decode())
+        self.assertIn('<altcha-widget', response.content.decode())
 
     def test_otp_request_sends_no_sms_until_the_captcha_passes(self):
         with patch.object(owner_otp_service, "send_platform_otp") as send:
@@ -427,7 +427,7 @@ class LoginCaptchaTests(_Base, TestCase):
             self.assertContains(denied, captcha_service.PUBLIC_ERROR_MESSAGE)
             send.assert_not_called()
             self.assertFalse(OwnerOtpChallenge.objects.exists())
-            self.assertIn("captcha-answer-login_otp", denied.content.decode())
+            self.assertIn("captcha-login_otp", denied.content.decode())
 
     def test_reset_request_sends_no_sms_until_the_captcha_passes(self):
         with patch.object(owner_otp_service, "send_platform_otp") as send:

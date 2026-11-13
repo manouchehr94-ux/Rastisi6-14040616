@@ -1,0 +1,217 @@
+{
+  "browser": "143.0.7499.4",
+  "date": "2026-11-13T17:10:56.181Z",
+  "profiles": [
+    {
+      "name": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "cdpCpuRate": 1,
+      "widgetReadyMs": {
+        "n": 10,
+        "min": 186,
+        "median": 217,
+        "p95": 381,
+        "max": 381
+      },
+      "clickToVerifiedMs": {
+        "n": 10,
+        "min": 81,
+        "median": 115,
+        "p95": 154,
+        "max": 154
+      },
+      "challengeResponseMs": {
+        "n": 10,
+        "min": 45,
+        "median": 72,
+        "p95": 116,
+        "max": 116
+      },
+      "samples": {
+        "ready": [
+          381,
+          248,
+          211,
+          186,
+          217,
+          223,
+          252,
+          204,
+          200,
+          192
+        ],
+        "verify": [
+          145,
+          115,
+          98,
+          120,
+          81,
+          93,
+          154,
+          102,
+          118,
+          101
+        ],
+        "challenge": [
+          92,
+          81,
+          47,
+          72,
+          45,
+          45,
+          116,
+          50,
+          74,
+          55
+        ]
+      }
+    },
+    {
+      "name": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "cdpCpuRate": 1,
+      "widgetReadyMs": {
+        "n": 10,
+        "min": 146,
+        "median": 177,
+        "p95": 249,
+        "max": 249
+      },
+      "clickToVerifiedMs": {
+        "n": 10,
+        "min": 68,
+        "median": 104,
+        "p95": 120,
+        "max": 120
+      },
+      "challengeResponseMs": {
+        "n": 10,
+        "min": 36,
+        "median": 63,
+        "p95": 72,
+        "max": 72
+      },
+      "samples": {
+        "ready": [
+          249,
+          203,
+          146,
+          189,
+          177,
+          167,
+          205,
+          162,
+          160,
+          158
+        ],
+        "verify": [
+          120,
+          68,
+          107,
+          103,
+          92,
+          104,
+          100,
+          113,
+          79,
+          105
+        ],
+        "challenge": [
+          72,
+          36,
+          67,
+          63,
+          39,
+          61,
+          52,
+          69,
+          47,
+          67
+        ]
+      }
+    },
+    {
+      "name": "mobile-cdp-6x",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "cdpCpuRate": 6,
+      "widgetReadyMs": {
+        "n": 10,
+        "min": 428,
+        "median": 515,
+        "p95": 914,
+        "max": 914
+      },
+      "clickToVerifiedMs": {
+        "n": 10,
+        "min": 147,
+        "median": 190,
+        "p95": 242,
+        "max": 242
+      },
+      "challengeResponseMs": {
+        "n": 10,
+        "min": 102,
+        "median": 125,
+        "p95": 161,
+        "max": 161
+      },
+      "samples": {
+        "ready": [
+          914,
+          485,
+          542,
+          531,
+          482,
+          497,
+          489,
+          515,
+          428,
+          605
+        ],
+        "verify": [
+          242,
+          231,
+          178,
+          186,
+          184,
+          192,
+          190,
+          228,
+          147,
+          148
+        ],
+        "challenge": [
+          150,
+          161,
+          102,
+          103,
+          114,
+          128,
+          125,
+          147,
+          102,
+          103
+        ]
+      }
+    }
+  ],
+  "checks": [
+    "login_password: real widget proof solved",
+    "login_otp: real widget proof solved",
+    "register: real widget proof solved",
+    "password_reset: real widget proof solved",
+    "unverified submit blocked without locking submit button",
+    "browser-generated PoW accepted by Django; replay rejected"
+  ],
+  "externalRequestsBlocked": [],
+  "errors": []
+}

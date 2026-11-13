@@ -1,34 +1,26 @@
-"""Server-side math CAPTCHA for the public account and contact forms (replaces Cloudflare Turnstile).
+"""Local ALTCHA PoW v2 for public authentication/contact forms.
 
-The visitor sees a question such as «۳۵ + ۱۴ = ؟» and types the sum. Everything that matters happens on the server:
-
-* **The answer never leaves the server.** The page carries only the two operands and a random, opaque token. The cache holds
-  an HMAC of ``token:answer`` (keyed with ``SECRET_KEY``), not the answer. The token is random; it is not derived from the answer.
-* **Bound to the session and to the form.** The stored challenge records an HMAC of the visitor's session key and the action
-  (``login_password``, ``login_otp``, ``register``, ``password_reset``, ``contact``). A token issued to another session, or for
-  another form, never verifies.
-* **Short-lived.** The cache entry expires after ``RASTISI_CAPTCHA_TTL_SECONDS`` (default 300) and the issue time is checked again on use.
-* **Single use, also under concurrency.** Every submission consumes the token *first*, whether the answer is right or wrong:
-  ``cache.delete()`` returns ``True`` for exactly one caller, so two simultaneous requests with the same token cannot both pass.
-  A wrong answer therefore costs the visitor a new question (one guess per question).
-* **Budgets.** Each verification attempt spends one unit of a per-client-IP budget, and issuing questions is budgeted per IP as well
-  (both in the shared rate-limit store). These are in addition to, not instead of, the existing per-endpoint limits.
-* **Fail closed.** If the shared store (Redis in production) is unavailable, a question cannot be issued and a submission cannot be
-  verified: the form is refused with the standard "temporarily unavailable" message. Production never treats "CAPTCHA off" as success.
-
-Honest limit: a math question stops naive scripts, not a determined bot that parses the page. The real protection against
-SMS pumping and password guessing stays the rate limits and per-identifier throttles that run after this check.
+Official altcha-django constructs/verifies the challenge. RastiSi keeps its own
+shared-store fencing: expiry, exact issued challenge, session + action binding,
+per-IP budgets and atomic one-use consumption (including invalid attempts).
+No Cloudflare, ALTCHA Cloud, Sentinel or remote verification call is used.
 """
 
+import base64
+import binascii
+import hashlib
 import hmac
+import json
 import logging
 import re
-import secrets
 import time
 from dataclasses import dataclass
 
+from altcha_django.challenge import ChallengeConfig, build_challenge
+from altcha_django.verifiers.local import LocalVerifier
 from django.conf import settings
 from django.core.cache import caches
+from django.urls import reverse
 from django.utils.crypto import salted_hmac
 
 from apps.core.services.client_ip import get_client_ip_bucket
@@ -40,43 +32,26 @@ from apps.core.services.rate_limit import (
 )
 
 logger = logging.getLogger(__name__)
-
-TOKEN_FIELD = "captcha_token"
-ANSWER_FIELD = "captcha_answer"
-
-ACTIONS = frozenset({"login_password", "login_otp", "register", "password_reset", "contact"})
-
-PUBLIC_ERROR_MESSAGE = "پاسخ تأیید امنیتی درست نیست یا منقضی شده است؛ سؤال تازه را حل کنید."
-RATE_LIMITED_MESSAGE = "تعداد تلاش‌ها برای تأیید امنیتی بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید."
-
-#: Operands are two-digit numbers (10..49); the sum is 20..98.
-OPERAND_MIN = 10
-OPERAND_MAX = 49
-
-#: Backstop budgets per client IP bucket (shared store): verification counts every attempt, issue counts every question shown.
-#: Deliberately generous: mobile carriers put many real users behind one IP, and the strict limits (login 15, OTP 10, reset/contact 5 per
-#: 10 minutes) live in the endpoints. These only stop flooding of the store and of the verifier.
-VERIFY_MAX_ATTEMPTS = 120
-VERIFY_WINDOW_SECONDS = 600
-ISSUE_MAX = 600
-ISSUE_WINDOW_SECONDS = 600
-
-_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
-_KEY_PREFIX = "captcha:v1:"
-_SALT_ANSWER = "rastisi.captcha.answer"
-_SALT_SESSION = "rastisi.captcha.session"
-_MAX_ANSWER_CHARS = 12
-
-# Persian (U+06F0..06F9) and Arabic-Indic (U+0660..0669) digits -> ASCII. Only whitespace and invisible bidi/joiner marks are
-# dropped; no separator is accepted ("4,5" is not 45).
-_DIGIT_MAP = {ord(c): str(i) for i, c in enumerate("۰۱۲۳۴۵۶۷۸۹")}
-_DIGIT_MAP.update({ord(c): str(i) for i, c in enumerate("٠١٢٣٤٥٦٧٨٩")})
-_STRIP = dict.fromkeys(map(ord, " \t\r\n\u00a0\u200b\u200c\u200d\u200e\u200f\u202a\u202b\u202c\u2066\u2067\u2068\u2069"))
-_PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+PAYLOAD_FIELD = "altcha"
+ACTIONS = frozenset(
+    {"login_password", "login_otp", "register", "password_reset", "contact"}
+)
+PUBLIC_ERROR_MESSAGE = (
+    "تأیید امنیتی معتبر نیست یا منقضی شده است؛ دوباره «من ربات نیستم» را تأیید کنید."
+)
+RATE_LIMITED_MESSAGE = (
+    "تعداد تلاش‌ها برای تأیید امنیتی بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید."
+)
+VERIFY_MAX_ATTEMPTS, VERIFY_WINDOW_SECONDS = 120, 600
+ISSUE_MAX, ISSUE_WINDOW_SECONDS = 600, 600
+MAX_PAYLOAD_CHARS = 4096
+_NONCE_RE = re.compile(r"^[0-9a-f]{32}$")
+_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
+_KEY_PREFIX = "captcha:altcha:v2:"
 
 
 class CaptchaUnavailable(Exception):
-    """The shared store cannot be used; the caller must fail closed."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -87,15 +62,15 @@ class CaptchaResult:
     skipped: bool = False
 
 
-def _production() -> bool:
+def _production():
     return bool(getattr(settings, "RASTISI_PRODUCTION_MODE", False))
 
 
-def is_enabled() -> bool:
+def is_enabled():
     return bool(getattr(settings, "RASTISI_CAPTCHA_ENABLED", False))
 
 
-def _ttl() -> int:
+def _ttl():
     return int(getattr(settings, "RASTISI_CAPTCHA_TTL_SECONDS", 300))
 
 
@@ -103,142 +78,241 @@ def _store():
     return caches[getattr(settings, "RASTISI_RATE_LIMIT_CACHE_ALIAS", "ratelimit")]
 
 
-def _storage_key(token: str) -> str:
-    return _KEY_PREFIX + salted_hmac("rastisi.captcha.key", token).hexdigest()
+def _storage_key(nonce):
+    return (
+        _KEY_PREFIX
+        + salted_hmac("rastisi.altcha.cache", nonce, algorithm="sha256").hexdigest()
+    )
 
 
-def _answer_digest(token: str, answer: int) -> str:
-    return salted_hmac(_SALT_ANSWER, f"{token}:{answer}").hexdigest()
+def _secret(purpose):
+    return salted_hmac(
+        "rastisi.altcha." + purpose, "pow-v2", algorithm="sha256"
+    ).digest()
 
 
-def _session_digest(session_key: str, action: str) -> str:
-    return salted_hmac(_SALT_SESSION, f"{session_key}:{action}").hexdigest()
+def _session_digest(session_key, action):
+    return salted_hmac(
+        "rastisi.altcha.session", f"{session_key}:{action}", algorithm="sha256"
+    ).hexdigest()
 
 
-def normalize_answer(raw) -> int | None:
-    """Persian, Arabic-Indic and ASCII digits are all accepted. Anything else (signs, letters, decimals, empty) is rejected."""
-    text = str(raw or "")
-    if len(text) > _MAX_ANSWER_CHARS:
-        return None
-    text = text.translate(_DIGIT_MAP).translate(_STRIP)
-    if not text or not text.isascii() or not text.isdigit() or len(text) > 3:
-        return None
-    return int(text)
+def _challenge_digest(challenge):
+    return hashlib.sha256(
+        json.dumps(
+            challenge, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+    ).hexdigest()
 
 
-def to_persian_digits(value) -> str:
-    return str(value).translate(_PERSIAN_DIGITS)
+def _ensure_session_key(request):
+    if not request.session.session_key:
+        request.session.create()
+    return request.session.session_key
 
 
-def _ensure_session_key(request) -> str:
-    session = request.session
-    if not session.session_key:
-        session.create()
-    return session.session_key
+def widget_config(request, action):
+    """Render the checkbox immediately; issue PoW only when the visitor clicks.
 
-
-def issue(request, action: str) -> dict:
-    """Create a challenge for ``action`` and return what the template may show.
-
-    Returns ``{"enabled": False}`` when the CAPTCHA is off (development only), ``{"enabled": True, "unavailable": True}`` when the shared
-    store cannot be used (the form then cannot be submitted successfully), or the question with its opaque token. The answer is never returned.
+    Establish the session on the page response (the two login widgets must share
+    a stable cookie) and check the store without creating unused challenges.
     """
     if action not in ACTIONS:
         raise ValueError("unknown CAPTCHA action")
     if not is_enabled():
         return {"enabled": False}
     try:
-        enforce_rate_limit(
-            "captcha_issue", get_client_ip_bucket(request), max_attempts=ISSUE_MAX, window_seconds=ISSUE_WINDOW_SECONDS,
+        _ensure_session_key(request)
+        _store().get(_KEY_PREFIX + "availability")
+    except Exception as exc:
+        logger.warning(
+            "ALTCHA unavailable while rendering (%s)", exc.__class__.__name__
         )
-        session_key = _ensure_session_key(request)
-        a = OPERAND_MIN + secrets.randbelow(OPERAND_MAX - OPERAND_MIN + 1)
-        b = OPERAND_MIN + secrets.randbelow(OPERAND_MAX - OPERAND_MIN + 1)
-        token = secrets.token_urlsafe(24)
-        payload = {
-            "h": _answer_digest(token, a + b),
-            "s": _session_digest(session_key, action),
-            "a": action,
-            "t": int(time.time()),
-        }
-        _store().set(_storage_key(token), payload, timeout=_ttl())
-    except (RateLimitExceeded, RateLimitUnavailable) as exc:
-        logger.warning("CAPTCHA question could not be issued: %s", exc.__class__.__name__)
-        return {"enabled": True, "unavailable": True}
-    except Exception as exc:  # noqa: BLE001 — a cache/session failure must never become a 500 on a public page
-        logger.error("CAPTCHA store failure while issuing: %s", exc.__class__.__name__)
         return {"enabled": True, "unavailable": True}
     return {
         "enabled": True,
         "unavailable": False,
-        "token": token,
-        "left": to_persian_digits(a),
-        "right": to_persian_digits(b),
-        "token_field": TOKEN_FIELD,
-        "answer_field": ANSWER_FIELD,
-        "ttl_minutes": to_persian_digits(max(1, _ttl() // 60)),
+        "challenge_url": reverse("portal:altcha-challenge", kwargs={"action": action}),
     }
 
 
-def _consume(token: str):
-    """Atomically take the challenge out of the store. Exactly one caller gets it; the others get ``None``."""
+def issue(request, action):
+    if action not in ACTIONS:
+        raise ValueError("unknown CAPTCHA action")
+    if not is_enabled():
+        return {"enabled": False}
     try:
-        store = _store()
-        key = _storage_key(token)
-        payload = store.get(key)
-        if payload is None:
+        enforce_rate_limit(
+            "captcha_issue",
+            get_client_ip_bucket(request),
+            max_attempts=ISSUE_MAX,
+            window_seconds=ISSUE_WINDOW_SECONDS,
+        )
+        session_key = _ensure_session_key(request)
+        config = ChallengeConfig(
+            algorithm="PBKDF2/SHA-256",
+            cost=getattr(settings, "RASTISI_ALTCHA_COST", 1000),
+            max_number=getattr(settings, "RASTISI_ALTCHA_MAX_NUMBER", 128),
+            key_length=32,
+            expires_seconds=_ttl(),
+        )
+        challenge = build_challenge(
+            config=config,
+            hmac_secret=_secret("sign"),
+            hmac_key_secret=_secret("key"),
+            hmac_algorithm="SHA-256",
+            data={"action": action},
+            bind_session_token=False,
+        ).to_dict()
+        nonce = challenge["parameters"]["nonce"]
+        record = {
+            "s": _session_digest(session_key, action),
+            "a": action,
+            "t": int(time.time()),
+            "c": _challenge_digest(challenge),
+            "m": config.max_number,
+        }
+        _store().set(_storage_key(nonce), record, timeout=_ttl())
+    except (RateLimitExceeded, RateLimitUnavailable) as exc:
+        logger.warning("ALTCHA challenge unavailable (%s)", exc.__class__.__name__)
+        return {
+            "enabled": True,
+            "unavailable": True,
+            "rate_limited": isinstance(exc, RateLimitExceeded),
+        }
+    except Exception as exc:
+        logger.error(
+            "ALTCHA challenge could not be issued (%s)", exc.__class__.__name__
+        )
+        return {"enabled": True, "unavailable": True}
+    return {
+        "enabled": True,
+        "unavailable": False,
+        "challenge": challenge,
+        "token": nonce,
+    }
+
+
+def _consume(nonce):
+    """DEL is atomic on Redis; exactly one contender can win. Never reuse a nonce."""
+    try:
+        store, key = _store(), _storage_key(nonce)
+        record = store.get(key)
+        if record is None or not store.delete(key):
             return None
-        if not store.delete(key):          # somebody else consumed it between get() and delete()
-            return None
-        return payload
-    except Exception as exc:  # noqa: BLE001
-        logger.error("CAPTCHA store failure while verifying: %s", exc.__class__.__name__)
+        return record
+    except Exception as exc:
+        logger.error("ALTCHA shared store unavailable (%s)", exc.__class__.__name__)
         raise CaptchaUnavailable from exc
 
 
-def verify_request(request, *, action: str) -> CaptchaResult:
-    """Check the submitted answer for ``action``. Consumes the token whatever the outcome."""
+def _unique_keys(pairs):
+    data = {}
+    for key, value in pairs:
+        if key in data:
+            raise ValueError("duplicate payload key")
+        data[key] = value
+    return data
+
+
+def decode_payload(raw):
+    """Bound decoding and reject duplicate keys, non-object JSON and test payloads."""
+    if not isinstance(raw, str) or not raw or len(raw) > MAX_PAYLOAD_CHARS:
+        return None
+    try:
+        data = json.loads(
+            base64.b64decode(raw, validate=True),
+            object_pairs_hook=_unique_keys,
+            parse_constant=lambda value: (_ for _ in ()).throw(
+                ValueError("nonfinite JSON")
+            ),
+        )
+        if not isinstance(data, dict) or set(data) != {"challenge", "solution"}:
+            return None
+        nonce = data["challenge"]["parameters"]["nonce"]
+        if not isinstance(nonce, str) or not _NONCE_RE.fullmatch(nonce):
+            return None
+        return data
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        binascii.Error,
+        UnicodeDecodeError,
+        RecursionError,
+    ):
+        return None
+
+
+def verify_request(request, *, action):
     if action not in ACTIONS:
         raise ValueError("unknown CAPTCHA action")
     if not is_enabled():
         if _production():
-            # Defence in depth behind the startup/system-check enforcement: production never treats "CAPTCHA off" as success.
-            logger.error("CAPTCHA is disabled in production configuration; failing closed.")
             return CaptchaResult(False, "captcha-misconfigured", UNAVAILABLE_MESSAGE)
         return CaptchaResult(True, skipped=True)
-
     try:
         enforce_rate_limit(
-            "captcha_verify", get_client_ip_bucket(request),
-            max_attempts=VERIFY_MAX_ATTEMPTS, window_seconds=VERIFY_WINDOW_SECONDS,
+            "captcha_verify",
+            get_client_ip_bucket(request),
+            max_attempts=VERIFY_MAX_ATTEMPTS,
+            window_seconds=VERIFY_WINDOW_SECONDS,
         )
     except RateLimitExceeded:
         return CaptchaResult(False, "rate-limited", RATE_LIMITED_MESSAGE)
     except RateLimitUnavailable:
         return CaptchaResult(False, "store-unavailable", UNAVAILABLE_MESSAGE)
-
-    token = str(request.POST.get(TOKEN_FIELD, "") or "")
-    answer = normalize_answer(request.POST.get(ANSWER_FIELD, ""))
-    if not _TOKEN_RE.match(token):
-        return CaptchaResult(False, "missing-token", PUBLIC_ERROR_MESSAGE)
-
+    raw = request.POST.get(PAYLOAD_FIELD, "")
+    decoded = decode_payload(raw)
+    if decoded is None:
+        return CaptchaResult(False, "invalid-payload", PUBLIC_ERROR_MESSAGE)
     try:
-        payload = _consume(token)           # single use: burned even when the answer below is wrong
+        record = _consume(decoded["challenge"]["parameters"]["nonce"])
     except CaptchaUnavailable:
         return CaptchaResult(False, "store-unavailable", UNAVAILABLE_MESSAGE)
-    if not isinstance(payload, dict):
+    if not isinstance(record, dict):
         return CaptchaResult(False, "unknown-or-used-token", PUBLIC_ERROR_MESSAGE)
-
-    issued_at = payload.get("t")
-    if not isinstance(issued_at, int) or not (0 <= time.time() - issued_at <= _ttl()):
+    issued = record.get("t")
+    if type(issued) is not int or not 0 <= time.time() - issued <= _ttl():
         return CaptchaResult(False, "expired", PUBLIC_ERROR_MESSAGE)
-    if payload.get("a") != action:
+    if record.get("a") != action:
         return CaptchaResult(False, "wrong-action", PUBLIC_ERROR_MESSAGE)
     session_key = getattr(request.session, "session_key", None)
-    if not session_key or not hmac.compare_digest(str(payload.get("s", "")), _session_digest(session_key, action)):
+    if not session_key or not hmac.compare_digest(
+        str(record.get("s", "")), _session_digest(session_key, action)
+    ):
         return CaptchaResult(False, "wrong-session", PUBLIC_ERROR_MESSAGE)
-    if answer is None:
-        return CaptchaResult(False, "missing-answer", PUBLIC_ERROR_MESSAGE)
-    if not hmac.compare_digest(str(payload.get("h", "")), _answer_digest(token, answer)):
-        return CaptchaResult(False, "wrong-answer", PUBLIC_ERROR_MESSAGE)
-    return CaptchaResult(True)
+    try:
+        if not hmac.compare_digest(
+            _challenge_digest(decoded["challenge"]), str(record.get("c", ""))
+        ):
+            return CaptchaResult(False, "tampered-challenge", PUBLIC_ERROR_MESSAGE)
+        solution = decoded["solution"]
+        if not isinstance(solution, dict) or set(solution) - {
+            "counter",
+            "derivedKey",
+            "time",
+        }:
+            return CaptchaResult(False, "invalid-solution", PUBLIC_ERROR_MESSAGE)
+        counter, key = solution.get("counter"), solution.get("derivedKey")
+        if (
+            type(counter) is not int
+            or not 0 <= counter < record["m"]
+            or not isinstance(key, str)
+            or not _KEY_RE.fullmatch(key)
+        ):
+            return CaptchaResult(False, "invalid-solution", PUBLIC_ERROR_MESSAGE)
+        result = LocalVerifier(
+            hmac_secret=_secret("sign"),
+            hmac_key_secret=_secret("key"),
+            hmac_algorithm="SHA-256",
+            bind_session=False,
+        ).verify(raw, request=request)
+    except Exception as exc:
+        logger.warning("ALTCHA payload rejected (%s)", exc.__class__.__name__)
+        return CaptchaResult(False, "invalid-solution", PUBLIC_ERROR_MESSAGE)
+    return (
+        CaptchaResult(True)
+        if result.verified
+        else CaptchaResult(False, "invalid-solution", PUBLIC_ERROR_MESSAGE)
+    )

@@ -1,0 +1,4 @@
+{% load static altcha_captcha %}{% captcha_assets_enabled as use_altcha %}{% if use_altcha %}
+<link rel="stylesheet" href="{% static 'portal/css/altcha-forms.css' %}?v=20261113-1">
+<script type="module" src="{% static 'portal/js/altcha-forms.js' %}?v=20261113-1"></script>
+{% endif %}

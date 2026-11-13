@@ -31,8 +31,8 @@ list with placeholder values. Summary:
 | `DJANGO_CSRF_COOKIE_SECURE` | Must be true | `True` when `DJANGO_DEBUG=False`, else `False` | same |
 | `RASTISI_RATE_LIMIT_CACHE_URL` | **Yes** — startup fails without it | unset (local LocMem; dev only) | `redis://` / `rediss://` URL of a Redis shared by all workers — §6.1 |
 | `DJANGO_TRUSTED_PROXY_CIDRS` | Yes behind any proxy/CDN | empty (forwarded headers ignored) | Comma-separated IPv4/IPv6 CIDRs (+ optional `unix`) of your reverse proxies — §6.2 |
-| `RASTISI_CAPTCHA_ENABLED` | **Yes** — must be true | `True` when `DJANGO_DEBUG=False`, else `False` | `false` with `DJANGO_DEBUG=False` is a startup error (`rastisi.E002`). Server-side math CAPTCHA; needs no keys or hostnames. The former `TURNSTILE_*` variables are ignored. |
-| `RASTISI_CAPTCHA_TTL_SECONDS` | Optional | `300` | Lifetime of a question, 30..900 |
+| `RASTISI_CAPTCHA_ENABLED` | **Yes** — must be true | `True` when `DJANGO_DEBUG=False`, else `False` | `false` with `DJANGO_DEBUG=False` is a startup error (`rastisi.E002`). Self-hosted ALTCHA PoW v2; uses the existing Django secret, no cloud keys or hostnames. The former `TURNSTILE_*` variables are ignored. |
+| `RASTISI_CAPTCHA_TTL_SECONDS` | Optional | `300` | Lifetime of an ALTCHA challenge, 30..900 |
 | `RASTISI_DEV_OTP_CODE` | **Must be unset/empty** | empty (off) | **DEVELOPMENT ONLY** local-QA OTP; non-empty with `DJANGO_DEBUG=False` is a startup error and `rastisi.E006` — see §6.3 |
 | `DJANGO_SECURE_HSTS_SECONDS` | Staged — see §7 | `0` | |
 | `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` | Staged | `False` | |
@@ -481,17 +481,11 @@ client, and a listed-but-uncontrolled network lets its users spoof their IP. The
 repository does not hardcode any CDN range because no maintenance process for
 them exists here.
 
-**Math CAPTCHA (production).** With `DJANGO_DEBUG=False`, `RASTISI_CAPTCHA_ENABLED` must be true (startup fails otherwise;
-`rastisi.E002`). The five public forms (`login_password`, `login_otp`, `register`, `password_reset`, `contact`) show a question such as
-«۳۵ + ۱۴ = ؟». The question is created on the server and stored in the shared rate-limit cache (the same Redis as the rate limits), as an
-HMAC of `token:answer` keyed with `SECRET_KEY`; the page carries only the two operands and a random token, never the sum. Each question is
-bound to the visitor's session and to its form, expires after `RASTISI_CAPTCHA_TTL_SECONDS`, and is consumed by the first submission,
-right or wrong (`cache.delete()` is atomic, so two simultaneous submissions cannot both pass). Persian, Arabic-Indic and ASCII digits are
-accepted. Verification attempts and question issuing are budgeted per client IP as a backstop (120 and 600 per 10 minutes; the strict per-endpoint limits still apply). If Redis is down, questions
-cannot be issued or verified: the form is refused with the standard "temporarily unavailable" message before password authentication, SMS or
-mail happens (fail closed). A runtime guard also refuses to treat "CAPTCHA off" as success while `DJANGO_DEBUG=False`.
-This check stops naive scripts; the per-IP, per-phone and per-identifier limits that run after it remain the main defence against abuse.
-No request is made to Cloudflare or any third party by this feature.
+**Local ALTCHA (production).** With `DJANGO_DEBUG=False`, `RASTISI_CAPTCHA_ENABLED` must be true (startup fails otherwise; `rastisi.E002`). The five public forms (`login_password`, `login_otp`, `register`, `password_reset`, `contact`) use the official, locally bundled ALTCHA checkbox and Persian translation. A click requests a same-origin challenge; the official `altcha-django` builder and local verifier handle PoW v2. No CDN, Cloudflare, ALTCHA Cloud or Sentinel is required.
+
+The shared rate-limit Redis stores an exact challenge digest, a keyed session/action binding, issue time and counter bound. The first submission consumes the nonce atomically, including invalid proofs. Expiry is enforced in Redis and during verification. Missing, malformed, changed, replayed, cross-session or cross-action payloads fail before sensitive actions. Redis outages fail closed. The existing per-IP, per-phone and per-identifier budgets remain in place (CAPTCHA verification 120 and issuance 600 per 10 minutes). No development test payload or mathematical fallback is accepted when enabled.
+
+`RASTISI_ALTCHA_COST` defaults to 1000 PBKDF2/SHA-256 iterations; `RASTISI_ALTCHA_MAX_NUMBER` defaults to 128, bounding client work to at most 128 derivations with one worker. Startup and `rastisi.E002` validate both settings (cost 500..10000, maximum 64..4096). These are abuse-cost controls, not proof of human identity; OTP limits remain essential. See [ALTCHA review and local owner preview](../../../captcha/altcha-20261113/README.md) for protocol details, browser evidence, CSP prerequisites and Windows instructions. Owner approval and a separate staging review are required before any production rollout.
 
 ### 6.3 Owner password recovery (mobile + SMS OTP) and the local-QA OTP
 

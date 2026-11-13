@@ -48,6 +48,10 @@ def check_captcha(app_configs, **kwargs):
         ttl_seconds=getattr(settings, "RASTISI_CAPTCHA_TTL_SECONDS", env_config.CAPTCHA_TTL_DEFAULT_SECONDS),
         production=_production(),
     )
+    problems += env_config.altcha_work_problems(
+        cost=getattr(settings, 'RASTISI_ALTCHA_COST', 1000),
+        max_number=getattr(settings, 'RASTISI_ALTCHA_MAX_NUMBER', 128),
+    )
     return _errors("rastisi.E002", problems)
 
 

@@ -115,7 +115,7 @@ _OTP_SESSION_KEYS = (
 
 
 def _captcha_form_is_valid(request, form, *, action: str) -> bool:
-    """Server-side math CAPTCHA (``captcha_service``): consumes the submitted token and adds a form error on any failure."""
+    """Local ALTCHA proof-of-work (``captcha_service``): consumes the submitted token and adds a form error on any failure."""
     result = captcha_service.verify_request(request, action=action)
     if result.success:
         return True

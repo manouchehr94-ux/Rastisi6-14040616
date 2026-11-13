@@ -1,19 +1,18 @@
-"""Test helpers for the server-side math CAPTCHA (``apps.portal.services.captcha_service``).
+"""Solve the real official ALTCHA PoW, without consulting server signing secrets.
 
-Tests solve the challenge the way a visitor does: they GET the real page, read the two operands and the opaque token from the HTML, and
-send back the sum. Nothing here reaches into the service to learn the answer.
+The answer_delta argument remains a compatibility name for existing security
+regressions: a nonzero value corrupts the derived key, never bypasses the check.
 """
 
-import re
-
+import base64
+import copy
+import json
+from bs4 import BeautifulSoup
+from altcha import Challenge, Payload, solve_challenge
 from django.core.cache import caches
 from django.test import override_settings
-
 from apps.portal.services import captcha_service
 
-_PERSIAN = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
-
-#: Settings that switch the CAPTCHA on (it is off by default outside production).
 ENABLED = {"RASTISI_CAPTCHA_ENABLED": True, "RASTISI_CAPTCHA_TTL_SECONDS": 300}
 
 
@@ -22,27 +21,44 @@ def captcha_enabled(**extra):
 
 
 def reset_store():
-    """Forget every challenge and budget counter (the dev rate-limit store is process-local LocMem)."""
     caches["ratelimit"].clear()
 
 
-def read_challenge(html, action):
-    """Return ``(left, right, token)`` of the question shown for ``action`` on a rendered page."""
-    marker = f'id="captcha-label-{action}"'
-    start = html.index(marker)
-    block = html[start:start + 2500]
-    question = re.search(r'<bdi dir="ltr">(\S+) \+ (\S+) = ؟</bdi>', block)
-    token = re.search(r'name="captcha_token" value="([^"]+)"', block)
-    assert question and token, "no CAPTCHA question found for " + action
-    return int(question.group(1).translate(_PERSIAN)), int(question.group(2).translate(_PERSIAN)), token.group(1)
+def encode(data):
+    return base64.b64encode(json.dumps(data, separators=(",", ":")).encode()).decode()
+
+
+def decode(fields):
+    return json.loads(base64.b64decode(fields[captcha_service.PAYLOAD_FIELD]))
+
+
+def nonce(fields):
+    return decode(fields)["challenge"]["parameters"]["nonce"]
+
+
+def solve_data(challenge, *, answer_delta=0):
+    challenge = Challenge.from_dict(copy.deepcopy(challenge))
+    solution = solve_challenge(challenge, timeout=5)
+    assert solution is not None, "official ALTCHA solver timed out"
+    data = Payload(challenge, solution).to_dict()
+    if answer_delta:
+        data["solution"]["derivedKey"] = "0" * 64
+    return {captcha_service.PAYLOAD_FIELD: encode(data)}
+
+
+def challenge_for(client, path, action, host, **extra):
+    page = client.get(path, HTTP_HOST=host, **extra)
+    assert page.status_code == 200
+    widget = BeautifulSoup(page.content, "html.parser").find(
+        "altcha-widget", id="captcha-" + action
+    )
+    assert widget is not None, "no ALTCHA widget for " + action
+    result = client.get(widget["challenge"], HTTP_HOST=host, **extra)
+    assert result.status_code == 200, result.content
+    return result.json()
 
 
 def solve(client, path, action, host, *, answer_delta=0, **extra):
-    """GET ``path`` and return the POST fields (token + answer) for ``action``; ``answer_delta`` makes the answer wrong on purpose."""
-    page = client.get(path, HTTP_HOST=host, **extra)
-    assert page.status_code == 200
-    left, right, token = read_challenge(page.content.decode(), action)
-    return {
-        captcha_service.TOKEN_FIELD: token,
-        captcha_service.ANSWER_FIELD: str(left + right + answer_delta),
-    }
+    return solve_data(
+        challenge_for(client, path, action, host, **extra), answer_delta=answer_delta
+    )

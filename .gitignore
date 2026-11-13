@@ -68,3 +68,6 @@ semantic-review/
 # committed reusable runner is tools/storefront_builder_r4_qa/w3_design_lab_qa.mjs)
 _w3_qa_setup.py
 _w3_run_browser_qa.sh
+
+# Isolated local ALTCHA preview (SQLite, venv and media).
+/.altcha-qa/

@@ -173,7 +173,7 @@ class OtherEndpointsUseTheResolverTests(_Base):
 
     def test_captcha_budget_is_charged_to_the_resolver_ip_not_raw_headers(self):
         request = RequestFactory().post(
-            "/", {"captcha_token": "tok"},
+            "/", {"altcha": "malformed"},
             REMOTE_ADDR=_PROXY, HTTP_X_FORWARDED_FOR="1.2.3.4, 203.0.113.44", HTTP_CF_CONNECTING_IP="6.6.6.6",
         )
         with override_settings(**C.ENABLED), patch.object(captcha_service, "enforce_rate_limit") as budget:
@@ -183,7 +183,7 @@ class OtherEndpointsUseTheResolverTests(_Base):
     @override_settings(RASTISI_TRUSTED_PROXY_CIDRS=())
     def test_captcha_budget_ignores_forwarded_headers_from_a_direct_peer(self):
         request = RequestFactory().post(
-            "/", {"captcha_token": "tok"},
+            "/", {"altcha": "malformed"},
             REMOTE_ADDR="203.0.113.10", HTTP_X_FORWARDED_FOR="1.2.3.4", HTTP_CF_CONNECTING_IP="6.6.6.6",
         )
         with override_settings(**C.ENABLED), patch.object(captcha_service, "enforce_rate_limit") as budget:
@@ -449,7 +449,16 @@ class CaptchaOutageFailsClosedTests(_Base):
                 HTTP_HOST=_HOST, REMOTE_ADDR=_PROXY, HTTP_X_FORWARDED_FOR="6.6.6.6, 203.0.113.44",
             )
         charged = {call.args[:2] for call in budget.call_args_list}
-        self.assertEqual(charged, {("captcha_verify", "203.0.113.44"), ("captcha_issue", "203.0.113.44")})  # verify, then the re-rendered question
+        self.assertEqual(charged, {("captcha_verify", "203.0.113.44")})
+        # The replacement checkbox issues its PoW on click, not on re-render.
+        with override_settings(RASTISI_TRUSTED_PROXY_CIDRS=("10.0.0.0/8",)), \
+                patch.object(captcha_service, "enforce_rate_limit") as issued_budget:
+            issued = self.client.get(
+                "/security/altcha/login_password/", HTTP_HOST=_HOST, REMOTE_ADDR=_PROXY,
+                HTTP_X_FORWARDED_FOR="6.6.6.6, 203.0.113.44",
+            )
+        self.assertEqual(issued.status_code, 200)
+        self.assertEqual(issued_budget.call_args.args[:2], ("captcha_issue", "203.0.113.44"))
 
 
 @override_settings(ALLOWED_HOSTS=_HOSTS)

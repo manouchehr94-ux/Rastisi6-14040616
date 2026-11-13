@@ -1,10 +1,11 @@
 from django.urls import path
 
-from . import views
+from . import views, captcha_views
 
 app_name = "portal"
 
 urlpatterns = [
+    path("security/altcha/<str:action>/", captcha_views.challenge, name="altcha-challenge"),
     # Public marketing site (Section A)
     path("", views.home, name="home"),
     path("robots.txt", views.platform_robots_txt, name="robots-txt"),

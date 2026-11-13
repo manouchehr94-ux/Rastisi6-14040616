@@ -27,6 +27,7 @@ from shop_core.env_config import (
     resolve_allow_console_otp,
     resolve_allowed_hosts,
     resolve_captcha_settings,
+    resolve_altcha_work_settings,
     resolve_dev_otp_code,
     resolve_qa_payment_simulator,
     resolve_log_level,
@@ -276,13 +277,17 @@ AUTH_SESSION_REMEMBER_ME_EXPIRY_SECONDS = env_int(
     "AUTH_SESSION_REMEMBER_ME_EXPIRY_SECONDS", default=60 * 60 * 24 * 30,
 )
 
-# Server-side math CAPTCHA (apps.portal.services.captcha_service) for the public account/contact forms.
+# Local ALTCHA CAPTCHA (apps.portal.services.captcha_service) for the public account/contact forms.
 # No external service and no keys: the challenge lives in the shared rate-limit cache and is bound to the visitor's session.
 # Fail-closed: ``RASTISI_CAPTCHA_ENABLED`` defaults to ``not DEBUG``; a DJANGO_DEBUG=False process that disables it fails at startup.
 _captcha = resolve_captcha_settings(DEBUG)
 RASTISI_CAPTCHA_ENABLED = _captcha["enabled"]
 RASTISI_CAPTCHA_TTL_SECONDS = _captcha["ttl_seconds"]
 del _captcha
+_altcha_work = resolve_altcha_work_settings()
+RASTISI_ALTCHA_COST = _altcha_work["cost"]
+RASTISI_ALTCHA_MAX_NUMBER = _altcha_work["max_number"]
+del _altcha_work
 
 
 # Database

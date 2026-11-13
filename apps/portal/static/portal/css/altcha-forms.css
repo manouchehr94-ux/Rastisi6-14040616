@@ -1,0 +1,21 @@
+.rasti-altcha{direction:rtl;margin-block:1rem;font-family:inherit;min-width:0}
+.rasti-altcha-label{display:block;font-weight:600;margin-block-end:.45rem}
+.rasti-altcha altcha-widget{
+  display:block;direction:rtl;font-family:inherit;max-width:100%;
+  --altcha-max-width:100%;--altcha-border-radius:.65rem;
+  --altcha-color-base:var(--card,var(--p-card));
+  --altcha-color-base-content:var(--ink,var(--p-ink));
+  --altcha-color-primary:var(--leaf,var(--p-primary));
+  --altcha-color-success:var(--leaf,var(--p-primary));
+  --altcha-color-success-content:var(--sign-ink,var(--p-bg));
+  --altcha-checkbox-border-color:var(--rule,var(--p-line));
+  --altcha-border-color:var(--rule,var(--p-line));
+}
+.rasti-altcha-status{display:block;font-size:.82rem;line-height:1.8;margin-block-start:.3rem;color:var(--muted,var(--p-muted));min-height:1.5em}
+
+/* ALTCHA 3 renders light DOM. Stop the site's ordinary field minimum height
+   and padding from stretching its 22px checkbox; leave official state styles. */
+.rasti-altcha .altcha-checkbox input{min-height:0;min-width:0;padding:0;margin:0}
+.rasti-altcha .altcha-checkbox-wrap label{margin:0;padding:0;line-height:1.4}
+/* The decorative checkmark must not intercept the real checkbox's click. */
+.rasti-altcha .altcha-checkbox svg,.rasti-altcha .altcha-checkbox-spinner{pointer-events:none}

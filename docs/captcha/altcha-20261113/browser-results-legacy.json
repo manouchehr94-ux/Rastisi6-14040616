@@ -1,0 +1,83 @@
+{
+  "browser": "143.0.7499.4",
+  "date": "2026-11-13T17:11:39.926Z",
+  "profiles": [
+    {
+      "name": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "cdpCpuRate": 1,
+      "widgetReadyMs": {
+        "n": 10,
+        "min": 198,
+        "median": 277,
+        "p95": 927,
+        "max": 927
+      },
+      "clickToVerifiedMs": {
+        "n": 10,
+        "min": 98,
+        "median": 132,
+        "p95": 346,
+        "max": 346
+      },
+      "challengeResponseMs": {
+        "n": 10,
+        "min": 62,
+        "median": 78,
+        "p95": 297,
+        "max": 297
+      },
+      "samples": {
+        "ready": [
+          927,
+          242,
+          269,
+          276,
+          277,
+          311,
+          393,
+          295,
+          268,
+          198
+        ],
+        "verify": [
+          346,
+          162,
+          98,
+          116,
+          144,
+          129,
+          121,
+          128,
+          132,
+          167
+        ],
+        "challenge": [
+          297,
+          84,
+          62,
+          76,
+          85,
+          75,
+          74,
+          78,
+          70,
+          80
+        ]
+      }
+    }
+  ],
+  "checks": [
+    "login_password: real widget proof solved",
+    "login_otp: real widget proof solved",
+    "register: real widget proof solved",
+    "password_reset: real widget proof solved",
+    "unverified submit blocked without locking submit button",
+    "browser-generated PoW accepted by Django; replay rejected"
+  ],
+  "externalRequestsBlocked": [],
+  "errors": []
+}

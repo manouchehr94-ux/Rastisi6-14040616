@@ -16,6 +16,7 @@
 {% block extra_css %}{% endblock %}
 <script src="{% static 'js/htmx.min.js' %}" defer></script>
 <script src="{% static 'js/alpine.min.js' %}" defer></script>
+{% include "portal/public/_altcha_assets.html" %}
 </head>
 <body style="background:var(--p-bg)">
 {% csrf_token %}

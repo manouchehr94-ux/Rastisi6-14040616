@@ -221,3 +221,22 @@ class CookieSecurityTests(SimpleTestCase):
             self.assertTrue(checks.check_auth_cookies(None))
         with override_settings(RASTISI_PRODUCTION_MODE=False, SESSION_COOKIE_SECURE=False):
             self.assertEqual(checks.check_auth_cookies(None), [])
+
+class AltchaWorkConfigTests(SimpleTestCase):
+    def test_local_work_defaults_and_explicit_profile(self):
+        from shop_core.env_config import resolve_altcha_work_settings
+        self.assertEqual(resolve_altcha_work_settings(environ={}), {'cost': 1000, 'max_number': 128})
+        self.assertEqual(resolve_altcha_work_settings(environ={'RASTISI_ALTCHA_COST': '500', 'RASTISI_ALTCHA_MAX_NUMBER': '64'}), {'cost': 500, 'max_number': 64})
+
+    def test_unsafe_work_profiles_are_refused(self):
+        from shop_core.env_config import resolve_altcha_work_settings
+        for name, values in {'RASTISI_ALTCHA_COST': ('0', '499', '10001', 'oops'),
+                             'RASTISI_ALTCHA_MAX_NUMBER': ('0', '63', '4097', 'oops')}.items():
+            for value in values:
+                with self.subTest(name=name, value=value), self.assertRaises(ImproperlyConfigured):
+                    resolve_altcha_work_settings(environ={name: value})
+
+    def test_runtime_check_refuses_unsafe_overrides(self):
+        for overrides in ({'RASTISI_ALTCHA_COST': 0}, {'RASTISI_ALTCHA_MAX_NUMBER': True}):
+            with self.subTest(overrides=overrides), override_settings(**overrides):
+                self.assertEqual([e.id for e in checks.check_captcha(None)], ['rastisi.E002'])
